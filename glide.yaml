@@ -1,0 +1,30 @@
+package: github.com/lyft/ratelimit
+import:
+- package: github.com/golang/mock
+  repo: git@github.com:clever/mock
+  version: c974af766aabe079e3216c6cdf4f138ee0b726a8
+  subpackages:
+  - gomock
+- package: github.com/kelseyhightower/envconfig
+  version: 1.1.0
+- package: github.com/lyft/gostats
+  version: 20442a7429a7bfca84f2b88ec833b3901530db2c
+- package: github.com/lyft/goruntime
+  version: 6b40116c86cb185340f0252a3cd0071b4ee3396b
+- package: github.com/mediocregopher/radix.v2
+  version: master
+  subpackages:
+  - pool
+  - redis
+- package: github.com/Sirupsen/logrus
+  version: ^0.11.0
+- package: golang.org/x/net
+  version: master
+  subpackages:
+  - context
+- package: gopkg.in/yaml.v2
+  version: master
+- package: github.com/stretchr/testify
+  version: v1.1.3
+- package: google.golang.org/grpc
+  version: v1.0.1-GA

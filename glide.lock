@@ -1,0 +1,75 @@
+hash: 08d069204d5baaaebb74a9674173ca408da8de956d642bf84a958b9f197ebcd8
+updated: 2017-01-30T13:06:57.326335961-08:00
+imports:
+- name: github.com/fsnotify/fsnotify
+  version: 629574ca2a5df945712d3079857300b5e4da0236
+- name: github.com/golang/mock
+  version: c974af766aabe079e3216c6cdf4f138ee0b726a8
+  repo: git@github.com:clever/mock
+  subpackages:
+  - gomock
+- name: github.com/golang/protobuf
+  version: 98fa357170587e470c5f27d3c3ea0947b71eb455
+  subpackages:
+  - proto
+- name: github.com/gorilla/context
+  version: 1ea25387ff6f684839d82767c1733ff4d4d15d0a
+- name: github.com/gorilla/mux
+  version: 0eeaf8392f5b04950925b8a69fe70f110fa7cbfc
+- name: github.com/kelseyhightower/envconfig
+  version: ac12b1f15efba734211a556d8b125110dc538016
+- name: github.com/lyft/goruntime
+  version: 6b40116c86cb185340f0252a3cd0071b4ee3396b
+  subpackages:
+  - loader
+  - snapshot
+  - snapshot/entry
+- name: github.com/lyft/gostats
+  version: 20442a7429a7bfca84f2b88ec833b3901530db2c
+- name: github.com/mediocregopher/radix.v2
+  version: 94451b037e02236d550bdc2035d0a9851749369b
+  subpackages:
+  - pool
+  - redis
+- name: github.com/Sirupsen/logrus
+  version: d26492970760ca5d33129d2d799e34be5c4782eb
+- name: github.com/stretchr/testify
+  version: f390dcf405f7b83c997eac1b06768bb9f44dec18
+  subpackages:
+  - assert
+- name: golang.org/x/net
+  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
+  subpackages:
+  - context
+  - http2
+  - http2/hpack
+  - idna
+  - internal/timeseries
+  - lex/httplex
+  - trace
+- name: golang.org/x/sys
+  version: 9bb9f0998d48b31547d975974935ae9b48c7a03c
+  subpackages:
+  - unix
+- name: google.golang.org/grpc
+  version: 0032a855ba5c8a3c8e0d71c2deef354b70af1584
+  subpackages:
+  - codes
+  - credentials
+  - grpclog
+  - internal
+  - metadata
+  - naming
+  - peer
+  - transport
+- name: gopkg.in/yaml.v2
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
+testImports:
+- name: github.com/davecgh/go-spew
+  version: 2df174808ee097f90d259e432cc04442cf60be21
+  subpackages:
+  - spew
+- name: github.com/pmezard/go-difflib
+  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
+  subpackages:
+  - difflib

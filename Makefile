@@ -1,0 +1,38 @@
+ifeq ("$(GOPATH)","")
+$(error GOPATH must be set)
+endif
+
+GOREPO := ${GOPATH}/src/github.com/lyft/ratelimit
+
+.PHONY: bootstrap
+bootstrap:
+	script/install-glide
+	glide install
+
+.PHONY: bootstrap_tests
+bootstrap_tests:
+	cd ./vendor/github.com/golang/mock/mockgen && go install
+
+.PHONY: docs_format
+docs_format:
+	docs/check_format.sh
+
+.PHONY: fix_format
+fix_format:
+	docs/fix_format.sh
+	go fmt $(shell glide nv)
+
+.PHONY: compile
+compile:
+	mkdir -p ${GOREPO}/bin
+	cd ${GOREPO}/src/service_cmd && go build -o ratelimit ./ && mv ./ratelimit ${GOREPO}/bin
+	cd ${GOREPO}/src/client_cmd && go build -o ratelimit_client ./ && mv ./ratelimit_client ${GOREPO}/bin
+	cd ${GOREPO}/src/config_check_cmd && go build -o ratelimit_config_check ./ && mv ./ratelimit_config_check ${GOREPO}/bin
+
+.PHONY: tests
+tests: compile
+	go test $(shell glide nv)
+
+.PHONY: proto
+proto:
+	script/generate_proto
