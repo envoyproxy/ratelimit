@@ -251,7 +251,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	descriptorsMap := value.descriptors
-	for _, entry := range descriptor.Entries {
+	for i, entry := range descriptor.Entries {
 		// First see if key_value is in the map. If that isn't in the map we look for just key
 		// to check for a default value.
 		finalKey := entry.Key + "_" + entry.Value
@@ -265,7 +265,11 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 		if nextDescriptor != nil && nextDescriptor.limit != nil {
 			logger.Debugf("found rate limit: %s", finalKey)
-			rateLimit = nextDescriptor.limit
+			if (i == len(descriptor.Entries) - 1) {
+				rateLimit = nextDescriptor.limit
+			} else {
+				logger.Debugf("request depth does not match config depth, there are more entries in the request's descriptor")
+			}
 		}
 
 		if nextDescriptor != nil && len(nextDescriptor.descriptors) > 0 {
