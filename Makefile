@@ -22,8 +22,8 @@ fix_format:
 	script/docs_fix_format
 	go fmt $(shell glide nv)
 
-.PHONY: compile docs_format
-compile:
+.PHONY: compile
+compile: docs_format
 	mkdir -p ${GOREPO}/bin
 	cd ${GOREPO}/src/service_cmd && go build -o ratelimit ./ && mv ./ratelimit ${GOREPO}/bin
 	cd ${GOREPO}/src/client_cmd && go build -o ratelimit_client ./ && mv ./ratelimit_client ${GOREPO}/bin
