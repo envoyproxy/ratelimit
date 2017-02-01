@@ -73,7 +73,7 @@ select the correct rate limit to use when limiting. Descriptors are case-sensiti
 
 Let's start with a simple example:
 
-```
+```yaml
 domain: mongo_cps
 descriptors:
   - key: database
@@ -98,7 +98,7 @@ request per second rate limit.
 
 A slightly more complex example:
 
-```
+```yaml
 domain: messaging
 descriptors:
   # Only allow 5 marketing messages a day
@@ -145,15 +145,15 @@ And the service with rate limit against *all* matching rules and return an aggre
 
 #### Example 3
 
-One last example to illustrate matching order.
+An example to illustrate matching order.
 
-```
+```yaml
 domain: edge_proxy_per_ip
 descriptors:
   - key: ip_address
-	rate_limit:
-	  unit: second
-	  requests_per_unit: 10
+    rate_limit:
+      unit: second
+      requests_per_unit: 10
 
   # Black list IP
   - key: ip_address
@@ -164,12 +164,49 @@ descriptors:
 ```
 
 In the preceding example, we setup a generic rate limit for individual IP addresses. The architecture's edge proxy can
-be configured to make a rate limitservice call with the descriptor ("ip_address", "50.0.0.1") for example. This IP would
+be configured to make a rate limit service call with the descriptor ("ip_address", "50.0.0.1") for example. This IP would
 get 10 requests per second as
 would any other IP. However, the configuration also contains a second configuration that explicitly defines a
 value along with the same key. If the descriptor ("ip_address", "50.0.0.5") is received, the service will
-*attempt the most specific match possible*. This means both the most nested matching descriptor entry, as well as
-the most specific at any descriptor list level. Thus, key/value is always attempted as a match before just key.
+*attempt the most specific match possible*. This means
+the most specific descriptor at the same level as your request. Keep in mind that equally specific descriptors are matched on a first match basis. Thus, key/value is always attempted as a match before just key.
+
+#### Example 4
+
+The Ratelimit service matches requests to configuration entries with the same depth level. For instance, the following request:
+
+```
+RateLimitRequest:
+  domain: example4
+  descriptor: ("key", "value"),("subkey", "subvalue")
+```
+
+Would **not** match the following configuration even though the first descriptor in
+the request matches the descriptor in the configuration.
+
+```yaml
+domain: example4
+descriptors:
+  - key: key
+    value: value
+    rate_limit:
+      -  requests_per_unit: 300
+         unit: second
+```
+
+However, it would match the following configuration:
+
+```yaml
+domain: example4
+descriptors:
+  - key: key
+    value: value
+    descriptors:
+      - key: subkey      
+        rate_limit:
+          -  requests_per_unit: 300
+             unit: second
+```
 
 ### Descriptor list definition
 
