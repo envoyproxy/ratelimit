@@ -40,3 +40,15 @@ descriptors:
     rate_limit:
       unit: day
       requests_per_unit: 1
+
+  - key: key5
+    value: value5
+    rate_limit:
+      unit: day
+      requests_per_unit: 15
+    descriptors:
+      key: subkey5
+      value: subvalue5
+      rate_limit:
+        unit: day
+        requests_per_unit: 25

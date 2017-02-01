@@ -173,7 +173,9 @@ the most specific descriptor at the same level as your request. Keep in mind tha
 
 #### Example 4
 
-The Ratelimit service matches requests to configuration entries with the same depth level. For instance, the following request:
+The Ratelimit service matches requests to configuration entries with the same depth level, i.e
+same number of tuples in the request's descriptor as nested levels of descriptors
+in the configuration file. For instance, the following request:
 
 ```
 RateLimitRequest:
@@ -181,8 +183,9 @@ RateLimitRequest:
   descriptor: ("key", "value"),("subkey", "subvalue")
 ```
 
-Would **not** match the following configuration even though the first descriptor in
-the request matches the descriptor in the configuration.
+Would **not** match the following configuration, even though the first descriptor in
+the request matches the descriptor in the configuration, because the request has
+two tuples in the descriptor.
 
 ```yaml
 domain: example4
