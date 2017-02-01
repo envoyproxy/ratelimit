@@ -15,15 +15,15 @@ bootstrap_tests:
 
 .PHONY: docs_format
 docs_format:
-	docs/check_format.sh
+	script/docs_check_format
 
 .PHONY: fix_format
 fix_format:
-	docs/fix_format.sh
+	script/docs_fix_format
 	go fmt $(shell glide nv)
 
 .PHONY: compile
-compile:
+compile: docs_format
 	mkdir -p ${GOREPO}/bin
 	cd ${GOREPO}/src/service_cmd && go build -o ratelimit ./ && mv ./ratelimit ${GOREPO}/bin
 	cd ${GOREPO}/src/client_cmd && go build -o ratelimit_client ./ && mv ./ratelimit_client ${GOREPO}/bin
