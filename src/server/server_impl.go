@@ -59,7 +59,7 @@ func (server *server) Start() {
 
 func (server *server) startGrpc() {
 	addr := fmt.Sprintf(":%d", server.grpcPort)
-	logger.Warnf("Listening for GRPC on '%s'", addr)
+	logger.Warnf("Listening for gRPC on '%s'", addr)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		logger.Fatalf("failed to listen: %v", err)

@@ -7,12 +7,12 @@
 - [Configuration](#configuration)
   - [The configuration format](#the-configuration-format)
     - [Definitions](#definitions)
-    - [Format overview](#format-overview)
+    - [Descriptor list definition](#descriptor-list-definition)
+    - [Rate limit definition](#rate-limit-definition)
+    - [Examples](#examples)
       - [Example 1](#example-1)
       - [Example 2](#example-2)
       - [Example 3](#example-3)
-    - [Descriptor list definition](#descriptor-list-definition)
-    - [Rate limit definition](#rate-limit-definition)
   - [Loading Configuration](#loading-configuration)
 - [Rate limit statistics](#rate-limit-statistics)
 - [Debug Port](#debug-port)
@@ -21,15 +21,17 @@
 
 # Overview
 
-The rate limit service is a Go/GRPC service designed to enable generic rate limit scenarios from different types of
+The rate limit service is a Go/gRPC service designed to enable generic rate limit scenarios from different types of
 applications. Applications request a rate limit decision based on a domain and a set of descriptors. The service
 reads the configuration from disk via [runtime](https://github.com/lyft/goruntime), composes a cache key, and talks to the redis cache. A
 decision is then returned to the caller.
 
 # Building and Testing
 
-* Install redis-server
-* Make sure go is setup correctly and checkout rate limit service into your go path
+* Install redis-server.
+* Make sure go is setup correctly and checkout rate limit service into your go path. More information about installing
+go [here](https://golang.org/doc/install).
+
 * In order to run the integration tests using a local default redis install you will also need these environment variables set:
 ```
 export REDIS_SOCKET_TYPE=tcp
@@ -56,6 +58,8 @@ USE_STATSD=false LOG_LEVEL=debug REDIS_SOCKET_TYPE=tcp REDIS_URL=localhost:6379 
 
 ## The configuration format
 
+The rate limit configuration file format is YAML (mainly so that comments are supported).
+
 ### Definitions
 
 * **Domain:** A domain is a container for a set of rate limits. All domains known to the rate limit service must be
@@ -67,7 +71,41 @@ select the correct rate limit to use when limiting. Descriptors are case-sensiti
   * ("to_cluster", "service_a")
   * ("to_cluster", "service_a"),("from_cluster", "service_b")
 
-### Format overview
+### Descriptor list definition
+
+Each configuration contains a top level descriptor list and potentially multiple nested lists beneath that. The format is:
+
+```
+domain: <unique domain ID>
+descriptors:
+  - key: <rule key: required>
+    value: <rule value: optional>
+	rate_limit: (optional block)
+	  unit: <see below: required>
+	  requests_per_unit: <see below: required>
+    descriptors: (optional block)
+	  ... (nested repetition of above)
+```
+
+Each descriptor in a descriptor list must have a key. It can also optionally have a value to enable a more specific
+match. The "rate_limit" block is optional and if present sets up an actual rate limit rule. See below for how the rule
+is defined. The reason a rule might not be present is typically if a descriptor is a container for a 2nd level
+descriptor list. Each descriptor can optionally contain a nested descriptor list that allows for more complex matches
+and rate limit scenarios.
+
+### Rate limit definition
+
+```
+rate_limit:
+  unit: <second, minute, hour, day>
+  requests_per_unit: <uint>
+```
+
+The rate limit block specifies the actual rate limit that will be used when there is a match.
+Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
+future based on customer demand.
+
+### Examples
 
 #### Example 1
 
@@ -89,7 +127,7 @@ descriptors:
       requests_per_unit: 500
 ```
 
-The rate limit configuration file format is YAML (mainly so that comments are supported). In the configuration above
+In the configuration above
 the domain is "mongo_cps" and we setup 2 different rate limits in the top level descriptor list. Each of the limits
 have the same key ("database"). They have a different value ("users", and "default"), and each of them setup a 500
 request per second rate limit.
@@ -151,9 +189,9 @@ An example to illustrate matching order.
 domain: edge_proxy_per_ip
 descriptors:
   - key: ip_address
-    rate_limit:
-      unit: second
-      requests_per_unit: 10
+	rate_limit:
+	  unit: second
+	  requests_per_unit: 10
 
   # Black list IP
   - key: ip_address
@@ -211,43 +249,10 @@ descriptors:
              unit: second
 ```
 
-### Descriptor list definition
-
-Each configuration contains a top level descriptor list and potentially multiple nested lists beneath that. The format is:
-
-```
-domain: <unique domain ID>
-descriptors:
-  - key: <rule key: required>
-    value: <rule value: optional>
-	rate_limit: (optional block)
-	  unit: <see below: required>
-	  requests_per_unit: <see below: required>
-    descriptors: (optional block)
-	  ... (nested repitiion of above)
-```
-
-Each descriptor in a descriptor list must have a key. It can also optionally have a value to enable a more specific
-match. The "rate_limit" block is optional and if present sets up an actual rate limit rule. See below for how the rule
-is defined. The reason a rule might not be present is typically if a descriptor is a container for a 2nd level
-descriptor list. Each descriptor can optionally contain a nested descriptor list that allows for more complex matches
-and rate limit scenarios.
-
-### Rate limit definition
-
-```
-rate_limit:
-  unit: <second, minute, hour, day>
-  requests_per_unit: <uint>
-```
-
-The rate limit block specifies the actual rate limit that will be used when there is a match.
-Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
-future based on customer demand.
-
 ## Loading Configuration
 
-The ratelimit service uses a library written by Lyft called goruntime to do configuration loading. Goruntime monitors
+The Ratelimit service uses a library written by Lyft called [goruntime](https://github.com/lyft/goruntime) to do configuration loading. Goruntime monitors
+>>>>>>> master
 a designated path, and watches for symlink swaps to files in the directory tree to reload configuration files.
 
 The path to watch can be configured via the [settings](https://github.com/lyft/ratelimit/blob/master/src/settings/settings.go)
