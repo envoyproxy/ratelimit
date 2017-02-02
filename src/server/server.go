@@ -10,7 +10,7 @@ import (
 
 type Server interface {
 	/**
-	 * Starts the HTTP and GRPC servers. This should be done after
+	 * Starts the HTTP and gRPC servers. This should be done after
 	 * all endpoints have been registered through 'AddHttpEndpoint'
 	 * and 'GrpcServer'.
 	 */
@@ -27,7 +27,7 @@ type Server interface {
 	AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc)
 
 	/**
-	 * Returns the embedded GRPC server to be used for registering GRPC endpoints.
+	 * Returns the embedded gRPC server to be used for registering gRPC endpoints.
 	 */
 	GrpcServer() *grpc.Server
 
