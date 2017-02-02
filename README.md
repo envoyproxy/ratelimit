@@ -13,6 +13,7 @@
       - [Example 1](#example-1)
       - [Example 2](#example-2)
       - [Example 3](#example-3)
+      - [Example 4](#example-4)
   - [Loading Configuration](#loading-configuration)
 - [Rate limit statistics](#rate-limit-statistics)
 - [Debug Port](#debug-port)
@@ -31,7 +32,6 @@ decision is then returned to the caller.
 * Install redis-server.
 * Make sure go is setup correctly and checkout rate limit service into your go path. More information about installing
 go [here](https://golang.org/doc/install).
-
 * In order to run the integration tests using a local default redis install you will also need these environment variables set:
 ```
 export REDIS_SOCKET_TYPE=tcp
@@ -62,9 +62,9 @@ The rate limit configuration file format is YAML (mainly so that comments are su
 
 ### Definitions
 
-* **Domain:** A domain is a container for a set of rate limits. All domains known to the rate limit service must be
+* **Domain:** A domain is a container for a set of rate limits. All domains known to the Ratelimit service must be
 globally unique. They serve as a way for different teams/projects to have rate limit configurations that don't conflict.
-* **Descriptor:** A descriptor is a list of key/value pairs owned by a domain that the rate limit service uses to
+* **Descriptor:** A descriptor is a list of key/value pairs owned by a domain that the Ratelimit service uses to
 select the correct rate limit to use when limiting. Descriptors are case-sensitive. Examples of descriptors are:
   * ("database", "users")
   * ("message_type", "marketing"),("to_number","2061234567")
@@ -179,7 +179,8 @@ RateLimitRequest:
   descriptor: ("to_number", "2061111111")
 ```
 
-And the service with rate limit against *all* matching rules and return an aggregate result.
+And the service with rate limit against *all* matching rules and return an aggregate result; a logical OR of all
+the individual rate limit decisions.
 
 #### Example 3
 
@@ -207,11 +208,11 @@ get 10 requests per second as
 would any other IP. However, the configuration also contains a second configuration that explicitly defines a
 value along with the same key. If the descriptor ("ip_address", "50.0.0.5") is received, the service will
 *attempt the most specific match possible*. This means
-the most specific descriptor at the same level as your request. Keep in mind that equally specific descriptors are matched on a first match basis. Thus, key/value is always attempted as a match before just key.
+the most specific descriptor at the same level as your request. Thus, key/value is always attempted as a match before just key.
 
 #### Example 4
 
-The Ratelimit service matches requests to configuration entries with the same depth level, i.e
+The Ratelimit service matches requests to configuration entries with the same level, i.e
 same number of tuples in the request's descriptor as nested levels of descriptors
 in the configuration file. For instance, the following request:
 
