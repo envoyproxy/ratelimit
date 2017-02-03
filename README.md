@@ -253,7 +253,6 @@ descriptors:
 ## Loading Configuration
 
 The Ratelimit service uses a library written by Lyft called [goruntime](https://github.com/lyft/goruntime) to do configuration loading. Goruntime monitors
->>>>>>> master
 a designated path, and watches for symlink swaps to files in the directory tree to reload configuration files.
 
 The path to watch can be configured via the [settings](https://github.com/lyft/ratelimit/blob/master/src/settings/settings.go)
