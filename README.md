@@ -179,7 +179,7 @@ RateLimitRequest:
   descriptor: ("to_number", "2061111111")
 ```
 
-And the service with rate limit against *all* matching rules and return an aggregate result; a logical OR of all
+And the service will rate limit against *all* matching rules and return an aggregate result; a logical OR of all
 the individual rate limit decisions.
 
 #### Example 3
@@ -222,8 +222,8 @@ RateLimitRequest:
   descriptor: ("key", "value"),("subkey", "subvalue")
 ```
 
-Would **not** match the following configuration, even though the first descriptor in
-the request matches the descriptor in the configuration, because the request has
+Would **not** match the following configuration. Even though the first descriptor in
+the request matches the 1st level descriptor in the configuration, the request has
 two tuples in the descriptor.
 
 ```yaml
