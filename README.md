@@ -13,6 +13,7 @@
       - [Example 1](#example-1)
       - [Example 2](#example-2)
       - [Example 3](#example-3)
+      - [Example 4](#example-4)
   - [Loading Configuration](#loading-configuration)
 - [Rate limit statistics](#rate-limit-statistics)
 - [Debug Port](#debug-port)
@@ -61,9 +62,9 @@ The rate limit configuration file format is YAML (mainly so that comments are su
 
 ### Definitions
 
-* **Domain:** A domain is a container for a set of rate limits. All domains known to the rate limit service must be
+* **Domain:** A domain is a container for a set of rate limits. All domains known to the Ratelimit service must be
 globally unique. They serve as a way for different teams/projects to have rate limit configurations that don't conflict.
-* **Descriptor:** A descriptor is a list of key/value pairs owned by a domain that the rate limit service uses to
+* **Descriptor:** A descriptor is a list of key/value pairs owned by a domain that the Ratelimit service uses to
 select the correct rate limit to use when limiting. Descriptors are case-sensitive. Examples of descriptors are:
   * ("database", "users")
   * ("message_type", "marketing"),("to_number","2061234567")
@@ -110,7 +111,7 @@ future based on customer demand.
 
 Let's start with a simple example:
 
-```
+```yaml
 domain: mongo_cps
 descriptors:
   - key: database
@@ -135,7 +136,7 @@ request per second rate limit.
 
 A slightly more complex example:
 
-```
+```yaml
 domain: messaging
 descriptors:
   # Only allow 5 marketing messages a day
@@ -178,13 +179,14 @@ RateLimitRequest:
   descriptor: ("to_number", "2061111111")
 ```
 
-And the service with rate limit against *all* matching rules and return an aggregate result.
+And the service will rate limit against *all* matching rules and return an aggregate result; a logical OR of all
+the individual rate limit decisions.
 
 #### Example 3
 
-One last example to illustrate matching order.
+An example to illustrate matching order.
 
-```
+```yaml
 domain: edge_proxy_per_ip
 descriptors:
   - key: ip_address
@@ -205,8 +207,48 @@ be configured to make a rate limit service call with the descriptor ("ip_address
 get 10 requests per second as
 would any other IP. However, the configuration also contains a second configuration that explicitly defines a
 value along with the same key. If the descriptor ("ip_address", "50.0.0.5") is received, the service will
-*attempt the most specific match possible*. This means both the most nested matching descriptor entry, as well as
-the most specific at any descriptor list level. Thus, key/value is always attempted as a match before just key.
+*attempt the most specific match possible*. This means
+the most specific descriptor at the same level as your request. Thus, key/value is always attempted as a match before just key.
+
+#### Example 4
+
+The Ratelimit service matches requests to configuration entries with the same level, i.e
+same number of tuples in the request's descriptor as nested levels of descriptors
+in the configuration file. For instance, the following request:
+
+```
+RateLimitRequest:
+  domain: example4
+  descriptor: ("key", "value"),("subkey", "subvalue")
+```
+
+Would **not** match the following configuration. Even though the first descriptor in
+the request matches the 1st level descriptor in the configuration, the request has
+two tuples in the descriptor.
+
+```yaml
+domain: example4
+descriptors:
+  - key: key
+    value: value
+    rate_limit:
+      -  requests_per_unit: 300
+         unit: second
+```
+
+However, it would match the following configuration:
+
+```yaml
+domain: example4
+descriptors:
+  - key: key
+    value: value
+    descriptors:
+      - key: subkey      
+        rate_limit:
+          -  requests_per_unit: 300
+             unit: second
+```
 
 ## Loading Configuration
 
