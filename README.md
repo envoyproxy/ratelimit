@@ -17,6 +17,7 @@
   - [Loading Configuration](#loading-configuration)
 - [Rate limit statistics](#rate-limit-statistics)
 - [Debug Port](#debug-port)
+- [Contact](#contact)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -311,3 +312,8 @@ $ curl 0:6070/
 ```
 
 You can specify the debug port with the `DEBUG_PORT` environment variable. It defaults to `6070`.
+
+# Contact
+
+* [#lyft-envoy](http://webchat.freenode.net/?channels=lyft-envoy): IRC
+* [lyft/envoy](https://gitter.im/lyft/envoy): Gitter
