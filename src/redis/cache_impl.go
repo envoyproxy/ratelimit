@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -133,11 +132,10 @@ func (this *rateLimitCacheImpl) DoLimit(
 				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OVER_LIMIT,
 					limits[i].Limit, 0}
 
-			// Increase statistics. Because we support += behavior for increasing the limit, we need to
+			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
 			// asses if the entire addNHits were over the limit. That is if the limit's value before adding the
 			// N hits was over the limit, then all the N hits were over limit.
 			// Otherwise, only the difference between the current value and the limit were over limit hits.
-			fmt.Printf("OVER, nearLimit Value: %d, current: %d, previous: %d\n", nearLimitValue, current, previous)
 			if previous >= limit {
 				limits[i].Stats.OverLimit.Add(uint64(addNHits))
 			} else {
@@ -153,8 +151,8 @@ func (this *rateLimitCacheImpl) DoLimit(
 					limit - current}
 
 			// The limit is OK but we additionally want to know if we are near the limit
-			fmt.Printf("OK, nearLimit Value: %d, current: %d, previous: %d\n", nearLimitValue, current, previous)
 			if current > nearLimitValue {
+				// Here we also need to asses which portion of the hits were in the near limit range.
 				if previous >= nearLimitValue {
 					limits[i].Stats.NearLimit.Add(uint64(addNHits))
 				} else {
