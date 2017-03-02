@@ -75,10 +75,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 	conn := this.pool.Get()
 	defer this.pool.Put(conn)
 
-	addNHits := request.AddNHits
-	if addNHits == 0 {
-		addNHits = 1
-	}
+	addend := max(1, request.Addend)
 
 	// First build a list of all cache keys that we are actually going to hit. generateCacheKey()
 	// returns "" if there is no limit so that we can keep the arrays all the same size.
@@ -90,7 +87,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 		// Increase statistics for limits hit by their respective requests
 		if limits[i] != nil {
-			limits[i].Stats.TotalHits.Add(uint64(addNHits))
+			limits[i].Stats.TotalHits.Add(uint64(addend))
 		}
 	}
 
@@ -101,7 +98,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 			continue
 		}
 		logger.Debugf("looking up cache key: %s", cacheKey)
-		conn.PipeAppend("INCRBY", cacheKey, addNHits)
+		conn.PipeAppend("INCRBY", cacheKey, addend)
 		conn.PipeAppend("EXPIRE", cacheKey, unitToDivider(limits[i].Limit.Unit))
 	}
 
@@ -114,49 +111,51 @@ func (this *rateLimitCacheImpl) DoLimit(
 				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OK, nil, 0}
 			continue
 		}
-		current := uint32(conn.PipeResponse().Int())
+		limitAfterIncrease := uint32(conn.PipeResponse().Int())
 		conn.PipeResponse() // Pop off EXPIRE response and check for error.
 
-		limit := limits[i].Limit.RequestsPerUnit
-
-		// previous is the the value of the limit before adding addNHits.
-		previous := current - addNHits
-
-		// The nearLimitValue is the number of requests that can be made before hitting the NearLimitRatio.
+		limitBeforeIncrease := limitAfterIncrease - addend
+		overLimitThreshold := limits[i].Limit.RequestsPerUnit
+		// The nearLimitThreshold is the number of requests that can be made before hitting the NearLimitRatio.
 		// We need to know it in both the OK and OVER_LIMIT scenarios.
-		nearLimitValue := uint32(math.Floor(float64(float32(limit) * config.NearLimitRatio)))
+		nearLimitThreshold := uint32(math.Floor(float64(float32(overLimitThreshold) * config.NearLimitRatio)))
 
-		logger.Debugf("cache key: %s current: %d", cacheKey, current)
-		if current > limit {
+		logger.Debugf("cache key: %s current: %d", cacheKey, limitAfterIncrease)
+		if limitAfterIncrease > overLimitThreshold {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OVER_LIMIT,
 					limits[i].Limit, 0}
 
 			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
-			// asses if the entire addNHits were over the limit. That is if the limit's value before adding the
+			// asses if the entire addend hits were over the limit. That is, if the limit's value before adding the
 			// N hits was over the limit, then all the N hits were over limit.
-			// Otherwise, only the difference between the current value and the limit were over limit hits.
-			if previous >= limit {
-				limits[i].Stats.OverLimit.Add(uint64(addNHits))
+			// Otherwise, only the difference between the current limit value and the over limit threshold
+			// were over limit hits.
+			if limitBeforeIncrease >= overLimitThreshold {
+				limits[i].Stats.OverLimit.Add(uint64(addend))
 			} else {
-				limits[i].Stats.OverLimit.Add(uint64(current - limit))
+				limits[i].Stats.OverLimit.Add(uint64(limitAfterIncrease - overLimitThreshold))
 
-				// Additionally we have to check how many of the hits were near limit
-				limits[i].Stats.NearLimit.Add(uint64(limit - max(nearLimitValue, previous)))
+				// If the limit before increase was below the over limit value, then some of the hits were
+				// in the near limit range.
+				limits[i].Stats.NearLimit.Add(uint64(overLimitThreshold - max(nearLimitThreshold, limitBeforeIncrease)))
 			}
 		} else {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OK,
 					limits[i].Limit,
-					limit - current}
+					overLimitThreshold - limitAfterIncrease}
 
 			// The limit is OK but we additionally want to know if we are near the limit
-			if current > nearLimitValue {
+			if limitAfterIncrease > nearLimitThreshold {
 				// Here we also need to asses which portion of the hits were in the near limit range.
-				if previous >= nearLimitValue {
-					limits[i].Stats.NearLimit.Add(uint64(addNHits))
+				// If all the hits were over the nearLimitThreshold, then all hits are near limit. Otherwise,
+				// only the difference between the current limit value and the near limit threshold were near
+				// limit hits.
+				if limitBeforeIncrease >= nearLimitThreshold {
+					limits[i].Stats.NearLimit.Add(uint64(addend))
 				} else {
-					limits[i].Stats.NearLimit.Add(uint64(current - nearLimitValue))
+					limits[i].Stats.NearLimit.Add(uint64(limitAfterIncrease - nearLimitThreshold))
 				}
 			}
 		}
