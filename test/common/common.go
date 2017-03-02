@@ -4,7 +4,7 @@ import (
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 )
 
-func NewRateLimitRequest(domain string, descriptors [][][2]string) *pb.RateLimitRequest {
+func NewRateLimitRequest(domain string, descriptors [][][2]string, addNHits uint32) *pb.RateLimitRequest {
 	request := &pb.RateLimitRequest{}
 	request.Domain = domain
 	for _, descriptor := range descriptors {
@@ -16,5 +16,6 @@ func NewRateLimitRequest(domain string, descriptors [][][2]string) *pb.RateLimit
 		}
 		request.Descriptors = append(request.Descriptors, newDescriptor)
 	}
+	request.AddNHits = addNHits
 	return request
 }

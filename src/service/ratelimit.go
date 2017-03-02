@@ -110,9 +110,6 @@ func (this *service) shouldRateLimitWorker(
 	limitsToCheck := make([]*config.RateLimit, len(request.Descriptors))
 	for i, descriptor := range request.Descriptors {
 		limitsToCheck[i] = snappedConfig.GetLimit(ctx, request.Domain, descriptor)
-		if limitsToCheck[i] != nil {
-			limitsToCheck[i].Stats.TotalHits.Inc()
-		}
 	}
 
 	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck)
@@ -124,7 +121,6 @@ func (this *service) shouldRateLimitWorker(
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		response.Statuses[i] = descriptorStatus
 		if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
-			limitsToCheck[i].Stats.OverLimit.Inc()
 			finalCode = descriptorStatus.Code
 		}
 	}

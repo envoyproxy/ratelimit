@@ -1,6 +1,8 @@
 package redis
 
 import (
+	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -58,6 +60,13 @@ func (this *rateLimitCacheImpl) generateCacheKey(
 	return cacheKey
 }
 
+func max(a uint32, b uint32) uint32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func (this *rateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
@@ -67,6 +76,11 @@ func (this *rateLimitCacheImpl) DoLimit(
 	conn := this.pool.Get()
 	defer this.pool.Put(conn)
 
+	var addNHits uint32 = request.AddNHits
+	if addNHits == 0 {
+		addNHits = 1
+	}
+
 	// First build a list of all cache keys that we are actually going to hit. generateCacheKey()
 	// returns "" if there is no limit so that we can keep the arrays all the same size.
 	assert.Assert(len(request.Descriptors) == len(limits))
@@ -74,6 +88,11 @@ func (this *rateLimitCacheImpl) DoLimit(
 	now := this.timeSource.UnixNow()
 	for i := 0; i < len(request.Descriptors); i++ {
 		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
+
+		// Increase statistics for limits hit by their respective requests
+		if limits[i] != nil {
+			limits[i].Stats.TotalHits.Add(uint64(addNHits))
+		}
 	}
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
@@ -83,7 +102,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 			continue
 		}
 		logger.Debugf("looking up cache key: %s", cacheKey)
-		conn.PipeAppend("INCR", cacheKey)
+		conn.PipeAppend("INCRBY", cacheKey, addNHits)
 		conn.PipeAppend("EXPIRE", cacheKey, unitToDivider(limits[i].Limit.Unit))
 	}
 
@@ -99,20 +118,48 @@ func (this *rateLimitCacheImpl) DoLimit(
 		current := uint32(conn.PipeResponse().Int())
 		conn.PipeResponse() // Pop off EXPIRE response and check for error.
 
+		limit := limits[i].Limit.RequestsPerUnit
+
+		// previous is the the value of the limit before adding addNHits.
+		previous := current - addNHits
+
+		// The nearLimitValue is the number of requests that can be made before hitting the NearLimitRatio.
+		// We need to know it in both the OK and OVER_LIMIT scenarios.
+		nearLimitValue := uint32(math.Floor(float64(float32(limit) * config.NearLimitRatio)))
+
 		logger.Debugf("cache key: %s current: %d", cacheKey, current)
-		if current > limits[i].Limit.RequestsPerUnit {
+		if current > limit {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OVER_LIMIT,
 					limits[i].Limit, 0}
+
+			// Increase statistics. Because we support += behavior for increasing the limit, we need to
+			// asses if the entire addNHits were over the limit. That is if the limit's value before adding the
+			// N hits was over the limit, then all the N hits were over limit.
+			// Otherwise, only the difference between the current value and the limit were over limit hits.
+			fmt.Printf("OVER, nearLimit Value: %d, current: %d, previous: %d\n", nearLimitValue, current, previous)
+			if previous >= limit {
+				limits[i].Stats.OverLimit.Add(uint64(addNHits))
+			} else {
+				limits[i].Stats.OverLimit.Add(uint64(current - limit))
+
+				// Additionally we have to check how many of the hits were near limit
+				limits[i].Stats.NearLimit.Add(uint64(limit - max(nearLimitValue, previous)))
+			}
 		} else {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OK,
 					limits[i].Limit,
-					limits[i].Limit.RequestsPerUnit - current}
+					limit - current}
 
 			// The limit is OK but we additionally want to know if we are near the limit
-			if float32(current)/float32(limits[i].Limit.RequestsPerUnit) >= config.NearLimitRatio {
-				limits[i].Stats.NearLimit.Inc()
+			fmt.Printf("OK, nearLimit Value: %d, current: %d, previous: %d\n", nearLimitValue, current, previous)
+			if current > nearLimitValue {
+				if previous >= nearLimitValue {
+					limits[i].Stats.NearLimit.Add(uint64(addNHits))
+				} else {
+					limits[i].Stats.NearLimit.Add(uint64(current - nearLimitValue))
+				}
 			}
 		}
 	}
