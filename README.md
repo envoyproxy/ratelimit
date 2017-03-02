@@ -15,7 +15,8 @@
       - [Example 3](#example-3)
       - [Example 4](#example-4)
   - [Loading Configuration](#loading-configuration)
-- [Rate limit statistics](#rate-limit-statistics)
+- [Request Fields](#request-fields)
+- [Statistics](#statistics)
 - [Debug Port](#debug-port)
 - [Contact](#contact)
 
@@ -266,7 +267,12 @@ RUNTIME_SUBDIRECTORY
 
 For more information on how runtime works you can read its [README](https://github.com/lyft/goruntime).
 
-# Rate limit statistics
+# Request Fields
+
+For information on the fields of a Ratelimit gRPC request please read the information
+on the RateLimitRequest message type in the Ratelimit [proto file.](https://github.com/lyft/ratelimit/blob/master/proto/ratelimit/ratelimit.proto)
+
+# Statistics
 
 The rate limit service generates various statistics for each configured rate limit rule that will be useful for end
 users both for visibility and for setting alarms.
