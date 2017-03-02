@@ -1,8 +1,7 @@
 package: github.com/lyft/ratelimit
 import:
 - package: github.com/golang/mock
-  repo: git@github.com:clever/mock
-  version: c974af766aabe079e3216c6cdf4f138ee0b726a8
+  version: bd3c8e81be01eef76d4b503f5e687d2d1354d2d9
   subpackages:
   - gomock
 - package: github.com/kelseyhightower/envconfig
