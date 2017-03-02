@@ -27,4 +27,4 @@ import:
 - package: github.com/stretchr/testify
   version: v1.1.3
 - package: google.golang.org/grpc
-  version: v1.0.1-GA
+  version: v1.0.5

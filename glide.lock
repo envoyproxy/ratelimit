@@ -1,5 +1,5 @@
-hash: 08d069204d5baaaebb74a9674173ca408da8de956d642bf84a958b9f197ebcd8
-updated: 2017-01-30T13:06:57.326335961-08:00
+hash: 1f923a83980d5ac5fede691411371fe4f5461cb7fdc0f71947c5daf5cbf4f9d0
+updated: 2017-03-02T10:36:20.835764151-08:00
 imports:
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
@@ -32,7 +32,7 @@ imports:
   - pool
   - redis
 - name: github.com/Sirupsen/logrus
-  version: d26492970760ca5d33129d2d799e34be5c4782eb
+  version: 0208149b40d863d2c1a2f8fe5753096a9cf2cc8b
 - name: github.com/stretchr/testify
   version: f390dcf405f7b83c997eac1b06768bb9f44dec18
   subpackages:
@@ -52,7 +52,7 @@ imports:
   subpackages:
   - unix
 - name: google.golang.org/grpc
-  version: 0032a855ba5c8a3c8e0d71c2deef354b70af1584
+  version: 708a7f9f3283aa2d4f6132d287d78683babe55c8
   subpackages:
   - codes
   - credentials
@@ -61,6 +61,8 @@ imports:
   - metadata
   - naming
   - peer
+  - stats
+  - tap
   - transport
 - name: gopkg.in/yaml.v2
   version: a5b47d31c556af34a302ce5d659e6fea44d90de0
