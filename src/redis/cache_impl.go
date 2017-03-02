@@ -75,7 +75,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 	conn := this.pool.Get()
 	defer this.pool.Put(conn)
 
-	var addNHits uint32 = request.AddNHits
+	addNHits := request.AddNHits
 	if addNHits == 0 {
 		addNHits = 1
 	}
