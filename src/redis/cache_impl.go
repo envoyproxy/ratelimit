@@ -75,6 +75,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 	conn := this.pool.Get()
 	defer this.pool.Put(conn)
 
+	// request.Addend could be 0 (default value) if not specified by the caller in the Ratelimit request.
 	addend := max(1, request.Addend)
 
 	// First build a list of all cache keys that we are actually going to hit. generateCacheKey()
