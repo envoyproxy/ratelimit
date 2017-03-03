@@ -28,7 +28,7 @@ message RateLimitRequest {
   repeated RateLimitDescriptor descriptors = 2;
   // Rate limit requests can optionally specify the number of hits a request adds to the matched limit. If the
   // value is not set in the message, a request increases the matched limit by 1.
-  uint32 addend = 3;
+  uint32 hits_addend = 3;
 }
 
 // A RateLimitDescriptor is a list of hierarchical entries that are used by the service to

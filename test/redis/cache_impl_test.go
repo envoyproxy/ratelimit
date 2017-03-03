@@ -172,7 +172,7 @@ func TestRedis(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
 
-	// Now test addNHits that is greater than 1
+	// Now test hitsAddend that is greater than 1
 	// All of it under limit, under near limit
 	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
