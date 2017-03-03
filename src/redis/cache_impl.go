@@ -128,7 +128,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 					limits[i].Limit, 0}
 
 			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
-			// asses if the entire addend hits were over the limit. That is, if the limit's value before adding the
+			// assess if the entire addend hits were over the limit. That is, if the limit's value before adding the
 			// N hits was over the limit, then all the N hits were over limit.
 			// Otherwise, only the difference between the current limit value and the over limit threshold
 			// were over limit hits.
@@ -149,7 +149,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 			// The limit is OK but we additionally want to know if we are near the limit
 			if limitAfterIncrease > nearLimitThreshold {
-				// Here we also need to asses which portion of the hits were in the near limit range.
+				// Here we also need to assess which portion of the hits were in the near limit range.
 				// If all the hits were over the nearLimitThreshold, then all hits are near limit. Otherwise,
 				// only the difference between the current limit value and the near limit threshold were near
 				// limit hits.
