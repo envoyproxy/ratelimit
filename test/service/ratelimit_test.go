@@ -92,7 +92,7 @@ func TestService(test *testing.T) {
 	service := t.setupBasicService()
 
 	// First request, config should be loaded.
-	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}})
+	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(nil)
 	t.cache.EXPECT().DoLimit(nil, request, []*config.RateLimit{nil}).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{pb.RateLimitResponse_OK, nil, 0}})
@@ -115,7 +115,7 @@ func TestService(test *testing.T) {
 
 	// Different request.
 	request = common.NewRateLimitRequest(
-		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}})
+		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
 	limits := []*config.RateLimit{
 		config.NewRateLimit(10, pb.RateLimit_MINUTE, "key", t.statStore),
 		nil}
@@ -167,8 +167,6 @@ func TestService(test *testing.T) {
 
 	t.assert.EqualValues(2, t.statStore.NewCounter("config_load_success").Value())
 	t.assert.EqualValues(1, t.statStore.NewCounter("config_load_error").Value())
-	t.assert.EqualValues(2, t.statStore.NewCounter("key.total_hits").Value())
-	t.assert.EqualValues(2, t.statStore.NewCounter("key.over_limit").Value())
 }
 
 func TestEmptyDomain(test *testing.T) {
@@ -176,7 +174,7 @@ func TestEmptyDomain(test *testing.T) {
 	defer t.controller.Finish()
 	service := t.setupBasicService()
 
-	request := common.NewRateLimitRequest("", [][][2]string{{{"hello", "world"}}})
+	request := common.NewRateLimitRequest("", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit domain must not be empty", err.Error())
@@ -188,7 +186,7 @@ func TestEmptyDescriptors(test *testing.T) {
 	defer t.controller.Finish()
 	service := t.setupBasicService()
 
-	request := common.NewRateLimitRequest("test-domain", [][][2]string{})
+	request := common.NewRateLimitRequest("test-domain", [][][2]string{}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit descriptor list must not be empty", err.Error())
@@ -200,7 +198,7 @@ func TestCacheError(test *testing.T) {
 	defer t.controller.Finish()
 	service := t.setupBasicService()
 
-	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}})
+	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimit_MINUTE, "key", t.statStore)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.cache.EXPECT().DoLimit(nil, request, limits).Do(
@@ -230,7 +228,7 @@ func TestInitialLoadError(test *testing.T) {
 		})
 	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore)
 
-	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}})
+	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("no rate limit configuration loaded", err.Error())

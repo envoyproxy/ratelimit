@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"math"
 	"strconv"
 	"time"
 
@@ -58,6 +59,13 @@ func (this *rateLimitCacheImpl) generateCacheKey(
 	return cacheKey
 }
 
+func max(a uint32, b uint32) uint32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func (this *rateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
@@ -67,6 +75,9 @@ func (this *rateLimitCacheImpl) DoLimit(
 	conn := this.pool.Get()
 	defer this.pool.Put(conn)
 
+	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
+	hitsAddend := max(1, request.HitsAddend)
+
 	// First build a list of all cache keys that we are actually going to hit. generateCacheKey()
 	// returns "" if there is no limit so that we can keep the arrays all the same size.
 	assert.Assert(len(request.Descriptors) == len(limits))
@@ -74,6 +85,11 @@ func (this *rateLimitCacheImpl) DoLimit(
 	now := this.timeSource.UnixNow()
 	for i := 0; i < len(request.Descriptors); i++ {
 		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
+
+		// Increase statistics for limits hit by their respective requests
+		if limits[i] != nil {
+			limits[i].Stats.TotalHits.Add(uint64(hitsAddend))
+		}
 	}
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
@@ -83,7 +99,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 			continue
 		}
 		logger.Debugf("looking up cache key: %s", cacheKey)
-		conn.PipeAppend("INCR", cacheKey)
+		conn.PipeAppend("INCRBY", cacheKey, hitsAddend)
 		conn.PipeAppend("EXPIRE", cacheKey, unitToDivider(limits[i].Limit.Unit))
 	}
 
@@ -96,23 +112,52 @@ func (this *rateLimitCacheImpl) DoLimit(
 				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OK, nil, 0}
 			continue
 		}
-		current := uint32(conn.PipeResponse().Int())
+		limitAfterIncrease := uint32(conn.PipeResponse().Int())
 		conn.PipeResponse() // Pop off EXPIRE response and check for error.
 
-		logger.Debugf("cache key: %s current: %d", cacheKey, current)
-		if current > limits[i].Limit.RequestsPerUnit {
+		limitBeforeIncrease := limitAfterIncrease - hitsAddend
+		overLimitThreshold := limits[i].Limit.RequestsPerUnit
+		// The nearLimitThreshold is the number of requests that can be made before hitting the NearLimitRatio.
+		// We need to know it in both the OK and OVER_LIMIT scenarios.
+		nearLimitThreshold := uint32(math.Floor(float64(float32(overLimitThreshold) * config.NearLimitRatio)))
+
+		logger.Debugf("cache key: %s current: %d", cacheKey, limitAfterIncrease)
+		if limitAfterIncrease > overLimitThreshold {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OVER_LIMIT,
 					limits[i].Limit, 0}
+
+			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
+			// assess if the entire hitsAddend were over the limit. That is, if the limit's value before adding the
+			// N hits was over the limit, then all the N hits were over limit.
+			// Otherwise, only the difference between the current limit value and the over limit threshold
+			// were over limit hits.
+			if limitBeforeIncrease >= overLimitThreshold {
+				limits[i].Stats.OverLimit.Add(uint64(hitsAddend))
+			} else {
+				limits[i].Stats.OverLimit.Add(uint64(limitAfterIncrease - overLimitThreshold))
+
+				// If the limit before increase was below the over limit value, then some of the hits were
+				// in the near limit range.
+				limits[i].Stats.NearLimit.Add(uint64(overLimitThreshold - max(nearLimitThreshold, limitBeforeIncrease)))
+			}
 		} else {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OK,
 					limits[i].Limit,
-					limits[i].Limit.RequestsPerUnit - current}
+					overLimitThreshold - limitAfterIncrease}
 
 			// The limit is OK but we additionally want to know if we are near the limit
-			if float32(current)/float32(limits[i].Limit.RequestsPerUnit) >= config.NearLimitRatio {
-				limits[i].Stats.NearLimit.Inc()
+			if limitAfterIncrease > nearLimitThreshold {
+				// Here we also need to assess which portion of the hitsAddend were in the near limit range.
+				// If all the hits were over the nearLimitThreshold, then all hits are near limit. Otherwise,
+				// only the difference between the current limit value and the near limit threshold were near
+				// limit hits.
+				if limitBeforeIncrease >= nearLimitThreshold {
+					limits[i].Stats.NearLimit.Add(uint64(hitsAddend))
+				} else {
+					limits[i].Stats.NearLimit.Add(uint64(limitAfterIncrease - nearLimitThreshold))
+				}
 			}
 		}
 	}

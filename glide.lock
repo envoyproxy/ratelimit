@@ -1,11 +1,10 @@
-hash: 08d069204d5baaaebb74a9674173ca408da8de956d642bf84a958b9f197ebcd8
-updated: 2017-01-30T13:06:57.326335961-08:00
+hash: 98b7e16a24734fcda672b5d4c9744efc7e97a67bbc092025443ae41143f2a66d
+updated: 2017-03-02T10:47:18.602795053-08:00
 imports:
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
 - name: github.com/golang/mock
-  version: c974af766aabe079e3216c6cdf4f138ee0b726a8
-  repo: git@github.com:clever/mock
+  version: bd3c8e81be01eef76d4b503f5e687d2d1354d2d9
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
@@ -27,18 +26,18 @@ imports:
 - name: github.com/lyft/gostats
   version: 20442a7429a7bfca84f2b88ec833b3901530db2c
 - name: github.com/mediocregopher/radix.v2
-  version: 94451b037e02236d550bdc2035d0a9851749369b
+  version: 1ac54a28f5934ea5e08f588647e734aba2383cb8
   subpackages:
   - pool
   - redis
 - name: github.com/Sirupsen/logrus
-  version: d26492970760ca5d33129d2d799e34be5c4782eb
+  version: 0208149b40d863d2c1a2f8fe5753096a9cf2cc8b
 - name: github.com/stretchr/testify
   version: f390dcf405f7b83c997eac1b06768bb9f44dec18
   subpackages:
   - assert
 - name: golang.org/x/net
-  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
+  version: 906cda9512f77671ab44f8c8563b13a8e707b230
   subpackages:
   - context
   - http2
@@ -52,7 +51,7 @@ imports:
   subpackages:
   - unix
 - name: google.golang.org/grpc
-  version: 0032a855ba5c8a3c8e0d71c2deef354b70af1584
+  version: 708a7f9f3283aa2d4f6132d287d78683babe55c8
   subpackages:
   - codes
   - credentials
@@ -61,9 +60,11 @@ imports:
   - metadata
   - naming
   - peer
+  - stats
+  - tap
   - transport
 - name: gopkg.in/yaml.v2
-  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
+  version: a3f3340b5840cee44f372bddb5880fcbc419b46a
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21

@@ -59,7 +59,7 @@ func main() {
 	c := pb.NewRateLimitServiceClient(conn)
 	response, err := c.ShouldRateLimit(
 		context.Background(),
-		&pb.RateLimitRequest{*domain, []*pb.RateLimitDescriptor{descriptorValue.descriptor}})
+		&pb.RateLimitRequest{*domain, []*pb.RateLimitDescriptor{descriptorValue.descriptor}, 1})
 	if err != nil {
 		fmt.Printf("request error: %s\n", err.Error())
 		os.Exit(1)
