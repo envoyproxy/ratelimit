@@ -23,7 +23,7 @@ func TestRedis(t *testing.T) {
 	timeSource := mock_redis.NewMockTimeSource(controller)
 	connection := mock_redis.NewMockConnection(controller)
 	response := mock_redis.NewMockResponse(controller)
-	cache := redis.NewRateLimitCacheImpl(pool, timeSource)
+	cache := redis.NewRateLimitCacheImpl(pool, timeSource, 0)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	pool.EXPECT().Get().Return(connection)
