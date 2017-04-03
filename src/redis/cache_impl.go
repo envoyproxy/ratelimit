@@ -2,6 +2,7 @@ package redis
 
 import (
 	"math"
+	"math/rand"
 	"strconv"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	"golang.org/x/net/context"
-	"math/rand"
 )
 
 type rateLimitCacheImpl struct {
@@ -95,7 +95,6 @@ func (this *rateLimitCacheImpl) DoLimit(
 	}
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
-	// TODO: Jitter expiration based on the time length.
 	for i, cacheKey := range cacheKeys {
 		if cacheKey == "" {
 			continue
@@ -103,7 +102,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 		logger.Debugf("looking up cache key: %s", cacheKey)
 
 		baseExpiration := unitToDivider(limits[i].Limit.Unit)
-		expirationSeconds := baseExpiration + int64(rand.Float64()*float64(this.expirationJitterMaxSeconds))
+		expirationSeconds := baseExpiration + rand.Int63n(this.expirationJitterMaxSeconds)
 
 		conn.PipeAppend("INCRBY", cacheKey, hitsAddend)
 		conn.PipeAppend("EXPIRE", cacheKey, expirationSeconds)
