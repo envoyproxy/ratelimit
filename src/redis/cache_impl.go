@@ -101,8 +101,10 @@ func (this *rateLimitCacheImpl) DoLimit(
 		}
 		logger.Debugf("looking up cache key: %s", cacheKey)
 
-		baseExpiration := unitToDivider(limits[i].Limit.Unit)
-		expirationSeconds := baseExpiration + rand.Int63n(this.expirationJitterMaxSeconds)
+		expirationSeconds := unitToDivider(limits[i].Limit.Unit)
+		if this.expirationJitterMaxSeconds > 0 {
+			expirationSeconds += rand.Int63n(this.expirationJitterMaxSeconds)
+		}
 
 		conn.PipeAppend("INCRBY", cacheKey, hitsAddend)
 		conn.PipeAppend("EXPIRE", cacheKey, expirationSeconds)
