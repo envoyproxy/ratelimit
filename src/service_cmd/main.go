@@ -15,11 +15,13 @@ import (
 func Run() {
 	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
 
+	s := settings.NewSettings()
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		redis.NewRateLimitCacheImpl(
 			redis.NewPoolImpl(srv.Scope().Scope("redis_pool")),
-			redis.NewTimeSourceImpl()),
+			redis.NewTimeSourceImpl(),
+			s.ExpirationJitterMaxSeconds),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"))
 

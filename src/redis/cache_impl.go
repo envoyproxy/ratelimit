@@ -10,11 +10,13 @@ import (
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	"golang.org/x/net/context"
+	"math/rand"
 )
 
 type rateLimitCacheImpl struct {
-	pool       Pool
-	timeSource TimeSource
+	pool                       Pool
+	timeSource                 TimeSource
+	expirationJitterMaxSeconds int64
 }
 
 // Convert a rate limit into a time divider.
@@ -27,9 +29,9 @@ func unitToDivider(unit pb.RateLimit_Unit) int64 {
 	case pb.RateLimit_MINUTE:
 		return 60
 	case pb.RateLimit_HOUR:
-		return (60 * 60)
+		return 60 * 60
 	case pb.RateLimit_DAY:
-		return (60 * 60 * 24)
+		return 60 * 60 * 24
 	}
 
 	panic("should not get here")
@@ -99,8 +101,12 @@ func (this *rateLimitCacheImpl) DoLimit(
 			continue
 		}
 		logger.Debugf("looking up cache key: %s", cacheKey)
+
+		baseExpiration := unitToDivider(limits[i].Limit.Unit)
+		expirationSeconds := baseExpiration + int64(rand.Float64()*float64(this.expirationJitterMaxSeconds-baseExpiration))
+
 		conn.PipeAppend("INCRBY", cacheKey, hitsAddend)
-		conn.PipeAppend("EXPIRE", cacheKey, unitToDivider(limits[i].Limit.Unit))
+		conn.PipeAppend("EXPIRE", cacheKey, expirationSeconds)
 	}
 
 	// Now fetch the pipeline.
@@ -165,8 +171,8 @@ func (this *rateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func NewRateLimitCacheImpl(pool Pool, timeSource TimeSource) RateLimitCache {
-	return &rateLimitCacheImpl{pool, timeSource}
+func NewRateLimitCacheImpl(pool Pool, timeSource TimeSource, expirationJitterMaxSeconds int64) RateLimitCache {
+	return &rateLimitCacheImpl{pool, timeSource, expirationJitterMaxSeconds}
 }
 
 type timeSourceImpl struct{}

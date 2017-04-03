@@ -265,7 +265,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 		if nextDescriptor != nil && nextDescriptor.limit != nil {
 			logger.Debugf("found rate limit: %s", finalKey)
-			if (i == len(descriptor.Entries) - 1) {
+			if i == len(descriptor.Entries)-1 {
 				rateLimit = nextDescriptor.limit
 			} else {
 				logger.Debugf("request depth does not match config depth, there are more entries in the request's descriptor")
