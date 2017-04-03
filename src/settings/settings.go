@@ -21,7 +21,7 @@ type Settings struct {
 	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisUrl                   string `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
 	RedisPoolSize              int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
-	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"21600"`
+	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 }
 
 type Option func(*Settings)
