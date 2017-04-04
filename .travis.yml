@@ -3,4 +3,4 @@ language: go
 go:       1.7.5
 
 install: make bootstrap
-script:  make tests
+script:  make check_format tests

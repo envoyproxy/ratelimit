@@ -35,7 +35,7 @@ compile:
 	cd ${GOREPO}/src/config_check_cmd && go build -o ratelimit_config_check ./ && mv ./ratelimit_config_check ${GOREPO}/bin
 
 .PHONY: tests
-tests: check_format compile
+tests: compile
 	go test $(shell glide nv)
 
 .PHONY: proto
