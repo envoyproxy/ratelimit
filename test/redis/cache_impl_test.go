@@ -12,6 +12,7 @@ import (
 	"github.com/lyft/ratelimit/test/common"
 	"github.com/lyft/ratelimit/test/mocks/redis"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 )
 
 func TestRedis(t *testing.T) {
@@ -23,7 +24,7 @@ func TestRedis(t *testing.T) {
 	timeSource := mock_redis.NewMockTimeSource(controller)
 	connection := mock_redis.NewMockConnection(controller)
 	response := mock_redis.NewMockResponse(controller)
-	cache := redis.NewRateLimitCacheImpl(pool, timeSource, 0)
+	cache := redis.NewRateLimitCacheImpl(pool, timeSource, rand.New(rand.NewSource(1)), 0)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	pool.EXPECT().Get().Return(connection)
@@ -291,5 +292,39 @@ func TestRedis(t *testing.T) {
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(3), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+}
+
+func TestRedisWithJitter(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	pool := mock_redis.NewMockPool(controller)
+	timeSource := mock_redis.NewMockTimeSource(controller)
+	connection := mock_redis.NewMockConnection(controller)
+	response := mock_redis.NewMockResponse(controller)
+	jitterSource := mock_redis.NewMockJitterRandSource(controller)
+	cache := redis.NewRateLimitCacheImpl(pool, timeSource, rand.New(jitterSource), 3600)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+
+	pool.EXPECT().Get().Return(connection)
+	timeSource.EXPECT().UnixNow().Return(int64(1234))
+	jitterSource.EXPECT().Int63().Return(int64(100))
+	connection.EXPECT().PipeAppend("INCRBY", "domain_key_value_1234", uint32(1))
+	connection.EXPECT().PipeAppend("EXPIRE", "domain_key_value_1234", int64(101))
+	connection.EXPECT().PipeResponse().Return(response)
+	response.EXPECT().Int().Return(int64(5))
+	connection.EXPECT().PipeResponse()
+	pool.EXPECT().Put(connection)
+
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimit_SECOND, "key_value", statsStore)}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{pb.RateLimitResponse_OK, limits[0].Limit, 5}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 }

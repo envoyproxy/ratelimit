@@ -3,6 +3,8 @@ package main
 import (
 	"io"
 	"net/http"
+	"math/rand"
+	"time"
 
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/config"
@@ -21,6 +23,7 @@ func Run() {
 		redis.NewRateLimitCacheImpl(
 			redis.NewPoolImpl(srv.Scope().Scope("redis_pool")),
 			redis.NewTimeSourceImpl(),
+			rand.New(redis.NewLockedSource(time.Now().Unix())),
 			s.ExpirationJitterMaxSeconds),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"))
