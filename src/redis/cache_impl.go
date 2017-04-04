@@ -189,7 +189,6 @@ func (this *timeSourceImpl) UnixNow() int64 {
 }
 
 // rand for jitter
-
 type lockedSource struct {
 	lk  sync.Mutex
 	src rand.Source
