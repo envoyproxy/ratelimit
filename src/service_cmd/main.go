@@ -3,6 +3,8 @@ package main
 import (
 	"io"
 	"net/http"
+	"math/rand"
+	"time"
 
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/config"
@@ -15,11 +17,14 @@ import (
 func Run() {
 	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
 
+	s := settings.NewSettings()
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		redis.NewRateLimitCacheImpl(
 			redis.NewPoolImpl(srv.Scope().Scope("redis_pool")),
-			redis.NewTimeSourceImpl()),
+			redis.NewTimeSourceImpl(),
+			rand.New(redis.NewLockedSource(time.Now().Unix())),
+			s.ExpirationJitterMaxSeconds),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"))
 

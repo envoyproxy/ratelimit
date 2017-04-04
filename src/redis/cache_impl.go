@@ -2,7 +2,9 @@ package redis
 
 import (
 	"math"
+	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 
 	logger "github.com/Sirupsen/logrus"
@@ -13,8 +15,10 @@ import (
 )
 
 type rateLimitCacheImpl struct {
-	pool       Pool
-	timeSource TimeSource
+	pool                       Pool
+	timeSource                 TimeSource
+	jitterRand                 *rand.Rand
+	expirationJitterMaxSeconds int64
 }
 
 // Convert a rate limit into a time divider.
@@ -27,9 +31,9 @@ func unitToDivider(unit pb.RateLimit_Unit) int64 {
 	case pb.RateLimit_MINUTE:
 		return 60
 	case pb.RateLimit_HOUR:
-		return (60 * 60)
+		return 60 * 60
 	case pb.RateLimit_DAY:
-		return (60 * 60 * 24)
+		return 60 * 60 * 24
 	}
 
 	panic("should not get here")
@@ -93,14 +97,19 @@ func (this *rateLimitCacheImpl) DoLimit(
 	}
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
-	// TODO: Jitter expiration based on the time length.
 	for i, cacheKey := range cacheKeys {
 		if cacheKey == "" {
 			continue
 		}
 		logger.Debugf("looking up cache key: %s", cacheKey)
+
+		expirationSeconds := unitToDivider(limits[i].Limit.Unit)
+		if this.expirationJitterMaxSeconds > 0 {
+			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
+		}
+
 		conn.PipeAppend("INCRBY", cacheKey, hitsAddend)
-		conn.PipeAppend("EXPIRE", cacheKey, unitToDivider(limits[i].Limit.Unit))
+		conn.PipeAppend("EXPIRE", cacheKey, expirationSeconds)
 	}
 
 	// Now fetch the pipeline.
@@ -165,8 +174,8 @@ func (this *rateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func NewRateLimitCacheImpl(pool Pool, timeSource TimeSource) RateLimitCache {
-	return &rateLimitCacheImpl{pool, timeSource}
+func NewRateLimitCacheImpl(pool Pool, timeSource TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64) RateLimitCache {
+	return &rateLimitCacheImpl{pool, timeSource, jitterRand, expirationJitterMaxSeconds}
 }
 
 type timeSourceImpl struct{}
@@ -177,4 +186,28 @@ func NewTimeSourceImpl() TimeSource {
 
 func (this *timeSourceImpl) UnixNow() int64 {
 	return time.Now().Unix()
+}
+
+// rand for jitter
+
+type lockedSource struct {
+	lk  sync.Mutex
+	src rand.Source
+}
+
+func NewLockedSource(seed int64) JitterRandSource {
+	return &lockedSource{src: rand.NewSource(seed)}
+}
+
+func (r *lockedSource) Int63() (n int64) {
+	r.lk.Lock()
+	n = r.src.Int63()
+	r.lk.Unlock()
+	return
+}
+
+func (r *lockedSource) Seed(seed int64) {
+	r.lk.Lock()
+	r.src.Seed(seed)
+	r.lk.Unlock()
 }

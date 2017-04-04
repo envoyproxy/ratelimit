@@ -12,6 +12,11 @@ type TimeSource interface {
 	UnixNow() int64
 }
 
+type JitterRandSource interface {
+	Int63() int64
+	Seed(seed int64)
+}
+
 // Interface for interacting with a cache backend for rate limiting.
 type RateLimitCache interface {
 	// Contact the cache and perform rate limiting for a set of descriptors and limits.
