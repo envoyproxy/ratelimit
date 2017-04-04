@@ -2,8 +2,8 @@ package main
 
 import (
 	"io"
-	"net/http"
 	"math/rand"
+	"net/http"
 	"time"
 
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
