@@ -1,6 +1,6 @@
 sudo:     required
 language: go
-go:       1.7.1
+go:       1.7.5
 
 install: make bootstrap
 script:  make tests
