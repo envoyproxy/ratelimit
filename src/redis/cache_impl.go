@@ -90,7 +90,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 	for i := 0; i < len(request.Descriptors); i++ {
 		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
 
-		// Increase statistics for limits hit by their respective requests
+		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
 			limits[i].Stats.TotalHits.Add(uint64(hitsAddend))
 		}
@@ -156,7 +156,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 					limits[i].Limit,
 					overLimitThreshold - limitAfterIncrease}
 
-			// The limit is OK but we additionally want to know if we are near the limit
+			// The limit is OK but we additionally want to know if we are near the limit.
 			if limitAfterIncrease > nearLimitThreshold {
 				// Here we also need to assess which portion of the hitsAddend were in the near limit range.
 				// If all the hits were over the nearLimitThreshold, then all hits are near limit. Otherwise,
