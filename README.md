@@ -192,9 +192,9 @@ An example to illustrate matching order.
 domain: edge_proxy_per_ip
 descriptors:
   - key: ip_address
-	rate_limit:
-	  unit: second
-	  requests_per_unit: 10
+    rate_limit:
+      unit: second
+      requests_per_unit: 10
 
   # Black list IP
   - key: ip_address
