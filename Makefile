@@ -38,6 +38,10 @@ compile:
 tests: compile
 	go test $(shell glide nv)
 
+.PHONY: tests_integration
+tests_integration: compile
+	go test $(shell glide nv) -tags=integration
+
 .PHONY: proto
 proto:
 	script/generate_proto
