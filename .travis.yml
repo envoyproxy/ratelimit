@@ -5,4 +5,4 @@ services: redis-server
 env:
   - REDIS_SOCKET_TYPE=tcp REDIS_URL="localhost:6379"
 install: make bootstrap
-script:  make check_format tests_integration
+script:  make check_format tests
