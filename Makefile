@@ -34,9 +34,13 @@ compile:
 	cd ${GOREPO}/src/client_cmd && go build -o ratelimit_client ./ && mv ./ratelimit_client ${GOREPO}/bin
 	cd ${GOREPO}/src/config_check_cmd && go build -o ratelimit_config_check ./ && mv ./ratelimit_config_check ${GOREPO}/bin
 
+.PHONY: tests_unit
+tests_unit: compile
+	go test $(shell glide nv)
+
 .PHONY: tests
 tests: compile
-	go test $(shell glide nv)
+	go test $(shell glide nv) -tags=integration
 
 .PHONY: proto
 proto:

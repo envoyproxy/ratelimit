@@ -48,7 +48,7 @@ func TestBasicConfig(t *testing.T) {
 
 	response, err := c.ShouldRateLimit(
 		context.Background(),
-		common.NewRateLimitRequest("foo", [][][2]string{{{"hello", "world"}}}))
+		common.NewRateLimitRequest("foo", [][][2]string{{{"hello", "world"}}}, 1))
 	assert.Equal(
 		&pb.RateLimitResponse{
 			pb.RateLimitResponse_OK,
@@ -58,7 +58,7 @@ func TestBasicConfig(t *testing.T) {
 
 	response, err = c.ShouldRateLimit(
 		context.Background(),
-		common.NewRateLimitRequest("basic", [][][2]string{{{"key1", "foo"}}}))
+		common.NewRateLimitRequest("basic", [][][2]string{{{"key1", "foo"}}}, 1))
 	assert.Equal(
 		&pb.RateLimitResponse{
 			pb.RateLimitResponse_OK,
@@ -74,7 +74,7 @@ func TestBasicConfig(t *testing.T) {
 		response, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest(
-				"another", [][][2]string{{{"key2", strconv.Itoa(randomInt)}}}))
+				"another", [][][2]string{{{"key2", strconv.Itoa(randomInt)}}}, 1))
 
 		status := pb.RateLimitResponse_OK
 		limitRemaining := uint32(20 - (i + 1))
@@ -101,7 +101,7 @@ func TestBasicConfig(t *testing.T) {
 				"another",
 				[][][2]string{
 					{{"key2", strconv.Itoa(randomInt)}},
-					{{"key3", strconv.Itoa(randomInt)}}}))
+					{{"key3", strconv.Itoa(randomInt)}}}, 1))
 
 		status := pb.RateLimitResponse_OK
 		limitRemaining1 := uint32(20 - (i + 1))
