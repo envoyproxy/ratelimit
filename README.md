@@ -265,6 +265,8 @@ RUNTIME_ROOT default:"/srv/runtime_data/current"`
 RUNTIME_SUBDIRECTORY
 ```
 
+**Configuration files are loaded from RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/\*.yaml**
+
 For more information on how runtime works you can read its [README](https://github.com/lyft/goruntime).
 
 # Request Fields
