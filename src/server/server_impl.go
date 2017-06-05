@@ -12,6 +12,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"net"
+
 	logger "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/kavu/go_reuseport"
@@ -24,6 +26,7 @@ import (
 type serverDebugListener struct {
 	endpoints map[string]string
 	debugMux  *http.ServeMux
+	listener  net.Listener
 }
 
 type server struct {
@@ -51,13 +54,14 @@ func (server *server) Start() {
 	go func() {
 		addr := fmt.Sprintf(":%d", server.debugPort)
 		logger.Warnf("Listening for debug on '%s'", addr)
-		list, err := reuseport.Listen("tcp", addr)
+		var err error
+		server.debugListener.listener, err = reuseport.Listen("tcp", addr)
 
 		if err != nil {
 			logger.Errorf("Failed to open debug HTTP listener: '%+v'", err)
 			return
 		}
-		logger.Info(http.Serve(list, server.debugListener.debugMux))
+		logger.Info(http.Serve(server.debugListener.listener, server.debugListener.debugMux))
 	}()
 
 	go server.startGrpc()
@@ -172,6 +176,9 @@ func (server *server) handleGracefulShutdown() {
 
 		logger.Infof("Ratelimit server recieved %v, shutting down gracefully", sig)
 		server.grpcServer.GracefulStop()
+		if server.debugListener.listener != nil {
+			server.debugListener.listener.Close()
+		}
 		os.Exit(0)
 	}()
 }
