@@ -4,13 +4,19 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/pprof"
 	"sort"
 
+	"os"
+	"os/signal"
+	"syscall"
+
+	"net"
+
 	logger "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
+	"github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
 	"github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/settings"
@@ -20,6 +26,7 @@ import (
 type serverDebugListener struct {
 	endpoints map[string]string
 	debugMux  *http.ServeMux
+	listener  net.Listener
 }
 
 type server struct {
@@ -47,20 +54,34 @@ func (server *server) Start() {
 	go func() {
 		addr := fmt.Sprintf(":%d", server.debugPort)
 		logger.Warnf("Listening for debug on '%s'", addr)
-		logger.Info(http.ListenAndServe(addr, server.debugListener.debugMux))
+		var err error
+		server.debugListener.listener, err = reuseport.Listen("tcp", addr)
+
+		if err != nil {
+			logger.Errorf("Failed to open debug HTTP listener: '%+v'", err)
+			return
+		}
+		err = http.Serve(server.debugListener.listener, server.debugListener.debugMux)
+		logger.Infof("Failed to start debug server '%+v'", err)
 	}()
 
 	go server.startGrpc()
 
+	server.handleGracefulShutdown()
+
 	addr := fmt.Sprintf(":%d", server.port)
 	logger.Warnf("Listening for HTTP on '%s'", addr)
-	logger.Fatal(http.ListenAndServe(addr, server.router))
+	list, err := reuseport.Listen("tcp", addr)
+	if err != nil {
+		logger.Fatalf("Failed to open HTTP listener: '%+v'", err)
+	}
+	logger.Fatal(http.Serve(list, server.router))
 }
 
 func (server *server) startGrpc() {
 	addr := fmt.Sprintf(":%d", server.grpcPort)
 	logger.Warnf("Listening for gRPC on '%s'", addr)
-	lis, err := net.Listen("tcp", addr)
+	lis, err := reuseport.Listen("tcp", addr)
 	if err != nil {
 		logger.Fatalf("failed to listen: %v", err)
 	}
@@ -145,4 +166,20 @@ func newServer(name string, opts ...settings.Option) *server {
 		})
 
 	return ret
+}
+
+func (server *server) handleGracefulShutdown() {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+
+	go func() {
+		sig := <-sigs
+
+		logger.Infof("Ratelimit server recieved %v, shutting down gracefully", sig)
+		server.grpcServer.GracefulStop()
+		if server.debugListener.listener != nil {
+			server.debugListener.listener.Close()
+		}
+		os.Exit(0)
+	}()
 }
