@@ -1,5 +1,5 @@
-hash: 98b7e16a24734fcda672b5d4c9744efc7e97a67bbc092025443ae41143f2a66d
-updated: 2017-03-02T10:47:18.602795053-08:00
+hash: 8467954ff9ce5394a7359369061c529e0c902f5172524edd36b9429f3a23573e
+updated: 2017-06-05T09:50:07.327159196-07:00
 imports:
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
@@ -11,10 +11,13 @@ imports:
   version: 98fa357170587e470c5f27d3c3ea0947b71eb455
   subpackages:
   - proto
+  - ptypes/any
 - name: github.com/gorilla/context
   version: 1ea25387ff6f684839d82767c1733ff4d4d15d0a
 - name: github.com/gorilla/mux
   version: 0eeaf8392f5b04950925b8a69fe70f110fa7cbfc
+- name: github.com/kavu/go_reuseport
+  version: 3d6c1e425f717ee59152524e73b904b67705eeb8
 - name: github.com/kelseyhightower/envconfig
   version: ac12b1f15efba734211a556d8b125110dc538016
 - name: github.com/lyft/goruntime
@@ -26,18 +29,18 @@ imports:
 - name: github.com/lyft/gostats
   version: 20442a7429a7bfca84f2b88ec833b3901530db2c
 - name: github.com/mediocregopher/radix.v2
-  version: 1ac54a28f5934ea5e08f588647e734aba2383cb8
+  version: a0e715a8b85933a8ef42073647fafa42ce925896
   subpackages:
   - pool
   - redis
 - name: github.com/Sirupsen/logrus
-  version: 0208149b40d863d2c1a2f8fe5753096a9cf2cc8b
+  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/stretchr/testify
   version: f390dcf405f7b83c997eac1b06768bb9f44dec18
   subpackages:
   - assert
 - name: golang.org/x/net
-  version: 906cda9512f77671ab44f8c8563b13a8e707b230
+  version: 3da985ce5951d99de868be4385f21ea6c2b22f24
   subpackages:
   - context
   - http2
@@ -50,21 +53,35 @@ imports:
   version: 9bb9f0998d48b31547d975974935ae9b48c7a03c
   subpackages:
   - unix
+- name: golang.org/x/text
+  version: 470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4
+  subpackages:
+  - secure/bidirule
+  - transform
+  - unicode/bidi
+  - unicode/norm
+- name: google.golang.org/genproto
+  version: 411e09b969b1170a9f0c467558eb4c4c110d9c77
+  subpackages:
+  - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: 708a7f9f3283aa2d4f6132d287d78683babe55c8
+  version: d2e1b51f33ff8c5e4a15560ff049d200e83726c5
   subpackages:
   - codes
   - credentials
+  - grpclb/grpc_lb_v1
   - grpclog
   - internal
+  - keepalive
   - metadata
   - naming
   - peer
   - stats
+  - status
   - tap
   - transport
 - name: gopkg.in/yaml.v2
-  version: a3f3340b5840cee44f372bddb5880fcbc419b46a
+  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21
