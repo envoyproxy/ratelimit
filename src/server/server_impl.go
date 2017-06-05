@@ -61,7 +61,8 @@ func (server *server) Start() {
 			logger.Errorf("Failed to open debug HTTP listener: '%+v'", err)
 			return
 		}
-		logger.Info(http.Serve(server.debugListener.listener, server.debugListener.debugMux))
+		err = http.Serve(server.debugListener.listener, server.debugListener.debugMux)
+		logger.Infof("Failed to start debug server '%+v'", err)
 	}()
 
 	go server.startGrpc()
