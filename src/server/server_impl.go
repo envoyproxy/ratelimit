@@ -83,7 +83,7 @@ func (server *server) startGrpc() {
 	logger.Warnf("Listening for gRPC on '%s'", addr)
 	lis, err := reuseport.Listen("tcp", addr)
 	if err != nil {
-		logger.Fatalf("failed to listen: %v", err)
+		logger.Fatalf("Failed to listen for gRPC: %v", err)
 	}
 	server.grpcServer.Serve(lis)
 }
@@ -175,7 +175,7 @@ func (server *server) handleGracefulShutdown() {
 	go func() {
 		sig := <-sigs
 
-		logger.Infof("Ratelimit server recieved %v, shutting down gracefully", sig)
+		logger.Infof("Ratelimit server received %v, shutting down gracefully", sig)
 		server.grpcServer.GracefulStop()
 		if server.debugListener.listener != nil {
 			server.debugListener.listener.Close()
