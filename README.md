@@ -77,16 +77,16 @@ select the correct rate limit to use when limiting. Descriptors are case-sensiti
 
 Each configuration contains a top level descriptor list and potentially multiple nested lists beneath that. The format is:
 
-```
+```yaml
 domain: <unique domain ID>
 descriptors:
   - key: <rule key: required>
     value: <rule value: optional>
-	rate_limit: (optional block)
-	  unit: <see below: required>
-	  requests_per_unit: <see below: required>
+    rate_limit: (optional block)
+      unit: <see below: required>
+      requests_per_unit: <see below: required>
     descriptors: (optional block)
-	  ... (nested repetition of above)
+      - ... (nested repetition of above)
 ```
 
 Each descriptor in a descriptor list must have a key. It can also optionally have a value to enable a more specific
@@ -97,7 +97,7 @@ and rate limit scenarios.
 
 ### Rate limit definition
 
-```
+```yaml
 rate_limit:
   unit: <second, minute, hour, day>
   requests_per_unit: <uint>
