@@ -47,5 +47,5 @@ proto:
 	script/generate_proto
 
 .PHONY: docker
-docker:
+docker: tests
 	docker build . -t lyft/ratelimit:`git rev-parse HEAD`
