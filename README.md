@@ -105,7 +105,7 @@ rate_limit:
 
 The rate limit block specifies the actual rate limit that will be used when there is a match.
 Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
-future based on customer demand.
+future based on user demand.
 
 ### Examples
 
