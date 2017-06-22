@@ -35,26 +35,26 @@ decision is then returned to the caller.
 * Make sure go is setup correctly and checkout rate limit service into your go path. More information about installing
 go [here](https://golang.org/doc/install).
 * In order to run the integration tests using a local default redis install you will also need these environment variables set:
-```
-export REDIS_SOCKET_TYPE=tcp
-export REDIS_URL=localhost:6379
-```
+  ```bash
+  export REDIS_SOCKET_TYPE=tcp
+  export REDIS_URL=localhost:6379
+  ```
 * To setup for the first time (only done once):
-```
-make bootstrap
-```
+  ```bash
+  make bootstrap
+  ```
 * To compile:
-```
-make compile
-```
+  ```bash
+  make compile
+  ```
 * To compile and run tests:
-```
-make tests
-```
+  ```bash
+  make tests
+  ```
 * To run the server locally using some sensible default settings you can do this (this will setup the server to read the configuration files from the path you specify):
-```
-USE_STATSD=false LOG_LEVEL=debug REDIS_SOCKET_TYPE=tcp REDIS_URL=localhost:6379 RUNTIME_ROOT=/home/user/src/runtime/data RUNTIME_SUBDIRECTORY=ratelimit
-```
+  ```bash
+  USE_STATSD=false LOG_LEVEL=debug REDIS_SOCKET_TYPE=tcp REDIS_URL=localhost:6379 RUNTIME_ROOT=/home/user/src/runtime/data RUNTIME_SUBDIRECTORY=ratelimit
+  ```
 
 # Configuration
 
@@ -77,16 +77,16 @@ select the correct rate limit to use when limiting. Descriptors are case-sensiti
 
 Each configuration contains a top level descriptor list and potentially multiple nested lists beneath that. The format is:
 
-```
+```yaml
 domain: <unique domain ID>
 descriptors:
   - key: <rule key: required>
     value: <rule value: optional>
-	rate_limit: (optional block)
-	  unit: <see below: required>
-	  requests_per_unit: <see below: required>
+    rate_limit: (optional block)
+      unit: <see below: required>
+      requests_per_unit: <see below: required>
     descriptors: (optional block)
-	  ... (nested repetition of above)
+      - ... (nested repetition of above)
 ```
 
 Each descriptor in a descriptor list must have a key. It can also optionally have a value to enable a more specific
@@ -97,7 +97,7 @@ and rate limit scenarios.
 
 ### Rate limit definition
 
-```
+```yaml
 rate_limit:
   unit: <second, minute, hour, day>
   requests_per_unit: <uint>
@@ -105,7 +105,7 @@ rate_limit:
 
 The rate limit block specifies the actual rate limit that will be used when there is a match.
 Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
-future based on customer demand.
+future based on user demand.
 
 ### Examples
 
