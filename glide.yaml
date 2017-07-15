@@ -18,7 +18,6 @@ import:
 - package: github.com/Sirupsen/logrus
   version: ^0.11.0
 - package: golang.org/x/net
-  version: master
   subpackages:
   - context
 - package: gopkg.in/yaml.v2
