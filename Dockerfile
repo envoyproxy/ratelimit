@@ -1,3 +1,3 @@
-FROM alpine:3.6
+FROM golang:1.8-stretch
 ADD bin/ratelimit* /bin/
 CMD ["/bin/ratelimit"]

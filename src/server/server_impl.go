@@ -17,7 +17,7 @@ import (
 	logger "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/kavu/go_reuseport"
-	"github.com/lyft/goruntime/loader"
+	"github.com/websdev/goruntime/loader"
 	"github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/settings"
 	"google.golang.org/grpc"

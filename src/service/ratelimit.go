@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	logger "github.com/Sirupsen/logrus"
-	"github.com/lyft/goruntime/loader"
+	"github.com/websdev/goruntime/loader"
 	"github.com/lyft/gostats"
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/assert"

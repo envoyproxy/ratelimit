@@ -1,5 +1,5 @@
-hash: 8467954ff9ce5394a7359369061c529e0c902f5172524edd36b9429f3a23573e
-updated: 2017-06-05T09:50:07.327159196-07:00
+hash: 55df1efe0fd693e7256c91c6aab742577d5aaaf13a5ab899bfbc4871a830dfda
+updated: 2017-07-27T16:11:03.59996947-04:00
 imports:
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
@@ -20,8 +20,14 @@ imports:
   version: 3d6c1e425f717ee59152524e73b904b67705eeb8
 - name: github.com/kelseyhightower/envconfig
   version: ac12b1f15efba734211a556d8b125110dc538016
-- name: github.com/lyft/goruntime
-  version: 6b40116c86cb185340f0252a3cd0071b4ee3396b
+#- name: github.com/lyft/goruntime
+#  version: 6b40116c86cb185340f0252a3cd0071b4ee3396b
+#  subpackages:
+#  - loader
+#  - snapshot
+#  - snapshot/entry
+- name: github.com/websdev/goruntime
+  version: 3fb89ad811be52ecfe717895151689a0da8ea6b7
   subpackages:
   - loader
   - snapshot
@@ -29,7 +35,7 @@ imports:
 - name: github.com/lyft/gostats
   version: 20442a7429a7bfca84f2b88ec833b3901530db2c
 - name: github.com/mediocregopher/radix.v2
-  version: a0e715a8b85933a8ef42073647fafa42ce925896
+  version: dbcfd490034f823788edc555737247e9ba628b6c
   subpackages:
   - pool
   - redis
@@ -40,7 +46,7 @@ imports:
   subpackages:
   - assert
 - name: golang.org/x/net
-  version: 3da985ce5951d99de868be4385f21ea6c2b22f24
+  version: 057a25b06247e0c51ba15d8ae475feb2fcb72164
   subpackages:
   - context
   - http2
@@ -81,7 +87,7 @@ imports:
   - tap
   - transport
 - name: gopkg.in/yaml.v2
-  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
+  version: 25c4ec802a7d637f88d584ab26798e94ad14c13b
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21

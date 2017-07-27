@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/lyft/goruntime/loader"
+	"github.com/websdev/goruntime/loader"
 	"github.com/lyft/gostats"
 	"google.golang.org/grpc"
 )

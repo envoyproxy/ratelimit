@@ -5,7 +5,7 @@ package mock_snapshot
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	entry "github.com/lyft/goruntime/snapshot/entry"
+	entry "github.com/websdev/goruntime/snapshot/entry"
 )
 
 // Mock of IFace interface
