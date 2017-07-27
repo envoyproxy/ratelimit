@@ -11,7 +11,7 @@ import:
 #- package: github.com/lyft/goruntime
 #  version: 6b40116c86cb185340f0252a3cd0071b4ee3396b
 - package: github.com/websdev/goruntime
-  version: 3fb89ad811be52ecfe717895151689a0da8ea6b7
+  version: 586c079388de0c02a32e8df45ec6e1dcfa2cd30b
 - package: github.com/mediocregopher/radix.v2
   version: master
   subpackages:

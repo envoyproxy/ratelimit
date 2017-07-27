@@ -27,7 +27,7 @@ imports:
 #  - snapshot
 #  - snapshot/entry
 - name: github.com/websdev/goruntime
-  version: 3fb89ad811be52ecfe717895151689a0da8ea6b7
+  version: 586c079388de0c02a32e8df45ec6e1dcfa2cd30b
   subpackages:
   - loader
   - snapshot
