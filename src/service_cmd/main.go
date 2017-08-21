@@ -1,4 +1,4 @@
-package main
+package service_cmd
 
 import (
 	"io"

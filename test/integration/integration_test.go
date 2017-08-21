@@ -34,7 +34,7 @@ func TestBasicConfig(t *testing.T) {
 	os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
 
 	go func() {
-		main.Run()
+		service_cmd.Run()
 	}()
 
 	// HACK: Wait for the server to come up. Make a hook that we can wait on.
