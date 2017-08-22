@@ -10,7 +10,7 @@ import (
 	"time"
 
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
-	"github.com/lyft/ratelimit/src/service_cmd"
+	"github.com/lyft/ratelimit/src/service_cmd/runner"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
@@ -34,7 +34,7 @@ func TestBasicConfig(t *testing.T) {
 	os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
 
 	go func() {
-		service_cmd.Run()
+		runner.Run()
 	}()
 
 	// HACK: Wait for the server to come up. Make a hook that we can wait on.
