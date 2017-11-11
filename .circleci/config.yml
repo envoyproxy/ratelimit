@@ -1,0 +1,35 @@
+version: 2
+jobs:
+  test:
+    working_directory: ~/ratelimit
+    docker:
+      - image: circleci/golang:1.9
+      - image: redis:alpine
+    steps:
+      - checkout
+      - run:
+          command: |
+            make test
+
+  build:
+    working_directory: ~/ratelimit
+    docker:
+      - image: circleci/golang:1.9
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          command: |
+            make bootstrap
+            make compile
+      - run:
+          name: Build Docker Image
+          command: |
+            docker build .
+
+workflows:
+  version: 2
+  test_and_build:
+    jobs:
+      - build
+      - test
