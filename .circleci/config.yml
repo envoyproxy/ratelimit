@@ -1,20 +1,17 @@
 version: 2
+
 job-defaults: &job-defaults
   working_directory: &working_directory
     /go/src/github.com/lyft/ratelimit/
 
-persist-workspace: &persist-workspace
-  persist_to_workspace:
-    root: /go/src/github.com/lyft/ratelimit/
-    paths: "*"
-
-attach-workspace: &attach-workspace
-  attach_workspace:
-    at: *working_directory
-
 jobs:
   build:
     <<: *job-defaults
+    environment:
+      - USE_STATSD=false
+      - LOG_LEVEL=debug
+      - REDIS_SOCKET_TYPE=tcp
+      - REDIS_URL=localhost:6379
     docker:
       - image: circleci/golang:1.9
       - image: redis:alpine
