@@ -24,7 +24,7 @@ jobs:
             make bootstrap
             make compile
       - run:
-          name: Build Docker Image
+          name: Build Docker Image and Run Tests
           command: |
             make docker
 
