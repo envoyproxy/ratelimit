@@ -1,0 +1,35 @@
+version: 2
+
+job-defaults: &job-defaults
+  working_directory: &working_directory
+    /go/src/github.com/lyft/ratelimit/
+
+jobs:
+  build:
+    <<: *job-defaults
+    environment:
+      - USE_STATSD=false
+      - LOG_LEVEL=debug
+      - REDIS_SOCKET_TYPE=tcp
+      - REDIS_URL=localhost:6379
+    docker:
+      - image: circleci/golang:1.9
+      - image: redis:alpine
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Compile
+          command: |
+            make bootstrap
+            make compile
+      - run:
+          name: Build Docker Image and Run Tests
+          command: |
+            make docker
+
+workflows:
+  version: 2
+  test_and_build:
+    jobs:
+      - build
