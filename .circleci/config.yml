@@ -19,6 +19,7 @@ jobs:
       - checkout
       - setup_remote_docker
       - run:
+          name: Compile
           command: |
             make bootstrap
             make compile
