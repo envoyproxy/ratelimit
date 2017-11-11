@@ -24,6 +24,8 @@
 
 # Overview
 
+[![CircleCI](https://circleci.com/gh/verygoodsecurity/ratelimit.svg?style=svg)](https://circleci.com/gh/verygoodsecurity/ratelimit)
+
 The rate limit service is a Go/gRPC service designed to enable generic rate limit scenarios from different types of
 applications. Applications request a rate limit decision based on a domain and a set of descriptors. The service
 reads the configuration from disk via [runtime](https://github.com/lyft/goruntime), composes a cache key, and talks to the redis cache. A
