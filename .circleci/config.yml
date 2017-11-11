@@ -13,21 +13,11 @@ attach-workspace: &attach-workspace
     at: *working_directory
 
 jobs:
-  test:
-    <<: *job-defaults
-    docker:
-      - image: circleci/golang:1.9
-      - image: redis:alpine
-    steps:
-      - checkout
-      - run:
-          command: |
-            make test
-
   build:
     <<: *job-defaults
     docker:
       - image: circleci/golang:1.9
+      - image: redis:alpine
     steps:
       - checkout
       - setup_remote_docker
@@ -46,4 +36,3 @@ workflows:
   test_and_build:
     jobs:
       - build
-      - test
