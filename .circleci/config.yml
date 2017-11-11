@@ -39,7 +39,7 @@ jobs:
       - run:
           name: Build Docker Image
           command: |
-            docker build .
+            make docker
 
 workflows:
   version: 2
