@@ -1,4 +1,3 @@
-
 version: "3"
 services:
 
@@ -19,6 +18,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - 8080:8080
+      - 6070:6070
     depends_on:
       - redis
     networks:
