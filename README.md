@@ -47,6 +47,13 @@ go [here](https://golang.org/doc/install).
   ```bash
   make compile
   ```
+
+  Ensure you set the correct platform if running OSX host with a linux container e.g.
+
+  ```bash
+  GOOS=linux make compile
+  ```
+
 * To compile and run tests:
   ```bash
   make tests
