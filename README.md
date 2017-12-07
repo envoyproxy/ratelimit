@@ -284,7 +284,8 @@ on the RateLimitRequest message type in the Ratelimit [proto file.](https://gith
 # Statistics
 
 The rate limit service generates various statistics for each configured rate limit rule that will be useful for end
-users both for visibility and for setting alarms.
+users both for visibility and for setting alarms. Ratelimit uses [gostats](https://github.com/lyft/gostats) as its statistics library. Please refer
+to [gostats' documentation](https://godoc.org/github.com/lyft/gostats) for more information on the library.
 
 Rate Limit Statistic Path:
 
