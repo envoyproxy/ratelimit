@@ -99,8 +99,7 @@ descriptors:
 Each descriptor in a descriptor list must have a key. It can also optionally have a value to enable a more specific
 match. The "rate_limit" block is optional and if present sets up an actual rate limit rule. See below for how the
 rule is defined. If the rate limit is not present and there are no nested descriptors, then the descriptor is
-effectively whitelisted. Otherwise, nested descriptors can be used to allow for more complex matches and rate
-limit scenarios.
+effectively whitelisted. Otherwise, nested descriptors allow more complex matching and rate limiting scenarios.
 
 ### Rate limit definition
 
