@@ -31,6 +31,10 @@ descriptors:
       unit: minute
       requests_per_unit: 30
 
+  # Top level key/value with no limit, effectively whitelisted.
+  - key: key2
+    value: value3
+
   - key: key3
     rate_limit:
       unit: hour
