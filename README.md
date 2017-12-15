@@ -97,10 +97,10 @@ descriptors:
 ```
 
 Each descriptor in a descriptor list must have a key. It can also optionally have a value to enable a more specific
-match. The "rate_limit" block is optional and if present sets up an actual rate limit rule. See below for how the rule
-is defined. The reason a rule might not be present is typically if a descriptor is a container for a 2nd level
-descriptor list. Each descriptor can optionally contain a nested descriptor list that allows for more complex matches
-and rate limit scenarios.
+match. The "rate_limit" block is optional and if present sets up an actual rate limit rule. See below for how the
+rule is defined. If the rate limit is not present and there are no nested descriptors, then the descriptor is
+effectively whitelisted. Otherwise, nested descriptors can be used to allow for more complex matches and rate
+limit scenarios.
 
 ### Rate limit definition
 
