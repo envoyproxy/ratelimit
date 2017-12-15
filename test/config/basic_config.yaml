@@ -31,7 +31,7 @@ descriptors:
       unit: minute
       requests_per_unit: 30
 
-  # Top level key/value with no limit, effectively whitelisted.
+  # First level override with no limit. This effectively whitelists the value.
   - key: key2
     value: value3
 
