@@ -102,6 +102,11 @@ func TestBasicConfig(t *testing.T) {
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
+		&pb.RateLimitDescriptor{[]*pb.RateLimitDescriptor_Entry{{"key2", "value3"}}})
+	assert.Nil(rl)
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
 		&pb.RateLimitDescriptor{[]*pb.RateLimitDescriptor_Entry{{"key3", "foo"}}})
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()

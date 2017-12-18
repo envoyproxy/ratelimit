@@ -31,6 +31,10 @@ descriptors:
       unit: minute
       requests_per_unit: 30
 
+  # First level override with no limit. This effectively whitelists the value.
+  - key: key2
+    value: value3
+
   - key: key3
     rate_limit:
       unit: hour
