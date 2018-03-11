@@ -7,7 +7,7 @@ import:
 - package: github.com/kelseyhightower/envconfig
   version: 1.1.0
 - package: github.com/lyft/gostats
-  version: 9c23c53385ad39995b55631367681b66bb03ac3a
+  version: ^0.2.2
 - package: github.com/lyft/goruntime
   version: 426ae3581aca6d8b997300525e0d075444bd68d1
 - package: github.com/mediocregopher/radix.v2
@@ -17,6 +17,8 @@ import:
   - redis
 - package: github.com/sirupsen/logrus
   version: ^1.0.4
+- package: golang.org/x/sys
+  version: master
 - package: golang.org/x/net
   version: master
   subpackages:
