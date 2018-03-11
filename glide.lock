@@ -1,5 +1,5 @@
-hash: 8467954ff9ce5394a7359369061c529e0c902f5172524edd36b9429f3a23573e
-updated: 2017-06-05T09:50:07.327159196-07:00
+hash: f7a9d583014d56af3758a95da65c1ab902fe1dccb6f21fe4c6d7fcdf5e6a4a3f
+updated: 2018-03-11T22:18:58.717648681+01:00
 imports:
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
@@ -21,26 +21,30 @@ imports:
 - name: github.com/kelseyhightower/envconfig
   version: ac12b1f15efba734211a556d8b125110dc538016
 - name: github.com/lyft/goruntime
-  version: 6b40116c86cb185340f0252a3cd0071b4ee3396b
+  version: 426ae3581aca6d8b997300525e0d075444bd68d1
   subpackages:
   - loader
   - snapshot
   - snapshot/entry
 - name: github.com/lyft/gostats
-  version: 20442a7429a7bfca84f2b88ec833b3901530db2c
+  version: 9c23c53385ad39995b55631367681b66bb03ac3a
 - name: github.com/mediocregopher/radix.v2
-  version: a0e715a8b85933a8ef42073647fafa42ce925896
+  version: 6a0c5624776f3f6ab0416da199aecc6991322b3f
   subpackages:
   - pool
   - redis
 - name: github.com/sirupsen/logrus
-  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
+  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/stretchr/testify
   version: f390dcf405f7b83c997eac1b06768bb9f44dec18
   subpackages:
   - assert
+- name: golang.org/x/crypto
+  version: c7dcf104e3a7a1417abc0230cb0d5240d764159d
+  subpackages:
+  - ssh/terminal
 - name: golang.org/x/net
-  version: 3da985ce5951d99de868be4385f21ea6c2b22f24
+  version: ae89d30ce0c63142b652837da33d782e2b0a9b25
   subpackages:
   - context
   - http2
@@ -53,6 +57,7 @@ imports:
   version: 9bb9f0998d48b31547d975974935ae9b48c7a03c
   subpackages:
   - unix
+  - windows
 - name: golang.org/x/text
   version: 470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4
   subpackages:
@@ -81,7 +86,7 @@ imports:
   - tap
   - transport
 - name: gopkg.in/yaml.v2
-  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
+  version: 7f97868eec74b32b0982dd158a51a446d1da7eb5
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21

@@ -7,16 +7,16 @@ import:
 - package: github.com/kelseyhightower/envconfig
   version: 1.1.0
 - package: github.com/lyft/gostats
-  version: 20442a7429a7bfca84f2b88ec833b3901530db2c
+  version: 9c23c53385ad39995b55631367681b66bb03ac3a
 - package: github.com/lyft/goruntime
-  version: 6b40116c86cb185340f0252a3cd0071b4ee3396b
+  version: 426ae3581aca6d8b997300525e0d075444bd68d1
 - package: github.com/mediocregopher/radix.v2
   version: master
   subpackages:
   - pool
   - redis
 - package: github.com/sirupsen/logrus
-  version: ^0.11.0
+  version: ^1.0.4
 - package: golang.org/x/net
   version: master
   subpackages:
