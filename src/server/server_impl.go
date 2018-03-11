@@ -121,7 +121,7 @@ func newServer(name string, opts ...settings.Option) *server {
 	ret.store.AddStatGenerator(stats.NewRuntimeStats(ret.scope.Scope("go")))
 
 	// setup runtime
-	ret.runtime = loader.New(s.RuntimePath, s.RuntimeSubdirectory, ret.store.Scope("runtime"))
+	ret.runtime = loader.New(s.RuntimePath, s.RuntimeSubdirectory, ret.store.Scope("runtime"), &loader.DirectoryRefresher{})
 
 	// setup http router
 	ret.router = mux.NewRouter()
