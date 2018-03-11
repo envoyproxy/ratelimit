@@ -33,7 +33,7 @@ imports:
   subpackages:
   - pool
   - redis
-- name: github.com/Sirupsen/logrus
+- name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/stretchr/testify
   version: f390dcf405f7b83c997eac1b06768bb9f44dec18

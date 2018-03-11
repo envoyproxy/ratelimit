@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	logger "github.com/Sirupsen/logrus"
+	logger "github.com/sirupsen/logrus"
 	"github.com/lyft/gostats"
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 	"golang.org/x/net/context"

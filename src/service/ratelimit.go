@@ -4,7 +4,7 @@ import (
 	"strings"
 	"sync"
 
-	logger "github.com/Sirupsen/logrus"
+	logger "github.com/sirupsen/logrus"
 	"github.com/lyft/goruntime/loader"
 	"github.com/lyft/gostats"
 	pb "github.com/lyft/ratelimit/proto/ratelimit"

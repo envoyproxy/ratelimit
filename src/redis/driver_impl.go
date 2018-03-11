@@ -1,7 +1,7 @@
 package redis
 
 import (
-	logger "github.com/Sirupsen/logrus"
+	logger "github.com/sirupsen/logrus"
 	"github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/settings"
