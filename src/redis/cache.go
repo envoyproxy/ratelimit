@@ -3,7 +3,7 @@ package redis
 import (
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/config"
-	"golang.org/x/net/context"
+	"context"
 )
 
 // Interface for a time source.

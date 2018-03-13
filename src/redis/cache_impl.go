@@ -11,7 +11,7 @@ import (
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	logger "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
+	"context"
 )
 
 type rateLimitCacheImpl struct {
