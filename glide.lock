@@ -1,10 +1,10 @@
-hash: 51079b722f06927c4ed01c94c6ef654e856ca5999f23928e098198fe0141390f
-updated: 2018-03-12T00:29:24.297486918+01:00
+hash: 9588fa3c794b6ff864c080ac58e055b7ff22462d09c4baac68558441d28b21a6
+updated: 2018-03-13T19:17:10.758076161+01:00
 imports:
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
 - name: github.com/golang/mock
-  version: bd3c8e81be01eef76d4b503f5e687d2d1354d2d9
+  version: 58cd061d09382b6011f84c1291ebe50ef2e25bab
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
@@ -27,7 +27,7 @@ imports:
   - snapshot
   - snapshot/entry
 - name: github.com/lyft/gostats
-  version: 26800eeab5fe617d48b3dcdaa4302a74997b459a
+  version: 943f43ede7b2dbf1d7162587689cb484d49ecd15
 - name: github.com/mediocregopher/radix.v2
   version: 6a0c5624776f3f6ab0416da199aecc6991322b3f
   subpackages:
@@ -40,11 +40,11 @@ imports:
   subpackages:
   - assert
 - name: golang.org/x/crypto
-  version: c7dcf104e3a7a1417abc0230cb0d5240d764159d
+  version: 182114d582623c1caa54f73de9c7224e23a48487
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: ae89d30ce0c63142b652837da33d782e2b0a9b25
+  version: 803fdb99c0f72e493c28ef2099d250a9c989d8ff
   subpackages:
   - context
   - http2
@@ -54,7 +54,7 @@ imports:
   - lex/httplex
   - trace
 - name: golang.org/x/sys
-  version: 7dca6fe1f43775aa6d1334576870ff63f978f539
+  version: 8c0ece68c28377f4c326d85b94f8df0dace46f80
   subpackages:
   - unix
   - windows
