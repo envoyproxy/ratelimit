@@ -1,9 +1,9 @@
 package redis
 
 import (
+	"context"
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/config"
-	"context"
 )
 
 // Interface for a time source.

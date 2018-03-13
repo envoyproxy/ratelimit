@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"context"
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	logger "github.com/sirupsen/logrus"
-	"context"
 )
 
 type rateLimitCacheImpl struct {
