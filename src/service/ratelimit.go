@@ -4,13 +4,13 @@ import (
 	"strings"
 	"sync"
 
-	logger "github.com/Sirupsen/logrus"
 	"github.com/lyft/goruntime/loader"
 	"github.com/lyft/gostats"
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
+	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	logger "github.com/Sirupsen/logrus"
 	"github.com/lyft/gostats"
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
+	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"gopkg.in/yaml.v2"
 )

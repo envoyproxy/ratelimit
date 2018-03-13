@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	logger "github.com/Sirupsen/logrus"
+	"context"
 	pb "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
-	"golang.org/x/net/context"
+	logger "github.com/sirupsen/logrus"
 )
 
 type rateLimitCacheImpl struct {
