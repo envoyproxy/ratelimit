@@ -1,46 +1,50 @@
-hash: 8467954ff9ce5394a7359369061c529e0c902f5172524edd36b9429f3a23573e
-updated: 2017-06-05T09:50:07.327159196-07:00
+hash: dc945f344deb6419e2cc13b4dd8c61f2dfacdfbb212ae91787209e59942b62b4
+updated: 2018-03-16T09:22:04.27667566-07:00
 imports:
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
 - name: github.com/golang/mock
-  version: bd3c8e81be01eef76d4b503f5e687d2d1354d2d9
+  version: 58cd061d09382b6011f84c1291ebe50ef2e25bab
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
-  version: 98fa357170587e470c5f27d3c3ea0947b71eb455
+  version: bbd03ef6da3a115852eaf24c8a1c46aeb39aa175
   subpackages:
   - proto
   - ptypes/any
 - name: github.com/gorilla/context
-  version: 1ea25387ff6f684839d82767c1733ff4d4d15d0a
+  version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
 - name: github.com/gorilla/mux
-  version: 0eeaf8392f5b04950925b8a69fe70f110fa7cbfc
+  version: 4dbd923b0c9e99ff63ad54b0e9705ff92d3cdb06
 - name: github.com/kavu/go_reuseport
   version: 3d6c1e425f717ee59152524e73b904b67705eeb8
 - name: github.com/kelseyhightower/envconfig
   version: ac12b1f15efba734211a556d8b125110dc538016
 - name: github.com/lyft/goruntime
-  version: 6b40116c86cb185340f0252a3cd0071b4ee3396b
+  version: 426ae3581aca6d8b997300525e0d075444bd68d1
   subpackages:
   - loader
   - snapshot
   - snapshot/entry
 - name: github.com/lyft/gostats
-  version: 20442a7429a7bfca84f2b88ec833b3901530db2c
+  version: 943f43ede7b2dbf1d7162587689cb484d49ecd15
 - name: github.com/mediocregopher/radix.v2
-  version: a0e715a8b85933a8ef42073647fafa42ce925896
+  version: 6a0c5624776f3f6ab0416da199aecc6991322b3f
   subpackages:
   - pool
   - redis
-- name: github.com/Sirupsen/logrus
-  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
+- name: github.com/sirupsen/logrus
+  version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
 - name: github.com/stretchr/testify
   version: f390dcf405f7b83c997eac1b06768bb9f44dec18
   subpackages:
   - assert
+- name: golang.org/x/crypto
+  version: b4956d363a8b14623cc81db401707679605930a3
+  subpackages:
+  - ssh/terminal
 - name: golang.org/x/net
-  version: 3da985ce5951d99de868be4385f21ea6c2b22f24
+  version: e0c57d8f86c17f0724497efcb3bc617e82834821
   subpackages:
   - context
   - http2
@@ -50,18 +54,19 @@ imports:
   - lex/httplex
   - trace
 - name: golang.org/x/sys
-  version: 9bb9f0998d48b31547d975974935ae9b48c7a03c
+  version: cc7307a45468e49eaf2997c890f14aa03a26917b
   subpackages:
   - unix
+  - windows
 - name: golang.org/x/text
-  version: 470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4
+  version: 8c34f848e18c4bd34d02db7f19a0ed1a0a8f5852
   subpackages:
   - secure/bidirule
   - transform
   - unicode/bidi
   - unicode/norm
 - name: google.golang.org/genproto
-  version: 411e09b969b1170a9f0c467558eb4c4c110d9c77
+  version: f8c8703595236ae70fdf8789ecb656ea0bcdcf46
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
@@ -81,7 +86,7 @@ imports:
   - tap
   - transport
 - name: gopkg.in/yaml.v2
-  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
+  version: 7f97868eec74b32b0982dd158a51a446d1da7eb5
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21
