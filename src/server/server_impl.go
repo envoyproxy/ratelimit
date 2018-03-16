@@ -14,12 +14,12 @@ import (
 
 	"net"
 
-	logger "github.com/sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
 	"github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/settings"
+	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 

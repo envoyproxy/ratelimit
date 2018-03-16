@@ -1,12 +1,12 @@
 package redis
 
 import (
-	logger "github.com/sirupsen/logrus"
 	"github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/settings"
 	"github.com/mediocregopher/radix.v2/pool"
 	"github.com/mediocregopher/radix.v2/redis"
+	logger "github.com/sirupsen/logrus"
 )
 
 type poolStats struct {
