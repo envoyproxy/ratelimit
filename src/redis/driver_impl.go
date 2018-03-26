@@ -3,6 +3,7 @@ package redis
 import (
 	"github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/assert"
+	"github.com/lyft/ratelimit/src/settings"
 	"github.com/mediocregopher/radix.v2/pool"
 	"github.com/mediocregopher/radix.v2/redis"
 	logger "github.com/sirupsen/logrus"
@@ -65,8 +66,20 @@ func (this *poolImpl) Put(c Connection) {
 }
 
 func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int) Pool {
+	s := settings.NewSettings()
+	df := func(network, addr string) (*redis.Client, error) {
+		client, err := redis.Dial(network, addr)
+		if err != nil {
+			return nil, err
+		}
+		if err = client.Cmd("AUTH", s.RedisPassword).Err; err != nil {
+			client.Close()
+			return nil, err
+		}
+		return client, nil
+	}
 	logger.Warnf("connecting to redis on %s %s with pool size %d", socketType, url, poolSize)
-	pool, err := pool.New(socketType, url, poolSize)
+	pool, err := pool.NewCustom(socketType, url, poolSize, df)
 	checkError(err)
 	return &poolImpl{
 		pool:  pool,

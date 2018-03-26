@@ -20,6 +20,7 @@ type Settings struct {
 	LogLevel                   string `envconfig:"LOG_LEVEL" default:"WARN"`
 	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisUrl                   string `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
+	RedisPassword			   string `envconfig:"REDIS_PASSWORD"`
 	RedisPoolSize              int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
 	RedisPerSecond             bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType   string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`

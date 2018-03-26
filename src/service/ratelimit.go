@@ -158,7 +158,7 @@ func (this *service) ShouldRateLimit(
 			panic(err)
 		}
 	}()
-
+	logger.Debugf("Received request %s", request.String())
 	response := this.shouldRateLimitWorker(ctx, request)
 	logger.Debugf("returning normal response")
 	return response, nil

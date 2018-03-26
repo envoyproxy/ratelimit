@@ -1,0 +1,6 @@
+domain: edge_proxy_per_ip
+descriptors:
+  - key: remote_address
+    rate_limit:
+      unit: day
+      requests_per_unit: 3

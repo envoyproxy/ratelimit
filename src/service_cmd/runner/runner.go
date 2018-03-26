@@ -8,6 +8,7 @@ import (
 
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
+	logger "github.com/Sirupsen/logrus"
 
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
@@ -16,10 +17,27 @@ import (
 	"github.com/lyft/ratelimit/src/settings"
 )
 
-func Run() {
-	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
+func InitLogLevel(level string) {
+	switch level {
+	case "WARN":
+		logger.SetLevel(logger.WarnLevel)
+		break
+	case "INFO":
+		logger.SetLevel(logger.InfoLevel)
+		break
+	case "DEBUG":
+		logger.SetLevel(logger.DebugLevel)
+		break
+	case "FATAL":
+		logger.SetLevel(logger.FatalLevel)
+		break
+	}
+}
 
+func Run() {
 	s := settings.NewSettings()
+	InitLogLevel(s.LogLevel)
+	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
 
 	var perSecondPool redis.Pool
 	if s.RedisPerSecond {
