@@ -1,5 +1,5 @@
-#!groovy
-@library('digital-jenkins-library@master')
+#!/usr/bin/groovy
+@Library('digital-jenkins-library@master')
 def digitalCommands = new com.digital.jenkins.DigitalCommands()
 def notifications = new com.digital.jenkins.Notifications()
 
