@@ -7,7 +7,8 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/lyft/ratelimit/proto/ratelimit"
+	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
+	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	logger "github.com/sirupsen/logrus"
@@ -24,15 +25,15 @@ type rateLimitCacheImpl struct {
 // Convert a rate limit into a time divider.
 // @param unit supplies the unit to convert.
 // @return the divider to use in time computations.
-func unitToDivider(unit pb.RateLimit_Unit) int64 {
+func unitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 	switch unit {
-	case pb.RateLimit_SECOND:
+	case pb.RateLimitResponse_RateLimit_SECOND:
 		return 1
-	case pb.RateLimit_MINUTE:
+	case pb.RateLimitResponse_RateLimit_MINUTE:
 		return 60
-	case pb.RateLimit_HOUR:
+	case pb.RateLimitResponse_RateLimit_HOUR:
 		return 60 * 60
-	case pb.RateLimit_DAY:
+	case pb.RateLimitResponse_RateLimit_DAY:
 		return 60 * 60 * 24
 	}
 
@@ -46,7 +47,7 @@ func unitToDivider(unit pb.RateLimit_Unit) int64 {
 // @param now supplies the current unix time.
 // @return the cache key.
 func (this *rateLimitCacheImpl) generateCacheKey(
-	domain string, descriptor *pb.RateLimitDescriptor, limit *config.RateLimit, now int64) string {
+	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64) string {
 
 	if limit == nil {
 		return ""
@@ -118,7 +119,11 @@ func (this *rateLimitCacheImpl) DoLimit(
 	for i, cacheKey := range cacheKeys {
 		if cacheKey == "" {
 			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OK, nil, 0}
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:           pb.RateLimitResponse_OK,
+					CurrentLimit:   nil,
+					LimitRemaining: 0,
+				}
 			continue
 		}
 		limitAfterIncrease := uint32(conn.PipeResponse().Int())
@@ -133,8 +138,11 @@ func (this *rateLimitCacheImpl) DoLimit(
 		logger.Debugf("cache key: %s current: %d", cacheKey, limitAfterIncrease)
 		if limitAfterIncrease > overLimitThreshold {
 			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OVER_LIMIT,
-					limits[i].Limit, 0}
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:           pb.RateLimitResponse_OVER_LIMIT,
+					CurrentLimit:   limits[i].Limit,
+					LimitRemaining: 0,
+				}
 
 			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
 			// assess if the entire hitsAddend were over the limit. That is, if the limit's value before adding the
@@ -152,9 +160,11 @@ func (this *rateLimitCacheImpl) DoLimit(
 			}
 		} else {
 			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OK,
-					limits[i].Limit,
-					overLimitThreshold - limitAfterIncrease}
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:           pb.RateLimitResponse_OK,
+					CurrentLimit:   limits[i].Limit,
+					LimitRemaining: overLimitThreshold - limitAfterIncrease,
+				}
 
 			// The limit is OK but we additionally want to know if we are near the limit.
 			if limitAfterIncrease > nearLimitThreshold {

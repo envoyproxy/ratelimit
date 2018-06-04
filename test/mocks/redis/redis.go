@@ -5,7 +5,7 @@ package mock_redis
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	ratelimit "github.com/lyft/ratelimit/proto/ratelimit"
+	ratelimit "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	config "github.com/lyft/ratelimit/src/config"
 	redis "github.com/lyft/ratelimit/src/redis"
 	context "golang.org/x/net/context"

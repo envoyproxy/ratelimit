@@ -1,6 +1,6 @@
 sudo:     required
 language: go
-go:       1.7.5
+go:       "1.10"
 services: redis-server
 env:
   - REDIS_SOCKET_TYPE=tcp REDIS_URL="localhost:6379"

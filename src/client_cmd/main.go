@@ -7,13 +7,14 @@ import (
 	"os"
 	"strings"
 
-	pb "github.com/lyft/ratelimit/proto/ratelimit"
+	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
+	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
 type descriptorValue struct {
-	descriptor *pb.RateLimitDescriptor
+	descriptor *pb_struct.RateLimitDescriptor
 }
 
 func (this *descriptorValue) Set(arg string) error {
@@ -25,7 +26,7 @@ func (this *descriptorValue) Set(arg string) error {
 		}
 
 		this.descriptor.Entries = append(
-			this.descriptor.Entries, &pb.RateLimitDescriptor_Entry{Key: parts[0], Value: parts[1]})
+			this.descriptor.Entries, &pb_struct.RateLimitDescriptor_Entry{Key: parts[0], Value: parts[1]})
 	}
 
 	return nil
@@ -39,7 +40,7 @@ func main() {
 	dialString := flag.String(
 		"dial_string", "localhost:8081", "url of ratelimit server in <host>:<port> form")
 	domain := flag.String("domain", "", "rate limit configuration domain to query")
-	descriptorValue := descriptorValue{&pb.RateLimitDescriptor{}}
+	descriptorValue := descriptorValue{&pb_struct.RateLimitDescriptor{}}
 	flag.Var(
 		&descriptorValue, "descriptors",
 		"descriptor list to query in <key>=<value>,<key>=<value>,... form")
@@ -59,7 +60,11 @@ func main() {
 	c := pb.NewRateLimitServiceClient(conn)
 	response, err := c.ShouldRateLimit(
 		context.Background(),
-		&pb.RateLimitRequest{*domain, []*pb.RateLimitDescriptor{descriptorValue.descriptor}, 1})
+		&pb.RateLimitRequest{
+			Domain:      *domain,
+			Descriptors: []*pb_struct.RateLimitDescriptor{descriptorValue.descriptor},
+			HitsAddend:  1,
+		})
 	if err != nil {
 		fmt.Printf("request error: %s\n", err.Error())
 		os.Exit(1)

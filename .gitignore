@@ -3,3 +3,4 @@ cover.out
 bin/
 .idea/
 vendor
+proto/envoy
