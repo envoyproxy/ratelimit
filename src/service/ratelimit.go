@@ -58,12 +58,6 @@ type service struct {
 	legacy             *legacyService
 }
 
-// legacyService is used to implement ratelimit.proto (https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto)
-// the legacyService receives RateLimitRequests, converts the request, and calls the service's ShouldRateLimit method.
-type legacyService struct {
-	s *service
-}
-
 func (this *service) reloadConfig() {
 	defer func() {
 		if e := recover(); e != nil {
@@ -193,7 +187,10 @@ func NewService(runtime loader.IFace, cache redis.RateLimitCache,
 		stats:              newServiceStats(stats),
 		rlStatsScope:       stats.Scope("rate_limit"),
 	}
-	newService.legacy = &legacyService{newService}
+	newService.legacy = &legacyService{
+		s: newService,
+		shouldRateLimitLegacyStats: newShouldRateLimitLegacyStats(stats),
+	}
 
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
 
