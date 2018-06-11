@@ -1,21 +1,29 @@
-hash: dc945f344deb6419e2cc13b4dd8c61f2dfacdfbb212ae91787209e59942b62b4
-updated: 2018-03-16T09:22:04.27667566-07:00
+hash: fe989994477e78bb58fd50892030bc6c0d0bbbf95b50012e7e9b10e2b2bd0f8d
+updated: 2018-06-07T16:52:24.670498-07:00
 imports:
+- name: github.com/envoyproxy/data-plane-api
+  version: 0f8a2a3d456de4d3a29f4e8f7a641fef011d1394
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
 - name: github.com/golang/mock
-  version: 58cd061d09382b6011f84c1291ebe50ef2e25bab
+  version: 22bbf0ddf08105dfa364d0a2fa619dfa71014af5
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
-  version: bbd03ef6da3a115852eaf24c8a1c46aeb39aa175
+  version: b4deda0973fb4c70b50d226b1af49f3da59f5265
   subpackages:
   - proto
+  - protoc-gen-go/descriptor
+  - ptypes
   - ptypes/any
+  - ptypes/duration
+  - ptypes/timestamp
+- name: github.com/google/protobuf
+  version: 106ffc04be1abf3ff3399f54ccf149815b287dd9
 - name: github.com/gorilla/context
   version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
 - name: github.com/gorilla/mux
-  version: 4dbd923b0c9e99ff63ad54b0e9705ff92d3cdb06
+  version: 53c1911da2b537f792e7cafcb446b05ffe33b996
 - name: github.com/kavu/go_reuseport
   version: 3d6c1e425f717ee59152524e73b904b67705eeb8
 - name: github.com/kelseyhightower/envconfig
@@ -28,8 +36,12 @@ imports:
   - snapshot/entry
 - name: github.com/lyft/gostats
   version: 943f43ede7b2dbf1d7162587689cb484d49ecd15
+- name: github.com/lyft/protoc-gen-validate
+  version: cae364899cd8c08b83bfdcabf4ce4dd4a68ca6da
+  subpackages:
+  - validate
 - name: github.com/mediocregopher/radix.v2
-  version: 6a0c5624776f3f6ab0416da199aecc6991322b3f
+  version: 94360be262532d465b7e4760c7a67195d3319a87
   subpackages:
   - pool
   - redis
@@ -40,53 +52,63 @@ imports:
   subpackages:
   - assert
 - name: golang.org/x/crypto
-  version: b4956d363a8b14623cc81db401707679605930a3
+  version: 91a49db82a88618983a78a06c1cbd4e00ab749ab
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: e0c57d8f86c17f0724497efcb3bc617e82834821
+  version: 1e491301e022f8f977054da4c2d852decd59571f
   subpackages:
   - context
+  - http/httpguts
   - http2
   - http2/hpack
   - idna
   - internal/timeseries
-  - lex/httplex
   - trace
 - name: golang.org/x/sys
-  version: cc7307a45468e49eaf2997c890f14aa03a26917b
+  version: f6cff0780e542efa0c8e864dc8fa522808f6a598
   subpackages:
   - unix
   - windows
 - name: golang.org/x/text
-  version: 8c34f848e18c4bd34d02db7f19a0ed1a0a8f5852
+  version: 27420a1a391f5504f73155051cd274311bf70883
   subpackages:
   - secure/bidirule
   - transform
   - unicode/bidi
   - unicode/norm
 - name: google.golang.org/genproto
-  version: f8c8703595236ae70fdf8789ecb656ea0bcdcf46
+  version: 2d9486acae19cf9bd0c093d7dc236a323726a9e4
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: d2e1b51f33ff8c5e4a15560ff049d200e83726c5
+  version: 41344da2231b913fa3d983840a57a6b1b7b631a1
   subpackages:
+  - balancer
+  - balancer/base
+  - balancer/roundrobin
+  - channelz
   - codes
+  - connectivity
   - credentials
-  - grpclb/grpc_lb_v1
+  - encoding
+  - encoding/proto
+  - grpclb/grpc_lb_v1/messages
   - grpclog
   - internal
   - keepalive
   - metadata
   - naming
   - peer
+  - resolver
+  - resolver/dns
+  - resolver/passthrough
   - stats
   - status
   - tap
   - transport
 - name: gopkg.in/yaml.v2
-  version: 7f97868eec74b32b0982dd158a51a446d1da7eb5
+  version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21

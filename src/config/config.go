@@ -2,7 +2,8 @@ package config
 
 import (
 	"github.com/lyft/gostats"
-	pb "github.com/lyft/ratelimit/proto/ratelimit"
+	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
+	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"golang.org/x/net/context"
 )
 
@@ -29,7 +30,7 @@ type RateLimitStats struct {
 type RateLimit struct {
 	FullKey string
 	Stats   RateLimitStats
-	Limit   *pb.RateLimit
+	Limit   *pb.RateLimitResponse_RateLimit
 }
 
 // Interface for interacting with a loaded rate limit config.
@@ -42,7 +43,7 @@ type RateLimitConfig interface {
 	// @param domain supplies the domain to lookup the descriptor in.
 	// @param descriptor supplies the descriptor to look up.
 	// @return a rate limit to apply or nil if no rate limit is configured for the descriptor.
-	GetLimit(ctx context.Context, domain string, descriptor *pb.RateLimitDescriptor) *RateLimit
+	GetLimit(ctx context.Context, domain string, descriptor *pb_struct.RateLimitDescriptor) *RateLimit
 }
 
 // Information for a config file to load into the aggregate config.

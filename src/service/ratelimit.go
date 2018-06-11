@@ -6,7 +6,7 @@ import (
 
 	"github.com/lyft/goruntime/loader"
 	"github.com/lyft/gostats"
-	pb "github.com/lyft/ratelimit/proto/ratelimit"
+	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
@@ -43,6 +43,7 @@ func newServiceStats(scope stats.Scope) serviceStats {
 type RateLimitServiceServer interface {
 	pb.RateLimitServiceServer
 	GetCurrentConfig() config.RateLimitConfig
+	GetLegacyService() RateLimitLegacyServiceServer
 }
 
 type service struct {
@@ -54,6 +55,7 @@ type service struct {
 	cache              redis.RateLimitCache
 	stats              serviceStats
 	rlStatsScope       stats.Scope
+	legacy             *legacyService
 }
 
 func (this *service) reloadConfig() {
@@ -162,6 +164,10 @@ func (this *service) ShouldRateLimit(
 	return response, nil
 }
 
+func (this *service) GetLegacyService() RateLimitLegacyServiceServer {
+	return this.legacy
+}
+
 func (this *service) GetCurrentConfig() config.RateLimitConfig {
 	this.configLock.RLock()
 	defer this.configLock.RUnlock()
@@ -171,8 +177,21 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 func NewService(runtime loader.IFace, cache redis.RateLimitCache,
 	configLoader config.RateLimitConfigLoader, stats stats.Scope) RateLimitServiceServer {
 
-	newService := &service{runtime, sync.RWMutex{}, configLoader, nil, make(chan int), cache,
-		newServiceStats(stats), stats.Scope("rate_limit")}
+	newService := &service{
+		runtime:            runtime,
+		configLock:         sync.RWMutex{},
+		configLoader:       configLoader,
+		config:             nil,
+		runtimeUpdateEvent: make(chan int),
+		cache:              cache,
+		stats:              newServiceStats(stats),
+		rlStatsScope:       stats.Scope("rate_limit"),
+	}
+	newService.legacy = &legacyService{
+		s: newService,
+		shouldRateLimitLegacyStats: newShouldRateLimitLegacyStats(stats),
+	}
+
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
 
 	newService.reloadConfig()

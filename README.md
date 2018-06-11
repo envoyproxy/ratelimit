@@ -3,6 +3,8 @@
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Overview](#overview)
+- [Deprecation of Legacy Ratelimit Proto](#deprecation-of-legacy-ratelimit-proto)
+  - [Deprecation Schedule](#deprecation-schedule)
 - [Building and Testing](#building-and-testing)
 - [Configuration](#configuration)
   - [The configuration format](#the-configuration-format)
@@ -28,6 +30,28 @@ The rate limit service is a Go/gRPC service designed to enable generic rate limi
 applications. Applications request a rate limit decision based on a domain and a set of descriptors. The service
 reads the configuration from disk via [runtime](https://github.com/lyft/goruntime), composes a cache key, and talks to the redis cache. A
 decision is then returned to the caller.
+
+# Deprecation of Legacy Ratelimit Proto
+
+Envoy's data-plane-api defines a ratelimit service proto [rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto).
+Logically the data-plane-api [rls](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto)
+is equivalent to the [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto)
+defined in this repo. However, due
+to the namespace differences and how gRPC routing works it is not possible to transparently route the
+legacy ratelimit (ones based in the [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto)
+defined in this repo) requests to the data-plane-api
+definitions. Therefore, the ratelimit service will upgrade the requests, process them internally as it would
+process a data-plane-api ratelimit request, and then downgrade the response to send back to the client. This means that,
+for a slight performance hit for clients using the legacy proto, ratelimit is backwards compatible with the legacy proto.
+
+## Deprecation Schedule
+
+1. `v1.0.0` tagged on commit `0ded92a2af8261d43096eba4132e45b99a3b8b14`. Ratelimit has been in production
+use at Lyft for over 2 years.
+2. `v1.1.0` introduces the data-plane-api proto and initiates the deprecation of the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
+3. `v2.0.0` deletes support for the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto). This version will be tagged by the end of 2018Q3 (~September 2018)
+to give time to community members running ratelimit off of `master`.
+
 
 # Building and Testing
 

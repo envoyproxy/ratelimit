@@ -26,7 +26,14 @@ import:
 - package: github.com/stretchr/testify
   version: v1.1.3
 - package: google.golang.org/grpc
-  version: v1.3.0
+  version: v1.12.0
 - package: github.com/kavu/go_reuseport
   version: v1.2.0
-
+- package: github.com/envoyproxy/data-plane-api
+  version: 0f8a2a3d456de4d3a29f4e8f7a641fef011d1394
+- package: github.com/lyft/protoc-gen-validate
+  version: cae364899cd8c08b83bfdcabf4ce4dd4a68ca6da
+- package: github.com/google/protobuf
+  version: v3.5.1
+- package: github.com/golang/protobuf/proto
+  version: v1.1.0
