@@ -49,7 +49,7 @@ for a slight performance hit for clients using the legacy proto, ratelimit is ba
 1. `v1.0.0` tagged on commit `0ded92a2af8261d43096eba4132e45b99a3b8b14`. Ratelimit has been in production
 use at Lyft for over 2 years.
 2. `v1.1.0` introduces the data-plane-api proto and initiates the deprecation of the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
-3. `v1.2.0` deletes support for the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto). This version will be tagged by the end of 2018Q3 (~September 2018)
+3. `v2.0.0` deletes support for the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto). This version will be tagged by the end of 2018Q3 (~September 2018)
 to give time to community members running ratelimit off of `master`.
 
 
