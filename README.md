@@ -357,9 +357,9 @@ You can specify the debug port with the `DEBUG_PORT` environment variable. It de
 * [envoy-announce](https://groups.google.com/forum/#!forum/envoy-announce): Low frequency mailing
   list where we will email announcements only.
 * [envoy-users](https://groups.google.com/forum/#!forum/envoy-users): General user discussion.
-  Please add \[ratelimit\] to the email subject.
+  Please add `[ratelimit]` to the email subject.
 * [envoy-dev](https://groups.google.com/forum/#!forum/envoy-dev): Envoy developer discussion (APIs,
-  feature design, etc.). Please add \[ratelimit\] to the email subject.
+  feature design, etc.). Please add `[ratelimit]` to the email subject.
 * [Slack](https://envoyproxy.slack.com/): Slack, to get invited go [here](http://envoyslack.cncf.io).
   We have the IRC/XMPP gateways enabled if you prefer either of those. Once an account is created,
   connection instructions for IRC/XMPP can be found [here](https://envoyproxy.slack.com/account/gateways).
