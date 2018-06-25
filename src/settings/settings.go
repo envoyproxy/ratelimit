@@ -21,6 +21,10 @@ type Settings struct {
 	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisUrl                   string `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
 	RedisPoolSize              int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
+	RedisPerSecond             bool   `envconfig:"REDIS_PERSECOND" default:"false"`
+	RedisPerSecondSocketType   string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
+	RedisPerSecondUrl          string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
+	RedisPerSecondPoolSize     int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 }
 

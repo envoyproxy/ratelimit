@@ -3,7 +3,6 @@ package redis
 import (
 	"github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/assert"
-	"github.com/lyft/ratelimit/src/settings"
 	"github.com/mediocregopher/radix.v2/pool"
 	"github.com/mediocregopher/radix.v2/redis"
 	logger "github.com/sirupsen/logrus"
@@ -65,13 +64,13 @@ func (this *poolImpl) Put(c Connection) {
 	}
 }
 
-func NewPoolImpl(scope stats.Scope) Pool {
-	s := settings.NewSettings()
-
-	logger.Warnf("connecting to redis on %s %s with pool size %d", s.RedisSocketType, s.RedisUrl, s.RedisPoolSize)
-	pool, err := pool.New(s.RedisSocketType, s.RedisUrl, s.RedisPoolSize)
+func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int) Pool {
+	logger.Warnf("connecting to redis on %s %s with pool size %d", socketType, url, poolSize)
+	pool, err := pool.New(socketType, url, poolSize)
 	checkError(err)
-	return &poolImpl{pool, newPoolStats(scope)}
+	return &poolImpl{
+		pool:  pool,
+		stats: newPoolStats(scope)}
 }
 
 func (this *connectionImpl) PipeAppend(cmd string, args ...interface{}) {

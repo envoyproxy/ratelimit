@@ -16,7 +16,12 @@ import (
 )
 
 type rateLimitCacheImpl struct {
-	pool                       Pool
+	pool Pool
+	// Optional Pool for a dedicated cache of per second limits.
+	// If this pool is nil, then the Cache will use the pool for all
+	// limits regardless of unit. If this pool is not nil, then it
+	// is used for limits that have a SECOND unit.
+	perSecondPool              Pool
 	timeSource                 TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
@@ -45,23 +50,33 @@ func unitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 // @param descriptor supplies the descriptor to generate the key for.
 // @param limit supplies the rate limit to generate the key for (may be nil).
 // @param now supplies the current unix time.
-// @return the cache key.
+// @return cacheKey struct.
 func (this *rateLimitCacheImpl) generateCacheKey(
-	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64) string {
+	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64) cacheKey {
 
 	if limit == nil {
-		return ""
+		return cacheKey{
+			key:       "",
+			perSecond: false,
+		}
 	}
 
-	var cacheKey string = domain + "_"
+	var key = domain + "_"
 	for _, entry := range descriptor.Entries {
-		cacheKey += entry.Key + "_"
-		cacheKey += entry.Value + "_"
+		key += entry.Key + "_"
+		key += entry.Value + "_"
 	}
 
 	divider := unitToDivider(limit.Limit.Unit)
-	cacheKey += strconv.FormatInt((now/divider)*divider, 10)
-	return cacheKey
+	key += strconv.FormatInt((now/divider)*divider, 10)
+
+	return cacheKey{
+		key:       key,
+		perSecond: isPerSecondLimit(limit.Limit.Unit)}
+}
+
+func isPerSecondLimit(unit pb.RateLimitResponse_RateLimit_Unit) bool {
+	return unit == pb.RateLimitResponse_RateLimit_SECOND
 }
 
 func max(a uint32, b uint32) uint32 {
@@ -71,22 +86,50 @@ func max(a uint32, b uint32) uint32 {
 	return b
 }
 
+type cacheKey struct {
+	key string
+	// True if the key corresponds to a limit with a SECOND unit. False otherwise.
+	perSecond bool
+}
+
+func pipelineAppend(conn Connection, key string, hitsAddend uint32, expirationSeconds int64) {
+	conn.PipeAppend("INCRBY", key, hitsAddend)
+	conn.PipeAppend("EXPIRE", key, expirationSeconds)
+}
+
+func pipelineFetch(conn Connection) uint32 {
+	ret := uint32(conn.PipeResponse().Int())
+	// Pop off EXPIRE response and check for error.
+	conn.PipeResponse()
+	return ret
+}
+
 func (this *rateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
 	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
 
 	logger.Debugf("starting cache lookup")
+
 	conn := this.pool.Get()
 	defer this.pool.Put(conn)
+
+	// Optional connection for per second limits. If the cache has a perSecondPool setup,
+	// then use a connection from the pool for per second limits.
+	var perSecondConn Connection = nil
+	if this.perSecondPool != nil {
+		perSecondConn = this.perSecondPool.Get()
+		defer this.perSecondPool.Put(perSecondConn)
+	}
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
 	hitsAddend := max(1, request.HitsAddend)
 
 	// First build a list of all cache keys that we are actually going to hit. generateCacheKey()
-	// returns "" if there is no limit so that we can keep the arrays all the same size.
+	// returns an empty string in the key if there is no limit so that we can keep the arrays
+	// all the same size.
 	assert.Assert(len(request.Descriptors) == len(limits))
-	cacheKeys := make([]string, len(request.Descriptors))
+	cacheKeys := make([]cacheKey, len(request.Descriptors))
 	now := this.timeSource.UnixNow()
 	for i := 0; i < len(request.Descriptors); i++ {
 		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
@@ -99,7 +142,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
-		if cacheKey == "" {
+		if cacheKey.key == "" {
 			continue
 		}
 		logger.Debugf("looking up cache key: %s", cacheKey)
@@ -109,15 +152,19 @@ func (this *rateLimitCacheImpl) DoLimit(
 			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 		}
 
-		conn.PipeAppend("INCRBY", cacheKey, hitsAddend)
-		conn.PipeAppend("EXPIRE", cacheKey, expirationSeconds)
+		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
+		if perSecondConn != nil && cacheKey.perSecond {
+			pipelineAppend(perSecondConn, cacheKey.key, hitsAddend, expirationSeconds)
+		} else {
+			pipelineAppend(conn, cacheKey.key, hitsAddend, expirationSeconds)
+		}
 	}
 
 	// Now fetch the pipeline.
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
 		len(request.Descriptors))
 	for i, cacheKey := range cacheKeys {
-		if cacheKey == "" {
+		if cacheKey.key == "" {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
 					Code:           pb.RateLimitResponse_OK,
@@ -126,8 +173,14 @@ func (this *rateLimitCacheImpl) DoLimit(
 				}
 			continue
 		}
-		limitAfterIncrease := uint32(conn.PipeResponse().Int())
-		conn.PipeResponse() // Pop off EXPIRE response and check for error.
+
+		var limitAfterIncrease uint32
+		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
+		if this.perSecondPool != nil && cacheKey.perSecond {
+			limitAfterIncrease = pipelineFetch(perSecondConn)
+		} else {
+			limitAfterIncrease = pipelineFetch(conn)
+		}
 
 		limitBeforeIncrease := limitAfterIncrease - hitsAddend
 		overLimitThreshold := limits[i].Limit.RequestsPerUnit
@@ -135,7 +188,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 		// We need to know it in both the OK and OVER_LIMIT scenarios.
 		nearLimitThreshold := uint32(math.Floor(float64(float32(overLimitThreshold) * config.NearLimitRatio)))
 
-		logger.Debugf("cache key: %s current: %d", cacheKey, limitAfterIncrease)
+		logger.Debugf("cache key: %s current: %d", cacheKey.key, limitAfterIncrease)
 		if limitAfterIncrease > overLimitThreshold {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
@@ -184,8 +237,14 @@ func (this *rateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func NewRateLimitCacheImpl(pool Pool, timeSource TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64) RateLimitCache {
-	return &rateLimitCacheImpl{pool, timeSource, jitterRand, expirationJitterMaxSeconds}
+func NewRateLimitCacheImpl(pool Pool, perSecondPool Pool, timeSource TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64) RateLimitCache {
+	return &rateLimitCacheImpl{
+		pool:                       pool,
+		perSecondPool:              perSecondPool,
+		timeSource:                 timeSource,
+		jitterRand:                 jitterRand,
+		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
+	}
 }
 
 type timeSourceImpl struct{}
