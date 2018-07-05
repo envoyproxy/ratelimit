@@ -93,7 +93,7 @@ func TestService(test *testing.T) {
 	// First request, config should be loaded.
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(nil)
-	t.cache.EXPECT().DoLimit(nil, request, []*config.RateLimit{nil}).Return(
+	t.cache.EXPECT().DoLimit(nil, request, []*config.RateLimit{nil}, false, "192.168.0.0/24").Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 
 	response, err := service.ShouldRateLimit(nil, request)
@@ -120,7 +120,7 @@ func TestService(test *testing.T) {
 		nil}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+	t.cache.EXPECT().DoLimit(nil, request, limits,false, "192.168.0.0/24").Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 	response, err = service.ShouldRateLimit(nil, request)
@@ -150,7 +150,7 @@ func TestService(test *testing.T) {
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+	t.cache.EXPECT().DoLimit(nil, request, limits, false, "192.168.0.0/24").Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0}})
 	response, err = service.ShouldRateLimit(nil, request)
@@ -200,8 +200,8 @@ func TestCacheError(test *testing.T) {
 	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Do(
-		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
+	t.cache.EXPECT().DoLimit(nil, request, limits, false, "192.168.0.0/24").Do(
+		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit, bool, string) {
 			panic(redis.RedisError("cache error"))
 		})
 

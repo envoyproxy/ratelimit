@@ -18,27 +18,34 @@ type Settings struct {
 	RuntimePath                string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`
 	RuntimeSubdirectory        string `envconfig:"RUNTIME_SUBDIRECTORY"`
 	LogLevel                   string `envconfig:"LOG_LEVEL" default:"WARN"`
-	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
-	RedisUrl                   string `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
-	RedisPassword			   string `envconfig:"REDIS_PASSWORD"`
+	ForceFlag				   bool   `envconfig:"FORCE_FLAG" default:"false"`
+	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"tcp"`
+	RedisUrl                   string `envconfig:"REDIS_URL" default:"redis:6379"`
+	RedisPassword			   string `envconfig:"REDIS_PASSWORD" default:"toor333666"`
 	RedisPoolSize              int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
 	RedisPerSecond             bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType   string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
 	RedisPerSecondUrl          string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize     int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
+	WhiteListIPNet             string `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24"`
 }
 
 type Option func(*Settings)
 
+var settings *Settings = nil
+
 func NewSettings() Settings {
+	if settings != nil {
+		return *settings
+	}
 	var s Settings
 
 	err := envconfig.Process("", &s)
 	if err != nil {
 		panic(err)
 	}
-
+	settings = &s
 	return s
 }
 

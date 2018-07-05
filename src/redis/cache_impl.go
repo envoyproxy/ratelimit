@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"net"
 
 	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
@@ -55,7 +56,7 @@ func unitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 // @param now supplies the current unix time.
 // @return cacheKey struct.
 func (this *rateLimitCacheImpl) generateCacheKey(
-	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64) cacheKey {
+	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64, whiteListIPNet *net.IPNet) cacheKey {
 
 	if limit == nil {
 		return cacheKey{
@@ -72,6 +73,16 @@ func (this *rateLimitCacheImpl) generateCacheKey(
 	b.WriteByte('_')
 
 	for _, entry := range descriptor.Entries {
+		if domain == "edge_proxy_per_ip" {
+			ip := net.ParseIP(entry.Value)
+			if ip != nil {
+				if whiteListIPNet.Contains(ip) {
+					return ""
+				}
+			} else {
+				logger.Warningf("can't parse remote ip : %s", entry.Value)
+			}
+		}
 		b.WriteString(entry.Key)
 		b.WriteByte('_')
 		b.WriteString(entry.Value)
@@ -118,7 +129,9 @@ func pipelineFetch(conn Connection) uint32 {
 func (this *rateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
-	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
+	limits []*config.RateLimit,
+	forceFlag bool,
+	whiteListIPs string) []*pb.RateLimitResponse_DescriptorStatus {
 
 	logger.Debugf("starting cache lookup")
 
@@ -141,9 +154,28 @@ func (this *rateLimitCacheImpl) DoLimit(
 	// all the same size.
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]cacheKey, len(request.Descriptors))
+	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
+		len(request.Descriptors))
+	if forceFlag {
+		for i := range cacheKeys {
+			responseDescriptorStatuses[i] =
+				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OK,
+					nil,
+					0}
+		}
+		return responseDescriptorStatuses
+	}
 	now := this.timeSource.UnixNow()
+
+	// parse white list ips
+	_, whiteListIPNet, err := net.ParseCIDR(whiteListIPs)
+	if err != nil {
+		logger.Warningf("whiteListIP parse error : %s", whiteListIPs)
+		_, whiteListIPNet, _ = net.ParseCIDR("0.0.0.0/0")
+	}
+
 	for i := 0; i < len(request.Descriptors); i++ {
-		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
+		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now, whiteListIPNet)
 
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
@@ -172,8 +204,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 	}
 
 	// Now fetch the pipeline.
-	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
-		len(request.Descriptors))
+
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.key == "" {
 			responseDescriptorStatuses[i] =

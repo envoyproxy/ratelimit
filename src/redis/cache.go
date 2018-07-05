@@ -34,5 +34,7 @@ type RateLimitCache interface {
 	DoLimit(
 		ctx context.Context,
 		request *pb.RateLimitRequest,
-		limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus
+		limits []*config.RateLimit,
+		forceFlag bool,
+		whiteListIPNet string) []*pb.RateLimitResponse_DescriptorStatus
 }

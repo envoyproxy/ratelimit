@@ -8,6 +8,7 @@ import (
 	"github.com/lyft/gostats"
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/assert"
+	"github.com/lyft/ratelimit/src/settings"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
 	logger "github.com/sirupsen/logrus"
@@ -114,7 +115,8 @@ func (this *service) shouldRateLimitWorker(
 		limitsToCheck[i] = snappedConfig.GetLimit(ctx, request.Domain, descriptor)
 	}
 
-	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck)
+	s := settings.NewSettings()
+	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck, s.ForceFlag, s.WhiteListIPNet)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
 
 	response := &pb.RateLimitResponse{}

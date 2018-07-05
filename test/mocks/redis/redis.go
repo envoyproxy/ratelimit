@@ -32,14 +32,14 @@ func (_m *MockRateLimitCache) EXPECT() *_MockRateLimitCacheRecorder {
 	return _m.recorder
 }
 
-func (_m *MockRateLimitCache) DoLimit(_param0 context.Context, _param1 *ratelimit.RateLimitRequest, _param2 []*config.RateLimit) []*ratelimit.RateLimitResponse_DescriptorStatus {
-	ret := _m.ctrl.Call(_m, "DoLimit", _param0, _param1, _param2)
+func (_m *MockRateLimitCache) DoLimit(_param0 context.Context, _param1 *ratelimit.RateLimitRequest, _param2 []*config.RateLimit, _param3 bool, _param4 string) []*ratelimit.RateLimitResponse_DescriptorStatus {
+	ret := _m.ctrl.Call(_m, "DoLimit", _param0, _param1, _param2, _param3, _param4)
 	ret0, _ := ret[0].([]*ratelimit.RateLimitResponse_DescriptorStatus)
 	return ret0
 }
 
-func (_mr *_MockRateLimitCacheRecorder) DoLimit(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "DoLimit", arg0, arg1, arg2)
+func (_mr *_MockRateLimitCacheRecorder) DoLimit(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "DoLimit", arg0, arg1, arg2, arg3, arg4)
 }
 
 // Mock of Pool interface
