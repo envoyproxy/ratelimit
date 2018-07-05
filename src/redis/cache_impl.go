@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"bytes"
 	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/assert"
@@ -25,6 +26,8 @@ type rateLimitCacheImpl struct {
 	timeSource                 TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
+	// bytes.Buffer pool used to efficiently generate cache keys.
+	bufferPool sync.Pool
 }
 
 // Convert a rate limit into a time divider.
@@ -61,17 +64,25 @@ func (this *rateLimitCacheImpl) generateCacheKey(
 		}
 	}
 
-	var key = domain + "_"
+	b := this.bufferPool.Get().(*bytes.Buffer)
+	defer this.bufferPool.Put(b)
+	b.Reset()
+
+	b.WriteString(domain)
+	b.WriteByte('_')
+
 	for _, entry := range descriptor.Entries {
-		key += entry.Key + "_"
-		key += entry.Value + "_"
+		b.WriteString(entry.Key)
+		b.WriteByte('_')
+		b.WriteString(entry.Value)
+		b.WriteByte('_')
 	}
 
 	divider := unitToDivider(limit.Limit.Unit)
-	key += strconv.FormatInt((now/divider)*divider, 10)
+	b.WriteString(strconv.FormatInt((now/divider)*divider, 10))
 
 	return cacheKey{
-		key:       key,
+		key:       b.String(),
 		perSecond: isPerSecondLimit(limit.Limit.Unit)}
 }
 
@@ -244,6 +255,15 @@ func NewRateLimitCacheImpl(pool Pool, perSecondPool Pool, timeSource TimeSource,
 		timeSource:                 timeSource,
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
+		bufferPool:                 newBufferPool(),
+	}
+}
+
+func newBufferPool() sync.Pool {
+	return sync.Pool{
+		New: func() interface{} {
+			return new(bytes.Buffer)
+		},
 	}
 }
 
