@@ -2,7 +2,6 @@ sudo:     required
 language: go
 go:       "1.10"
 services: redis-server
-env:
-  - REDIS_SOCKET_TYPE=tcp REDIS_URL="localhost:6379"
 install: make bootstrap
+before_script: redis-server --port 6380 &
 script:  make check_format tests

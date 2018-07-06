@@ -20,6 +20,9 @@
 - [Request Fields](#request-fields)
 - [Statistics](#statistics)
 - [Debug Port](#debug-port)
+- [Redis](#redis)
+  - [One Redis Instance](#one-redis-instance)
+  - [Two Redis Instances](#two-redis-instances)
 - [Contact](#contact)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -28,7 +31,7 @@
 
 The rate limit service is a Go/gRPC service designed to enable generic rate limit scenarios from different types of
 applications. Applications request a rate limit decision based on a domain and a set of descriptors. The service
-reads the configuration from disk via [runtime](https://github.com/lyft/goruntime), composes a cache key, and talks to the redis cache. A
+reads the configuration from disk via [runtime](https://github.com/lyft/goruntime), composes a cache key, and talks to the Redis cache. A
 decision is then returned to the caller.
 
 # Deprecation of Legacy Ratelimit Proto
@@ -55,13 +58,13 @@ to give time to community members running ratelimit off of `master`.
 
 # Building and Testing
 
-* Install redis-server.
+* Install Redis-server.
 * Make sure go is setup correctly and checkout rate limit service into your go path. More information about installing
 go [here](https://golang.org/doc/install).
-* In order to run the integration tests using a local default redis install you will also need these environment variables set:
+* In order to run the integration tests using a local Redis server please run two Redis-server instances: one on port `6379` and another on port `6380`
   ```bash
-  export REDIS_SOCKET_TYPE=tcp
-  export REDIS_URL=localhost:6379
+  Redis-server --port 6379 &
+  Redis-server --port 6380 &
   ```
 * To setup for the first time (only done once):
   ```bash
@@ -351,6 +354,38 @@ $ curl 0:6070/
 ```
 
 You can specify the debug port with the `DEBUG_PORT` environment variable. It defaults to `6070`.
+
+# Redis
+
+Ratelimit uses Redis as its caching layer. Ratelimit supports two operation modes:
+
+1. One Redis server for all limits.
+1. Two Redis instances: one for per second limits and another one for all other limits.
+
+## One Redis Instance
+
+To configure one Redis instance use the following environment variables:
+
+1. `REDIS_SOCKET_TYPE`
+1. `REDIS_URL`
+1. `REDIS_POOL_SIZE`
+
+This setup will use the same Redis server for all limits.
+
+## Two Redis Instances
+
+To configure two Redis instances use the following environment variables:
+
+1. `REDIS_SOCKET_TYPE`
+1. `REDIS_URL`
+1. `REDIS_POOL_SIZE`
+1. `REDIS_PERSECOND`: set this to `"true"`.
+1. `REDIS_PERSECOND_SOCKET_TYPE`
+1. `REDIS_PERSECOND_URL`
+1. `REDIS_PERSECOND_POOL_SIZE`
+
+This setup will use the Redis server configured with the `_PERSECOND_` vars for
+per second limits, and the other Redis server for all other limits.
 
 # Contact
 
