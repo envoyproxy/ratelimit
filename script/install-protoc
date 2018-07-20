@@ -9,7 +9,7 @@ unzip "${PROTOC_REL}" -d protoc
 if which sudo >/dev/null;
     then sudo mv protoc /usr/local && sudo ln -s /usr/local/protoc/bin/protoc /usr/local/bin
 else
-    mv mv protoc /usr/local && ln -s /usr/local/protoc/bin/protoc /usr/local/bin
+    mv protoc /usr/local && ln -s /usr/local/protoc/bin/protoc /usr/local/bin
 fi
 popd
 go get -u github.com/golang/protobuf/protoc-gen-go
