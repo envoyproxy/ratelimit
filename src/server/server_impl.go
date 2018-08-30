@@ -21,6 +21,8 @@ import (
 	"github.com/lyft/ratelimit/src/settings"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type serverDebugListener struct {
@@ -39,6 +41,7 @@ type server struct {
 	scope         stats.Scope
 	runtime       loader.IFace
 	debugListener serverDebugListener
+	health        *healthChecker
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
@@ -127,7 +130,9 @@ func newServer(name string, opts ...settings.Option) *server {
 	ret.router = mux.NewRouter()
 
 	// setup healthcheck path
-	ret.router.Path("/healthcheck").Handler(NewHealthChecker())
+	ret.health = NewHealthChecker(health.NewServer())
+	ret.router.Path("/healthcheck").Handler(ret.health)
+	healthpb.RegisterHealthServer(ret.grpcServer, ret.health.grpc)
 
 	// setup default debug listener
 	ret.debugListener.debugMux = http.NewServeMux()

@@ -6,15 +6,22 @@ import (
 	"os/signal"
 	"sync/atomic"
 	"syscall"
+
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type healthChecker struct {
-	ok uint32
+	grpc *health.Server
+	ok   uint32
 }
 
-func NewHealthChecker() *healthChecker {
+func NewHealthChecker(grpcHealthServer *health.Server) *healthChecker {
 	ret := &healthChecker{}
 	ret.ok = 1
+
+	ret.grpc = grpcHealthServer
+	ret.grpc.SetServingStatus("ratelimit", healthpb.HealthCheckResponse_SERVING)
 
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, syscall.SIGTERM)
@@ -22,6 +29,7 @@ func NewHealthChecker() *healthChecker {
 	go func() {
 		<-sigterm
 		atomic.StoreUint32(&ret.ok, 0)
+		ret.grpc.SetServingStatus("ratelimit", healthpb.HealthCheckResponse_NOT_SERVING)
 	}()
 
 	return ret
@@ -38,4 +46,5 @@ func (hc *healthChecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (hc *healthChecker) Fail() {
 	atomic.StoreUint32(&hc.ok, 0)
+	hc.grpc.SetServingStatus("ratelimit", healthpb.HealthCheckResponse_NOT_SERVING)
 }
