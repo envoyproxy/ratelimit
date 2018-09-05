@@ -6,6 +6,7 @@
 - [Deprecation of Legacy Ratelimit Proto](#deprecation-of-legacy-ratelimit-proto)
   - [Deprecation Schedule](#deprecation-schedule)
 - [Building and Testing](#building-and-testing)
+  - [Docker-compose setup](#docker-compose-setup)
 - [Configuration](#configuration)
   - [The configuration format](#the-configuration-format)
     - [Definitions](#definitions)
@@ -89,6 +90,22 @@ go [here](https://golang.org/doc/install).
   ```bash
   USE_STATSD=false LOG_LEVEL=debug REDIS_SOCKET_TYPE=tcp REDIS_URL=localhost:6379 RUNTIME_ROOT=/home/user/src/runtime/data RUNTIME_SUBDIRECTORY=ratelimit
   ```
+
+## Docker-compose setup
+
+The docker-compose setup has three containers: redis, ratelimit-build, and ratelimit. In order to run the docker-compose setup from the root of the repo, run
+
+```bash
+glide install
+docker-compose up
+```
+
+The ratelimit-build container will build the ratelimit binary. Then via a shared volume the binary will be shared with the ratelimit container. This dual container setup is used in order to use a
+a minimal container to run the application, rather than the heftier container used to build it.
+
+If you want to run with [two redis instances](#two-redis-instances), you will need to modify
+the docker-compose.yaml file to run a second redis container, and change the environment variables
+as explained in the [two redis instances](#two-redis-instances) section.
 
 # Configuration
 
