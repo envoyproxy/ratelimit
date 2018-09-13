@@ -9,7 +9,6 @@ import (
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 
-	"fmt"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
 	"github.com/lyft/ratelimit/src/server"
@@ -23,7 +22,7 @@ func Run() {
 
 	logLevel, err := logger.ParseLevel(s.LogLevel)
 	if err != nil {
-		fmt.Printf("Could not parse log level. %v\n", err)
+		logger.Fatalf("Could not parse log level. %v\n", err)
 	} else {
 		logger.SetLevel(logLevel)
 	}
