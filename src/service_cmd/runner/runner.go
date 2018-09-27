@@ -14,12 +14,20 @@ import (
 	"github.com/lyft/ratelimit/src/server"
 	"github.com/lyft/ratelimit/src/service"
 	"github.com/lyft/ratelimit/src/settings"
+	logger "github.com/sirupsen/logrus"
 )
 
 func Run() {
-	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
-
 	s := settings.NewSettings()
+
+	logLevel, err := logger.ParseLevel(s.LogLevel)
+	if err != nil {
+		logger.Fatalf("Could not parse log level. %v\n", err)
+	} else {
+		logger.SetLevel(logLevel)
+	}
+
+	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
 
 	var perSecondPool redis.Pool
 	if s.RedisPerSecond {
