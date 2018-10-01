@@ -17,6 +17,7 @@ type Settings struct {
 	StatsdPort                 int    `envconfig:"STATSD_PORT" default:"8125"`
 	RuntimePath                string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`
 	RuntimeSubdirectory        string `envconfig:"RUNTIME_SUBDIRECTORY"`
+	RuntimeIgnoreDotFiles      bool   `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
 	LogLevel                   string `envconfig:"LOG_LEVEL" default:"WARN"`
 	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisUrl                   string `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`

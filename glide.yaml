@@ -9,7 +9,7 @@ import:
 - package: github.com/lyft/gostats
   version: v0.2.6
 - package: github.com/lyft/goruntime
-  version: v0.1.8
+  version: v0.1.9
 - package: github.com/mediocregopher/radix.v2
   version: master
   subpackages:
