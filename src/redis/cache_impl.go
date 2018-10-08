@@ -156,7 +156,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 		if cacheKey.key == "" {
 			continue
 		}
-		logger.Debugf("looking up cache key: %s", cacheKey)
+		logger.Debugf("looking up cache key: %s", cacheKey.key)
 
 		expirationSeconds := unitToDivider(limits[i].Limit.Unit)
 		if this.expirationJitterMaxSeconds > 0 {
