@@ -8,7 +8,6 @@ GOREPO := ${GOPATH}/src/github.com/lyft/ratelimit
 .PHONY: bootstrap
 bootstrap:
 	script/install-glide
-	script/install-protoc
 	glide install
 
 .PHONY: bootstrap_tests
