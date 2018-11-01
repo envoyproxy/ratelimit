@@ -163,9 +163,11 @@ func (this *rateLimitCacheImpl) DoLimit(
 	if forceFlag {
 		for i := range cacheKeys {
 			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{pb.RateLimitResponse_OK,
-					nil,
-					0}
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:           pb.RateLimitResponse_OK,
+					CurrentLimit:   nil,
+					LimitRemaining: 0,
+				}
 		}
 		return responseDescriptorStatuses
 	}
