@@ -16,7 +16,7 @@ import:
   - pool
   - redis
 - package: github.com/sirupsen/logrus
-  version: ^1.0
+  version: master
 - package: golang.org/x/net
   version: master
   subpackages:
