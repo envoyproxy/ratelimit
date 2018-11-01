@@ -4,6 +4,7 @@ import (
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/config"
 	"golang.org/x/net/context"
+	"net"
 )
 
 // Interface for a time source.
@@ -36,5 +37,5 @@ type RateLimitCache interface {
 		request *pb.RateLimitRequest,
 		limits []*config.RateLimit,
 		forceFlag bool,
-		whiteListIPNet string) []*pb.RateLimitResponse_DescriptorStatus
+		WhiteListIPNetList [] *net.IPNet) []*pb.RateLimitResponse_DescriptorStatus
 }

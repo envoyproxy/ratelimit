@@ -3,11 +3,14 @@ package settings
 import (
 	"github.com/kelseyhightower/envconfig"
 	"google.golang.org/grpc"
+	"net"
+	"strings"
 )
 
 type Settings struct {
 	// runtime options
 	GrpcUnaryInterceptor grpc.ServerOption
+	WhiteListIPNetList [] *net.IPNet
 	// env config
 	Port                       int    `envconfig:"PORT" default:"8080"`
 	GrpcPort                   int    `envconfig:"GRPC_PORT" default:"8081"`
@@ -28,7 +31,7 @@ type Settings struct {
 	RedisPerSecondUrl          string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize     int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
-	WhiteListIPNet             string `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24"`
+	WhiteListIPNetString             string `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24,10.0.0.0/8"`
 }
 
 type Option func(*Settings)
@@ -45,6 +48,10 @@ func NewSettings() Settings {
 	if err != nil {
 		panic(err)
 	}
+	s.WhiteListIPNetList, err = ParseIPNetString(s.WhiteListIPNetString)
+	if err != nil {
+		panic(err)
+	}
 	settings = &s
 	return s
 }
@@ -53,4 +60,17 @@ func GrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 	return func(s *Settings) {
 		s.GrpcUnaryInterceptor = grpc.UnaryInterceptor(i)
 	}
+}
+
+func ParseIPNetString(IPNetString string) ([]*net.IPNet,error) {
+	ipNetStringList := strings.Split(IPNetString, ",")
+	var result []*net.IPNet
+	for _, ipNetString := range ipNetStringList {
+		_, ipNet, err := net.ParseCIDR(ipNetString)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, ipNet)
+	}
+	return result, nil
 }

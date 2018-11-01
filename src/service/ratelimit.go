@@ -116,7 +116,7 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	s := settings.NewSettings()
-	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck, s.ForceFlag, s.WhiteListIPNet)
+	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck, s.ForceFlag, s.WhiteListIPNetList)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
 
 	response := &pb.RateLimitResponse{}

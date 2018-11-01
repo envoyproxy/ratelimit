@@ -2,19 +2,18 @@ package redis
 
 import (
 	"bytes"
-	"math"
-	"math/rand"
-	"strconv"
-	"sync"
-	"time"
-	"net"
-
 	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+	"math"
+	"math/rand"
+	"net"
+	"strconv"
+	"sync"
+	"time"
 )
 
 type rateLimitCacheImpl struct {
@@ -56,7 +55,7 @@ func unitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 // @param now supplies the current unix time.
 // @return cacheKey struct.
 func (this *rateLimitCacheImpl) generateCacheKey(
-	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64, whiteListIPNet *net.IPNet) cacheKey {
+	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64, whiteListIPNet []*net.IPNet) cacheKey {
 
 	if limit == nil {
 		return cacheKey{
@@ -76,8 +75,13 @@ func (this *rateLimitCacheImpl) generateCacheKey(
 		if domain == "edge_proxy_per_ip" {
 			ip := net.ParseIP(entry.Value)
 			if ip != nil {
-				if whiteListIPNet.Contains(ip) {
-					return ""
+				for _, ipNet := range whiteListIPNet {
+					if ipNet.Contains(ip) {
+						return cacheKey{
+							key:       "",
+							perSecond: false,
+						}
+					}
 				}
 			} else {
 				logger.Warningf("can't parse remote ip : %s", entry.Value)
@@ -131,7 +135,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 	request *pb.RateLimitRequest,
 	limits []*config.RateLimit,
 	forceFlag bool,
-	whiteListIPs string) []*pb.RateLimitResponse_DescriptorStatus {
+	WhiteListIPNetList [] *net.IPNet) []*pb.RateLimitResponse_DescriptorStatus {
 
 	logger.Debugf("starting cache lookup")
 
@@ -167,15 +171,9 @@ func (this *rateLimitCacheImpl) DoLimit(
 	}
 	now := this.timeSource.UnixNow()
 
-	// parse white list ips
-	_, whiteListIPNet, err := net.ParseCIDR(whiteListIPs)
-	if err != nil {
-		logger.Warningf("whiteListIP parse error : %s", whiteListIPs)
-		_, whiteListIPNet, _ = net.ParseCIDR("0.0.0.0/0")
-	}
-
 	for i := 0; i < len(request.Descriptors); i++ {
-		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now, whiteListIPNet)
+
+		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now, WhiteListIPNetList)
 
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
