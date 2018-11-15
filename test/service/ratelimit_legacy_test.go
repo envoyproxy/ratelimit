@@ -15,6 +15,7 @@ import (
 	"github.com/lyft/ratelimit/test/common"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 func convertRatelimit(ratelimit *pb.RateLimitResponse_RateLimit) (*pb_legacy.RateLimit, error) {
@@ -224,7 +225,8 @@ func TestInitialLoadErrorLegacy(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Scope) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore, false,
+		ratelimit.Clock{UnixSeconds: func() int64 { return 0 }})
 
 	request := common.NewRateLimitRequestLegacy("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)
@@ -405,4 +407,32 @@ func TestConvertResponse(test *testing.T) {
 	}
 
 	assert.Equal(test, expectedResponse, resp)
+}
+
+func TestConvertResponseWithHeaders(t *testing.T) {
+	response := &pb.RateLimitResponse{
+		OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+		Statuses: []*pb.RateLimitResponse_DescriptorStatus{{
+			Code:           pb.RateLimitResponse_OK,
+			CurrentLimit:   nil,
+			LimitRemaining: 9,
+		}},
+		Headers: []*core.HeaderValue{
+			{Key: "X-RateLimit-Limit", Value: "5"},
+			{Key: "X-RateLimit-Remaining", Value: "4"},
+			{Key: "X-RateLimit-Reset", Value: "38"},
+		},
+	}
+	legacyResponse, err := ratelimit.ConvertResponse(response)
+	if err != nil {
+		assert.FailNow(t, err.Error())
+	}
+	assert.Equal(t, &pb_legacy.RateLimitResponse{
+		OverallCode: pb_legacy.RateLimitResponse_OVER_LIMIT,
+		Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{{
+			Code:           pb_legacy.RateLimitResponse_OK,
+			CurrentLimit:   nil,
+			LimitRemaining: 9,
+		}},
+	}, legacyResponse)
 }

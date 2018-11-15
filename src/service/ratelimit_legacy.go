@@ -6,6 +6,7 @@ import (
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 	"golang.org/x/net/context"
+	"strings"
 )
 
 type RateLimitLegacyServiceServer interface {
@@ -90,7 +91,8 @@ func ConvertResponse(response *pb.RateLimitResponse) (*pb_legacy.RateLimitRespon
 	}
 
 	resp := &pb_legacy.RateLimitResponse{}
-	err = jsonpb.UnmarshalString(s, resp)
+	u := jsonpb.Unmarshaler{AllowUnknownFields: true}
+	err = u.Unmarshal(strings.NewReader(s), resp)
 	if err != nil {
 		return nil, err
 	}

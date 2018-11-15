@@ -12,11 +12,17 @@ import (
 	"github.com/lyft/ratelimit/src/redis"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	"strconv"
 )
 
 type shouldRateLimitStats struct {
 	redisError   stats.Counter
 	serviceError stats.Counter
+}
+
+type Clock struct {
+	UnixSeconds func() int64
 }
 
 func newShouldRateLimitStats(scope stats.Scope) shouldRateLimitStats {
@@ -47,15 +53,17 @@ type RateLimitServiceServer interface {
 }
 
 type service struct {
-	runtime            loader.IFace
-	configLock         sync.RWMutex
-	configLoader       config.RateLimitConfigLoader
-	config             config.RateLimitConfig
-	runtimeUpdateEvent chan int
-	cache              redis.RateLimitCache
-	stats              serviceStats
-	rlStatsScope       stats.Scope
-	legacy             *legacyService
+	runtime                loader.IFace
+	configLock             sync.RWMutex
+	configLoader           config.RateLimitConfigLoader
+	config                 config.RateLimitConfig
+	runtimeUpdateEvent     chan int
+	cache                  redis.RateLimitCache
+	stats                  serviceStats
+	rlStatsScope           stats.Scope
+	legacy                 *legacyService
+	responseHeadersEnabled bool
+	clock                  Clock
 }
 
 func (this *service) reloadConfig() {
@@ -126,9 +134,83 @@ func (this *service) shouldRateLimitWorker(
 			finalCode = descriptorStatus.Code
 		}
 	}
+	if this.responseHeadersEnabled {
+		now := this.clock.UnixSeconds()
+		var limitingDescriptor *pb.RateLimitResponse_DescriptorStatus
+		limitCount := 0
+		for _, descriptor := range responseDescriptorStatuses {
+			if descriptor.CurrentLimit == nil {
+				continue
+			}
+			limitCount++
+			if limitingDescriptor == nil ||
+				descriptor.LimitRemaining < limitingDescriptor.LimitRemaining ||
+				descriptor.LimitRemaining == limitingDescriptor.LimitRemaining &&
+					calculateReset(descriptor, now) > calculateReset(limitingDescriptor, now) {
+				limitingDescriptor = descriptor
+			}
+		}
+		if limitCount == 1 {
+			response.Headers = []*core.HeaderValue{
+				rateLimitLimitHeader(limitingDescriptor),
+				rateLimitRemainingHeader(limitingDescriptor),
+				rateLimitResetHeader(limitingDescriptor, now),
+			}
+		} else if limitCount > 1 {
+			// If there is more than one limit, then picking one of them for the "X-RateLimit-Limit"
+			// header value would be arbitrary, so we omit it completely.
+			response.Headers = []*core.HeaderValue{
+				rateLimitRemainingHeader(limitingDescriptor),
+				rateLimitResetHeader(limitingDescriptor, now),
+			}
+		}
+	}
 
 	response.OverallCode = finalCode
 	return response
+}
+
+func rateLimitLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+	return &core.HeaderValue{
+		Key:   "X-RateLimit-Limit",
+		Value: strconv.FormatUint(uint64(descriptor.CurrentLimit.RequestsPerUnit), 10),
+	}
+}
+
+func rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+	return &core.HeaderValue{
+		Key:   "X-RateLimit-Remaining",
+		Value: strconv.FormatUint(uint64(descriptor.LimitRemaining), 10),
+	}
+}
+
+func rateLimitResetHeader(
+	descriptor *pb.RateLimitResponse_DescriptorStatus, now int64) *core.HeaderValue {
+
+	return &core.HeaderValue{
+		Key:   "X-RateLimit-Reset",
+		Value: strconv.FormatInt(calculateReset(descriptor, now), 10),
+	}
+}
+
+func calculateReset(descriptor *pb.RateLimitResponse_DescriptorStatus, now int64) int64 {
+	sec := unitInSeconds(descriptor.CurrentLimit.Unit)
+	return sec - now%sec
+}
+
+func unitInSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
+	switch unit {
+	case pb.RateLimitResponse_RateLimit_SECOND:
+		return 1
+	case pb.RateLimitResponse_RateLimit_MINUTE:
+		return 60
+	case pb.RateLimitResponse_RateLimit_HOUR:
+		return 60 * 60
+	case pb.RateLimitResponse_RateLimit_DAY:
+		return 60 * 60 * 24
+	default:
+		panic("unknown rate limit unit")
+	}
 }
 
 func (this *service) ShouldRateLimit(
@@ -175,17 +257,20 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache redis.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, stats stats.Scope) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, stats stats.Scope,
+	responseHeadersEnabled bool, clock Clock) RateLimitServiceServer {
 
 	newService := &service{
-		runtime:            runtime,
-		configLock:         sync.RWMutex{},
-		configLoader:       configLoader,
-		config:             nil,
-		runtimeUpdateEvent: make(chan int),
-		cache:              cache,
-		stats:              newServiceStats(stats),
-		rlStatsScope:       stats.Scope("rate_limit"),
+		runtime:                runtime,
+		configLock:             sync.RWMutex{},
+		configLoader:           configLoader,
+		config:                 nil,
+		runtimeUpdateEvent:     make(chan int),
+		cache:                  cache,
+		stats:                  newServiceStats(stats),
+		rlStatsScope:           stats.Scope("rate_limit"),
+		responseHeadersEnabled: responseHeadersEnabled,
+		clock:                  clock,
 	}
 	newService.legacy = &legacyService{
 		s:                          newService,

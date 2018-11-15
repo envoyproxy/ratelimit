@@ -1,22 +1,37 @@
-hash: fe989994477e78bb58fd50892030bc6c0d0bbbf95b50012e7e9b10e2b2bd0f8d
-updated: 2018-06-07T16:52:24.670498-07:00
+hash: 0d0716e157a0c117523de1fc32cbe28730684a2fc451716cee3ee9612a6ce0a1
+updated: 2018-11-14T19:44:31.103009-08:00
 imports:
 - name: github.com/envoyproxy/data-plane-api
-  version: 0f8a2a3d456de4d3a29f4e8f7a641fef011d1394
+  version: ea5bba9e8ebb84d31c4967c0ee3e16a8f36bc39d
+- name: github.com/envoyproxy/go-control-plane
+  version: 676016db8193d83324a507a986a78cd3642ad713
+  subpackages:
+  - envoy/api/v2/core
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
+- name: github.com/gogo/protobuf
+  version: 636bf0302bc95575d69441b25a2603156ffdddf1
+  subpackages:
+  - gogoproto
+  - proto
+  - protoc-gen-gogo/descriptor
+  - protoc-gen-gogofast
+  - sortkeys
+  - types
 - name: github.com/golang/mock
-  version: 22bbf0ddf08105dfa364d0a2fa619dfa71014af5
+  version: 8a44ef6e8be577e050008c7886f24fc705d709fb
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
   version: b4deda0973fb4c70b50d226b1af49f3da59f5265
   subpackages:
+  - jsonpb
   - proto
   - protoc-gen-go/descriptor
   - ptypes
   - ptypes/any
   - ptypes/duration
+  - ptypes/struct
   - ptypes/timestamp
 - name: github.com/google/protobuf
   version: 106ffc04be1abf3ff3399f54ccf149815b287dd9
@@ -28,6 +43,8 @@ imports:
   version: 3d6c1e425f717ee59152524e73b904b67705eeb8
 - name: github.com/kelseyhightower/envconfig
   version: ac12b1f15efba734211a556d8b125110dc538016
+- name: github.com/konsorten/go-windows-terminal-sequences
+  version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/lyft/goruntime
   version: 426ae3581aca6d8b997300525e0d075444bd68d1
   subpackages:
@@ -41,12 +58,12 @@ imports:
   subpackages:
   - validate
 - name: github.com/mediocregopher/radix.v2
-  version: 94360be262532d465b7e4760c7a67195d3319a87
+  version: b67df6e626f993b64b3ca9f4b8630900e61002e3
   subpackages:
   - pool
   - redis
 - name: github.com/sirupsen/logrus
-  version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
+  version: bcd833dfe83d3cebad139e4a29ed79cb2318bf95
 - name: github.com/stretchr/testify
   version: f390dcf405f7b83c997eac1b06768bb9f44dec18
   subpackages:
@@ -56,7 +73,7 @@ imports:
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 1e491301e022f8f977054da4c2d852decd59571f
+  version: adae6a3d119ae4890b46832a2e88a95adc62b8e7
   subpackages:
   - context
   - http/httpguts
@@ -66,7 +83,7 @@ imports:
   - internal/timeseries
   - trace
 - name: golang.org/x/sys
-  version: f6cff0780e542efa0c8e864dc8fa522808f6a598
+  version: acbc56fc7007d2a01796d5bde54f39e3b3e95945
   subpackages:
   - unix
   - windows
@@ -95,6 +112,8 @@ imports:
   - encoding/proto
   - grpclb/grpc_lb_v1/messages
   - grpclog
+  - health
+  - health/grpc_health_v1
   - internal
   - keepalive
   - metadata

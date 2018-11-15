@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 func newDescriptorStatus(
@@ -243,4 +244,46 @@ func TestBasicConfigLegacy(t *testing.T) {
 			response)
 		assert.NoError(err)
 	}
+}
+
+func TestBasicConfigWithHeaders(t *testing.T) {
+	os.Setenv("RESPONSE_HEADERS_ENABLED", "true")
+	os.Setenv("REDIS_PERSECOND", "false")
+	os.Setenv("PORT", "8082")
+	os.Setenv("GRPC_PORT", "8086")
+	os.Setenv("DEBUG_PORT", "8084")
+	os.Setenv("RUNTIME_ROOT", "runtime/current")
+	os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
+	os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
+	os.Setenv("REDIS_SOCKET_TYPE", "tcp")
+	os.Setenv("REDIS_URL", "localhost:6379")
+
+	go func() {
+		runner.Run()
+	}()
+
+	// HACK: Wait for the server to come up. Make a hook that we can wait on.
+	time.Sleep(100 * time.Millisecond)
+
+	assert := assert.New(t)
+	conn, err := grpc.Dial("localhost:8086", grpc.WithInsecure())
+	assert.NoError(err)
+	defer conn.Close()
+	c := pb.NewRateLimitServiceClient(conn)
+
+	response, err := c.ShouldRateLimit(
+		context.Background(),
+		common.NewRateLimitRequest("basic_headers", [][][2]string{{{"key1", "foo"}}}, 1))
+	assert.Equal(
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{newDescriptorStatus(
+				pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49)},
+			Headers: []*core.HeaderValue{
+				{Key: "X-RateLimit-Limit", Value: "50"},
+				{Key: "X-RateLimit-Remaining", Value: "49"},
+				{Key: "X-RateLimit-Reset", Value: "1"},
+			}},
+		response)
+	assert.NoError(err)
 }

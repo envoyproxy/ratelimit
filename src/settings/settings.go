@@ -26,6 +26,7 @@ type Settings struct {
 	RedisPerSecondUrl          string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize     int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
+	ResponseHeadersEnabled     bool   `envconfig:"RESPONSE_HEADERS_ENABLED" default:"false"`
 }
 
 type Option func(*Settings)

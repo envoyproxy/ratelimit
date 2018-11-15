@@ -17,6 +17,7 @@ import (
 	"github.com/lyft/ratelimit/test/mocks/runtime/snapshot"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 type barrier struct {
@@ -47,15 +48,17 @@ func newBarrier() barrier {
 }
 
 type rateLimitServiceTestSuite struct {
-	assert                *assert.Assertions
-	controller            *gomock.Controller
-	runtime               *mock_loader.MockIFace
-	snapshot              *mock_snapshot.MockIFace
-	cache                 *mock_redis.MockRateLimitCache
-	configLoader          *mock_config.MockRateLimitConfigLoader
-	config                *mock_config.MockRateLimitConfig
-	runtimeUpdateCallback chan<- int
-	statStore             stats.Store
+	assert                 *assert.Assertions
+	controller             *gomock.Controller
+	runtime                *mock_loader.MockIFace
+	snapshot               *mock_snapshot.MockIFace
+	cache                  *mock_redis.MockRateLimitCache
+	configLoader           *mock_config.MockRateLimitConfigLoader
+	config                 *mock_config.MockRateLimitConfig
+	runtimeUpdateCallback  chan<- int
+	statStore              stats.Store
+	responseHeadersEnabled bool
+	clock                  ratelimit.Clock
 }
 
 func commonSetup(t *testing.T) rateLimitServiceTestSuite {
@@ -82,7 +85,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 	this.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}},
 		gomock.Any()).Return(this.config)
-	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statStore)
+	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statStore, this.responseHeadersEnabled, this.clock)
 }
 
 func TestService(test *testing.T) {
@@ -225,11 +228,240 @@ func TestInitialLoadError(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Scope) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore,
+		t.responseHeadersEnabled, t.clock)
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("no rate limit configuration loaded", err.Error())
 	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
+}
+
+func TestHeaders(test *testing.T) {
+	t := commonSetup(test)
+	currentTime := 123
+	t.responseHeadersEnabled = true
+	t.clock = ratelimit.Clock{UnixSeconds: func() int64 { return int64(currentTime) }}
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore),
+	}
+
+	// Under limit
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK,
+			CurrentLimit: limits[0].Limit, LimitRemaining: 6},
+		})
+	response, err := service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Limit", Value: "10"},
+		{Key: "X-RateLimit-Remaining", Value: "6"},
+		{Key: "X-RateLimit-Reset", Value: "57"},
+	},
+		response.Headers)
+	t.assert.Nil(err)
+
+	// Last request under limit
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK,
+			CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Limit", Value: "10"},
+		{Key: "X-RateLimit-Remaining", Value: "0"},
+		{Key: "X-RateLimit-Reset", Value: "57"},
+	},
+		response.Headers)
+	t.assert.Nil(err)
+
+	// Over limit
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT,
+			CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Limit", Value: "10"},
+		{Key: "X-RateLimit-Remaining", Value: "0"},
+		{Key: "X-RateLimit-Reset", Value: "57"},
+	},
+		response.Headers)
+	t.assert.Nil(err)
+
+	// After time passes, the reset header should decrement
+	currentTime = 124
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT,
+			CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Limit", Value: "10"},
+		{Key: "X-RateLimit-Remaining", Value: "0"},
+		{Key: "X-RateLimit-Reset", Value: "56"},
+	}, response.Headers)
+	t.assert.Nil(err)
+
+	// Last second before reset
+	currentTime = 179
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT,
+			CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Limit", Value: "10"},
+		{Key: "X-RateLimit-Remaining", Value: "0"},
+		{Key: "X-RateLimit-Reset", Value: "1"},
+	}, response.Headers)
+	t.assert.Nil(err)
+
+	// Exact second when reset occurs
+	currentTime = 180
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK,
+			CurrentLimit: limits[0].Limit, LimitRemaining: 9},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Limit", Value: "10"},
+		{Key: "X-RateLimit-Remaining", Value: "9"},
+		{Key: "X-RateLimit-Reset", Value: "60"},
+	}, response.Headers)
+	t.assert.Nil(err)
+
+	// Multiple descriptors
+	// (X-RateLimit-Limit omitted because choosing the limit of one descriptor would be arbitrary)
+
+	currentTime = 200
+	request = common.NewRateLimitRequest("test-domain", [][][2]string{
+		{{"a", "b"}}, {{"c", "d"}}, {{"e", "f"}},
+	}, 1)
+	limits = []*config.RateLimit{
+		config.NewRateLimit(1000, pb.RateLimitResponse_RateLimit_HOUR, "key", t.statStore),
+		config.NewRateLimit(75, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore),
+		config.NewRateLimit(50, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore),
+	}
+
+	// First descriptor is limiting factor
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[2]).Return(limits[2])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 3},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 4},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[2].Limit, LimitRemaining: 5},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Remaining", Value: "3"},
+		{Key: "X-RateLimit-Reset", Value: "3400"},
+	}, response.Headers)
+	t.assert.Nil(err)
+
+	// Second descriptor is limiting factor
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[2]).Return(limits[2])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 6},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 4},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[2].Limit, LimitRemaining: 5},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Remaining", Value: "4"},
+		{Key: "X-RateLimit-Reset", Value: "40"},
+	}, response.Headers)
+	t.assert.Nil(err)
+
+	// Third descriptor is limiting factor
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[2]).Return(limits[2])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 6},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 7},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[2].Limit, LimitRemaining: 5},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Remaining", Value: "5"},
+		{Key: "X-RateLimit-Reset", Value: "40"},
+	}, response.Headers)
+	t.assert.Nil(err)
+
+	// If there's a LimitRemaining tie, the highest Reset is returned
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[2]).Return(limits[2])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 6},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 6},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[2].Limit, LimitRemaining: 7},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Remaining", Value: "6"},
+		{Key: "X-RateLimit-Reset", Value: "3400"},
+	}, response.Headers)
+	t.assert.Nil(err)
+
+	// Same test with same expected result, but inverse descriptor order from cache
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[2]).Return(limits[2])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[2].Limit, LimitRemaining: 7},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 6},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 6},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Equal([]*core.HeaderValue{
+		{Key: "X-RateLimit-Remaining", Value: "6"},
+		{Key: "X-RateLimit-Reset", Value: "3400"},
+	}, response.Headers)
+	t.assert.Nil(err)
+
+	// No headers if no limit, one descriptor
+	request = common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(nil)
+	t.cache.EXPECT().DoLimit(nil, request, []*config.RateLimit{nil}).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Nil(response.Headers)
+	t.assert.Nil(err)
+
+	// No headers if no limit, two descriptors
+	request = common.NewRateLimitRequest("test-domain", [][][2]string{
+		{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(nil)
+	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[1]).Return(nil)
+	t.cache.EXPECT().DoLimit(nil, request, []*config.RateLimit{nil, nil}).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+		})
+	response, err = service.ShouldRateLimit(nil, request)
+	t.assert.Nil(response.Headers)
+	t.assert.Nil(err)
 }

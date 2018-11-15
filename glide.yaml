@@ -30,10 +30,12 @@ import:
 - package: github.com/kavu/go_reuseport
   version: v1.2.0
 - package: github.com/envoyproxy/data-plane-api
-  version: 0f8a2a3d456de4d3a29f4e8f7a641fef011d1394
+  version: ea5bba9e8ebb84d31c4967c0ee3e16a8f36bc39d
 - package: github.com/lyft/protoc-gen-validate
   version: cae364899cd8c08b83bfdcabf4ce4dd4a68ca6da
 - package: github.com/google/protobuf
   version: v3.5.1
 - package: github.com/golang/protobuf/proto
   version: v1.1.0
+- package: github.com/envoyproxy/go-control-plane
+  version: v0.5.0

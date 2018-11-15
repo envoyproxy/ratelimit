@@ -3,10 +3,12 @@
 
 package ratelimit
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-import _ "github.com/lyft/protoc-gen-validate/validate"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	_ "github.com/lyft/protoc-gen-validate/validate"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -72,16 +74,17 @@ func (m *RateLimitDescriptor) Reset()         { *m = RateLimitDescriptor{} }
 func (m *RateLimitDescriptor) String() string { return proto.CompactTextString(m) }
 func (*RateLimitDescriptor) ProtoMessage()    {}
 func (*RateLimitDescriptor) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ratelimit_0246c3aad2c335eb, []int{0}
+	return fileDescriptor_5684844e04543b8d, []int{0}
 }
+
 func (m *RateLimitDescriptor) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RateLimitDescriptor.Unmarshal(m, b)
 }
 func (m *RateLimitDescriptor) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RateLimitDescriptor.Marshal(b, m, deterministic)
 }
-func (dst *RateLimitDescriptor) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RateLimitDescriptor.Merge(dst, src)
+func (m *RateLimitDescriptor) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RateLimitDescriptor.Merge(m, src)
 }
 func (m *RateLimitDescriptor) XXX_Size() int {
 	return xxx_messageInfo_RateLimitDescriptor.Size(m)
@@ -113,16 +116,17 @@ func (m *RateLimitDescriptor_Entry) Reset()         { *m = RateLimitDescriptor_E
 func (m *RateLimitDescriptor_Entry) String() string { return proto.CompactTextString(m) }
 func (*RateLimitDescriptor_Entry) ProtoMessage()    {}
 func (*RateLimitDescriptor_Entry) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ratelimit_0246c3aad2c335eb, []int{0, 0}
+	return fileDescriptor_5684844e04543b8d, []int{0, 0}
 }
+
 func (m *RateLimitDescriptor_Entry) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RateLimitDescriptor_Entry.Unmarshal(m, b)
 }
 func (m *RateLimitDescriptor_Entry) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RateLimitDescriptor_Entry.Marshal(b, m, deterministic)
 }
-func (dst *RateLimitDescriptor_Entry) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RateLimitDescriptor_Entry.Merge(dst, src)
+func (m *RateLimitDescriptor_Entry) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RateLimitDescriptor_Entry.Merge(m, src)
 }
 func (m *RateLimitDescriptor_Entry) XXX_Size() int {
 	return xxx_messageInfo_RateLimitDescriptor_Entry.Size(m)
@@ -153,10 +157,10 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("envoy/api/v2/ratelimit/ratelimit.proto", fileDescriptor_ratelimit_0246c3aad2c335eb)
+	proto.RegisterFile("envoy/api/v2/ratelimit/ratelimit.proto", fileDescriptor_5684844e04543b8d)
 }
 
-var fileDescriptor_ratelimit_0246c3aad2c335eb = []byte{
+var fileDescriptor_5684844e04543b8d = []byte{
 	// 211 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x52, 0x4b, 0xcd, 0x2b, 0xcb,
 	0xaf, 0xd4, 0x4f, 0x2c, 0xc8, 0xd4, 0x2f, 0x33, 0xd2, 0x2f, 0x4a, 0x2c, 0x49, 0xcd, 0xc9, 0xcc,
