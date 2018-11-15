@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/lyft/goruntime/loader"
 	"github.com/lyft/gostats"
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
@@ -12,7 +13,6 @@ import (
 	"github.com/lyft/ratelimit/src/redis"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
-	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"strconv"
 )
 

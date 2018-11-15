@@ -3,6 +3,7 @@ package ratelimit_test
 import (
 	"testing"
 
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/lyft/gostats"
@@ -15,7 +16,6 @@ import (
 	"github.com/lyft/ratelimit/test/common"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
-	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 func convertRatelimit(ratelimit *pb.RateLimitResponse_RateLimit) (*pb_legacy.RateLimit, error) {

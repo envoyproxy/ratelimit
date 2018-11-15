@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/service_cmd/runner"
@@ -17,7 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 func newDescriptorStatus(

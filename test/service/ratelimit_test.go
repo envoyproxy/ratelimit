@@ -4,6 +4,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/mock/gomock"
 	"github.com/lyft/gostats"
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
@@ -17,7 +18,6 @@ import (
 	"github.com/lyft/ratelimit/test/mocks/runtime/snapshot"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
-	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 type barrier struct {
