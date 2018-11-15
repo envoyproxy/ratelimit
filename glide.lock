@@ -73,7 +73,7 @@ imports:
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: adae6a3d119ae4890b46832a2e88a95adc62b8e7
+  version: 1e491301e022f8f977054da4c2d852decd59571f
   subpackages:
   - context
   - http/httpguts
@@ -83,7 +83,7 @@ imports:
   - internal/timeseries
   - trace
 - name: golang.org/x/sys
-  version: acbc56fc7007d2a01796d5bde54f39e3b3e95945
+  version: f6cff0780e542efa0c8e864dc8fa522808f6a598
   subpackages:
   - unix
   - windows
