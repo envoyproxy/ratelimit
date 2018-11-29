@@ -1,6 +1,7 @@
 #!/bin/bash
 
 PROTOC_VER=3.5.1
+PROTOBUF_VER=1.2.0
 PROTOC_REL=protoc-"${PROTOC_VER}"-linux-x86_64.zip
 pushd /tmp
 wget https://github.com/google/protobuf/releases/download/v"${PROTOC_VER}/${PROTOC_REL}"
@@ -12,4 +13,6 @@ else
     mv protoc /usr/local && ln -s /usr/local/protoc/bin/protoc /usr/local/bin
 fi
 popd
-go get -u github.com/golang/protobuf/protoc-gen-go
+go get -d -u github.com/golang/protobuf/protoc-gen-go
+git -C "$(go env GOPATH)"/src/github.com/golang/protobuf checkout v$PROTOBUF_VER
+go install github.com/golang/protobuf/protoc-gen-go
