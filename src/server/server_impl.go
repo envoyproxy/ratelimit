@@ -124,7 +124,19 @@ func newServer(name string, opts ...settings.Option) *server {
 	ret.store.AddStatGenerator(stats.NewRuntimeStats(ret.scope.Scope("go")))
 
 	// setup runtime
-	ret.runtime = loader.New(s.RuntimePath, s.RuntimeSubdirectory, ret.store.Scope("runtime"), &loader.SymlinkRefresher{s.RuntimePath})
+	loaderOpts := make([]loader.Option, 0, 1)
+	if s.RuntimeIgnoreDotFiles {
+		loaderOpts = append(loaderOpts, loader.IgnoreDotFiles)
+	} else {
+		loaderOpts = append(loaderOpts, loader.AllowDotFiles)
+	}
+
+	ret.runtime = loader.New(
+		s.RuntimePath,
+		s.RuntimeSubdirectory,
+		ret.store.Scope("runtime"),
+		&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
+		loaderOpts...)
 
 	// setup http router
 	ret.router = mux.NewRouter()
