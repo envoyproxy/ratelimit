@@ -5,10 +5,12 @@ package mock_redis
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	context "golang.org/x/net/context"
+
 	ratelimit "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	config "github.com/lyft/ratelimit/src/config"
+	"github.com/lyft/ratelimit/src/filter"
 	redis "github.com/lyft/ratelimit/src/redis"
-	context "golang.org/x/net/context"
 )
 
 // Mock of RateLimitCache interface
@@ -32,14 +34,14 @@ func (_m *MockRateLimitCache) EXPECT() *_MockRateLimitCacheRecorder {
 	return _m.recorder
 }
 
-func (_m *MockRateLimitCache) DoLimit(_param0 context.Context, _param1 *ratelimit.RateLimitRequest, _param2 []*config.RateLimit, _param3 bool, _param4 string) []*ratelimit.RateLimitResponse_DescriptorStatus {
-	ret := _m.ctrl.Call(_m, "DoLimit", _param0, _param1, _param2, _param3, _param4)
+func (_m *MockRateLimitCache) DoLimit(_param0 context.Context, _param1 *ratelimit.RateLimitRequest, _param2 []*config.RateLimit, _param3 bool, _param4, _param5 filter.Filter) []*ratelimit.RateLimitResponse_DescriptorStatus {
+	ret := _m.ctrl.Call(_m, "DoLimit", _param0, _param1, _param2, _param3, _param4, _param5)
 	ret0, _ := ret[0].([]*ratelimit.RateLimitResponse_DescriptorStatus)
 	return ret0
 }
 
-func (_mr *_MockRateLimitCacheRecorder) DoLimit(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "DoLimit", arg0, arg1, arg2, arg3, arg4)
+func (_mr *_MockRateLimitCacheRecorder) DoLimit(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "DoLimit", arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // Mock of Pool interface

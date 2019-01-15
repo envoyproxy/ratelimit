@@ -6,13 +6,14 @@ import (
 
 	"github.com/lyft/goruntime/loader"
 	"github.com/lyft/gostats"
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
-	"github.com/lyft/ratelimit/src/assert"
-	"github.com/lyft/ratelimit/src/settings"
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/redis"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+
+	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
+	"github.com/lyft/ratelimit/src/assert"
+	"github.com/lyft/ratelimit/src/config"
+	"github.com/lyft/ratelimit/src/redis"
+	"github.com/lyft/ratelimit/src/settings"
 )
 
 type shouldRateLimitStats struct {
@@ -116,7 +117,7 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	s := settings.NewSettings()
-	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck, s.ForceFlag, s.WhiteListIPNetList)
+	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck, s.ForceFlag, s.IPFilter, s.UIDFilter)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
 
 	response := &pb.RateLimitResponse{}
@@ -190,7 +191,7 @@ func NewService(runtime loader.IFace, cache redis.RateLimitCache,
 		rlStatsScope:       stats.Scope("rate_limit"),
 	}
 	newService.legacy = &legacyService{
-		s: newService,
+		s:                          newService,
 		shouldRateLimitLegacyStats: newShouldRateLimitLegacyStats(stats),
 	}
 

@@ -1,10 +1,11 @@
 package redis
 
 import (
+	"golang.org/x/net/context"
+
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/config"
-	"golang.org/x/net/context"
-	"net"
+	"github.com/lyft/ratelimit/src/filter"
 )
 
 // Interface for a time source.
@@ -37,5 +38,6 @@ type RateLimitCache interface {
 		request *pb.RateLimitRequest,
 		limits []*config.RateLimit,
 		forceFlag bool,
-		WhiteListIPNetList [] *net.IPNet) []*pb.RateLimitResponse_DescriptorStatus
+		ipFilter filter.Filter,
+		uidFilter filter.Filter) []*pb.RateLimitResponse_DescriptorStatus
 }

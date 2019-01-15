@@ -2,18 +2,26 @@ package redis
 
 import (
 	"bytes"
+	"math"
+	"math/rand"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/lyft/ratelimit/src/filter"
+	logger "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
+
 	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
-	logger "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
-	"math"
-	"math/rand"
-	"net"
-	"strconv"
-	"sync"
-	"time"
+)
+
+const (
+	entryKeyRemoteAddr = "remote_address"
+	entryKeyUserID     = "user_id"
+	cacheKeyBlocked    = "_user_blocked"
 )
 
 type rateLimitCacheImpl struct {
@@ -55,7 +63,8 @@ func unitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 // @param now supplies the current unix time.
 // @return cacheKey struct.
 func (this *rateLimitCacheImpl) generateCacheKey(
-	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64, whiteListIPNet []*net.IPNet) cacheKey {
+	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64,
+	ipFilter filter.Filter, uidFilter filter.Filter) cacheKey {
 
 	if limit == nil {
 		return cacheKey{
@@ -73,20 +82,39 @@ func (this *rateLimitCacheImpl) generateCacheKey(
 
 	for _, entry := range descriptor.Entries {
 		if domain == "edge_proxy_per_ip" {
-			ip := net.ParseIP(entry.Value)
-			if ip != nil {
-				for _, ipNet := range whiteListIPNet {
-					if ipNet.Contains(ip) {
-						return cacheKey{
-							key:       "",
-							perSecond: false,
-						}
+			if entry.Key == entryKeyRemoteAddr {
+				switch action, reason := ipFilter.Match(entry.Value); action {
+				case filter.FilterActionAllow:
+					return cacheKey{
+						key:       "",
+						perSecond: false,
+					}
+				case filter.FilterActionDeny:
+					return cacheKey{
+						key:       cacheKeyBlocked,
+						perSecond: false,
+					}
+				case filter.FilterActionError:
+					logger.Warningf(reason)
+				}
+			}
+
+			if entry.Key == entryKeyUserID {
+				switch action, _ := uidFilter.Match(entry.Value); action {
+				case filter.FilterActionAllow:
+					return cacheKey{
+						key:       "",
+						perSecond: false,
+					}
+				case filter.FilterActionDeny:
+					return cacheKey{
+						key:       cacheKeyBlocked,
+						perSecond: false,
 					}
 				}
-			} else {
-				logger.Warningf("can't parse remote ip : %s", entry.Value)
 			}
 		}
+
 		b.WriteString(entry.Key)
 		b.WriteByte('_')
 		b.WriteString(entry.Value)
@@ -135,7 +163,8 @@ func (this *rateLimitCacheImpl) DoLimit(
 	request *pb.RateLimitRequest,
 	limits []*config.RateLimit,
 	forceFlag bool,
-	WhiteListIPNetList [] *net.IPNet) []*pb.RateLimitResponse_DescriptorStatus {
+	ipFilter filter.Filter,
+	uidFilter filter.Filter) []*pb.RateLimitResponse_DescriptorStatus {
 
 	logger.Debugf("starting cache lookup")
 
@@ -144,7 +173,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 	// Optional connection for per second limits. If the cache has a perSecondPool setup,
 	// then use a connection from the pool for per second limits.
-	var perSecondConn Connection = nil
+	var perSecondConn Connection
 	if this.perSecondPool != nil {
 		perSecondConn = this.perSecondPool.Get()
 		defer this.perSecondPool.Put(perSecondConn)
@@ -175,7 +204,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 	for i := 0; i < len(request.Descriptors); i++ {
 
-		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now, WhiteListIPNetList)
+		cacheKeys[i] = this.generateCacheKey(request.Domain, request.Descriptors[i], limits[i], now, ipFilter, uidFilter)
 
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
@@ -188,7 +217,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 		if cacheKey.key == "" {
 			continue
 		}
-		logger.Debugf("looking up cache key: %s", cacheKey)
+		logger.Debugf("looking up cache key: %v", cacheKey)
 
 		expirationSeconds := unitToDivider(limits[i].Limit.Unit)
 		if this.expirationJitterMaxSeconds > 0 {
@@ -210,6 +239,16 @@ func (this *rateLimitCacheImpl) DoLimit(
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
 					Code:           pb.RateLimitResponse_OK,
+					CurrentLimit:   nil,
+					LimitRemaining: 0,
+				}
+			continue
+		}
+
+		if cacheKey.key == cacheKeyBlocked {
+			responseDescriptorStatuses[i] =
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:           pb.RateLimitResponse_OVER_LIMIT,
 					CurrentLimit:   nil,
 					LimitRemaining: 0,
 				}
