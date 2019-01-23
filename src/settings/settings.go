@@ -1,16 +1,19 @@
 package settings
 
 import (
-	"github.com/kelseyhightower/envconfig"
-	"google.golang.org/grpc"
 	"net"
 	"strings"
+
+	"github.com/kelseyhightower/envconfig"
+	"google.golang.org/grpc"
+
+	"github.com/lyft/ratelimit/src/filter"
 )
 
 type Settings struct {
 	// runtime options
 	GrpcUnaryInterceptor grpc.ServerOption
-	WhiteListIPNetList [] *net.IPNet
+	WhiteListIPNetList   []*net.IPNet
 	// env config
 	Port                       int    `envconfig:"PORT" default:"8080"`
 	GrpcPort                   int    `envconfig:"GRPC_PORT" default:"8081"`
@@ -21,17 +24,24 @@ type Settings struct {
 	RuntimePath                string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`
 	RuntimeSubdirectory        string `envconfig:"RUNTIME_SUBDIRECTORY"`
 	LogLevel                   string `envconfig:"LOG_LEVEL" default:"WARN"`
-	ForceFlag				   bool   `envconfig:"FORCE_FLAG" default:"false"`
+	ForceFlag                  bool   `envconfig:"FORCE_FLAG" default:"false"`
 	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"tcp"`
 	RedisUrl                   string `envconfig:"REDIS_URL" default:"redis:6379"`
-	RedisPassword			   string `envconfig:"REDIS_PASSWORD" default:"toor333666"`
+	RedisPassword              string `envconfig:"REDIS_PASSWORD" default:"toor333666"`
 	RedisPoolSize              int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
 	RedisPerSecond             bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType   string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
 	RedisPerSecondUrl          string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize     int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
-	WhiteListIPNetString             string `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24,10.0.0.0/8"`
+	// filter env config
+	BlackListIPNetString string `envconfig:"BLACKLIST_IP_NET" default:""`
+	WhiteListIPNetString string `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24,10.0.0.0/8"`
+	BlackListUIDString   string `envconfig:"BLACKLIST_UID" default:"123,456,789"`
+	WhiteListUIDString   string `envconfig:"WHITELIST_UID" default:""`
+	// filters
+	IPFilter  filter.Filter
+	UIDFilter filter.Filter
 }
 
 type Option func(*Settings)
@@ -48,10 +58,19 @@ func NewSettings() Settings {
 	if err != nil {
 		panic(err)
 	}
-	s.WhiteListIPNetList, err = ParseIPNetString(s.WhiteListIPNetString)
+
+	whiteListIPNetList, err := parseIPNetString(s.WhiteListIPNetString)
 	if err != nil {
 		panic(err)
 	}
+	blackListIPNetList, err := parseIPNetString(s.BlackListIPNetString)
+	if err != nil {
+		panic(err)
+	}
+
+	s.IPFilter = filter.NewIPFilter(whiteListIPNetList, blackListIPNetList)
+	s.UIDFilter = filter.NewUIDFilter(parseUIDString(s.WhiteListUIDString), parseUIDString(s.BlackListUIDString))
+
 	settings = &s
 	return s
 }
@@ -62,10 +81,14 @@ func GrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 	}
 }
 
-func ParseIPNetString(IPNetString string) ([]*net.IPNet,error) {
+func parseIPNetString(IPNetString string) ([]*net.IPNet, error) {
 	ipNetStringList := strings.Split(IPNetString, ",")
 	var result []*net.IPNet
 	for _, ipNetString := range ipNetStringList {
+		ipNetString = strings.TrimSpace(ipNetString)
+		if ipNetString == "" {
+			continue
+		}
 		_, ipNet, err := net.ParseCIDR(ipNetString)
 		if err != nil {
 			return nil, err
@@ -73,4 +96,18 @@ func ParseIPNetString(IPNetString string) ([]*net.IPNet,error) {
 		result = append(result, ipNet)
 	}
 	return result, nil
+}
+
+func parseUIDString(uidList string) map[string]struct{} {
+	uidMap := make(map[string]struct{})
+	uidItems := strings.Split(uidList, ",")
+	for _, v := range uidItems {
+		uid := strings.TrimSpace(v)
+		if uid == "" {
+			continue
+		}
+
+		uidMap[uid] = struct{}{}
+	}
+	return uidMap
 }

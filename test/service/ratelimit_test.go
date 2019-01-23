@@ -6,6 +6,9 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/lyft/gostats"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
+
 	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
@@ -15,8 +18,6 @@ import (
 	"github.com/lyft/ratelimit/test/mocks/redis"
 	"github.com/lyft/ratelimit/test/mocks/runtime/loader"
 	"github.com/lyft/ratelimit/test/mocks/runtime/snapshot"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
 )
 
 type barrier struct {
@@ -93,7 +94,7 @@ func TestService(test *testing.T) {
 	// First request, config should be loaded.
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(nil)
-	t.cache.EXPECT().DoLimit(nil, request, []*config.RateLimit{nil}, false, "192.168.0.0/24").Return(
+	t.cache.EXPECT().DoLimit(nil, request, []*config.RateLimit{nil}, false, ipFilter, uidFilter).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 
 	response, err := service.ShouldRateLimit(nil, request)
@@ -120,7 +121,7 @@ func TestService(test *testing.T) {
 		nil}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits,false, "192.168.0.0/24").Return(
+	t.cache.EXPECT().DoLimit(nil, request, limits, false, ipFilter, uidFilter).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 	response, err = service.ShouldRateLimit(nil, request)
@@ -150,7 +151,7 @@ func TestService(test *testing.T) {
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits, false, "192.168.0.0/24").Return(
+	t.cache.EXPECT().DoLimit(nil, request, limits, false, ipFilter, uidFilter).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0}})
 	response, err = service.ShouldRateLimit(nil, request)
@@ -200,7 +201,7 @@ func TestCacheError(test *testing.T) {
 	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.cache.EXPECT().DoLimit(nil, request, limits, false, "192.168.0.0/24").Do(
+	t.cache.EXPECT().DoLimit(nil, request, limits, false, ipFilter, uidFilter).Do(
 		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit, bool, string) {
 			panic(redis.RedisError("cache error"))
 		})
