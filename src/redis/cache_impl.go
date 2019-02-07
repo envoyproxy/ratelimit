@@ -134,7 +134,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 	}
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
-	hitsAddend := max(1, request.HitsAddend)
+	hitsAddend := max(0, request.HitsAddend)
 
 	// First build a list of all cache keys that we are actually going to hit. generateCacheKey()
 	// returns an empty string in the key if there is no limit so that we can keep the arrays
