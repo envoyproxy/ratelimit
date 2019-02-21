@@ -37,11 +37,11 @@ compile: proto
 
 .PHONY: tests_unit
 tests_unit: compile
-	go test $(shell glide nv)
+	go test -race ./...
 
 .PHONY: tests
 tests: compile
-	go test $(shell glide nv) -tags=integration
+	go test -race -tags=integration ./...
 
 .PHONY: proto
 proto:
