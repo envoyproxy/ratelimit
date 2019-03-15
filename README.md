@@ -298,7 +298,7 @@ descriptors:
     descriptors:
       - key: subkey      
         rate_limit:
-          -  requests_per_unit: 300
+             requests_per_unit: 300
              unit: second
 ```
 
