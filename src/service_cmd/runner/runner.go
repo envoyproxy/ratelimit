@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 
 	"github.com/lyft/ratelimit/src/config"

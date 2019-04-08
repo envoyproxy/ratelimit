@@ -4,9 +4,9 @@ import (
 	"sync"
 	"testing"
 
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/lyft/gostats"
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
 	"github.com/lyft/ratelimit/src/service"
