@@ -34,6 +34,6 @@ import:
 - package: github.com/envoyproxy/protoc-gen-validate
   version: v0.0.14
 - package: github.com/google/protobuf
-  version: v3.5.1
+  version: v3.7.1
 - package: github.com/golang/protobuf/proto
-  version: v1.1.0
+  version: v1.3.1

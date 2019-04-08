@@ -1,5 +1,5 @@
-hash: 8fa2e811bad45a1e2389bc8428cbd96cfa8b922aed09cdaffdbad9e7d80784e1
-updated: 2019-04-08T10:12:32.306083-07:00
+hash: dbaf34c6a11259517cf882afa8a5ecf03eade91f1cac4c4e54edc30a3b4fdd3e
+updated: 2019-04-08T10:22:39.596389-07:00
 imports:
 - name: github.com/envoyproxy/go-control-plane
   version: 0ad6fa1cf0b9b6ca8f3617a7188a568e81f40b87
@@ -26,7 +26,7 @@ imports:
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
-  version: b4deda0973fb4c70b50d226b1af49f3da59f5265
+  version: b5d812f8a3706043e23a9cd5babf2e5423744d30
   subpackages:
   - jsonpb
   - proto
@@ -37,7 +37,7 @@ imports:
   - ptypes/struct
   - ptypes/timestamp
 - name: github.com/google/protobuf
-  version: 106ffc04be1abf3ff3399f54ccf149815b287dd9
+  version: 6973c3a5041636c1d8dc5f7f6c8c1f3c15bc63d6
 - name: github.com/gorilla/mux
   version: 9e1f5955c0d22b55d9e20d6faa28589f83b2faca
 - name: github.com/kavu/go_reuseport
