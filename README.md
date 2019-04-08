@@ -296,7 +296,7 @@ descriptors:
   - key: key
     value: value
     descriptors:
-      - key: subkey      
+      - key: subkey
         rate_limit:
           -  requests_per_unit: 300
              unit: second
@@ -311,8 +311,9 @@ The path to watch can be configured via the [settings](https://github.com/lyft/r
 package with the following environment variables:
 
 ```
-RUNTIME_ROOT default:"/srv/runtime_data/current"`
+RUNTIME_ROOT default:"/srv/runtime_data/current"
 RUNTIME_SUBDIRECTORY
+RUNTIME_IGNOREDOTFILES default:"false"
 ```
 
 **Configuration files are loaded from RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/\*.yaml**

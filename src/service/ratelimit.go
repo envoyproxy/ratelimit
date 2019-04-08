@@ -4,16 +4,17 @@ import (
 	"strings"
 	"sync"
 
+	"strconv"
+
 	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/lyft/goruntime/loader"
 	"github.com/lyft/gostats"
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
-	"strconv"
 )
 
 type shouldRateLimitStats struct {
@@ -270,10 +271,10 @@ func NewService(runtime loader.IFace, cache redis.RateLimitCache,
 		stats:                  newServiceStats(stats),
 		rlStatsScope:           stats.Scope("rate_limit"),
 		responseHeadersEnabled: responseHeadersEnabled,
-		clock:                  clock,
+		clock: clock,
 	}
 	newService.legacy = &legacyService{
-		s:                          newService,
+		s: newService,
 		shouldRateLimitLegacyStats: newShouldRateLimitLegacyStats(stats),
 	}
 

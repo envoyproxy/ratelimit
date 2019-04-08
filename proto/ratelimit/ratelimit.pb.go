@@ -94,14 +94,14 @@ func (RateLimitResponse_Code) EnumDescriptor() ([]byte, []int) {
 type RateLimitRequest struct {
 	// All rate limit requests must specify a domain. This enables the configuration to be per
 	// application without fear of overlap. E.g., "envoy".
-	Domain string `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	Domain string `protobuf:"bytes,1,opt,name=domain" json:"domain,omitempty"`
 	// All rate limit requests must specify at least one RateLimitDescriptor. Each descriptor is
 	// processed by the service (see below). If any of the descriptors are over limit, the entire
 	// request is considered to be over limit.
-	Descriptors []*RateLimitDescriptor `protobuf:"bytes,2,rep,name=descriptors,proto3" json:"descriptors,omitempty"`
+	Descriptors []*RateLimitDescriptor `protobuf:"bytes,2,rep,name=descriptors" json:"descriptors,omitempty"`
 	// Rate limit requests can optionally specify the number of hits a request adds to the matched limit. If the
 	// value is not set in the message, a request increases the matched limit by 1.
-	HitsAddend           uint32   `protobuf:"varint,3,opt,name=hits_addend,json=hitsAddend,proto3" json:"hits_addend,omitempty"`
+	HitsAddend           uint32   `protobuf:"varint,3,opt,name=hits_addend,json=hitsAddend" json:"hits_addend,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -175,7 +175,7 @@ func (m *RateLimitRequest) GetHitsAddend() uint32 {
 // The idea behind the API is that (1)/(2)/(3) and (4)/(5) can be sent in 1 request if desired.
 // This enables building complex application scenarios with a generic backend.
 type RateLimitDescriptor struct {
-	Entries              []*RateLimitDescriptor_Entry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	Entries              []*RateLimitDescriptor_Entry `protobuf:"bytes,1,rep,name=entries" json:"entries,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                     `json:"-"`
 	XXX_unrecognized     []byte                       `json:"-"`
 	XXX_sizecache        int32                        `json:"-"`
@@ -214,8 +214,8 @@ func (m *RateLimitDescriptor) GetEntries() []*RateLimitDescriptor_Entry {
 }
 
 type RateLimitDescriptor_Entry struct {
-	Key                  string   `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Value                string   `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Key                  string   `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
+	Value                string   `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -262,8 +262,8 @@ func (m *RateLimitDescriptor_Entry) GetValue() string {
 
 // Defines an actual rate limit in terms of requests per unit of time and the unit itself.
 type RateLimit struct {
-	RequestsPerUnit      uint32         `protobuf:"varint,1,opt,name=requests_per_unit,json=requestsPerUnit,proto3" json:"requests_per_unit,omitempty"`
-	Unit                 RateLimit_Unit `protobuf:"varint,2,opt,name=unit,proto3,enum=pb.lyft.ratelimit.RateLimit_Unit" json:"unit,omitempty"`
+	RequestsPerUnit      uint32         `protobuf:"varint,1,opt,name=requests_per_unit,json=requestsPerUnit" json:"requests_per_unit,omitempty"`
+	Unit                 RateLimit_Unit `protobuf:"varint,2,opt,name=unit,enum=pb.lyft.ratelimit.RateLimit_Unit" json:"unit,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
@@ -312,11 +312,11 @@ func (m *RateLimit) GetUnit() RateLimit_Unit {
 type RateLimitResponse struct {
 	// The overall response code which takes into account all of the descriptors that were passed
 	// in the RateLimitRequest message.
-	OverallCode RateLimitResponse_Code `protobuf:"varint,1,opt,name=overall_code,json=overallCode,proto3,enum=pb.lyft.ratelimit.RateLimitResponse_Code" json:"overall_code,omitempty"`
+	OverallCode RateLimitResponse_Code `protobuf:"varint,1,opt,name=overall_code,json=overallCode,enum=pb.lyft.ratelimit.RateLimitResponse_Code" json:"overall_code,omitempty"`
 	// A list of DescriptorStatus messages which matches the length of the descriptor list passed
 	// in the RateLimitRequest. This can be used by the caller to determine which individual
 	// descriptors failed and/or what the currently configured limits are for all of them.
-	Statuses             []*RateLimitResponse_DescriptorStatus `protobuf:"bytes,2,rep,name=statuses,proto3" json:"statuses,omitempty"`
+	Statuses             []*RateLimitResponse_DescriptorStatus `protobuf:"bytes,2,rep,name=statuses" json:"statuses,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                              `json:"-"`
 	XXX_unrecognized     []byte                                `json:"-"`
 	XXX_sizecache        int32                                 `json:"-"`
@@ -363,11 +363,11 @@ func (m *RateLimitResponse) GetStatuses() []*RateLimitResponse_DescriptorStatus 
 
 type RateLimitResponse_DescriptorStatus struct {
 	// The response code for an individual descriptor.
-	Code RateLimitResponse_Code `protobuf:"varint,1,opt,name=code,proto3,enum=pb.lyft.ratelimit.RateLimitResponse_Code" json:"code,omitempty"`
+	Code RateLimitResponse_Code `protobuf:"varint,1,opt,name=code,enum=pb.lyft.ratelimit.RateLimitResponse_Code" json:"code,omitempty"`
 	// The current limit as configured by the server. Useful for debugging, etc.
-	CurrentLimit *RateLimit `protobuf:"bytes,2,opt,name=current_limit,json=currentLimit,proto3" json:"current_limit,omitempty"`
+	CurrentLimit *RateLimit `protobuf:"bytes,2,opt,name=current_limit,json=currentLimit" json:"current_limit,omitempty"`
 	// The limit remaining in the current time unit.
-	LimitRemaining       uint32   `protobuf:"varint,3,opt,name=limit_remaining,json=limitRemaining,proto3" json:"limit_remaining,omitempty"`
+	LimitRemaining       uint32   `protobuf:"varint,3,opt,name=limit_remaining,json=limitRemaining" json:"limit_remaining,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -478,9 +478,8 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// RateLimitServiceClient is the client API for RateLimitService service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+// Client API for RateLimitService service
+
 type RateLimitServiceClient interface {
 	// Determine whether rate limiting should take place.
 	ShouldRateLimit(ctx context.Context, in *RateLimitRequest, opts ...grpc.CallOption) (*RateLimitResponse, error)
@@ -496,14 +495,15 @@ func NewRateLimitServiceClient(cc *grpc.ClientConn) RateLimitServiceClient {
 
 func (c *rateLimitServiceClient) ShouldRateLimit(ctx context.Context, in *RateLimitRequest, opts ...grpc.CallOption) (*RateLimitResponse, error) {
 	out := new(RateLimitResponse)
-	err := c.cc.Invoke(ctx, "/pb.lyft.ratelimit.RateLimitService/ShouldRateLimit", in, out, opts...)
+	err := grpc.Invoke(ctx, "/pb.lyft.ratelimit.RateLimitService/ShouldRateLimit", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// RateLimitServiceServer is the server API for RateLimitService service.
+// Server API for RateLimitService service
+
 type RateLimitServiceServer interface {
 	// Determine whether rate limiting should take place.
 	ShouldRateLimit(context.Context, *RateLimitRequest) (*RateLimitResponse, error)

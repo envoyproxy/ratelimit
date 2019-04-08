@@ -9,7 +9,7 @@ import:
 - package: github.com/lyft/gostats
   version: v0.2.6
 - package: github.com/lyft/goruntime
-  version: v0.1.8
+  version: v0.2.1
 - package: github.com/mediocregopher/radix.v2
   version: master
   subpackages:
@@ -29,13 +29,11 @@ import:
   version: v1.12.0
 - package: github.com/kavu/go_reuseport
   version: v1.2.0
-- package: github.com/envoyproxy/data-plane-api
-  version: ea5bba9e8ebb84d31c4967c0ee3e16a8f36bc39d
-- package: github.com/lyft/protoc-gen-validate
-  version: cae364899cd8c08b83bfdcabf4ce4dd4a68ca6da
-- package: github.com/google/protobuf
-  version: v3.5.1
-- package: github.com/golang/protobuf/proto
-  version: v1.1.0
 - package: github.com/envoyproxy/go-control-plane
-  version: v0.5.0
+  version: v0.6.9
+- package: github.com/envoyproxy/protoc-gen-validate
+  version: v0.0.14
+- package: github.com/google/protobuf
+  version: v3.7.1
+- package: github.com/golang/protobuf/proto
+  version: v1.3.1

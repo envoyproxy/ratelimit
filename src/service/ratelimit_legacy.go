@@ -1,9 +1,9 @@
 package ratelimit
 
 import (
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/lyft/gostats"
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 	"golang.org/x/net/context"
 	"strings"
