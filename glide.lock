@@ -1,16 +1,32 @@
-hash: 8eb465e3dce54065826786f6eb25807589fe99dd548db5988ed8db0cbaede809
-updated: 2018-10-03T00:32:46.325855583+01:00
+hash: dbaf34c6a11259517cf882afa8a5ecf03eade91f1cac4c4e54edc30a3b4fdd3e
+updated: 2019-04-08T10:22:39.596389-07:00
 imports:
-- name: github.com/envoyproxy/data-plane-api
-  version: 0f8a2a3d456de4d3a29f4e8f7a641fef011d1394
+- name: github.com/envoyproxy/go-control-plane
+  version: 0ad6fa1cf0b9b6ca8f3617a7188a568e81f40b87
+  subpackages:
+  - envoy/api/v2/core
+  - envoy/api/v2/ratelimit
+  - envoy/service/ratelimit/v2
+  - envoy/type
+- name: github.com/envoyproxy/protoc-gen-validate
+  version: ff6f7a9bc2e5fe006509b9f8c7594c41a953d50f
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
+- name: github.com/gogo/protobuf
+  version: ba06b47c162d49f2af050fb4c75bcbc86a159d5c
+  subpackages:
+  - gogoproto
+  - proto
+  - protoc-gen-gogo/descriptor
+  - protoc-gen-gogofast
+  - sortkeys
+  - types
 - name: github.com/golang/mock
-  version: 600781dde9cca80734169b9e969d9054ccc57937
+  version: 8a44ef6e8be577e050008c7886f24fc705d709fb
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
-  version: b4deda0973fb4c70b50d226b1af49f3da59f5265
+  version: b5d812f8a3706043e23a9cd5babf2e5423744d30
   subpackages:
   - jsonpb
   - proto
@@ -21,7 +37,7 @@ imports:
   - ptypes/struct
   - ptypes/timestamp
 - name: github.com/google/protobuf
-  version: 106ffc04be1abf3ff3399f54ccf149815b287dd9
+  version: 6973c3a5041636c1d8dc5f7f6c8c1f3c15bc63d6
 - name: github.com/gorilla/mux
   version: 9e1f5955c0d22b55d9e20d6faa28589f83b2faca
 - name: github.com/kavu/go_reuseport
@@ -37,7 +53,7 @@ imports:
 - name: github.com/lyft/gostats
   version: 943f43ede7b2dbf1d7162587689cb484d49ecd15
 - name: github.com/lyft/protoc-gen-validate
-  version: cae364899cd8c08b83bfdcabf4ce4dd4a68ca6da
+  version: f9d2b11e44149635b23a002693b76512b01ae515
   subpackages:
   - validate
 - name: github.com/mediocregopher/radix.v2
@@ -46,17 +62,17 @@ imports:
   - pool
   - redis
 - name: github.com/sirupsen/logrus
-  version: 3e01752db0189b9157070a0e1668a620f9a85da2
+  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/stretchr/testify
   version: f390dcf405f7b83c997eac1b06768bb9f44dec18
   subpackages:
   - assert
 - name: golang.org/x/crypto
-  version: e3636079e1a4c1f337f212cc5cd2aca108f6c900
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 4dfa2610cdf3b287375bbba5b8f2a14d3b01d8de
+  version: d0887baf81f4598189d4e12a37c6da86f0bba4d0
   subpackages:
   - context
   - http/httpguts
@@ -66,19 +82,19 @@ imports:
   - internal/timeseries
   - trace
 - name: golang.org/x/sys
-  version: e4b3c5e9061176387e7cea65e4dc5853801f3fb7
+  version: acbc56fc7007d2a01796d5bde54f39e3b3e95945
   subpackages:
   - unix
   - windows
 - name: golang.org/x/text
-  version: 905a57155faa8230500121607930ebb9dd8e139c
+  version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
   - secure/bidirule
   - transform
   - unicode/bidi
   - unicode/norm
 - name: google.golang.org/genproto
-  version: c7e5094acea1ca1b899e2259d80a6b0f882f81f8
+  version: 221a8d4f74948678f06caaa13c9d41d22e069ae8
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc

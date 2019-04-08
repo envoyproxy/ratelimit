@@ -3,11 +3,11 @@ package ratelimit_test
 import (
 	"testing"
 
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/lyft/gostats"
-	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"

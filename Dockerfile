@@ -4,11 +4,9 @@ WORKDIR /go/src/github.com/lyft/ratelimit
 COPY src src
 COPY script script
 COPY vendor vendor
-COPY proto proto
 COPY glide.yaml glide.yaml
 COPY glide.lock glide.lock
 
-RUN go get -u github.com/golang/protobuf/protoc-gen-go
 RUN script/install-glide
 RUN glide install
 
