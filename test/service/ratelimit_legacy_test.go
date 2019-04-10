@@ -215,6 +215,10 @@ func TestInitialLoadErrorLegacy(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
 
+	t.settings.ResponseHeadersEnabled = false
+	var currentTime int64 = 0
+	var c ratelimit.Clock = stubClock{now: &currentTime}
+
 	t.runtime.EXPECT().AddUpdateCallback(gomock.Any()).Do(
 		func(callback chan<- int) { t.runtimeUpdateCallback = callback })
 	t.runtime.EXPECT().Snapshot().Return(t.snapshot).MinTimes(1)
@@ -225,8 +229,7 @@ func TestInitialLoadErrorLegacy(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Scope) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore, false,
-		ratelimit.Clock{UnixSeconds: func() int64 { return 0 }})
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore, c, t.settings)
 
 	request := common.NewRateLimitRequestLegacy("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)

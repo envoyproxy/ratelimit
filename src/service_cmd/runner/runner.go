@@ -45,8 +45,8 @@ func Run() {
 			s.ExpirationJitterMaxSeconds),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"),
-		s.ResponseHeadersEnabled,
-		systemClock(),
+		ratelimit.StdClock{},
+		s,
 	)
 	srv.AddDebugHttpEndpoint(
 		"/rlconfig",
@@ -63,8 +63,4 @@ func Run() {
 	// (1) is the current definition, and (2) is the legacy definition.
 
 	srv.Start()
-}
-
-func systemClock() ratelimit.Clock {
-	return ratelimit.Clock{UnixSeconds: func() int64 { return time.Now().Unix() }}
 }
