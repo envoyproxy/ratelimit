@@ -3,6 +3,7 @@ WORKDIR /go/src/github.com/lyft/ratelimit
 
 COPY src src
 COPY script script
+COPY proto proto
 COPY vendor vendor
 COPY glide.yaml glide.yaml
 COPY glide.lock glide.lock
@@ -14,4 +15,14 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /usr/local/bin/ratelimit -ldflags="-w -
 
 FROM alpine:3.8 AS final
 RUN apk --no-cache add ca-certificates
+ENV USE_STATSD=false
+ENV LOG_LEVEL=debug
+ENV REDIS_SOCKET_TYPE=tcp
+ENV REDIS_URL=localhost:6379
+ENV RUNTIME_ROOT=/data
+ENV RUNTIME_SUBDIRECTORY=ratelimit
+ENV RUNTIME_IGNOREDOTFILES="true"
+COPY data /data
 COPY --from=build /usr/local/bin/ratelimit /bin/ratelimit
+EXPOSE 8001 8000 6070
+ENTRYPOINT ["/bin/ratelimit"]
