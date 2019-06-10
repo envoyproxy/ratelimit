@@ -24,6 +24,7 @@
 - [Redis](#redis)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
+- [Ambassador Use Case](#ambassador-use-case)
 - [Contact](#contact)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -405,6 +406,11 @@ To configure two Redis instances use the following environment variables:
 This setup will use the Redis server configured with the `_PERSECOND_` vars for
 per second limits, and the other Redis server for all other limits.
 
+# Ambassador Use Case
+
+This service can be used with ambassador API gateway (OSS) to implement the rate limiter.
+Please go through this [link](https://medium.com/tech-chronicles/ambassador-lyfts-rate-limit-service-cdf64b4fa371) for more information. 
+
 # Contact
 
 * [envoy-announce](https://groups.google.com/forum/#!forum/envoy-announce): Low frequency mailing
@@ -417,3 +423,4 @@ per second limits, and the other Redis server for all other limits.
   We have the IRC/XMPP gateways enabled if you prefer either of those. Once an account is created,
   connection instructions for IRC/XMPP can be found [here](https://envoyproxy.slack.com/account/gateways).
   The `#ratelimit-users` channel is used for discussions about the ratelimit service.
+
