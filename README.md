@@ -284,8 +284,8 @@ descriptors:
   - key: key
     value: value
     rate_limit:
-      -  requests_per_unit: 300
-         unit: second
+      requests_per_unit: 300
+      unit: second
 ```
 
 However, it would match the following configuration:
@@ -296,10 +296,10 @@ descriptors:
   - key: key
     value: value
     descriptors:
-      - key: subkey      
+      - key: subkey
         rate_limit:
-          -  requests_per_unit: 300
-             unit: second
+          requests_per_unit: 300
+          unit: second
 ```
 
 ## Loading Configuration

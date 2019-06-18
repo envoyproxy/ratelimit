@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/service_cmd/runner"
 	"github.com/lyft/ratelimit/test/common"

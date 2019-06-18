@@ -6,9 +6,9 @@ package mock_config
 
 import (
 	context "context"
+	ratelimit "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
 	gomock "github.com/golang/mock/gomock"
 	gostats "github.com/lyft/gostats"
-	ratelimit "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
 	config "github.com/lyft/ratelimit/src/config"
 	reflect "reflect"
 )

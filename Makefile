@@ -8,7 +8,6 @@ GOREPO := ${GOPATH}/src/github.com/lyft/ratelimit
 .PHONY: bootstrap
 bootstrap:
 	script/install-glide
-	script/install-protoc
 	glide install
 
 .PHONY: bootstrap_tests
@@ -29,7 +28,7 @@ check_format: docs_format
 	@gofmt -l $(shell glide nv | sed 's/\.\.\.//g') | tee /dev/stderr | read && echo "Files failed gofmt" && exit 1 || true
 
 .PHONY: compile
-compile: proto
+compile:
 	mkdir -p ${GOREPO}/bin
 	cd ${GOREPO}/src/service_cmd && go build -o ratelimit ./ && mv ./ratelimit ${GOREPO}/bin
 	cd ${GOREPO}/src/client_cmd && go build -o ratelimit_client ./ && mv ./ratelimit_client ${GOREPO}/bin
@@ -37,15 +36,11 @@ compile: proto
 
 .PHONY: tests_unit
 tests_unit: compile
-	go test $(shell glide nv)
+	go test -race ./...
 
 .PHONY: tests
 tests: compile
-	go test $(shell glide nv) -tags=integration
-
-.PHONY: proto
-proto:
-	script/generate_proto
+	go test -race -tags=integration ./...
 
 .PHONY: docker
 docker: tests

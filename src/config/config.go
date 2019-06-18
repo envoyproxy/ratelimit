@@ -1,9 +1,9 @@
 package config
 
 import (
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/lyft/gostats"
-	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
 	"golang.org/x/net/context"
 )
 
