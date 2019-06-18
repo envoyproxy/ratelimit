@@ -64,8 +64,8 @@ to give time to community members running ratelimit off of `master`.
 go [here](https://golang.org/doc/install).
 * In order to run the integration tests using a local Redis server please run two Redis-server instances: one on port `6379` and another on port `6380`
   ```bash
-  Redis-server --port 6379 &
-  Redis-server --port 6380 &
+  redis-server --port 6379 &
+  redis-server --port 6380 &
   ```
 * To setup for the first time (only done once):
   ```bash
