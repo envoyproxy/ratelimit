@@ -4,3 +4,7 @@ descriptors:
     rate_limit:
       unit: second
       requests_per_unit: 50
+  - key: key2_10
+    rate_limit:
+      unit: second
+      requests_per_unit: 10

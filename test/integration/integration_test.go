@@ -244,3 +244,62 @@ func TestBasicConfigLegacy(t *testing.T) {
 		assert.NoError(err)
 	}
 }
+
+// Test case to validate that when hitsAdded is set to zero it does not reduce
+// the remaining limit.
+func TestHitsAddedZero(t *testing.T) {
+	os.Setenv("PORT", "8082")
+	os.Setenv("GRPC_PORT", "8083")
+	os.Setenv("DEBUG_PORT", "8084")
+	os.Setenv("RUNTIME_ROOT", "runtime/current")
+	os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
+
+	go func() {
+		runner.Run()
+	}()
+
+	// HACK: Wait for the server to come up. Make a hook that we can wait on.
+	time.Sleep(100 * time.Millisecond)
+
+	assert := assert.New(t)
+	conn, err := grpc.Dial("localhost:8083", grpc.WithInsecure())
+	assert.NoError(err)
+	defer conn.Close()
+	c := pb_legacy.NewRateLimitServiceClient(conn)
+
+	// request with hitsAdded zero shouldn't decrease allowed limit
+	response, err := c.ShouldRateLimit(
+		context.Background(),
+		common.NewRateLimitRequestLegacy("basic_legacy", [][][2]string{{{"key2_10", "foo"}}}, 0))
+	assert.Equal(
+		&pb_legacy.RateLimitResponse{
+			OverallCode: pb_legacy.RateLimitResponse_OK,
+			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
+				newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 10, pb_legacy.RateLimit_SECOND, 10)}},
+		response)
+	assert.NoError(err)
+	// try decreasing remaining limit
+	response, err = c.ShouldRateLimit(
+		context.Background(),
+		common.NewRateLimitRequestLegacy("basic_legacy", [][][2]string{{{"key2_10", "foo"}}}, 1))
+	assert.Equal(
+		&pb_legacy.RateLimitResponse{
+			OverallCode: pb_legacy.RateLimitResponse_OK,
+			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
+				newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 10, pb_legacy.RateLimit_SECOND, 9)}},
+		response)
+	assert.NoError(err)
+	limitRemaining := response.Statuses[0].LimitRemaining
+	// set hitsAdded to zero to check how much limit is remaining
+	response, err = c.ShouldRateLimit(
+		context.Background(),
+		common.NewRateLimitRequestLegacy("basic_legacy", [][][2]string{{{"key2_10", "foo"}}}, 0))
+	assert.Equal(
+		&pb_legacy.RateLimitResponse{
+			OverallCode: pb_legacy.RateLimitResponse_OK,
+			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
+				newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 10, pb_legacy.RateLimit_SECOND, 9)}},
+		response)
+	assert.Equal(limitRemaining, response.Statuses[0].LimitRemaining)
+	assert.NoError(err)
+}

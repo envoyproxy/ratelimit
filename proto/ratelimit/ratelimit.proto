@@ -26,8 +26,7 @@ message RateLimitRequest {
   // processed by the service (see below). If any of the descriptors are over limit, the entire
   // request is considered to be over limit.
   repeated RateLimitDescriptor descriptors = 2;
-  // Rate limit requests can optionally specify the number of hits a request adds to the matched limit. If the
-  // value is not set in the message, a request increases the matched limit by 1.
+  // Specify the number of hits a request adds to the matched limit.
   uint32 hits_addend = 3;
 }
 
