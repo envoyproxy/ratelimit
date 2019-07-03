@@ -31,14 +31,23 @@ func Run() {
 
 	var perSecondPool redis.Pool
 	if s.RedisPerSecond {
-		perSecondPool = redis.NewAuthTLSPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisAuth, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize)
+		if s.RedisPerSecondTls {
+			perSecondPool = redis.NewAuthTLSPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondAuth, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize)
+		} else {
+			perSecondPool = redis.NewPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisSocketType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize)
+		}
 
 	}
-
+	var otherPool redis.Pool
+	if s.RedisTls {
+		otherPool = redis.NewAuthTLSPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisAuth, s.RedisUrl, s.RedisPoolSize)
+	} else {
+		otherPool = redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisSocketType, s.RedisUrl, s.RedisPoolSize)
+	}
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		redis.NewRateLimitCacheImpl(
-			redis.NewAuthTLSPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisAuth, s.RedisUrl, s.RedisPoolSize),
+			otherPool,
 			perSecondPool,
 			redis.NewTimeSourceImpl(),
 			rand.New(redis.NewLockedSource(time.Now().Unix())),
