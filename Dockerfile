@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/lyft/ratelimit
 
 COPY src src
 COPY script script
-COPY vendor vendor
+RUN mkdir vendor
 COPY glide.yaml glide.yaml
 COPY glide.lock glide.lock
 
