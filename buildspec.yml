@@ -5,31 +5,21 @@ env:
     # This S3 bucket will be used to store the packaged Lambda deployment bundle.
     # Make sure to provide a valid S3 bucket name (it must exist already).
     # The AWS CodeBuild IAM role must allow write access to it.
-    Test: asas
+    GOPATH: /go/
 
 phases:
 
   install:
+    runtime-versions:
+      golang: 1.12
     commands:
-
-      # AWS Codebuild Go images use /go for the $GOPATH so let's copy our 
-      # application source code into that directory structure.
-      - mkdir -p "/go/src/$(dirname ${PACKAGE})"
-      - ln -s "${CODEBUILD_SRC_DIR}" "/go/src/${PACKAGE}" 
-      
-      # Print all environment variables (handy for AWS CodeBuild logs)
-      - env
-      - apt-get install build-essential -y
-
-  pre_build: 
-    commands:
-
-      # Make sure we're in the project directory within our GOPATH
-      - cd "/go/src/${PACKAGE}"
-
+      - rm -rf vendor
+      - mkdir -p /go/src/github.com/lyft/ratelimit
+      - rsync -aPq . /go/src/github.com/lyft/ratelimit/
   build:
     commands:
-
-      # Build our go application
+      - cd /go/src/github.com/lyft/ratelimit/
       - make bootstrap
       - make compile
+      - cd /go/src/github.com/lyft/ratelimit/bin
+      - ls -lh

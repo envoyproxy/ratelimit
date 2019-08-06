@@ -1,4 +1,4 @@
-package: github.com/lyft/ratelimit
+package: github.com/replicon/ratelimit
 import:
 - package: github.com/golang/mock
   version: master
