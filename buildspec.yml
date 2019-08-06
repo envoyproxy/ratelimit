@@ -1,25 +1,13 @@
 version: 0.2
 
-env:
-  variables:
-    # This S3 bucket will be used to store the packaged Lambda deployment bundle.
-    # Make sure to provide a valid S3 bucket name (it must exist already).
-    # The AWS CodeBuild IAM role must allow write access to it.
-    GOPATH: /go/
-
 phases:
-
   install:
     runtime-versions:
-      golang: 1.12
-    commands:
-      - rm -rf vendor
-      - mkdir -p /go/src/github.com/lyft/ratelimit
-      - rsync -aPq . /go/src/github.com/lyft/ratelimit/
+      docker: 18
   build:
     commands:
-      - cd /go/src/github.com/lyft/ratelimit/
-      - make bootstrap
-      - make compile
-      - cd /go/src/github.com/lyft/ratelimit/bin
-      - ls -lh
+      - chmod +x ci/build.sh
+      - ci/build.sh
+cache:
+  paths:
+    - '/root/.dockercache/*'
