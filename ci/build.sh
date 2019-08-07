@@ -1,4 +1,12 @@
 #!/bin/bash
+function installLamp()
+{
+    apt-get install -y wget 
+    wget https://s3-us-west-2.amazonaws.com/opsgeniedownloads/repo/opsgenie-lamp-2.5.0.zip
+    unzip opsgenie-lamp-2.5.0.zip -d opsgenie
+    mv opsgenie/lamp/lamp /usr/local/bin
+    rm -rf opsgenie*
+}
 set -eo nounset
 export REPLICON_GIT_BRANCH="$(git symbolic-ref HEAD --short 2>/dev/null)"
 if [ "$REPLICON_GIT_BRANCH" = "" ] ; then
@@ -19,6 +27,7 @@ echo "==> REPLICON_GIT_BRANCH = $REPLICON_GIT_BRANCH"
 echo "==> REPLICON_GIT_CLEAN_BRANCH = $REPLICON_GIT_CLEAN_BRANCH"
 echo "==> REPLICON_GIT_ESCAPED_BRANCH = $REPLICON_GIT_ESCAPED_BRANCH"
 echo "==> REPLICON_GIT_MESSAGE = $REPLICON_GIT_MESSAGE"
+installLamp &
 mkdir -p /root/.dockercache
 eval $(aws ecr get-login --region us-west-2 --no-include-email)
 for img in "golang:1.10.4" "alpine:3.8"
