@@ -29,6 +29,7 @@
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 # Overview
+![Build Status](https://codebuild.us-west-2.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoiT0xIbnNiWU5GdFZyNUErQ1I0KzdVNEovZEMxQWVZWGY1VnMyWXlLMHNiclNRY3R3dXZsSWJGaGowUWhSNDBwc0VRVTFyeWdVdkdQT1FiTFN4QktaN0JJPSIsIml2UGFyYW1ldGVyU3BlYyI6IlAwQ2FkWlJ4R2orbzJtZzgiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=master)
 
 The rate limit service is a Go/gRPC service designed to enable generic rate limit scenarios from different types of
 applications. Applications request a rate limit decision based on a domain and a set of descriptors. The service
