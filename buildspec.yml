@@ -6,8 +6,7 @@ phases:
       docker: 18
   build:
     commands:
-      - chmod +x ci/build.sh
+      - chmod +x ci/*.sh
       - ci/build.sh
-cache:
-  paths:
-    - '/root/.dockercache/*'
+    finally:
+      - ci/finally.sh

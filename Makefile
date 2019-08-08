@@ -3,7 +3,7 @@ $(error GOPATH must be set)
 endif
 
 SHELL := /bin/bash
-GOREPO := /go/src/github.com/lyft/ratelimit
+GOREPO := ${GOPATH}/src/github.com/lyft/ratelimit
 
 .PHONY: bootstrap
 bootstrap:
@@ -30,9 +30,9 @@ check_format: docs_format
 .PHONY: compile
 compile:
 	mkdir -p ${GOREPO}/bin
-	cd ${GOREPO}/src/service_cmd && CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o ./ratelimit  && mv ./ratelimit ${GOREPO}/bin/
-	cd ${GOREPO}/src/client_cmd && go build -o ratelimit_client ./ && mv ./ratelimit_client ${GOREPO}/bin/
-	cd ${GOREPO}/src/config_check_cmd && go build -o ratelimit_config_check ./ && mv ./ratelimit_config_check ${GOREPO}/bin/
+	cd ${GOREPO}/src/service_cmd && go build -o ratelimit ./ && mv ./ratelimit ${GOREPO}/bin
+	cd ${GOREPO}/src/client_cmd && go build -o ratelimit_client ./ && mv ./ratelimit_client ${GOREPO}/bin
+	cd ${GOREPO}/src/config_check_cmd && go build -o ratelimit_config_check ./ && mv ./ratelimit_config_check ${GOREPO}/bin
 
 .PHONY: tests_unit
 tests_unit: compile

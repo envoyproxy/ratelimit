@@ -2,7 +2,7 @@
 function installLamp()
 {
     apt-get install -y wget 
-    wget https://s3-us-west-2.amazonaws.com/opsgeniedownloads/repo/opsgenie-lamp-2.5.0.zip
+    wget -q https://s3-us-west-2.amazonaws.com/opsgeniedownloads/repo/opsgenie-lamp-2.5.0.zip
     unzip opsgenie-lamp-2.5.0.zip -d opsgenie
     mv opsgenie/lamp/lamp /usr/local/bin
     rm -rf opsgenie*
@@ -17,16 +17,10 @@ setEnvs
 
 installLamp &
 
-mkdir -p /root/.dockercache
 eval $(aws ecr get-login --region us-west-2 --no-include-email)
 for img in "golang:1.10.4" "alpine:3.8"
 do
-    if test -f "/root/.dockercache/$img.cache"
-    then
-        (gzip -c -d "/root/.dockercache/$img.cache" | docker load) &
-    else 
-        (docker pull $img ;docker save $img | gzip > "/root/.dockercache/$img.cache")
-    fi
+    docker pull $img
 done
 wait
 
