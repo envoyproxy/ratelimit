@@ -65,7 +65,7 @@ func (this *poolImpl) Put(c Connection) {
 }
 
 func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int, db int) Pool {
-	logger.Warnf("connecting to redis on %s %s with pool size %d", socketType, url, poolSize)
+	logger.Warnf("connecting to redis on %s %s database %d with pool size %d", socketType, url, db, poolSize)
 	pool, err := pool.NewCustom(socketType, url, poolSize, func(network, addr string) (*redis.Client, error) {
 		c, err := redis.Dial(network, addr)
 		if err != nil {
