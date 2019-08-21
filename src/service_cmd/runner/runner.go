@@ -12,7 +12,7 @@ import (
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
 	"github.com/lyft/ratelimit/src/server"
-	"github.com/lyft/ratelimit/src/service"
+	ratelimit "github.com/lyft/ratelimit/src/service"
 	"github.com/lyft/ratelimit/src/settings"
 	logger "github.com/sirupsen/logrus"
 )
@@ -26,7 +26,7 @@ func Run() {
 	} else {
 		logger.SetLevel(logLevel)
 	}
-
+	logger.Debugf("Settings\n %+v", s)
 	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
 
 	var perSecondPool redis.Pool
@@ -44,6 +44,9 @@ func Run() {
 	} else {
 		otherPool = redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisSocketType, s.RedisUrl, s.RedisPoolSize)
 	}
+	if s.ShadowMode {
+		logger.Info("Shadow Mode Enabled")
+	}
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		redis.NewRateLimitCacheImpl(
@@ -53,7 +56,7 @@ func Run() {
 			rand.New(redis.NewLockedSource(time.Now().Unix())),
 			s.ExpirationJitterMaxSeconds),
 		config.NewRateLimitConfigLoaderImpl(),
-		srv.Scope().Scope("service"))
+		srv.Scope().Scope("service"), s.ShadowMode)
 
 	srv.AddDebugHttpEndpoint(
 		"/rlconfig",

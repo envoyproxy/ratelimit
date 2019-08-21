@@ -2,7 +2,8 @@ package redis
 
 import (
 	"crypto/tls"
-	"github.com/lyft/gostats"
+
+	stats "github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/mediocregopher/radix.v2/pool"
 	"github.com/mediocregopher/radix.v2/redis"
@@ -77,7 +78,7 @@ func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int)
 func NewAuthTLSPoolImpl(scope stats.Scope, auth string, url string, poolSize int) Pool {
 	logger.Warnf("connecting to redis on tls %s with pool size %d", url, poolSize)
 	df := func(network, addr string) (*redis.Client, error) {
-		conn, err := tls.Dial("tcp", addr, &tls.Config{})
+		conn, err := tls.Dial(network, addr, &tls.Config{})
 		if err != nil {
 			return nil, err
 		}
