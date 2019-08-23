@@ -61,7 +61,7 @@ func convertRatelimits(ratelimits []*config.RateLimit) ([]*pb_legacy.RateLimit, 
 func TestServiceLegacy(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService()
+	service := t.setupBasicService(false)
 
 	// First request, config should be loaded.
 	legacyRequest := common.NewRateLimitRequestLegacy("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
@@ -163,7 +163,7 @@ func TestServiceLegacy(test *testing.T) {
 func TestEmptyDomainLegacy(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService()
+	service := t.setupBasicService(false)
 
 	request := common.NewRateLimitRequestLegacy("", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)
@@ -176,7 +176,7 @@ func TestEmptyDomainLegacy(test *testing.T) {
 func TestEmptyDescriptorsLegacy(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService()
+	service := t.setupBasicService(false)
 
 	request := common.NewRateLimitRequestLegacy("test-domain", [][][2]string{}, 1)
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)
@@ -189,7 +189,7 @@ func TestEmptyDescriptorsLegacy(test *testing.T) {
 func TestCacheErrorLegacy(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService()
+	service := t.setupBasicService(false)
 
 	legacyRequest := common.NewRateLimitRequestLegacy("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
 	req, err := ratelimit.ConvertLegacyRequest(legacyRequest)
@@ -224,7 +224,7 @@ func TestInitialLoadErrorLegacy(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Scope) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore,false)
 
 	request := common.NewRateLimitRequestLegacy("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)

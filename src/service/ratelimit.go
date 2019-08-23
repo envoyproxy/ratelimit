@@ -17,12 +17,14 @@ import (
 type shouldRateLimitStats struct {
 	redisError   stats.Counter
 	serviceError stats.Counter
+	wouldOfRateLimited stats.Counter
 }
 
 func newShouldRateLimitStats(scope stats.Scope) shouldRateLimitStats {
 	ret := shouldRateLimitStats{}
 	ret.redisError = scope.NewCounter("redis_error")
 	ret.serviceError = scope.NewCounter("service_error")
+	ret.wouldOfRateLimited = scope.NewCounter("shadow_block")
 	return ret
 }
 
@@ -56,6 +58,7 @@ type service struct {
 	stats              serviceStats
 	rlStatsScope       stats.Scope
 	legacy             *legacyService
+	shadowMode 			bool
 }
 
 func (this *service) reloadConfig() {
@@ -160,6 +163,14 @@ func (this *service) ShouldRateLimit(
 	}()
 
 	response := this.shouldRateLimitWorker(ctx, request)
+	if this.shadowMode{
+		if response.OverallCode != pb.RateLimitResponse_OK{
+			logger.Infof("shadow mode: would of returned %+v",response.OverallCode )
+			response.OverallCode = pb.RateLimitResponse_OK
+			this.stats.shouldRateLimit.wouldOfRateLimited.Inc()
+		}
+		
+	}
 	logger.Debugf("returning normal response")
 	return response, nil
 }
@@ -175,7 +186,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache redis.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, stats stats.Scope) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, stats stats.Scope,shadowMode bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -186,6 +197,7 @@ func NewService(runtime loader.IFace, cache redis.RateLimitCache,
 		cache:              cache,
 		stats:              newServiceStats(stats),
 		rlStatsScope:       stats.Scope("rate_limit"),
+		shadowMode:			shadowMode,
 	}
 	newService.legacy = &legacyService{
 		s:                          newService,

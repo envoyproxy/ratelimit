@@ -15,9 +15,9 @@ import (
 	"net"
 
 	"github.com/gorilla/mux"
-	"github.com/kavu/go_reuseport"
+	reuseport "github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/settings"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"

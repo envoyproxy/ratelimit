@@ -6,15 +6,15 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/golang/mock/gomock"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
-	"github.com/lyft/ratelimit/src/service"
+	ratelimit "github.com/lyft/ratelimit/src/service"
 	"github.com/lyft/ratelimit/test/common"
-	"github.com/lyft/ratelimit/test/mocks/config"
-	"github.com/lyft/ratelimit/test/mocks/redis"
-	"github.com/lyft/ratelimit/test/mocks/runtime/loader"
-	"github.com/lyft/ratelimit/test/mocks/runtime/snapshot"
+	mock_config "github.com/lyft/ratelimit/test/mocks/config"
+	mock_redis "github.com/lyft/ratelimit/test/mocks/redis"
+	mock_loader "github.com/lyft/ratelimit/test/mocks/runtime/loader"
+	mock_snapshot "github.com/lyft/ratelimit/test/mocks/runtime/snapshot"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
@@ -71,7 +71,7 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	return ret
 }
 
-func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitServiceServer {
+func (this *rateLimitServiceTestSuite) setupBasicService(shadowMode bool) ratelimit.RateLimitServiceServer {
 	this.runtime.EXPECT().AddUpdateCallback(gomock.Any()).Do(
 		func(callback chan<- int) {
 			this.runtimeUpdateCallback = callback
@@ -82,13 +82,13 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 	this.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}},
 		gomock.Any()).Return(this.config)
-	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statStore)
+	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statStore, shadowMode)
 }
 
 func TestService(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService()
+	service := t.setupBasicService(false)
 
 	// First request, config should be loaded.
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
@@ -167,11 +167,36 @@ func TestService(test *testing.T) {
 	t.assert.EqualValues(2, t.statStore.NewCounter("config_load_success").Value())
 	t.assert.EqualValues(1, t.statStore.NewCounter("config_load_error").Value())
 }
+func TestShadowMode(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService(true)
 
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore),
+		nil}
+	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: nil, LimitRemaining: 0}})
+	response, err := service.ShouldRateLimit(nil, request)
+	t.assert.Equal(
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: nil, LimitRemaining: 0},
+			}},
+		response)
+	t.assert.Nil(err)
+}
 func TestEmptyDomain(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService()
+	service := t.setupBasicService(false)
 
 	request := common.NewRateLimitRequest("", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
@@ -183,7 +208,7 @@ func TestEmptyDomain(test *testing.T) {
 func TestEmptyDescriptors(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService()
+	service := t.setupBasicService(false)
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
@@ -195,7 +220,7 @@ func TestEmptyDescriptors(test *testing.T) {
 func TestCacheError(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService()
+	service := t.setupBasicService(false)
 
 	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
@@ -225,7 +250,7 @@ func TestInitialLoadError(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Scope) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore, false)
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
