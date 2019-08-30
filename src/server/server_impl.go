@@ -135,7 +135,7 @@ func newServer(name string, opts ...settings.Option) *server {
 		s.RuntimePath,
 		s.RuntimeSubdirectory,
 		ret.store.Scope("runtime"),
-		&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
+		&loader.DirectoryRefresher{},
 		loaderOpts...)
 
 	// setup http router
