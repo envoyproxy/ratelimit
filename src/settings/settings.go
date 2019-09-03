@@ -19,16 +19,16 @@ type Settings struct {
 	RuntimeSubdirectory        string `envconfig:"RUNTIME_SUBDIRECTORY"`
 	RuntimeIgnoreDotFiles      bool   `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
 	LogLevel                   string `envconfig:"LOG_LEVEL" default:"WARN"`
-	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"tcp"`
-	RedisUrl                   string `envconfig:"REDIS_URL" default:"127.0.0.1:6379"`
+	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
+	RedisUrl                   string `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
 	RedisPoolSize              int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
-	RedisAuth                  string `envconfig:"REDIS_AUTH"`
+	RedisAuth                  string `envconfig:"REDIS_AUTH default:""`
 	RedisTls                   bool   `envconfig:"REDIS_TLS" default:"false"`
 	RedisPerSecond             bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType   string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
 	RedisPerSecondUrl          string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize     int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
-	RedisPerSecondAuth         string `envconfig:"REDIS_PERSECOND_AUTH"`
+	RedisPerSecondAuth         string `envconfig:"REDIS_PERSECOND_AUTH default:""`
 	RedisPerSecondTls          bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
 	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 }
