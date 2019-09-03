@@ -46,23 +46,23 @@ func TestBasicConfig(t *testing.T) {
 	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true"))
 }
 func TestTLSConfig(t *testing.T) {
-	t.Run("WithoutPerSecondRedis", testBasicConfigAuthTLS("8083", "false"))
-	t.Run("WithPerSecondRedis", testBasicConfigAuthTLS("8085", "true"))
+	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false"))
+	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS("8089", "true"))
 }
-func testBasicConfigAuthTLS(grpcPort, perSecond) func(*testing.T) {
+func testBasicConfigAuthTLS(grpcPort, perSecond string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
 	os.Setenv("REDIS_URL", "localhost:16381")
 	os.Setenv("REDIS_TLS", "true")
 	os.Setenv("REDIS_AUTH", "password123")
 	return testBasicConfig(grpcPort, perSecond)
 }
-func testBasicConfig(grpcPort, perSecond) func(*testing.T) {
+func testBasicConfig(grpcPort, perSecond string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
 	os.Setenv("REDIS_URL", "localhost:6379")
 	os.Setenv("REDIS_TLS", "false")
 	return testBasicBaseConfig(grpcPort, perSecond)
 }
-func testBasicBaseConfig(grpcPort, perSecond) func(*testing.T) {
+func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 	return func(t *testing.T) {
 		os.Setenv("REDIS_PERSECOND", perSecond)
 		os.Setenv("PORT", "8082")
