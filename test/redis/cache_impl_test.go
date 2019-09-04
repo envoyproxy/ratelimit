@@ -4,16 +4,15 @@ import (
 	"testing"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	stats "github.com/lyft/gostats"
+	"github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
 
-	"math/rand"
-
 	"github.com/golang/mock/gomock"
 	"github.com/lyft/ratelimit/test/common"
-	mock_redis "github.com/lyft/ratelimit/test/mocks/redis"
+	"github.com/lyft/ratelimit/test/mocks/redis"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 )
 
 func TestRedis(t *testing.T) {
