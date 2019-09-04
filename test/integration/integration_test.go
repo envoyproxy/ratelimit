@@ -42,13 +42,13 @@ func newDescriptorStatusLegacy(
 }
 
 func TestBasicConfig(t *testing.T) {
-	//t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false"))
-	//t.Run("WithPerSecondRedis", testBasicConfig("8085", "true"))
-
+	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false"))
+	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true"))
+}
+func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false"))
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS("8089", "true"))
 }
-
 func testBasicConfigAuthTLS(grpcPort, perSecond string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
 	os.Setenv("REDIS_URL", "localhost:16381")
