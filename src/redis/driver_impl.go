@@ -77,6 +77,7 @@ func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int)
 
 func NewAuthTLSPoolImpl(scope stats.Scope, auth string, url string, poolSize int) Pool {
 	logger.Warnf("connecting to redis on tls %s with pool size %d", url, poolSize)
+	localAuth := auth
 	df := func(network, addr string) (*redis.Client, error) {
 		conn, err := tls.Dial("tcp", addr, &tls.Config{})
 		if err != nil {
@@ -87,9 +88,9 @@ func NewAuthTLSPoolImpl(scope stats.Scope, auth string, url string, poolSize int
 		if err != nil {
 			return nil, err
 		}
-		if auth != "" {
+		if localAuth != "" {
 			logger.Warnf("enabling authentication to redis on tls %s", url)
-			if err = client.Cmd("AUTH", auth).Err; err != nil {
+			if err = client.Cmd("AUTH", localAuth).Err; err != nil {
 				client.Close()
 				return nil, err
 			}
