@@ -35,5 +35,13 @@ import:
   version: v0.0.14
 - package: github.com/google/protobuf
   version: v3.7.1
-- package: github.com/golang/protobuf/proto
+- package: github.com/golang/protobuf
   version: v1.3.1
+  subpackages:
+  - proto
+- package: github.com/prometheus/client_golang
+  version: ^1.1.0
+  subpackages:
+  - prometheus/promhttp
+  - prometheus/promauto
+  - prometheus

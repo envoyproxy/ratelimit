@@ -1,6 +1,10 @@
-hash: dbaf34c6a11259517cf882afa8a5ecf03eade91f1cac4c4e54edc30a3b4fdd3e
-updated: 2019-04-08T10:22:39.596389-07:00
+hash: 7853a1fb342c20750d9f847d31f6addb4266d5f634a3673bd095b81c4fd9d992
+updated: 2019-09-13T10:06:37.2832611-06:00
 imports:
+- name: github.com/beorn7/perks
+  version: 37c8de3658fcb183f997c4e13e8337516ab753e6
+  subpackages:
+  - quantile
 - name: github.com/envoyproxy/go-control-plane
   version: 0ad6fa1cf0b9b6ca8f3617a7188a568e81f40b87
   subpackages:
@@ -13,7 +17,7 @@ imports:
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
 - name: github.com/gogo/protobuf
-  version: ba06b47c162d49f2af050fb4c75bcbc86a159d5c
+  version: 0ca988a254f991240804bf9821f3450d87ccbb1b
   subpackages:
   - gogoproto
   - proto
@@ -22,7 +26,7 @@ imports:
   - sortkeys
   - types
 - name: github.com/golang/mock
-  version: 8a44ef6e8be577e050008c7886f24fc705d709fb
+  version: dd8d2a22370e4c8a334e80ca8477f71356c8e4bb
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
@@ -56,11 +60,37 @@ imports:
   version: f9d2b11e44149635b23a002693b76512b01ae515
   subpackages:
   - validate
+- name: github.com/matttproud/golang_protobuf_extensions
+  version: c182affec369e30f25d3eb8cd8a478dee585ae7d
+  subpackages:
+  - pbutil
 - name: github.com/mediocregopher/radix.v2
-  version: 94360be262532d465b7e4760c7a67195d3319a87
+  version: b67df6e626f993b64b3ca9f4b8630900e61002e3
   subpackages:
   - pool
   - redis
+- name: github.com/prometheus/client_golang
+  version: 170205fb58decfd011f1550d4cfb737230d7ae4f
+  subpackages:
+  - prometheus
+  - prometheus/internal
+  - prometheus/promauto
+  - prometheus/promhttp
+- name: github.com/prometheus/client_model
+  version: 14fe0d1b01d4d5fc031dd4bec1823bd3ebbe8016
+  subpackages:
+  - go
+- name: github.com/prometheus/common
+  version: 287d3e634a1e550c9e463dd7e5a75a422c614505
+  subpackages:
+  - expfmt
+  - internal/bitbucket.org/ww/goautoneg
+  - model
+- name: github.com/prometheus/procfs
+  version: 476cb425ed565fa4c08ba2fdd466d28df391302c
+  subpackages:
+  - internal/fs
+  - internal/util
 - name: github.com/sirupsen/logrus
   version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/stretchr/testify
@@ -72,7 +102,7 @@ imports:
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: d0887baf81f4598189d4e12a37c6da86f0bba4d0
+  version: 24e19bdeb0f2d062d8e2640d50a7aaf2a7f80e7a
   subpackages:
   - context
   - http/httpguts
@@ -126,7 +156,7 @@ imports:
   - tap
   - transport
 - name: gopkg.in/yaml.v2
-  version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
+  version: 51d6538a90f86fe93ac480b35f37b2be17fef232
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21

@@ -19,6 +19,7 @@ import (
 	"github.com/lyft/goruntime/loader"
 	stats "github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/settings"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -145,7 +146,8 @@ func newServer(name string, opts ...settings.Option) *server {
 	ret.health = NewHealthChecker(health.NewServer())
 	ret.router.Path("/healthcheck").Handler(ret.health)
 	healthpb.RegisterHealthServer(ret.grpcServer, ret.health.grpc)
-
+	// setup promethues endpoint
+	ret.router.Path("/metrics").Handler(promhttp.Handler())
 	// setup default debug listener
 	ret.debugListener.debugMux = http.NewServeMux()
 	ret.debugListener.endpoints = map[string]string{}
