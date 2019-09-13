@@ -28,14 +28,15 @@ var (
 		Name: "rate_limiting_shadow_requests",
 		Help: "The total number of requests that would of been rate limited not in shadow mode",
 	})
-	shadowModeEnabled = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "rate_limiting_shadow_mode_enabled",
-		Help: "Indicates whether shadow mode is enabled",
-	})
 	rateLimitRequestSummary = promauto.NewSummary(prometheus.SummaryOpts{
-		Name: "rate_limiting_request_time_sec",
-		Help: "Summary of rate limiting request times",
+		Name:       "rate_limiting_request_time_sec",
+		Help:       "Summary of rate limiting request times",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 	})
+	rateLimitErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "rate_limiting_service_errors",
+		Help: "Count of different rate limiting errors",
+	}, []string{"type"})
 )
 
 func newShouldRateLimitStats(scope stats.Scope) shouldRateLimitStats {
@@ -88,6 +89,7 @@ func (this *service) reloadConfig() {
 			}
 
 			this.stats.configLoadError.Inc()
+			rateLimitErrors.WithLabelValues("config_reload").Inc()
 			logger.Errorf("error loading new configuration from runtime: %s", configError.Error())
 		}
 	}()
@@ -173,11 +175,13 @@ func (this *service) ShouldRateLimit(
 		case redis.RedisError:
 			{
 				this.stats.shouldRateLimit.redisError.Inc()
+				rateLimitErrors.WithLabelValues("redis").Inc()
 				finalError = t
 			}
 		case serviceError:
 			{
 				this.stats.shouldRateLimit.serviceError.Inc()
+				rateLimitErrors.WithLabelValues("service").Inc()
 				finalError = t
 			}
 		default:
@@ -190,7 +194,6 @@ func (this *service) ShouldRateLimit(
 		if response.OverallCode != pb.RateLimitResponse_OK {
 			logger.Infof("shadow mode: would of returned %+v", response.OverallCode)
 			shadowRequests.Inc()
-			shadowModeEnabled.Set(1)
 			response.OverallCode = pb.RateLimitResponse_OK
 			this.stats.shouldRateLimit.wouldOfRateLimited.Inc()
 		}

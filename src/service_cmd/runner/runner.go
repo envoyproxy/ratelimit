@@ -8,13 +8,21 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
-
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
 	"github.com/lyft/ratelimit/src/server"
 	ratelimit "github.com/lyft/ratelimit/src/service"
 	"github.com/lyft/ratelimit/src/settings"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	logger "github.com/sirupsen/logrus"
+)
+
+var (
+	shadowModeEnabled = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "rate_limiting_shadow_mode_enabled",
+		Help: "Indicates whether shadow mode is enabled",
+	})
 )
 
 func Run() {
@@ -46,6 +54,7 @@ func Run() {
 	}
 	if s.ShadowMode {
 		logger.Info("Shadow Mode Enabled")
+		shadowModeEnabled.Set(1)
 	}
 	service := ratelimit.NewService(
 		srv.Runtime(),
