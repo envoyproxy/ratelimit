@@ -44,6 +44,12 @@ func newDescriptorStatusLegacy(
 func TestBasicConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false"))
 	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true"))
+	t.Run("WithoutPerSecondRedisDbNumber", testBasicConfig("8083", "false"))
+	// t.Run("WithPerSecondRedisDdNumber", testBasicConfig("8083", "false"))
+}
+
+func testDbNumber(grpcPort, perSecond string) func(*testing.T) {
+	return testBasicConfig("8083", "false")
 }
 
 func testBasicConfig(grpcPort, perSecond string) func(*testing.T) {
