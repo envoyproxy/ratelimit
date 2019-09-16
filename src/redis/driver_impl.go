@@ -69,7 +69,7 @@ type DialFunc func(*redis.Client) error
 func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int, dfs ...DialFunc) Pool {
 	logger.Warnf("connecting to redis on %s %s with pool size %d", socketType, url, poolSize)
 
-	var df pool.DialFunc
+	df := redis.Dial
 	if len(dfs) != 0 {
 		df = func(network, addr string) (*redis.Client, error) {
 			c, err := redis.Dial(network, addr)
