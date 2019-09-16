@@ -46,12 +46,12 @@ func TestBasicConfig(t *testing.T) {
 	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true"))
 	// Use same redis configuration
 	// If database number configuration doesn't work it will lead to key collisions
-	t.Run("WithPerSecondRedisDbNumber", testDbNumber("8085", "true"))
+	t.Run("WithPerSecondRedisDbNumber", testDbNumber("8087", "true"))
 }
 
 func testDbNumber(grpcPort, perSecond string) func(*testing.T) {
-	os.Setenv("REDIS_DB", "10")
-	os.Setenv("REDIS_PERSECOND_DB", "10")
+	// os.Setenv("REDIS_DB", "10")
+	// os.Setenv("REDIS_PERSECOND_DB", "10")
 	return testBasicConfig(grpcPort, perSecond)
 }
 
