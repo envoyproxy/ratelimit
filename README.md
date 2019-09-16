@@ -380,6 +380,8 @@ Ratelimit uses Redis as its caching layer. Ratelimit supports two operation mode
 1. One Redis server for all limits.
 1. Two Redis instances: one for per second limits and another one for all other limits.
 
+1. `REDIS_DB` and `REDIS_PERSECOND_DB` could be used to configure redis database number
+
 ## One Redis Instance
 
 To configure one Redis instance use the following environment variables:
@@ -387,6 +389,7 @@ To configure one Redis instance use the following environment variables:
 1. `REDIS_SOCKET_TYPE`
 1. `REDIS_URL`
 1. `REDIS_POOL_SIZE`
+1. `REDIS_DB`
 
 This setup will use the same Redis server for all limits.
 
@@ -397,10 +400,12 @@ To configure two Redis instances use the following environment variables:
 1. `REDIS_SOCKET_TYPE`
 1. `REDIS_URL`
 1. `REDIS_POOL_SIZE`
+1. `REDIS_DB`
 1. `REDIS_PERSECOND`: set this to `"true"`.
 1. `REDIS_PERSECOND_SOCKET_TYPE`
 1. `REDIS_PERSECOND_URL`
 1. `REDIS_PERSECOND_POOL_SIZE`
+1. `REDIS_PERSECOND_DB`
 
 This setup will use the Redis server configured with the `_PERSECOND_` vars for
 per second limits, and the other Redis server for all other limits.
