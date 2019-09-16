@@ -50,8 +50,8 @@ func TestBasicConfig(t *testing.T) {
 }
 
 func testDbNumber(grpcPort, perSecond string) func(*testing.T) {
-	// os.Setenv("REDIS_DB", "10")
-	// os.Setenv("REDIS_PERSECOND_DB", "10")
+	os.Setenv("REDIS_DB", "10")
+	os.Setenv("REDIS_PERSECOND_DB", "10")
 	return testBasicConfig(grpcPort, perSecond)
 }
 
