@@ -3,22 +3,41 @@ package ratelimit
 import (
 	"strings"
 	"sync"
+	"time"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/lyft/goruntime/loader"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/assert"
 	"github.com/lyft/ratelimit/src/config"
 	"github.com/lyft/ratelimit/src/redis"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
 type shouldRateLimitStats struct {
-	redisError   stats.Counter
-	serviceError stats.Counter
+	redisError         stats.Counter
+	serviceError       stats.Counter
 	wouldOfRateLimited stats.Counter
 }
+
+var (
+	shadowRequests = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rate_limiting_shadow_requests",
+		Help: "The total number of requests that would of been rate limited not in shadow mode",
+	})
+	rateLimitRequestSummary = promauto.NewSummary(prometheus.SummaryOpts{
+		Name:       "rate_limiting_request_time_sec",
+		Help:       "Summary of rate limiting request times",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+	})
+	rateLimitErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "rate_limiting_service_errors",
+		Help: "Count of different rate limiting errors",
+	}, []string{"type"})
+)
 
 func newShouldRateLimitStats(scope stats.Scope) shouldRateLimitStats {
 	ret := shouldRateLimitStats{}
@@ -58,7 +77,7 @@ type service struct {
 	stats              serviceStats
 	rlStatsScope       stats.Scope
 	legacy             *legacyService
-	shadowMode 			bool
+	shadowMode         bool
 }
 
 func (this *service) reloadConfig() {
@@ -70,6 +89,7 @@ func (this *service) reloadConfig() {
 			}
 
 			this.stats.configLoadError.Inc()
+			rateLimitErrors.WithLabelValues("config_reload").Inc()
 			logger.Errorf("error loading new configuration from runtime: %s", configError.Error())
 		}
 	}()
@@ -137,6 +157,11 @@ func (this *service) shouldRateLimitWorker(
 func (this *service) ShouldRateLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest) (finalResponse *pb.RateLimitResponse, finalError error) {
+	start := time.Now()
+
+	defer func(t time.Time) {
+		rateLimitRequestSummary.Observe(time.Now().Sub(start).Seconds())
+	}(start)
 
 	defer func() {
 		err := recover()
@@ -150,11 +175,13 @@ func (this *service) ShouldRateLimit(
 		case redis.RedisError:
 			{
 				this.stats.shouldRateLimit.redisError.Inc()
+				rateLimitErrors.WithLabelValues("redis").Inc()
 				finalError = t
 			}
 		case serviceError:
 			{
 				this.stats.shouldRateLimit.serviceError.Inc()
+				rateLimitErrors.WithLabelValues("service").Inc()
 				finalError = t
 			}
 		default:
@@ -163,13 +190,14 @@ func (this *service) ShouldRateLimit(
 	}()
 
 	response := this.shouldRateLimitWorker(ctx, request)
-	if this.shadowMode{
-		if response.OverallCode != pb.RateLimitResponse_OK{
-			logger.Infof("shadow mode: would of returned %+v",response.OverallCode )
+	if this.shadowMode {
+		if response.OverallCode != pb.RateLimitResponse_OK {
+			logger.Infof("shadow mode: would of returned %+v", response.OverallCode)
+			shadowRequests.Inc()
 			response.OverallCode = pb.RateLimitResponse_OK
 			this.stats.shouldRateLimit.wouldOfRateLimited.Inc()
 		}
-		
+
 	}
 	logger.Debugf("returning normal response")
 	return response, nil
@@ -186,7 +214,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache redis.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, stats stats.Scope,shadowMode bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, stats stats.Scope, shadowMode bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -197,7 +225,7 @@ func NewService(runtime loader.IFace, cache redis.RateLimitCache,
 		cache:              cache,
 		stats:              newServiceStats(stats),
 		rlStatsScope:       stats.Scope("rate_limit"),
-		shadowMode:			shadowMode,
+		shadowMode:         shadowMode,
 	}
 	newService.legacy = &legacyService{
 		s:                          newService,
