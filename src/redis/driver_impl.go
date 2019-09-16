@@ -64,24 +64,39 @@ func (this *poolImpl) Put(c Connection) {
 	}
 }
 
-func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int, db int) Pool {
-	logger.Warnf("connecting to redis on %s %s database %d with pool size %d", socketType, url, db, poolSize)
-	pool, err := pool.NewCustom(socketType, url, poolSize, func(network, addr string) (*redis.Client, error) {
-		c, err := redis.Dial(network, addr)
-		if err != nil {
-			return nil, err
-		}
+type DialFunc func(*redis.Client) error
 
-		if err := c.Cmd("select", db).Err; err != nil {
-			return nil, err
-		}
+func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int, dfs ...DialFunc) Pool {
+	logger.Warnf("connecting to redis on %s %s with pool size %d", socketType, url, poolSize)
 
-		return c, nil
-	})
+	var df pool.DialFunc
+	if len(dfs) != 0 {
+		df = func(network, addr string) (*redis.Client, error) {
+			c, err := redis.Dial(network, addr)
+			if err != nil {
+				return nil, err
+			}
+			for _, f := range dfs {
+				dialErr := f(c)
+				if dialErr != nil {
+					return nil, dialErr
+				}
+			}
+			return c, nil
+		}
+	}
+	pool, err := pool.NewCustom(socketType, url, poolSize, df)
 	checkError(err)
 	return &poolImpl{
 		pool:  pool,
 		stats: newPoolStats(scope)}
+}
+
+func WithDatabase(db int) DialFunc {
+	return func(c *redis.Client) error {
+		logger.Warnf("connecting to redis database %d", db)
+		return c.Cmd("select", db).Err
+	}
 }
 
 func (this *connectionImpl) PipeAppend(cmd string, args ...interface{}) {
