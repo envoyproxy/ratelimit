@@ -29,16 +29,39 @@ func Run() {
 
 	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
 
+	var pool redis.Pool
+	var dials []redis.DialFunc
+	if s.RedisDatabase != 0 {
+		dials = append(dials, redis.WithDatabase(s.RedisDatabase))
+	}
+	pool = redis.NewPoolImpl(
+		srv.Scope().Scope("redis_pool"),
+		s.RedisSocketType,
+		s.RedisUrl,
+		s.RedisPoolSize,
+		dials...,
+	)
+
 	var perSecondPool redis.Pool
 	if s.RedisPerSecond {
-		perSecondPool = redis.NewPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondSocketType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize, s.RedisPerSecondDatabase)
+		var perSecondDials []redis.DialFunc
+		if s.RedisPerSecondDatabase != 0 {
+			perSecondDials = append(perSecondDials, redis.WithDatabase(s.RedisPerSecondDatabase))
+		}
+		perSecondPool = redis.NewPoolImpl(
+			srv.Scope().Scope("redis_per_second_pool"),
+			s.RedisPerSecondSocketType,
+			s.RedisPerSecondUrl,
+			s.RedisPerSecondPoolSize,
+			perSecondDials...,
+		)
 
 	}
 
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		redis.NewRateLimitCacheImpl(
-			redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisSocketType, s.RedisUrl, s.RedisPoolSize, s.RedisDatabase),
+			pool,
 			perSecondPool,
 			redis.NewTimeSourceImpl(),
 			rand.New(redis.NewLockedSource(time.Now().Unix())),
