@@ -6,6 +6,7 @@ COPY script script
 COPY vendor vendor
 COPY glide.yaml glide.yaml
 COPY glide.lock glide.lock
+COPY proto proto
 
 RUN script/install-glide
 RUN glide install
