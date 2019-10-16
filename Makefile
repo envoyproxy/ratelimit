@@ -1,14 +1,9 @@
-ifeq ("$(GOPATH)","")
-$(error GOPATH must be set)
-endif
-
 SHELL := /bin/bash
-GOREPO := ${GOPATH}/src/github.com/lyft/ratelimit
+GOREPO := ${PWD}
 
 .PHONY: bootstrap
 bootstrap:
-	script/install-glide
-	glide install
+	go get
 
 .PHONY: bootstrap_tests
 bootstrap_tests:
