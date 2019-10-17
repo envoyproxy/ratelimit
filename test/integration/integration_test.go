@@ -52,8 +52,6 @@ func TestBasicTLSConfig(t *testing.T) {
 func testBasicConfigAuthTLS(grpcPort, perSecond string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
 	os.Setenv("REDIS_URL", "localhost:16381")
-	os.Setenv("REDIS_TLS", "true")
-	os.Setenv("REDIS_PERSECOND_TLS", "true")
 	os.Setenv("REDIS_AUTH", "password123")
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
 	return testBasicBaseConfig(grpcPort, perSecond)
@@ -81,7 +79,7 @@ func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 		}()
 
 		// HACK: Wait for the server to come up. Make a hook that we can wait on.
-		time.Sleep(100 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 
 		assert := assert.New(t)
 		conn, err := grpc.Dial(fmt.Sprintf("localhost:%s", grpcPort), grpc.WithInsecure())
