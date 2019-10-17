@@ -380,6 +380,11 @@ Ratelimit uses Redis as its caching layer. Ratelimit supports two operation mode
 1. One Redis server for all limits.
 1. Two Redis instances: one for per second limits and another one for all other limits.
 
+As well Ratelimit supports TLS connections and authentication over TLS connections. These can be configured using the following environment variables:
+
+1. `REDIS_TLS` & `REDIS_PERSECOND_TLS`: set to `"true"` to enable a TLS connection for the specific connection type.
+1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable authentication to the redis host. This requires TLS to be enabled as well for the specific connection. 
+
 ## One Redis Instance
 
 To configure one Redis instance use the following environment variables:

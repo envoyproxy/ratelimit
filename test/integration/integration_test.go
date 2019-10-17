@@ -45,8 +45,25 @@ func TestBasicConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false"))
 	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true"))
 }
-
+func TestBasicTLSConfig(t *testing.T) {
+	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false"))
+	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS("8089", "true"))
+}
+func testBasicConfigAuthTLS(grpcPort, perSecond string) func(*testing.T) {
+	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
+	os.Setenv("REDIS_URL", "localhost:16381")
+	os.Setenv("REDIS_AUTH", "password123")
+	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
+	return testBasicBaseConfig(grpcPort, perSecond)
+}
 func testBasicConfig(grpcPort, perSecond string) func(*testing.T) {
+	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
+	os.Setenv("REDIS_URL", "localhost:6379")
+	os.Setenv("REDIS_TLS", "false")
+	os.Setenv("REDIS_PERSECOND_TLS", "false")
+	return testBasicBaseConfig(grpcPort, perSecond)
+}
+func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 	return func(t *testing.T) {
 		os.Setenv("REDIS_PERSECOND", perSecond)
 		os.Setenv("PORT", "8082")
@@ -55,16 +72,14 @@ func testBasicConfig(grpcPort, perSecond string) func(*testing.T) {
 		os.Setenv("RUNTIME_ROOT", "runtime/current")
 		os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
 		os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
-		os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
 		os.Setenv("REDIS_SOCKET_TYPE", "tcp")
-		os.Setenv("REDIS_URL", "localhost:6379")
 
 		go func() {
 			runner.Run()
 		}()
 
 		// HACK: Wait for the server to come up. Make a hook that we can wait on.
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 
 		assert := assert.New(t)
 		conn, err := grpc.Dial(fmt.Sprintf("localhost:%s", grpcPort), grpc.WithInsecure())
@@ -156,6 +171,10 @@ func TestBasicConfigLegacy(t *testing.T) {
 	os.Setenv("RUNTIME_ROOT", "runtime/current")
 	os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
 
+	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
+	os.Setenv("REDIS_URL", "localhost:6379")
+	os.Setenv("REDIS_TLS", "false")
+	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	go func() {
 		runner.Run()
 	}()
