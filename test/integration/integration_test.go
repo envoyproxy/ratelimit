@@ -79,7 +79,7 @@ func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 		}()
 
 		// HACK: Wait for the server to come up. Make a hook that we can wait on.
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 
 		assert := assert.New(t)
 		conn, err := grpc.Dial(fmt.Sprintf("localhost:%s", grpcPort), grpc.WithInsecure())
