@@ -87,13 +87,16 @@ func NewAuthTLSPoolImpl(scope stats.Scope, auth string, url string, poolSize int
 		if err != nil {
 			return nil, err
 		}
-		if err = client.Cmd("AUTH", auth).Err; err != nil {
-			client.Close()
-			return nil, err
+		if auth != "" {
+			logger.Warnf("enabling authentication to redis on tls %s", url)
+			if err = client.Cmd("AUTH", auth).Err; err != nil {
+				client.Close()
+				return nil, err
+			}
 		}
 		return client, nil
 	}
-	pool, err := pool.NewCustom("tcp", url, 10, df)
+	pool, err := pool.NewCustom("tcp", url, poolSize, df)
 	checkError(err)
 	return &poolImpl{
 		pool:  pool,
