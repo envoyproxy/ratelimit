@@ -22,13 +22,13 @@ type Settings struct {
 	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"tcp"`
 	RedisUrl                   string `envconfig:"REDIS_URL" default:"127.0.0.1:6379"`
 	RedisPoolSize              int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
-	RedisAuth                  string `envconfig:"REDIS_AUTH"`
+	RedisAuth                  string `envconfig:"REDIS_AUTH" default:""`
 	RedisTls                   bool   `envconfig:"REDIS_TLS" default:"false"`
 	RedisPerSecond             bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType   string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
 	RedisPerSecondUrl          string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize     int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
-	RedisPerSecondAuth         string `envconfig:"REDIS_PERSECOND_AUTH"`
+	RedisPerSecondAuth         string `envconfig:"REDIS_PERSECOND_AUTH" default:""`
 	RedisPerSecondTls          bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
 	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	ShadowMode                 bool   `envconfig:"SHADOW_MODE" default:"false"`

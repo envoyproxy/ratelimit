@@ -39,7 +39,7 @@ func Run() {
 
 	var perSecondPool redis.Pool
 	if s.RedisPerSecond {
-		if s.RedisPerSecondTls {
+		if s.RedisPerSecondAuth != "" || s.RedisPerSecondTls {
 			perSecondPool = redis.NewAuthTLSPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondAuth, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize)
 		} else {
 			perSecondPool = redis.NewPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisSocketType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize)
@@ -47,7 +47,7 @@ func Run() {
 
 	}
 	var otherPool redis.Pool
-	if s.RedisTls {
+	if s.RedisAuth != "" || s.RedisTls {
 		otherPool = redis.NewAuthTLSPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisAuth, s.RedisUrl, s.RedisPoolSize)
 	} else {
 		otherPool = redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisSocketType, s.RedisUrl, s.RedisPoolSize)
