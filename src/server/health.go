@@ -14,14 +14,16 @@ import (
 type healthChecker struct {
 	grpc *health.Server
 	ok   uint32
+	name string
 }
 
-func NewHealthChecker(grpcHealthServer *health.Server) *healthChecker {
+func NewHealthChecker(grpcHealthServer *health.Server, name string) *healthChecker {
 	ret := &healthChecker{}
 	ret.ok = 1
+	ret.name = name
 
 	ret.grpc = grpcHealthServer
-	ret.grpc.SetServingStatus("ratelimit", healthpb.HealthCheckResponse_SERVING)
+	ret.grpc.SetServingStatus(ret.name, healthpb.HealthCheckResponse_SERVING)
 
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, syscall.SIGTERM)
@@ -29,7 +31,7 @@ func NewHealthChecker(grpcHealthServer *health.Server) *healthChecker {
 	go func() {
 		<-sigterm
 		atomic.StoreUint32(&ret.ok, 0)
-		ret.grpc.SetServingStatus("ratelimit", healthpb.HealthCheckResponse_NOT_SERVING)
+		ret.grpc.SetServingStatus(ret.name, healthpb.HealthCheckResponse_NOT_SERVING)
 	}()
 
 	return ret
@@ -46,5 +48,5 @@ func (hc *healthChecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (hc *healthChecker) Fail() {
 	atomic.StoreUint32(&hc.ok, 0)
-	hc.grpc.SetServingStatus("ratelimit", healthpb.HealthCheckResponse_NOT_SERVING)
+	hc.grpc.SetServingStatus(hc.name, healthpb.HealthCheckResponse_NOT_SERVING)
 }
