@@ -41,7 +41,7 @@ type server struct {
 	scope         stats.Scope
 	runtime       loader.IFace
 	debugListener serverDebugListener
-	health        *healthChecker
+	health        *HealthChecker
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
@@ -144,7 +144,7 @@ func newServer(name string, opts ...settings.Option) *server {
 	// setup healthcheck path
 	ret.health = NewHealthChecker(health.NewServer(), "ratelimit")
 	ret.router.Path("/healthcheck").Handler(ret.health)
-	healthpb.RegisterHealthServer(ret.grpcServer, ret.health.grpc)
+	healthpb.RegisterHealthServer(ret.grpcServer, ret.health.Server())
 
 	// setup default debug listener
 	ret.debugListener.debugMux = http.NewServeMux()
