@@ -11,14 +11,14 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
-type healthChecker struct {
+type HealthChecker struct {
 	grpc *health.Server
 	ok   uint32
 	name string
 }
 
-func NewHealthChecker(grpcHealthServer *health.Server, name string) *healthChecker {
-	ret := &healthChecker{}
+func NewHealthChecker(grpcHealthServer *health.Server, name string) *HealthChecker {
+	ret := &HealthChecker{}
 	ret.ok = 1
 	ret.name = name
 
@@ -37,7 +37,7 @@ func NewHealthChecker(grpcHealthServer *health.Server, name string) *healthCheck
 	return ret
 }
 
-func (hc *healthChecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (hc *HealthChecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ok := atomic.LoadUint32(&hc.ok)
 	if ok == 1 {
 		w.Write([]byte("OK"))
@@ -46,7 +46,11 @@ func (hc *healthChecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (hc *healthChecker) Fail() {
+func (hc *HealthChecker) Fail() {
 	atomic.StoreUint32(&hc.ok, 0)
 	hc.grpc.SetServingStatus(hc.name, healthpb.HealthCheckResponse_NOT_SERVING)
+}
+
+func (hc *HealthChecker) Server() *health.Server {
+	return hc.grpc
 }
