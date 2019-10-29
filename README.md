@@ -67,10 +67,6 @@ go [here](https://golang.org/doc/install).
   redis-server --port 6379 &
   redis-server --port 6380 &
   ```
-* To setup for the first time (only done once):
-  ```bash
-  make bootstrap
-  ```
 * To compile:
   ```bash
   make compile
@@ -96,8 +92,8 @@ go [here](https://golang.org/doc/install).
 The docker-compose setup has three containers: redis, ratelimit-build, and ratelimit. In order to run the docker-compose setup from the root of the repo, run
 
 ```bash
-glide install
-docker-compose up
+docker-compose run --rm ratelimit-build
+docker-compose up ratelimit
 ```
 
 The ratelimit-build container will build the ratelimit binary. Then via a shared volume the binary will be shared with the ratelimit container. This dual container setup is used in order to use a

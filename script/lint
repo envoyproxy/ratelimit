@@ -12,5 +12,5 @@ for pkg in $LINT_PKGS; do
     golint $pkg | grep -v comment
 done
 
-go vet $(glide nv)
+go vet ./...
 goimports -d $(find . -type f -name '*.go' -not -path "./vendor/*")
