@@ -19,7 +19,7 @@ func TestHealthCheck(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 
-	hc := server.NewHealthChecker(health.NewServer())
+	hc := server.NewHealthChecker(health.NewServer(), "ratelimit")
 
 	r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
 	hc.ServeHTTP(recorder, r)
@@ -49,7 +49,7 @@ func TestGrpcHealthCheck(t *testing.T) {
 	defer signal.Reset(syscall.SIGTERM)
 
 	grpcHealthServer := health.NewServer()
-	hc := server.NewHealthChecker(grpcHealthServer)
+	hc := server.NewHealthChecker(grpcHealthServer, "ratelimit")
 	healthpb.RegisterHealthServer(grpc.NewServer(), grpcHealthServer)
 
 	req := &healthpb.HealthCheckRequest{

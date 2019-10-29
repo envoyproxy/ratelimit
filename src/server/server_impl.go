@@ -15,9 +15,9 @@ import (
 	"net"
 
 	"github.com/gorilla/mux"
-	"github.com/kavu/go_reuseport"
+	reuseport "github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/settings"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -142,7 +142,7 @@ func newServer(name string, opts ...settings.Option) *server {
 	ret.router = mux.NewRouter()
 
 	// setup healthcheck path
-	ret.health = NewHealthChecker(health.NewServer())
+	ret.health = NewHealthChecker(health.NewServer(), "ratelimit")
 	ret.router.Path("/healthcheck").Handler(ret.health)
 	healthpb.RegisterHealthServer(ret.grpcServer, ret.health.grpc)
 
