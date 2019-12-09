@@ -53,6 +53,7 @@ func testBasicConfigAuthTLS(grpcPort, perSecond string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
 	os.Setenv("REDIS_URL", "localhost:16381")
 	os.Setenv("REDIS_AUTH", "password123")
+	os.Setenv("REDIS_TLS", "true")
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
 	return testBasicBaseConfig(grpcPort, perSecond)
 }

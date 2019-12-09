@@ -39,8 +39,10 @@ func Run() {
 
 	}
 	var otherPool redis.Pool
-	if s.RedisAuth != "" || s.RedisTls {
+	if s.RedisAuth != "" && s.RedisTls {
 		otherPool = redis.NewAuthTLSPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisAuth, s.RedisUrl, s.RedisPoolSize)
+	} else if s.RedisAuth != "" {
+		otherPool = redis.NewAuthPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisAuth, s.RedisUrl, s.RedisPoolSize)
 	} else {
 		otherPool = redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisSocketType, s.RedisUrl, s.RedisPoolSize)
 	}

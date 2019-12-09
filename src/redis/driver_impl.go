@@ -103,6 +103,29 @@ func NewAuthTLSPoolImpl(scope stats.Scope, auth string, url string, poolSize int
 		stats: newPoolStats(scope)}
 }
 
+func NewAuthPoolImpl(scope stats.Scope, auth string, url string, poolSize int) Pool {
+	logger.Warnf("connecting to redis on tcp %s with pool size %d", url, poolSize)
+	df := func(network, addr string) (*redis.Client, error) {
+		client, err := redis.Dial("tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		if auth != "" {
+			logger.Warnf("enabling authentication to redis on tcp %s", url)
+			if err = client.Cmd("AUTH", auth).Err; err != nil {
+				client.Close()
+				return nil, err
+			}
+		}
+		return client, nil
+	}
+	pool, err := pool.NewCustom("tcp", url, poolSize, df)
+	checkError(err)
+	return &poolImpl{
+		pool:  pool,
+		stats: newPoolStats(scope)}
+}
+
 func (this *connectionImpl) PipeAppend(cmd string, args ...interface{}) {
 	this.client.PipeAppend(cmd, args...)
 	this.pending++
