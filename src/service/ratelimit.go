@@ -74,7 +74,7 @@ func (this *service) reloadConfig() {
 	files := []config.RateLimitConfigToLoad{}
 	snapshot := this.runtime.Snapshot()
 	for _, key := range snapshot.Keys() {
-		if !strings.HasPrefix(key, "config.") {
+		if !strings.HasSuffix(key, ".yaml") {
 			continue
 		}
 

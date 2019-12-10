@@ -131,11 +131,19 @@ func newServer(name string, opts ...settings.Option) *server {
 		loaderOpts = append(loaderOpts, loader.AllowDotFiles)
 	}
 
+	// set the refresh mode
+	var runtimeMode loader.Refresher
+	if s.RuntimeMode == "symlink" {
+		runtimeMode = &loader.SymlinkRefresher{RuntimePath: s.RuntimePath}
+	} else {
+		runtimeMode = &loader.DirectoryRefresher{}
+	}
+
 	ret.runtime = loader.New(
 		s.RuntimePath,
 		s.RuntimeSubdirectory,
 		ret.store.Scope("runtime"),
-		&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
+		runtimeMode,
 		loaderOpts...)
 
 	// setup http router

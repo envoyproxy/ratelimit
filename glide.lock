@@ -1,5 +1,5 @@
-hash: dbaf34c6a11259517cf882afa8a5ecf03eade91f1cac4c4e54edc30a3b4fdd3e
-updated: 2019-04-08T10:22:39.596389-07:00
+hash: a4add8385a18bf24c76be66bc3d82b82182083cccacc5c91fb19f3c78aeb266d
+updated: 2019-12-09T18:10:56.243786-08:00
 imports:
 - name: github.com/envoyproxy/go-control-plane
   version: 0ad6fa1cf0b9b6ca8f3617a7188a568e81f40b87
@@ -11,9 +11,9 @@ imports:
 - name: github.com/envoyproxy/protoc-gen-validate
   version: ff6f7a9bc2e5fe006509b9f8c7594c41a953d50f
 - name: github.com/fsnotify/fsnotify
-  version: 629574ca2a5df945712d3079857300b5e4da0236
+  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: github.com/gogo/protobuf
-  version: ba06b47c162d49f2af050fb4c75bcbc86a159d5c
+  version: 5628607bb4c51c3157aacc3a50f0ab707582b805
   subpackages:
   - gogoproto
   - proto
@@ -22,7 +22,7 @@ imports:
   - sortkeys
   - types
 - name: github.com/golang/mock
-  version: 8a44ef6e8be577e050008c7886f24fc705d709fb
+  version: 112dfb85f71efc679eef2a9763162fa83fbee449
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
@@ -45,7 +45,7 @@ imports:
 - name: github.com/kelseyhightower/envconfig
   version: ac12b1f15efba734211a556d8b125110dc538016
 - name: github.com/lyft/goruntime
-  version: a0d6acf20fcfd48f53e623ed62b87ffb7fe17038
+  version: fd5ff74f1c4313c29aa252a14626d37f0ad15e17
   subpackages:
   - loader
   - snapshot
@@ -57,7 +57,7 @@ imports:
   subpackages:
   - validate
 - name: github.com/mediocregopher/radix.v2
-  version: 94360be262532d465b7e4760c7a67195d3319a87
+  version: b67df6e626f993b64b3ca9f4b8630900e61002e3
   subpackages:
   - pool
   - redis
@@ -72,7 +72,7 @@ imports:
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: d0887baf81f4598189d4e12a37c6da86f0bba4d0
+  version: c0dbc17a35534bf2e581d7a942408dc936316da4
   subpackages:
   - context
   - http/httpguts
@@ -126,7 +126,7 @@ imports:
   - tap
   - transport
 - name: gopkg.in/yaml.v2
-  version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
+  version: 1f64d6156d11335c3f22d9330b0ad14fc1e789ce
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21

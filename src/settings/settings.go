@@ -18,6 +18,7 @@ type Settings struct {
 	RuntimePath                string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`
 	RuntimeSubdirectory        string `envconfig:"RUNTIME_SUBDIRECTORY"`
 	RuntimeIgnoreDotFiles      bool   `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
+	RuntimeMode                string `envconfig:"RUNTIME_MODE" default:"symlink"`
 	LogLevel                   string `envconfig:"LOG_LEVEL" default:"WARN"`
 	RedisSocketType            string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisUrl                   string `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
