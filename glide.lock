@@ -1,6 +1,10 @@
-hash: dbaf34c6a11259517cf882afa8a5ecf03eade91f1cac4c4e54edc30a3b4fdd3e
-updated: 2019-04-08T10:22:39.596389-07:00
+hash: 8cc8fb031b0204aa915eaa8947e364aa1ce4362a3a9eede8086ffa97ced02b4c
+updated: 2019-12-19T15:33:02.225239-08:00
 imports:
+- name: github.com/cespare/xxhash
+  version: d7df74196a9e781ede915320c11c378c1b2f3a1f
+- name: github.com/coocood/freecache
+  version: 3c79a0a23c1940ab4479332fb3e0127265650ce3
 - name: github.com/envoyproxy/go-control-plane
   version: 0ad6fa1cf0b9b6ca8f3617a7188a568e81f40b87
   subpackages:
@@ -13,7 +17,7 @@ imports:
 - name: github.com/fsnotify/fsnotify
   version: 629574ca2a5df945712d3079857300b5e4da0236
 - name: github.com/gogo/protobuf
-  version: ba06b47c162d49f2af050fb4c75bcbc86a159d5c
+  version: 5628607bb4c51c3157aacc3a50f0ab707582b805
   subpackages:
   - gogoproto
   - proto
@@ -22,7 +26,7 @@ imports:
   - sortkeys
   - types
 - name: github.com/golang/mock
-  version: 8a44ef6e8be577e050008c7886f24fc705d709fb
+  version: 41e7e9a91aa20115266b326233308d17079ea51c
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
@@ -39,7 +43,7 @@ imports:
 - name: github.com/google/protobuf
   version: 6973c3a5041636c1d8dc5f7f6c8c1f3c15bc63d6
 - name: github.com/gorilla/mux
-  version: 9e1f5955c0d22b55d9e20d6faa28589f83b2faca
+  version: 49c01487a141b49f8ffe06277f3dca3ee80a55fa
 - name: github.com/kavu/go_reuseport
   version: 3d6c1e425f717ee59152524e73b904b67705eeb8
 - name: github.com/kelseyhightower/envconfig
@@ -57,7 +61,7 @@ imports:
   subpackages:
   - validate
 - name: github.com/mediocregopher/radix.v2
-  version: 94360be262532d465b7e4760c7a67195d3319a87
+  version: b67df6e626f993b64b3ca9f4b8630900e61002e3
   subpackages:
   - pool
   - redis
@@ -68,11 +72,11 @@ imports:
   subpackages:
   - assert
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: becbf705a91575484002d598f87d74f0002801e7
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: d0887baf81f4598189d4e12a37c6da86f0bba4d0
+  version: c0dbc17a35534bf2e581d7a942408dc936316da4
   subpackages:
   - context
   - http/httpguts
@@ -87,14 +91,14 @@ imports:
   - unix
   - windows
 - name: golang.org/x/text
-  version: b19bf474d317b857955b12035d2c5acb57ce8b01
+  version: cbf43d21aaebfdfeb81d91a5f444d13a3046e686
   subpackages:
   - secure/bidirule
   - transform
   - unicode/bidi
   - unicode/norm
 - name: google.golang.org/genproto
-  version: 221a8d4f74948678f06caaa13c9d41d22e069ae8
+  version: b31c10ee225f87dbb9f5f878ead9d64f34f5cbbb
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
@@ -126,7 +130,7 @@ imports:
   - tap
   - transport
 - name: gopkg.in/yaml.v2
-  version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
+  version: 1f64d6156d11335c3f22d9330b0ad14fc1e789ce
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21

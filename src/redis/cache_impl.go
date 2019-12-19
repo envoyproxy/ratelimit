@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coocood/freecache"
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/lyft/ratelimit/src/assert"
@@ -28,6 +29,7 @@ type rateLimitCacheImpl struct {
 	expirationJitterMaxSeconds int64
 	// bytes.Buffer pool used to efficiently generate cache keys.
 	bufferPool sync.Pool
+	localCache *freecache.Cache
 }
 
 // Convert a rate limit into a time divider.
@@ -115,6 +117,15 @@ func pipelineFetch(conn Connection) uint32 {
 	return ret
 }
 
+func (this *rateLimitCacheImpl) getExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
+	expirationSeconds := unitToDivider(unit)
+	if this.expirationJitterMaxSeconds > 0 {
+		expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
+	}
+
+	return expirationSeconds
+}
+
 func (this *rateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
@@ -151,11 +162,24 @@ func (this *rateLimitCacheImpl) DoLimit(
 		}
 	}
 
+	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
+
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.key == "" {
 			continue
 		}
+
+		if this.localCache != nil {
+			// Get returns the value or not found error.
+			_, err := this.localCache.Get([]byte(cacheKey.key))
+			if err == nil {
+				isOverLimitWithLocalCache[i] = true
+				logger.Debugf("cache key is over the limit: %s", cacheKey.key)
+				continue
+			}
+		}
+
 		logger.Debugf("looking up cache key: %s", cacheKey.key)
 
 		expirationSeconds := unitToDivider(limits[i].Limit.Unit)
@@ -182,6 +206,18 @@ func (this *rateLimitCacheImpl) DoLimit(
 					CurrentLimit:   nil,
 					LimitRemaining: 0,
 				}
+			continue
+		}
+
+		if isOverLimitWithLocalCache[i] {
+			responseDescriptorStatuses[i] =
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:           pb.RateLimitResponse_OVER_LIMIT,
+					CurrentLimit:   limits[i].Limit,
+					LimitRemaining: 0,
+				}
+			limits[i].Stats.OverLimit.Add(uint64(hitsAddend))
+			limits[i].Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
 			continue
 		}
 
@@ -222,6 +258,12 @@ func (this *rateLimitCacheImpl) DoLimit(
 				// in the near limit range.
 				limits[i].Stats.NearLimit.Add(uint64(overLimitThreshold - max(nearLimitThreshold, limitBeforeIncrease)))
 			}
+			if this.localCache != nil {
+				err := this.localCache.Set([]byte(cacheKey.key), []byte{}, int(unitToDivider(limits[i].Limit.Unit)))
+				if err != nil {
+					logger.Errorf("Failing to set local cache key: %s", cacheKey.key)
+				}
+			}
 		} else {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
@@ -248,7 +290,12 @@ func (this *rateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func NewRateLimitCacheImpl(pool Pool, perSecondPool Pool, timeSource TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64) RateLimitCache {
+func NewRateLimitCacheImpl(pool Pool, perSecondPool Pool, timeSource TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCacheSize int) RateLimitCache {
+	var localCache *freecache.Cache
+	if localCacheSize != 0 {
+		localCache = freecache.NewCache(localCacheSize)
+	}
+
 	return &rateLimitCacheImpl{
 		pool:                       pool,
 		perSecondPool:              perSecondPool,
@@ -256,6 +303,7 @@ func NewRateLimitCacheImpl(pool Pool, perSecondPool Pool, timeSource TimeSource,
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		bufferPool:                 newBufferPool(),
+		localCache:                 localCache,
 	}
 }
 

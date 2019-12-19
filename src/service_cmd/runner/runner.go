@@ -51,7 +51,8 @@ func Run() {
 			perSecondPool,
 			redis.NewTimeSourceImpl(),
 			rand.New(redis.NewLockedSource(time.Now().Unix())),
-			s.ExpirationJitterMaxSeconds),
+			s.ExpirationJitterMaxSeconds,
+			s.LocalCacheSize),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"))
 
