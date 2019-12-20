@@ -250,6 +250,13 @@ func (this *rateLimitCacheImpl) DoLimit(
 				limits[i].Stats.NearLimit.Add(uint64(overLimitThreshold - max(nearLimitThreshold, limitBeforeIncrease)))
 			}
 			if this.localCache != nil {
+				// Set the TTL of the local_cache to be the entire duration.
+				// Since the cache_key gets changed once the time crosses over current time slot, the over-the-limit
+				// cache keys in local_cache lose effectiveness.
+				// For example, if we have an hour limit on all mongo connections, the cache key would be
+				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
+				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
+				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
 				err := this.localCache.Set([]byte(cacheKey.key), []byte{}, int(unitToDivider(limits[i].Limit.Unit)))
 				if err != nil {
 					logger.Errorf("Failing to set local cache key: %s", cacheKey.key)

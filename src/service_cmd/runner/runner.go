@@ -1,11 +1,12 @@
 package runner
 
 import (
-	"github.com/coocood/freecache"
 	"io"
 	"math/rand"
 	"net/http"
 	"time"
+
+	"github.com/coocood/freecache"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
@@ -47,8 +48,8 @@ func Run() {
 	}
 
 	var localCache *freecache.Cache
-	if s.LocalCacheSize != 0 {
-		localCache = freecache.NewCache(s.LocalCacheSize)
+	if s.LocalCacheSizeInBytes != 0 {
+		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
 	}
 	service := ratelimit.NewService(
 		srv.Runtime(),
