@@ -41,14 +41,12 @@ func newDescriptorStatusLegacy(
 	}
 }
 
-
 func TestBasicConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0"))
 	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0"))
 	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("8083", "false", "1000"))
 	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("8085", "true", "1000"))
 }
-
 
 func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false", "0"))
@@ -206,7 +204,6 @@ func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
 		os.Setenv("LOCAL_CACHE_SIZE", local_cache_size)
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
-
 
 		go func() {
 			runner.Run()
