@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"github.com/coocood/freecache"
 	"io"
 	"math/rand"
 	"net/http"
@@ -44,6 +45,11 @@ func Run() {
 	} else {
 		otherPool = redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisSocketType, s.RedisUrl, s.RedisPoolSize)
 	}
+
+	var localCache *freecache.Cache
+	if s.LocalCacheSize != 0 {
+		localCache = freecache.NewCache(s.LocalCacheSize)
+	}
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		redis.NewRateLimitCacheImpl(
@@ -52,7 +58,7 @@ func Run() {
 			redis.NewTimeSourceImpl(),
 			rand.New(redis.NewLockedSource(time.Now().Unix())),
 			s.ExpirationJitterMaxSeconds,
-			s.LocalCacheSize),
+			localCache),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"))
 

@@ -290,12 +290,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func NewRateLimitCacheImpl(pool Pool, perSecondPool Pool, timeSource TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCacheSize int) RateLimitCache {
-	var localCache *freecache.Cache
-	if localCacheSize != 0 {
-		localCache = freecache.NewCache(localCacheSize)
-	}
-
+func NewRateLimitCacheImpl(pool Pool, perSecondPool Pool, timeSource TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache) RateLimitCache {
 	return &rateLimitCacheImpl{
 		pool:                       pool,
 		perSecondPool:              perSecondPool,
