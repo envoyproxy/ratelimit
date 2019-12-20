@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/coocood/freecache"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 
@@ -44,6 +46,11 @@ func Run() {
 	} else {
 		otherPool = redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisSocketType, s.RedisUrl, s.RedisPoolSize)
 	}
+
+	var localCache *freecache.Cache
+	if s.LocalCacheSizeInBytes != 0 {
+		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
+	}
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		redis.NewRateLimitCacheImpl(
@@ -51,7 +58,8 @@ func Run() {
 			perSecondPool,
 			redis.NewTimeSourceImpl(),
 			rand.New(redis.NewLockedSource(time.Now().Unix())),
-			s.ExpirationJitterMaxSeconds),
+			s.ExpirationJitterMaxSeconds,
+			localCache),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"))
 

@@ -31,6 +31,7 @@ type Settings struct {
 	RedisPerSecondAuth         string `envconfig:"REDIS_PERSECOND_AUTH" default:""`
 	RedisPerSecondTls          bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
 	ExpirationJitterMaxSeconds int64  `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
+	LocalCacheSizeInBytes      int    `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
 }
 
 type Option func(*Settings)

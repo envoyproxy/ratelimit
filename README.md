@@ -21,6 +21,7 @@
 - [Request Fields](#request-fields)
 - [Statistics](#statistics)
 - [Debug Port](#debug-port)
+- [Local Cache](#local-cache)
 - [Redis](#redis)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
@@ -372,6 +373,12 @@ $ curl 0:6070/
 ```
 
 You can specify the debug port with the `DEBUG_PORT` environment variable. It defaults to `6070`.
+
+# Local Cache
+
+Ratelimit optionally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and thus avoids reading the 
+redis cache again for the already over-the-limit keys. The local cache size can be configured via `LocalCacheSizeInBytes` in the [settings](https://github.com/lyft/ratelimit/blob/master/src/settings/settings.go).
+If `LocalCacheSizeInBytes` is 0, local cache is disabled.
 
 # Redis
 
