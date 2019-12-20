@@ -117,15 +117,6 @@ func pipelineFetch(conn Connection) uint32 {
 	return ret
 }
 
-func (this *rateLimitCacheImpl) getExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
-	expirationSeconds := unitToDivider(unit)
-	if this.expirationJitterMaxSeconds > 0 {
-		expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
-	}
-
-	return expirationSeconds
-}
-
 func (this *rateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
