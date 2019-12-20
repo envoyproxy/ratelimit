@@ -376,7 +376,7 @@ You can specify the debug port with the `DEBUG_PORT` environment variable. It de
 
 # Local Cache
 
-Ratelimit optimally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and avoid reading 
+Ratelimit optionally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and thus avoids reading the 
 redis cache again for the already over-the-limit keys. The local cache size can be configured via `LocalCacheSizeInBytes` in the [settings](https://github.com/lyft/ratelimit/blob/master/src/settings/settings.go).
 If `LocalCacheSizeInBytes` is 0, local cache is disabled.
 
