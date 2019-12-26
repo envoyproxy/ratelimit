@@ -89,7 +89,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
 		os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
 		os.Setenv("REDIS_SOCKET_TYPE", "tcp")
-		os.Setenv("LOCAL_CACHE_SIZE", local_cache_size)
+		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
 
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
@@ -201,7 +201,7 @@ func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
 		os.Setenv("REDIS_URL", "localhost:6379")
 		os.Setenv("REDIS_TLS", "false")
 		os.Setenv("REDIS_PERSECOND_TLS", "false")
-		os.Setenv("LOCAL_CACHE_SIZE", local_cache_size)
+		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
 
