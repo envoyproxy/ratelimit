@@ -50,12 +50,13 @@ func TestBasicConfig(t *testing.T) {
 	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000"))
 }
 
+/*
 func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false", "0"))
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS("8089", "true", "0"))
 	t.Run("WithoutPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18087", "false", "1000"))
 	t.Run("WithPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18089", "true", "1000"))
-}
+}*/
 
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
@@ -206,8 +207,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 }
 
 func TestBasicConfigLegacy(t *testing.T) {
-	t.Run("testBasicConfigLegacy", testBasicConfigLegacy("8086", "0"))
-	t.Run("testBasicConfigLegacyWithLocalCache", testBasicConfigLegacy("18086", "1000"))
+	t.Run("testBasicConfigLegacy", testBasicConfigLegacy("8093", "0"))
+	t.Run("testBasicConfigLegacyWithLocalCache", testBasicConfigLegacy("18093", "1000"))
 }
 
 func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
