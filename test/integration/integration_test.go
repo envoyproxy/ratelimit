@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	stats "github.com/lyft/gostats"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/service_cmd/runner"
@@ -44,15 +46,15 @@ func newDescriptorStatusLegacy(
 func TestBasicConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0"))
 	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0"))
-	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("8083", "false", "1000"))
-	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("8085", "true", "1000"))
+	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("18083", "false", "1000"))
+	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000"))
 }
 
 func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false", "0"))
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS("8089", "true", "0"))
-	t.Run("WithoutPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("8087", "false", "1000"))
-	t.Run("WithPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("8089", "true", "1000"))
+	t.Run("WithoutPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18087", "false", "1000"))
+	t.Run("WithPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18089", "true", "1000"))
 }
 
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
@@ -89,13 +91,14 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
 		os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
 		os.Setenv("REDIS_SOCKET_TYPE", "tcp")
-		os.Setenv("LOCAL_CACHE_SIZE", local_cache_size)
+		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
 
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
+		store := stats.NewDefaultStore()
 
 		go func() {
-			runner.Run()
+			runner.Run(store)
 		}()
 
 		// HACK: Wait for the server to come up. Make a hook that we can wait on.
@@ -142,6 +145,15 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			if i >= 20 {
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining = 0
+				overLimitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key2", enable_local_cache)))
+				assert.Equal(i-19, int(overLimitCounter.Value()))
+
+				overLimitWithLocalCacheCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key2", enable_local_cache)))
+				if enable_local_cache {
+					assert.Equal(i-20, int(overLimitWithLocalCacheCounter.Value()))
+				} else {
+					assert.Equal(0, int(overLimitWithLocalCacheCounter.Value()))
+				}
 			}
 
 			assert.Equal(
@@ -170,6 +182,14 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			if i >= 10 {
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining2 = 0
+				overLimitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key3", enable_local_cache)))
+				assert.Equal(i-9, int(overLimitCounter.Value()))
+				overLimitWithLocalCacheCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key3", enable_local_cache)))
+				if enable_local_cache {
+					assert.Equal(i-10, int(overLimitWithLocalCacheCounter.Value()))
+				} else {
+					assert.Equal(0, int(overLimitWithLocalCacheCounter.Value()))
+				}
 			}
 
 			assert.Equal(
@@ -181,18 +201,19 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				response)
 			assert.NoError(err)
 		}
+		store = nil
 	}
 }
 
 func TestBasicConfigLegacy(t *testing.T) {
-	t.Run("testBasicConfigLegacy", testBasicConfigLegacy("0"))
-	t.Run("testBasicConfigLegacyWithLocalCache", testBasicConfigLegacy("1000"))
+	t.Run("testBasicConfigLegacy", testBasicConfigLegacy("8086", "0"))
+	t.Run("testBasicConfigLegacyWithLocalCache", testBasicConfigLegacy("18086", "1000"))
 }
 
-func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
+func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 	return func(t *testing.T) {
 		os.Setenv("PORT", "8082")
-		os.Setenv("GRPC_PORT", "8083")
+		os.Setenv("GRPC_PORT", grpcPort)
 		os.Setenv("DEBUG_PORT", "8084")
 		os.Setenv("RUNTIME_ROOT", "runtime/current")
 		os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
@@ -201,19 +222,22 @@ func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
 		os.Setenv("REDIS_URL", "localhost:6379")
 		os.Setenv("REDIS_TLS", "false")
 		os.Setenv("REDIS_PERSECOND_TLS", "false")
-		os.Setenv("LOCAL_CACHE_SIZE", local_cache_size)
+		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
+
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
 
+		store := stats.NewDefaultStore()
+
 		go func() {
-			runner.Run()
+			runner.Run(store)
 		}()
 
 		// HACK: Wait for the server to come up. Make a hook that we can wait on.
 		time.Sleep(100 * time.Millisecond)
 
 		assert := assert.New(t)
-		conn, err := grpc.Dial("localhost:8083", grpc.WithInsecure())
+		conn, err := grpc.Dial(fmt.Sprintf("localhost:%s", grpcPort), grpc.WithInsecure())
 		assert.NoError(err)
 		defer conn.Close()
 		c := pb_legacy.NewRateLimitServiceClient(conn)
@@ -253,6 +277,16 @@ func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
 			if i >= 20 {
 				status = pb_legacy.RateLimitResponse_OVER_LIMIT
 				limitRemaining = 0
+
+				overLimitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key2", enable_local_cache)))
+				assert.Equal(i-19, int(overLimitCounter.Value()))
+
+				overLimitWithLocalCacheCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key2", enable_local_cache)))
+				if enable_local_cache {
+					assert.Equal(i-20, int(overLimitWithLocalCacheCounter.Value()))
+				} else {
+					assert.Equal(0, int(overLimitWithLocalCacheCounter.Value()))
+				}
 			}
 
 			assert.Equal(
@@ -281,6 +315,14 @@ func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
 			if i >= 10 {
 				status = pb_legacy.RateLimitResponse_OVER_LIMIT
 				limitRemaining2 = 0
+				overLimitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another_legacy.%s.over_limit", getCacheKey("key3", enable_local_cache)))
+				assert.Equal(i-9, int(overLimitCounter.Value()))
+				overLimitWithLocalCacheCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another_legacy.%s.over_limit_with_local_cache", getCacheKey("key3", enable_local_cache)))
+				if enable_local_cache {
+					assert.Equal(i-10, int(overLimitWithLocalCacheCounter.Value()))
+				} else {
+					assert.Equal(0, int(overLimitWithLocalCacheCounter.Value()))
+				}
 			}
 
 			assert.Equal(
