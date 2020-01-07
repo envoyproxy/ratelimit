@@ -192,7 +192,7 @@ func TestBasicConfigLegacy(t *testing.T) {
 func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
 	return func(t *testing.T) {
 		os.Setenv("PORT", "8082")
-		os.Setenv("GRPC_PORT", "8083")
+		os.Setenv("GRPC_PORT", "8093")
 		os.Setenv("DEBUG_PORT", "8084")
 		os.Setenv("RUNTIME_ROOT", "runtime/current")
 		os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
@@ -213,7 +213,7 @@ func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		assert := assert.New(t)
-		conn, err := grpc.Dial("localhost:8083", grpc.WithInsecure())
+		conn, err := grpc.Dial("localhost:8093", grpc.WithInsecure())
 		assert.NoError(err)
 		defer conn.Close()
 		c := pb_legacy.NewRateLimitServiceClient(conn)
