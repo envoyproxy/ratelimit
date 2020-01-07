@@ -130,6 +130,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49)}},
 			response)
 		assert.NoError(err)
+
+		// store.NewCounter returns the existing counter.
 		key1HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.basic.%s.total_hits", getCacheKey("key1", enable_local_cache)))
 		assert.Equal(1, int(key1HitCounter.Value()))
 
