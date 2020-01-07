@@ -199,8 +199,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 }
 
 func TestBasicConfigLegacy(t *testing.T) {
-	t.Run("testBasicConfigLegacy", testBasicConfigLegacy("8094", "0"))
-	t.Run("testBasicConfigLegacyWithLocalCache", testBasicConfigLegacy("18094", "1000"))
+	t.Run("testBasicConfigLegacy", testBasicConfigLegacy("8086", "0"))
+	t.Run("testBasicConfigLegacyWithLocalCache", testBasicConfigLegacy("18086", "1000"))
 }
 
 func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
@@ -216,6 +216,8 @@ func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 		os.Setenv("REDIS_TLS", "false")
 		os.Setenv("REDIS_PERSECOND_TLS", "false")
 		os.Setenv("LOCAL_CACHE_SIZE", local_cache_size)
+		os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
+		os.Setenv("REDIS_SOCKET_TYPE", "tcp")
 
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
