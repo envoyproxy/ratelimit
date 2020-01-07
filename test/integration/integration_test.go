@@ -159,7 +159,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				response)
 			assert.NoError(err)
 			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
-			assert.Equal(i + 1, int(key2HitCounter.Value()))
+			assert.Equal(i+1, int(key2HitCounter.Value()))
 		}
 
 		// Limit now against 2 keys in the same domain.
@@ -190,10 +190,10 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				response)
 			assert.NoError(err)
 			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
-			assert.Equal(i + 26, int(key2HitCounter.Value()))
+			assert.Equal(i+26, int(key2HitCounter.Value()))
 
 			key3HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key3", enable_local_cache)))
-			assert.Equal(i + 1, int(key3HitCounter.Value()))
+			assert.Equal(i+1, int(key3HitCounter.Value()))
 		}
 	}
 }
@@ -282,7 +282,7 @@ func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 				response)
 			assert.NoError(err)
 			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
-			assert.Equal(i + 1, int(key2HitCounter.Value()))
+			assert.Equal(i+1, int(key2HitCounter.Value()))
 		}
 
 		// Limit now against 2 keys in the same domain.
@@ -313,10 +313,10 @@ func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 				response)
 			assert.NoError(err)
 			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another_legacy.%s.total_hits", getCacheKey("key2", enable_local_cache)))
-			assert.Equal(i + 1, int(key2HitCounter.Value()))
+			assert.Equal(i+1, int(key2HitCounter.Value()))
 
 			key3HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another_legacy.%s.total_hits", getCacheKey("key3", enable_local_cache)))
-			assert.Equal(i + 1, int(key3HitCounter.Value()))
+			assert.Equal(i+1, int(key3HitCounter.Value()))
 		}
 	}
 }
