@@ -50,13 +50,12 @@ func TestBasicConfig(t *testing.T) {
 	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000"))
 }
 
-/*
 func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false", "0"))
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS("8089", "true", "0"))
 	t.Run("WithoutPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18087", "false", "1000"))
 	t.Run("WithPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18089", "true", "1000"))
-}*/
+}
 
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
@@ -92,7 +91,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
 		os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
 		os.Setenv("REDIS_SOCKET_TYPE", "tcp")
-		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
+		os.Setenv("LOCAL_CACHE_SIZE", local_cache_size)
 
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
@@ -131,6 +130,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49)}},
 			response)
 		assert.NoError(err)
+		key1HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.basic.%s.total_hits", getCacheKey("key1", enable_local_cache)))
+		assert.Equal(1, int(key1HitCounter.Value()))
 
 		// Now come up with a random key, and go over limit for a minute limit which should always work.
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -146,15 +147,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			if i >= 20 {
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining = 0
-				overLimitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key2", enable_local_cache)))
-				assert.Equal(i-19, int(overLimitCounter.Value()))
-
-				overLimitWithLocalCacheCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key2", enable_local_cache)))
-				if enable_local_cache {
-					assert.Equal(i-20, int(overLimitWithLocalCacheCounter.Value()))
-				} else {
-					assert.Equal(0, int(overLimitWithLocalCacheCounter.Value()))
-				}
 			}
 
 			assert.Equal(
@@ -164,6 +156,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 						newDescriptorStatus(status, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining)}},
 				response)
 			assert.NoError(err)
+			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
+			assert.Equal(i + 1, int(key2HitCounter.Value()))
 		}
 
 		// Limit now against 2 keys in the same domain.
@@ -183,14 +177,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			if i >= 10 {
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining2 = 0
-				overLimitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key3", enable_local_cache)))
-				assert.Equal(i-9, int(overLimitCounter.Value()))
-				overLimitWithLocalCacheCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key3", enable_local_cache)))
-				if enable_local_cache {
-					assert.Equal(i-10, int(overLimitWithLocalCacheCounter.Value()))
-				} else {
-					assert.Equal(0, int(overLimitWithLocalCacheCounter.Value()))
-				}
 			}
 
 			assert.Equal(
@@ -201,8 +187,12 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
 				response)
 			assert.NoError(err)
+			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
+			assert.Equal(i + 26, int(key2HitCounter.Value()))
+
+			key3HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key3", enable_local_cache)))
+			assert.Equal(i + 1, int(key3HitCounter.Value()))
 		}
-		store = nil
 	}
 }
 
@@ -223,7 +213,7 @@ func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 		os.Setenv("REDIS_URL", "localhost:6379")
 		os.Setenv("REDIS_TLS", "false")
 		os.Setenv("REDIS_PERSECOND_TLS", "false")
-		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
+		os.Setenv("LOCAL_CACHE_SIZE", local_cache_size)
 
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
@@ -263,6 +253,8 @@ func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 					newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 50, pb_legacy.RateLimit_SECOND, 49)}},
 			response)
 		assert.NoError(err)
+		key1HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.basic_legacy.%s.total_hits", getCacheKey("key1", enable_local_cache)))
+		assert.Equal(1, int(key1HitCounter.Value()))
 
 		// Now come up with a random key, and go over limit for a minute limit which should always work.
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -278,16 +270,6 @@ func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 			if i >= 20 {
 				status = pb_legacy.RateLimitResponse_OVER_LIMIT
 				limitRemaining = 0
-
-				overLimitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key2", enable_local_cache)))
-				assert.Equal(i-19, int(overLimitCounter.Value()))
-
-				overLimitWithLocalCacheCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key2", enable_local_cache)))
-				if enable_local_cache {
-					assert.Equal(i-20, int(overLimitWithLocalCacheCounter.Value()))
-				} else {
-					assert.Equal(0, int(overLimitWithLocalCacheCounter.Value()))
-				}
 			}
 
 			assert.Equal(
@@ -297,6 +279,8 @@ func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 						newDescriptorStatusLegacy(status, 20, pb_legacy.RateLimit_MINUTE, limitRemaining)}},
 				response)
 			assert.NoError(err)
+			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
+			assert.Equal(i + 1, int(key2HitCounter.Value()))
 		}
 
 		// Limit now against 2 keys in the same domain.
@@ -316,14 +300,6 @@ func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 			if i >= 10 {
 				status = pb_legacy.RateLimitResponse_OVER_LIMIT
 				limitRemaining2 = 0
-				overLimitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another_legacy.%s.over_limit", getCacheKey("key3", enable_local_cache)))
-				assert.Equal(i-9, int(overLimitCounter.Value()))
-				overLimitWithLocalCacheCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another_legacy.%s.over_limit_with_local_cache", getCacheKey("key3", enable_local_cache)))
-				if enable_local_cache {
-					assert.Equal(i-10, int(overLimitWithLocalCacheCounter.Value()))
-				} else {
-					assert.Equal(0, int(overLimitWithLocalCacheCounter.Value()))
-				}
 			}
 
 			assert.Equal(
@@ -334,6 +310,11 @@ func testBasicConfigLegacy(grpcPort, local_cache_size string) func(*testing.T) {
 						newDescriptorStatusLegacy(status, 10, pb_legacy.RateLimit_HOUR, limitRemaining2)}},
 				response)
 			assert.NoError(err)
+			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another_legacy.%s.total_hits", getCacheKey("key2", enable_local_cache)))
+			assert.Equal(i + 1, int(key2HitCounter.Value()))
+
+			key3HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another_legacy.%s.total_hits", getCacheKey("key3", enable_local_cache)))
+			assert.Equal(i + 1, int(key3HitCounter.Value()))
 		}
 	}
 }
