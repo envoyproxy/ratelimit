@@ -21,7 +21,19 @@ import (
 	logger "github.com/sirupsen/logrus"
 )
 
-func Run(store stats.Store) {
+type Runner struct {
+	statsStore stats.Store
+}
+
+func NewRunner() Runner {
+	return Runner{stats.NewDefaultStore()}
+}
+
+func (runner *Runner) GetStatsStore() stats.Store{
+	return runner.statsStore
+}
+
+func (runner *Runner) Run() {
 	s := settings.NewSettings()
 
 	logLevel, err := logger.ParseLevel(s.LogLevel)
@@ -30,11 +42,8 @@ func Run(store stats.Store) {
 	} else {
 		logger.SetLevel(logLevel)
 	}
-	if store == nil {
-		store = stats.NewDefaultStore()
-	}
 
-	srv := server.NewServer("ratelimit", store, settings.GrpcUnaryInterceptor(nil))
+	srv := server.NewServer("ratelimit", runner.statsStore, settings.GrpcUnaryInterceptor(nil))
 
 	var perSecondPool redis.Pool
 	if s.RedisPerSecond {

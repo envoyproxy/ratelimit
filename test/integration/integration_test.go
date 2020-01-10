@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	stats "github.com/lyft/gostats"
-
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 	"github.com/lyft/ratelimit/src/service_cmd/runner"
@@ -43,6 +41,8 @@ func newDescriptorStatusLegacy(
 	}
 }
 
+// TODO: Once adding the ability of stopping the server in the runner (https://github.com/lyft/ratelimit/issues/119),
+//  stop the server at the end of each test, thus we can reuse the grpc port among these integration tests.
 func TestBasicConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0"))
 	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0"))
@@ -95,10 +95,10 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
-		store := stats.NewDefaultStore()
+		runner := runner.NewRunner()
 
 		go func() {
-			runner.Run(store)
+			runner.Run()
 		}()
 
 		// HACK: Wait for the server to come up. Make a hook that we can wait on.
@@ -132,7 +132,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		assert.NoError(err)
 
 		// store.NewCounter returns the existing counter.
-		key1HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.basic.%s.total_hits", getCacheKey("key1", enable_local_cache)))
+		key1HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.basic.%s.total_hits", getCacheKey("key1", enable_local_cache)))
 		assert.Equal(1, int(key1HitCounter.Value()))
 
 		// Now come up with a random key, and go over limit for a minute limit which should always work.
@@ -158,7 +158,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 						newDescriptorStatus(status, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining)}},
 				response)
 			assert.NoError(err)
-			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
+			key2HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
 			assert.Equal(i+1, int(key2HitCounter.Value()))
 		}
 
@@ -189,10 +189,10 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
 				response)
 			assert.NoError(err)
-			key2HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
+			key2HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
 			assert.Equal(i+26, int(key2HitCounter.Value()))
 
-			key3HitCounter := store.NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key3", enable_local_cache)))
+			key3HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key3", enable_local_cache)))
 			assert.Equal(i+1, int(key3HitCounter.Value()))
 		}
 	}
@@ -219,8 +219,9 @@ func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
 
+		runner := runner.NewRunner()
 		go func() {
-			runner.Run(nil)
+			runner.Run()
 		}()
 
 		// HACK: Wait for the server to come up. Make a hook that we can wait on.
