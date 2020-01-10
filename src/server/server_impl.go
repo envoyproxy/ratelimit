@@ -99,11 +99,11 @@ func (server *server) Runtime() loader.IFace {
 	return server.runtime
 }
 
-func NewServer(name string, opts ...settings.Option) Server {
-	return newServer(name, opts...)
+func NewServer(name string, store stats.Store, opts ...settings.Option) Server {
+	return newServer(name, store, opts...)
 }
 
-func newServer(name string, opts ...settings.Option) *server {
+func newServer(name string, store stats.Store, opts ...settings.Option) *server {
 	s := settings.NewSettings()
 
 	for _, opt := range opts {
@@ -119,7 +119,7 @@ func newServer(name string, opts ...settings.Option) *server {
 	ret.debugPort = s.DebugPort
 
 	// setup stats
-	ret.store = stats.NewDefaultStore()
+	ret.store = store
 	ret.scope = ret.store.Scope(name)
 	ret.store.AddStatGenerator(stats.NewRuntimeStats(ret.scope.Scope("go")))
 

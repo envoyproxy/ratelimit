@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	stats "github.com/lyft/gostats"
+
 	"github.com/coocood/freecache"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
@@ -19,7 +21,19 @@ import (
 	logger "github.com/sirupsen/logrus"
 )
 
-func Run() {
+type Runner struct {
+	statsStore stats.Store
+}
+
+func NewRunner() Runner {
+	return Runner{stats.NewDefaultStore()}
+}
+
+func (runner *Runner) GetStatsStore() stats.Store {
+	return runner.statsStore
+}
+
+func (runner *Runner) Run() {
 	s := settings.NewSettings()
 
 	logLevel, err := logger.ParseLevel(s.LogLevel)
@@ -29,7 +43,7 @@ func Run() {
 		logger.SetLevel(logLevel)
 	}
 
-	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
+	srv := server.NewServer("ratelimit", runner.statsStore, settings.GrpcUnaryInterceptor(nil))
 
 	var perSecondPool redis.Pool
 	if s.RedisPerSecond {
