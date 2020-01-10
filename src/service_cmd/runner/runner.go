@@ -29,7 +29,7 @@ func NewRunner() Runner {
 	return Runner{stats.NewDefaultStore()}
 }
 
-func (runner *Runner) GetStatsStore() stats.Store{
+func (runner *Runner) GetStatsStore() stats.Store {
 	return runner.statsStore
 }
 
