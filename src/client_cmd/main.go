@@ -13,11 +13,13 @@ import (
 	"google.golang.org/grpc"
 )
 
-type descriptorValue struct {
-	descriptor *pb_struct.RateLimitDescriptor
+type requestValue struct {
+	request *pb.RateLimitRequest
 }
 
-func (this *descriptorValue) Set(arg string) error {
+func (this *requestValue) Set(arg string) error {
+	descriptor := pb_struct.RateLimitDescriptor{}
+
 	pairs := strings.Split(arg, ",")
 	for _, pair := range pairs {
 		parts := strings.Split(pair, "=")
@@ -25,30 +27,56 @@ func (this *descriptorValue) Set(arg string) error {
 			return errors.New("invalid descriptor list")
 		}
 
-		this.descriptor.Entries = append(
-			this.descriptor.Entries, &pb_struct.RateLimitDescriptor_Entry{Key: parts[0], Value: parts[1]})
+		descriptor.Entries = append(
+			descriptor.Entries,
+			&pb_struct.RateLimitDescriptor_Entry{
+				Key: parts[0], 
+				Value: parts[1],
+			},
+		)
 	}
+
+	this.request.Descriptors = append(
+		this.request.Descriptors,
+		&descriptor,
+	)
 
 	return nil
 }
 
-func (this *descriptorValue) String() string {
-	return this.descriptor.String()
+func (this *requestValue) String() string {
+	return this.request.String()
 }
 
 func main() {
 	dialString := flag.String(
-		"dial_string", "localhost:8081", "url of ratelimit server in <host>:<port> form")
-	domain := flag.String("domain", "", "rate limit configuration domain to query")
-	descriptorValue := descriptorValue{&pb_struct.RateLimitDescriptor{}}
+		"dial_string", 
+		"localhost:8081", 
+		"url of ratelimit server in <host>:<port> form")
+	
+	domain := flag.String(
+		"domain", 
+		"", 
+		"rate limit configuration domain to query")
+
+	hitsAddend := flag.Uint(
+		"hits_addend",
+		1,
+		"amount to add to the cache on each hit",
+	)
+	
+	myRequest := requestValue{&pb.RateLimitRequest{}}
 	flag.Var(
-		&descriptorValue, "descriptors",
+		&myRequest, 
+		"descriptors",
 		"descriptor list to query in <key>=<value>,<key>=<value>,... form")
 	flag.Parse()
 
+	myRequest.request.Domain = *domain
+	myRequest.request.HitsAddend = uint32(*hitsAddend)
+
 	fmt.Printf("dial string: %s\n", *dialString)
-	fmt.Printf("domain: %s\n", *domain)
-	fmt.Printf("descriptors: %s\n", &descriptorValue)
+	fmt.Printf("request: %v\n", myRequest.request)
 
 	conn, err := grpc.Dial(*dialString, grpc.WithInsecure())
 	if err != nil {
@@ -58,13 +86,10 @@ func main() {
 
 	defer conn.Close()
 	c := pb.NewRateLimitServiceClient(conn)
+
 	response, err := c.ShouldRateLimit(
 		context.Background(),
-		&pb.RateLimitRequest{
-			Domain:      *domain,
-			Descriptors: []*pb_struct.RateLimitDescriptor{descriptorValue.descriptor},
-			HitsAddend:  1,
-		})
+		myRequest.request)
 	if err != nil {
 		fmt.Printf("request error: %s\n", err.Error())
 		os.Exit(1)
