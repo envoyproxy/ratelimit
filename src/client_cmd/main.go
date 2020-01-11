@@ -30,7 +30,7 @@ func (this *requestValue) Set(arg string) error {
 		descriptor.Entries = append(
 			descriptor.Entries,
 			&pb_struct.RateLimitDescriptor_Entry{
-				Key: parts[0], 
+				Key:   parts[0],
 				Value: parts[1],
 			},
 		)
@@ -50,24 +50,15 @@ func (this *requestValue) String() string {
 
 func main() {
 	dialString := flag.String(
-		"dial_string", 
-		"localhost:8081", 
-		"url of ratelimit server in <host>:<port> form")
-	
+		"dial_string", "localhost:8081", "url of ratelimit server in <host>:<port> form")
 	domain := flag.String(
-		"domain", 
-		"", 
-		"rate limit configuration domain to query")
-
+		"domain", "", "rate limit configuration domain to query")
 	hitsAddend := flag.Uint(
-		"hits_addend",
-		1,
-		"amount to add to the cache on each hit",
-	)
-	
+		"hits_addend", 1, "amount to add to the cache on each hit")
+
 	myRequest := requestValue{&pb.RateLimitRequest{}}
 	flag.Var(
-		&myRequest, 
+		&myRequest,
 		"descriptors",
 		"descriptor list to query in <key>=<value>,<key>=<value>,... form")
 	flag.Parse()
