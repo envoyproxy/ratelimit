@@ -47,19 +47,10 @@ func (runner *Runner) Run() {
 
 	var perSecondPool redis.Pool
 	if s.RedisPerSecond {
-		if s.RedisPerSecondAuth != "" || s.RedisPerSecondTls {
-			perSecondPool = redis.NewAuthTLSPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondAuth, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize)
-		} else {
-			perSecondPool = redis.NewPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisSocketType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize)
-		}
-
+		perSecondPool = redis.NewPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondTls, s.RedisPerSecondAuth, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize)
 	}
 	var otherPool redis.Pool
-	if s.RedisAuth != "" || s.RedisTls {
-		otherPool = redis.NewAuthTLSPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisAuth, s.RedisUrl, s.RedisPoolSize)
-	} else {
-		otherPool = redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisSocketType, s.RedisUrl, s.RedisPoolSize)
-	}
+	otherPool = redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisTls, s.RedisAuth, s.RedisUrl, s.RedisPoolSize)
 
 	var localCache *freecache.Cache
 	if s.LocalCacheSizeInBytes != 0 {

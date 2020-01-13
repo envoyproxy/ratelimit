@@ -2,6 +2,7 @@ package redis
 
 import (
 	"crypto/tls"
+	"net"
 
 	stats "github.com/lyft/gostats"
 	"github.com/lyft/ratelimit/src/assert"
@@ -66,19 +67,16 @@ func (this *poolImpl) Put(c Connection) {
 	}
 }
 
-func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int) Pool {
-	logger.Warnf("connecting to redis on %s %s with pool size %d", socketType, url, poolSize)
-	pool, err := pool.New(socketType, url, poolSize)
-	checkError(err)
-	return &poolImpl{
-		pool:  pool,
-		stats: newPoolStats(scope)}
-}
-
-func NewAuthTLSPoolImpl(scope stats.Scope, auth string, url string, poolSize int) Pool {
-	logger.Warnf("connecting to redis on tls %s with pool size %d", url, poolSize)
+func NewPoolImpl(scope stats.Scope, useTls bool, auth string, url string, poolSize int) Pool {
+	logger.Warnf("connecting to redis on %s with pool size %d", url, poolSize)
 	df := func(network, addr string) (*redis.Client, error) {
-		conn, err := tls.Dial("tcp", addr, &tls.Config{})
+		var conn net.Conn
+		var err error
+		if useTls {
+			conn, err = tls.Dial("tcp", addr, &tls.Config{})
+		} else {
+			conn, err = net.Dial("tcp", addr)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +86,7 @@ func NewAuthTLSPoolImpl(scope stats.Scope, auth string, url string, poolSize int
 			return nil, err
 		}
 		if auth != "" {
-			logger.Warnf("enabling authentication to redis on tls %s", url)
+			logger.Warnf("enabling authentication to redis on %s", url)
 			if err = client.Cmd("AUTH", auth).Err; err != nil {
 				client.Close()
 				return nil, err

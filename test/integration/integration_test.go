@@ -57,19 +57,40 @@ func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18089", "true", "1000"))
 }
 
+func TestBasicAuthConfig(t *testing.T) {
+	t.Run("WithoutPerSecondRedisAuth", testBasicConfigAuth("8091", "false", "0"))
+	t.Run("WithPerSecondRedisAuth", testBasicConfigAuth("8093", "true", "0"))
+	t.Run("WithoutPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18091", "false", "1000"))
+	t.Run("WithPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18093", "true", "1000"))
+}
+
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
 	os.Setenv("REDIS_URL", "localhost:16381")
 	os.Setenv("REDIS_AUTH", "password123")
+	os.Setenv("REDIS_TLS", "true")
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
+	os.Setenv("REDIS_PERSECOND_TLS", "true")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
 
 func testBasicConfig(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
 	os.Setenv("REDIS_URL", "localhost:6379")
+	os.Setenv("REDIS_AUTH", "")
 	os.Setenv("REDIS_TLS", "false")
+	os.Setenv("REDIS_PERSECOND_AUTH", "")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
+	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
+}
+
+func testBasicConfigAuth(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
+	os.Setenv("REDIS_PERSECOND_URL", "localhost:6385")
+	os.Setenv("REDIS_URL", "localhost:6384")
+	os.Setenv("REDIS_TLS", "false")
+	os.Setenv("REDIS_AUTH", "password123")
+	os.Setenv("REDIS_PERSECOND_TLS", "false")
+	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
 
@@ -214,7 +235,9 @@ func testBasicConfigLegacy(local_cache_size string) func(*testing.T) {
 		os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
 		os.Setenv("REDIS_URL", "localhost:6379")
 		os.Setenv("REDIS_TLS", "false")
+		os.Setenv("REDIS_AUTH", "")
 		os.Setenv("REDIS_PERSECOND_TLS", "false")
+		os.Setenv("REDIS_PERSECOND_AUTH", "")
 		os.Setenv("LOCAL_CACHE_SIZE", local_cache_size)
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
