@@ -1,8 +1,9 @@
 package redis_test
 
 import (
-	"github.com/coocood/freecache"
 	"testing"
+
+	"github.com/coocood/freecache"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	stats "github.com/lyft/gostats"
@@ -20,7 +21,6 @@ import (
 func TestRedis(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testRedis(false))
 	t.Run("WithPerSecondRedis", testRedis(true))
-
 }
 
 func testRedis(usePerSecondRedis bool) func(*testing.T) {
@@ -152,6 +152,42 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 	}
 }
 
+func testLocalCacheStats(localCacheStats stats.StatGenerator, statsStore stats.Store, sink *common.TestStatSink,
+	expectedHitCount int, expectedMissCount int, expectedLookUpCount int, expectedExpiredCount int,
+	expectedEntryCount int) func(*testing.T) {
+	return func(t *testing.T) {
+		localCacheStats.GenerateStats()
+		statsStore.Flush()
+
+		// Check whether all local_cache related stats are available.
+		_, ok := sink.Record["averageAccessTime"]
+		assert.Equal(t, true, ok)
+		hitCount, ok := sink.Record["hitCount"]
+		assert.Equal(t, true, ok)
+		missCount, ok := sink.Record["missCount"]
+		assert.Equal(t, true, ok)
+		lookupCount, ok := sink.Record["lookupCount"]
+		assert.Equal(t, true, ok)
+		_, ok = sink.Record["overwriteCount"]
+		assert.Equal(t, true, ok)
+		_, ok = sink.Record["evacuateCount"]
+		assert.Equal(t, true, ok)
+		expiredCount, ok := sink.Record["expiredCount"]
+		assert.Equal(t, true, ok)
+		entryCount, ok := sink.Record["entryCount"]
+		assert.Equal(t, true, ok)
+
+		// Check the correctness of hitCount, missCount, lookupCount, expiredCount and entryCount
+		assert.Equal(t, expectedHitCount, hitCount.(int))
+		assert.Equal(t, expectedMissCount, missCount.(int))
+		assert.Equal(t, expectedLookUpCount, lookupCount.(int))
+		assert.Equal(t, expectedExpiredCount, expiredCount.(int))
+		assert.Equal(t, expectedEntryCount, entryCount.(int))
+
+		sink.Clear()
+	}
+}
+
 func TestOverLimitWithLocalCache(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
@@ -161,8 +197,11 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	timeSource := mock_redis.NewMockTimeSource(controller)
 	connection := mock_redis.NewMockConnection(controller)
 	response := mock_redis.NewMockResponse(controller)
-	cache := redis.NewRateLimitCacheImpl(pool, nil, timeSource, rand.New(rand.NewSource(1)), 0, freecache.NewCache(100))
-	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	localCache := freecache.NewCache(100)
+	cache := redis.NewRateLimitCacheImpl(pool, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache)
+	sink := &common.TestStatSink{}
+	statsStore := stats.NewStore(sink, true)
+	localCacheStats := redis.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	pool.EXPECT().Get().Return(connection)
@@ -189,6 +228,9 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 
+	// Check the local cache stats.
+	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
+
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
 	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
@@ -208,6 +250,9 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+
+	// Check the local cache stats.
+	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
 
 	// Test Over limit stats
 	pool.EXPECT().Get().Return(connection)
@@ -229,6 +274,9 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
 
+	// Check the local cache stats.
+	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
+
 	// Test Over limit stats with local cache
 	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
@@ -246,6 +294,9 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimitWithLocalCache.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+
+	// Check the local cache stats.
+	testLocalCacheStats(localCacheStats, statsStore, sink, 1, 3, 4, 0, 1)
 }
 
 func TestNearLimit(t *testing.T) {

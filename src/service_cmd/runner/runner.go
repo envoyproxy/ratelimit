@@ -42,8 +42,12 @@ func (runner *Runner) Run() {
 	} else {
 		logger.SetLevel(logLevel)
 	}
+	var localCache *freecache.Cache
+	if s.LocalCacheSizeInBytes != 0 {
+		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
+	}
 
-	srv := server.NewServer("ratelimit", runner.statsStore, settings.GrpcUnaryInterceptor(nil))
+	srv := server.NewServer("ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
 
 	var perSecondPool redis.Pool
 	if s.RedisPerSecond {
@@ -52,10 +56,6 @@ func (runner *Runner) Run() {
 	var otherPool redis.Pool
 	otherPool = redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisTls, s.RedisAuth, s.RedisUrl, s.RedisPoolSize)
 
-	var localCache *freecache.Cache
-	if s.LocalCacheSizeInBytes != 0 {
-		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
-	}
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		redis.NewRateLimitCacheImpl(
