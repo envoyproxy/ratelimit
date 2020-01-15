@@ -3,11 +3,12 @@ package server
 import (
 	"expvar"
 	"fmt"
-	"github.com/lyft/ratelimit/src/redis"
 	"io"
 	"net/http"
 	"net/http/pprof"
 	"sort"
+
+	"github.com/lyft/ratelimit/src/redis"
 
 	"os"
 	"os/signal"
@@ -100,7 +101,6 @@ func (server *server) Scope() stats.Scope {
 func (server *server) Runtime() loader.IFace {
 	return server.runtime
 }
-
 
 func NewServer(name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) Server {
 	return newServer(name, store, localCache, opts...)
