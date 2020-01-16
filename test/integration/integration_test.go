@@ -141,6 +141,14 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			response)
 		assert.NoError(err)
 
+		// Manually flush the cache for local_cache stats
+		runner.GetStatsStore().Flush()
+		localCacheHitCounter := runner.GetStatsStore().NewGauge("ratelimit.localcache.hitCount")
+		assert.Equal(0, int(localCacheHitCounter.Value()))
+
+		localCacheMissCounter := runner.GetStatsStore().NewGauge("ratelimit.localcache.missCount")
+		assert.Equal(0, int(localCacheMissCounter.Value()))
+
 		response, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
@@ -155,6 +163,18 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		// store.NewCounter returns the existing counter.
 		key1HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.basic.%s.total_hits", getCacheKey("key1", enable_local_cache)))
 		assert.Equal(1, int(key1HitCounter.Value()))
+
+		// Manually flush the cache for local_cache stats
+		runner.GetStatsStore().Flush()
+		localCacheHitCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.hitCount")
+		assert.Equal(0, int(localCacheHitCounter.Value()))
+
+		localCacheMissCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.missCount")
+		if enable_local_cache {
+			assert.Equal(1, int(localCacheMissCounter.Value()))
+		} else {
+			assert.Equal(0, int(localCacheMissCounter.Value()))
+		}
 
 		// Now come up with a random key, and go over limit for a minute limit which should always work.
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -193,6 +213,26 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				assert.Equal(i-20, int(key2LocalCacheOverLimitCounter.Value()))
 			} else {
 				assert.Equal(0, int(key2LocalCacheOverLimitCounter.Value()))
+			}
+
+			// Manually flush the cache for local_cache stats
+			runner.GetStatsStore().Flush()
+			localCacheHitCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.hitCount")
+			if enable_local_cache && i >= 20 {
+				assert.Equal(i-20, int(localCacheHitCounter.Value()))
+			} else {
+				assert.Equal(0, int(localCacheHitCounter.Value()))
+			}
+
+			localCacheMissCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.missCount")
+			if enable_local_cache {
+				if i < 20 {
+					assert.Equal(i+2, int(localCacheMissCounter.Value()))
+				} else {
+					assert.Equal(22, int(localCacheMissCounter.Value()))
+				}
+			} else {
+				assert.Equal(0, int(localCacheMissCounter.Value()))
 			}
 		}
 
@@ -247,6 +287,33 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				assert.Equal(i-10, int(key3LocalCacheOverLimitCounter.Value()))
 			} else {
 				assert.Equal(0, int(key3LocalCacheOverLimitCounter.Value()))
+			}
+
+			// Manually flush the cache for local_cache stats
+			runner.GetStatsStore().Flush()
+			localCacheHitCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.hitCount")
+			if enable_local_cache {
+				if i < 10 {
+					assert.Equal(4, int(localCacheHitCounter.Value()))
+				} else {
+					// key3 caches hit
+					assert.Equal(i-6, int(localCacheHitCounter.Value()))
+				}
+			} else {
+				assert.Equal(0, int(localCacheHitCounter.Value()))
+			}
+
+			localCacheMissCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.missCount")
+			if enable_local_cache {
+				if i < 10 {
+					// both key2 and key3 cache miss.
+					assert.Equal(i*2+24, int(localCacheMissCounter.Value()))
+				} else {
+					// key2 caches miss.
+					assert.Equal(i+34, int(localCacheMissCounter.Value()))
+				}
+			} else {
+				assert.Equal(0, int(localCacheMissCounter.Value()))
 			}
 
 		}
