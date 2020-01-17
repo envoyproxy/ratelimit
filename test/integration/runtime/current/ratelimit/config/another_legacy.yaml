@@ -9,13 +9,3 @@ descriptors:
     rate_limit:
       unit: hour
       requests_per_unit: 10
-
-  - key: key2_local
-    rate_limit:
-      unit: minute
-      requests_per_unit: 20
-
-  - key: key3_local
-    rate_limit:
-      unit: hour
-      requests_per_unit: 10

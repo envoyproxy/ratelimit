@@ -4,8 +4,3 @@ descriptors:
     rate_limit:
       unit: second
       requests_per_unit: 50
-
-  - key: key1_local
-    rate_limit:
-      unit: second
-      requests_per_unit: 50

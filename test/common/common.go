@@ -1,10 +1,41 @@
 package common
 
 import (
+	"sync"
+
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
 )
+
+type TestStatSink struct {
+	sync.Mutex
+	Record map[string]interface{}
+}
+
+func (s *TestStatSink) Clear() {
+	s.Lock()
+	s.Record = map[string]interface{}{}
+	s.Unlock()
+}
+
+func (s *TestStatSink) FlushCounter(name string, value uint64) {
+	s.Lock()
+	s.Record[name] = value
+	s.Unlock()
+}
+
+func (s *TestStatSink) FlushGauge(name string, value uint64) {
+	s.Lock()
+	s.Record[name] = value
+	s.Unlock()
+}
+
+func (s *TestStatSink) FlushTimer(name string, value float64) {
+	s.Lock()
+	s.Record[name] = value
+	s.Unlock()
+}
 
 func NewRateLimitRequest(domain string, descriptors [][][2]string, hitsAddend uint32) *pb.RateLimitRequest {
 	request := &pb.RateLimitRequest{}

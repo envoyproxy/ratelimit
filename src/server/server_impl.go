@@ -8,12 +8,15 @@ import (
 	"net/http/pprof"
 	"sort"
 
+	"github.com/lyft/ratelimit/src/redis"
+
 	"os"
 	"os/signal"
 	"syscall"
 
 	"net"
 
+	"github.com/coocood/freecache"
 	"github.com/gorilla/mux"
 	reuseport "github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
@@ -99,11 +102,11 @@ func (server *server) Runtime() loader.IFace {
 	return server.runtime
 }
 
-func NewServer(name string, store stats.Store, opts ...settings.Option) Server {
-	return newServer(name, store, opts...)
+func NewServer(name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) Server {
+	return newServer(name, store, localCache, opts...)
 }
 
-func newServer(name string, store stats.Store, opts ...settings.Option) *server {
+func newServer(name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) *server {
 	s := settings.NewSettings()
 
 	for _, opt := range opts {
@@ -122,6 +125,9 @@ func newServer(name string, store stats.Store, opts ...settings.Option) *server 
 	ret.store = store
 	ret.scope = ret.store.Scope(name)
 	ret.store.AddStatGenerator(stats.NewRuntimeStats(ret.scope.Scope("go")))
+	if localCache != nil {
+		ret.store.AddStatGenerator(redis.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
+	}
 
 	// setup runtime
 	loaderOpts := make([]loader.Option, 0, 1)
