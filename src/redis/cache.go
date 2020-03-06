@@ -2,7 +2,7 @@ package redis
 
 import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	"github.com/lyft/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/config"
 	"golang.org/x/net/context"
 )
 

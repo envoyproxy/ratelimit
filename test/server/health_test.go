@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lyft/ratelimit/src/server"
+	"github.com/envoyproxy/ratelimit/src/server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"

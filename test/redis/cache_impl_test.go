@@ -6,15 +6,15 @@ import (
 	"github.com/coocood/freecache"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/redis"
 	stats "github.com/lyft/gostats"
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/redis"
 
 	"math/rand"
 
+	"github.com/envoyproxy/ratelimit/test/common"
+	mock_redis "github.com/envoyproxy/ratelimit/test/mocks/redis"
 	"github.com/golang/mock/gomock"
-	"github.com/lyft/ratelimit/test/common"
-	mock_redis "github.com/lyft/ratelimit/test/mocks/redis"
 	"github.com/stretchr/testify/assert"
 )
 
