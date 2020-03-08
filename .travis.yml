@@ -3,7 +3,7 @@ language: go
 go:       "1.14"
 services: redis-server
 before_install: sudo apt-get update -y && sudo apt-get install stunnel4 -y
-install: make bootstrap_redis_tls
+install: make bootstrap bootstrap_redis_tls
 before_script: 
 - redis-server --port 6380 &
 - redis-server --port 6381 --requirepass password123 &

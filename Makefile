@@ -2,7 +2,6 @@ export GO111MODULE=on
 MODULE = github.com/envoyproxy/ratelimit
 
 SHELL := /bin/bash
-GOREPO := ${GOPATH}/src/github.com/envoyproxy/ratelimit
 
 .PHONY: bootstrap
 bootstrap:
