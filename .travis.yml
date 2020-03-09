@@ -1,6 +1,6 @@
 sudo:     required
 language: go
-go:       "1.11"
+go:       "1.14"
 services: redis-server
 before_install: sudo apt-get update -y && sudo apt-get install stunnel4 -y
 install: make bootstrap bootstrap_redis_tls

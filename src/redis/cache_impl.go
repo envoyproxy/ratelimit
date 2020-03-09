@@ -11,8 +11,8 @@ import (
 	"github.com/coocood/freecache"
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	"github.com/lyft/ratelimit/src/assert"
-	"github.com/lyft/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/assert"
+	"github.com/envoyproxy/ratelimit/src/config"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )

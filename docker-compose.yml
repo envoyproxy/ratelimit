@@ -12,11 +12,11 @@ services:
 
   # minimal container that builds the ratelimit service binary and exits.
   ratelimit-build:
-    image: golang:1.10-alpine
-    working_dir: /go/src/github.com/lyft/ratelimit
-    command: go build -o /usr/local/bin/ratelimit /go/src/github.com/lyft/ratelimit/src/service_cmd/main.go
+    image: golang:1.14-alpine
+    working_dir: /go/src/github.com/envoyproxy/ratelimit
+    command: go build -o /usr/local/bin/ratelimit ./src/service_cmd/main.go
     volumes:
-      - .:/go/src/github.com/lyft/ratelimit
+      - .:/go/src/github.com/envoyproxy/ratelimit
       - binary:/usr/local/bin/
 
   ratelimit:

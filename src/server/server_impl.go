@@ -8,7 +8,7 @@ import (
 	"net/http/pprof"
 	"sort"
 
-	"github.com/lyft/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/redis"
 
 	"os"
 	"os/signal"
@@ -17,11 +17,11 @@ import (
 	"net"
 
 	"github.com/coocood/freecache"
+	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/gorilla/mux"
 	reuseport "github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
 	stats "github.com/lyft/gostats"
-	"github.com/lyft/ratelimit/src/settings"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
