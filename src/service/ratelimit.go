@@ -5,11 +5,11 @@ import (
 	"sync"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	"github.com/envoyproxy/ratelimit/src/assert"
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/lyft/goruntime/loader"
 	"github.com/lyft/gostats"
-	"github.com/lyft/ratelimit/src/assert"
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/redis"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
