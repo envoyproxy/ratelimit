@@ -1,6 +1,10 @@
 export GO111MODULE=on
+PROJECT = ratelimit
+REGISTRY ?= envoyproxy
+IMAGE := $(REGISTRY)/$(PROJECT)
 MODULE = github.com/envoyproxy/ratelimit
-
+GIT_REF = $(shell git describe --tags || git rev-parse --short=8 --verify HEAD)
+VERSION ?= $(GIT_REF)
 SHELL := /bin/bash
 
 .PHONY: bootstrap
@@ -67,6 +71,11 @@ tests_unit: compile
 tests: compile
 	go test -race -tags=integration $(MODULE)/...
 
-.PHONY: docker
-docker: tests
-	docker build . -t envoyproxy/ratelimit:`git rev-parse HEAD`
+.PHONY: docker_image
+docker_image: tests
+	docker build . -t $(IMAGE):$(VERSION)
+
+.PHONY: docker_push
+docker_push: docker_image
+	docker push $(IMAGE):$(VERSION)
+
