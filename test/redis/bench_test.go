@@ -1,0 +1,73 @@
+package redis_test
+
+import (
+	"context"
+	"runtime"
+	"testing"
+	"time"
+
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/redis"
+	stats "github.com/lyft/gostats"
+
+	"math/rand"
+
+	"github.com/envoyproxy/ratelimit/test/common"
+)
+
+func BenchmarkParallelDoLimit(b *testing.B) {
+	b.Skip("Skip benchmark")
+
+	b.ReportAllocs()
+
+	parallel := runtime.GOMAXPROCS(0)
+	poolSize := parallel * runtime.GOMAXPROCS(0)
+
+	do := func(b *testing.B, fn func() error) {
+		b.ResetTimer()
+		b.SetParallelism(parallel)
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				if err := fn(); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+
+	mkDoLimitBench := func(pipelineWindow time.Duration, pipelineLimit int) func(*testing.B) {
+		return func(b *testing.B) {
+			statsStore := stats.NewStore(stats.NewNullSink(), false)
+			client := redis.NewClientImpl(statsStore, false, "", "127.0.0.1:6379", poolSize, pipelineWindow, pipelineLimit)
+			defer client.Close()
+
+			cache := redis.NewRateLimitCacheImpl(client, nil, redis.NewTimeSourceImpl(), rand.New(redis.NewLockedSource(time.Now().Unix())), 10, nil)
+			request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
+			limits := []*config.RateLimit{config.NewRateLimit(1000000000, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
+
+			// wait for the pool to fill up
+			for {
+				time.Sleep(50 * time.Millisecond)
+				if client.NumActiveConns() >= poolSize {
+					break
+				}
+			}
+
+			b.ResetTimer()
+
+			do(b, func() error {
+				cache.DoLimit(context.Background(), request, limits)
+				return nil
+			})
+		}
+	}
+
+	b.Run("no pipeline", mkDoLimitBench(0, 0))
+	b.Run("pipeline 50us 4", mkDoLimitBench(50*time.Microsecond, 4))
+	b.Run("pipeline 75us  4", mkDoLimitBench(75*time.Microsecond, 4))
+	b.Run("pipeline 150us 4", mkDoLimitBench(150*time.Microsecond, 4))
+	b.Run("pipeline 50us 8", mkDoLimitBench(50*time.Microsecond, 8))
+	b.Run("pipeline 75us 8", mkDoLimitBench(75*time.Microsecond, 8))
+	b.Run("pipeline 150us 8", mkDoLimitBench(150*time.Microsecond, 8))
+}
