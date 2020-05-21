@@ -27,7 +27,7 @@ type rateLimitCacheImpl struct {
 	timeSource                 TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
-	// bytes.Buffer client used to efficiently generate cache keys.
+	// bytes.Buffer pool used to efficiently generate cache keys.
 	bufferPool sync.Pool
 	localCache *freecache.Cache
 }

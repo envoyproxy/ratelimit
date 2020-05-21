@@ -391,6 +391,13 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_TLS` & `REDIS_PERSECOND_TLS`: set to `"true"` to enable a TLS connection for the specific connection type.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable authentication to the redis host.
 
+Ratelimit use [implicit pipelining](https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L238) to send requests to redis. Pipelining can be configured using the following environment variables:
+
+1. `REDIS_PIPELINE_WINDOW` & `REDIS_PERSECOND_PIPELINE_WINDOW`:  sets the duration after which internal pipelines will be flushed.
+If window is zero then implicit pipelining will be disabled.
+1. `REDIS_PIPELINE_LIMIT` & `REDIS_PERSECOND_PIPELINE_LIMIT`: sets maximum number of commands that can be pipelined before flushing.
+If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
+
 ## One Redis Instance
 
 To configure one Redis instance use the following environment variables:
