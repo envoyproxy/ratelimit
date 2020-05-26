@@ -8,6 +8,7 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	stats "github.com/lyft/gostats"
 
@@ -43,7 +44,7 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 			client := redis.NewClientImpl(statsStore, false, "", "127.0.0.1:6379", poolSize, pipelineWindow, pipelineLimit)
 			defer client.Close()
 
-			cache := redis.NewRateLimitCacheImpl(client, nil, redis.NewTimeSourceImpl(), rand.New(redis.NewLockedSource(time.Now().Unix())), 10, nil)
+			cache := redis.NewRateLimitCacheImpl(client, nil, limiter.NewTimeSourceImpl(), rand.New(limiter.NewLockedSource(time.Now().Unix())), 10, nil)
 			request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 			limits := []*config.RateLimit{config.NewRateLimit(1000000000, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
 
