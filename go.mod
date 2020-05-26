@@ -3,6 +3,7 @@ module github.com/envoyproxy/ratelimit
 go 1.14
 
 require (
+	github.com/alicebob/miniredis/v2 v2.11.4
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/coocood/freecache v1.1.0
 	github.com/envoyproxy/go-control-plane v0.6.9

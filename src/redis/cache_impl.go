@@ -141,8 +141,8 @@ func (this *rateLimitCacheImpl) DoLimit(
 	}
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
-	results := make([]uint32, len(request.Descriptors), len(request.Descriptors))
-	var lastErr error
+	results := make([]uint32, len(request.Descriptors))
+	var err error
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
@@ -167,20 +167,18 @@ func (this *rateLimitCacheImpl) DoLimit(
 			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 		}
 
-		result := &results[i]
-		key := cacheKey.key
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
 		if this.perSecondClient != nil && cacheKey.perSecond {
-			if err := pipelineAppend(this.perSecondClient, key, hitsAddend, result, expirationSeconds); err != nil {
-				lastErr = err
+			if err = pipelineAppend(this.perSecondClient, cacheKey.key, hitsAddend, &results[i], expirationSeconds); err != nil {
+				break
 			}
 		} else {
-			if err := pipelineAppend(this.client, key, hitsAddend, result, expirationSeconds); err != nil {
-				lastErr = err
+			if err = pipelineAppend(this.client, cacheKey.key, hitsAddend, &results[i], expirationSeconds); err != nil {
+				break
 			}
 		}
 	}
-	checkError(lastErr)
+	checkError(err)
 
 	// Now fetch the pipeline.
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,

@@ -2,6 +2,7 @@ package redis
 
 import (
 	"crypto/tls"
+	"fmt"
 	"time"
 
 	"github.com/mediocregopher/radix/v3/trace"
@@ -81,6 +82,13 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, url string, pool
 		radix.PoolWithTrace(poolTrace(&stats)),
 	)
 	checkError(err)
+
+	// Check if connection is good
+	var pingResponse string
+	checkError(pool.Do(radix.Cmd(&pingResponse, "PING")))
+	if pingResponse != "PONG" {
+		checkError(fmt.Errorf("connecting redis error: %s", pingResponse))
+	}
 
 	return &clientImpl{
 		client: pool,

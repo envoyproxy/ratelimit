@@ -2,6 +2,7 @@ package redis_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/coocood/freecache"
 
@@ -12,6 +13,7 @@ import (
 
 	"math/rand"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_redis "github.com/envoyproxy/ratelimit/test/mocks/redis"
 	"github.com/golang/mock/gomock"
@@ -417,4 +419,106 @@ func TestRedisWithJitter(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+}
+
+func mustNewRedisServer() *miniredis.Miniredis {
+	srv, err := miniredis.Run()
+	if err != nil {
+		panic(err)
+	}
+
+	return srv
+}
+
+func TestNewClientImpl(t *testing.T) {
+	redisAuth := "123"
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+
+	mkRedisClient := func(auth, addr string) redis.Client {
+		return redis.NewClientImpl(statsStore, false, auth, addr, 1, 1*time.Millisecond, 1)
+	}
+
+	t.Run("no connection", func(t *testing.T) {
+		assert.Panics(t, func() {
+			mkRedisClient("", "localhost:6379")
+		})
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		var client redis.Client
+		assert.NotPanics(t, func() {
+			client = mkRedisClient("", redisSrv.Addr())
+		})
+		assert.NotNil(t, client)
+	})
+
+	t.Run("auth fail", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		redisSrv.RequireAuth(redisAuth)
+
+		assert.Panics(t, func() {
+			mkRedisClient("", redisSrv.Addr())
+		})
+	})
+
+	t.Run("auth pass", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		redisSrv.RequireAuth(redisAuth)
+
+		assert.NotPanics(t, func() {
+			mkRedisClient(redisAuth, redisSrv.Addr())
+		})
+	})
+}
+
+func TestDoCmd(t *testing.T) {
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+
+	mkRedisClient := func(addr string) redis.Client {
+		return redis.NewClientImpl(statsStore, false, "", addr, 1, 0, 0)
+	}
+
+	t.Run("SETGET ok", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		client := mkRedisClient(redisSrv.Addr())
+		var res string
+
+		assert.Nil(t, client.DoCmd(nil, "SET", "foo", "bar"))
+		assert.Nil(t, client.DoCmd(&res, "GET", "foo"))
+		assert.Equal(t, "bar", res)
+	})
+
+	t.Run("INCRBY ok", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		client := mkRedisClient(redisSrv.Addr())
+		var res uint32
+		hits := uint32(1)
+
+		assert.Nil(t, client.DoCmd(&res, "INCRBY", "a", hits))
+		assert.Equal(t, hits, res)
+		assert.Nil(t, client.DoCmd(&res, "INCRBY", "a", hits))
+		assert.Equal(t, uint32(2), res)
+	})
+
+	t.Run("connection broken", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		client := mkRedisClient(redisSrv.Addr())
+
+		assert.Nil(t, client.DoCmd(nil, "SET", "foo", "bar"))
+
+		redisSrv.Close()
+		t.Log(client.DoCmd(nil, "GET", "foo"))
+		assert.NotNil(t, client.DoCmd(nil, "GET", "foo"))
+	})
 }
