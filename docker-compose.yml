@@ -19,6 +19,14 @@ services:
       - .:/go/src/github.com/envoyproxy/ratelimit
       - binary:/usr/local/bin/
 
+  ratelimit-client-build:
+    image: golang:1.14-alpine
+    working_dir: /go/src/github.com/envoyproxy/ratelimit
+    command: go build -o /usr/local/bin/ratelimit_client ./src/client_cmd/main.go
+    volumes:
+      - .:/go/src/github.com/envoyproxy/ratelimit
+      - binary:/usr/local/bin/
+
   ratelimit:
     image: alpine:3.6
     command: /usr/local/bin/ratelimit
@@ -29,6 +37,7 @@ services:
     depends_on:
       - redis
       - ratelimit-build
+      - ratelimit-client-build
     networks:
       - ratelimit-network
     volumes:
