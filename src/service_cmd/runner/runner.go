@@ -75,6 +75,8 @@ func (runner *Runner) Run() {
 			io.WriteString(writer, service.GetCurrentConfig().Dump())
 		})
 
+	srv.AddJsonHandler(service)
+
 	// Ratelimit is compatible with two proto definitions
 	// 1. data-plane-api rls.proto: https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto
 	pb.RegisterRateLimitServiceServer(srv.GrpcServer(), service)

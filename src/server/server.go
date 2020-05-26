@@ -1,6 +1,7 @@
 package server
 
 import (
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"net/http"
 
 	"github.com/lyft/goruntime/loader"
@@ -25,6 +26,7 @@ type Server interface {
 	 * Add an HTTP endpoint to the local debug port.
 	 */
 	AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc)
+	AddJsonHandler(pb.RateLimitServiceServer)
 
 	/**
 	 * Returns the embedded gRPC server to be used for registering gRPC endpoints.
