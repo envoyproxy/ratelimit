@@ -440,7 +440,9 @@ func TestNewClientImpl(t *testing.T) {
 
 	t.Run("no connection", func(t *testing.T) {
 		assert.Panics(t, func() {
-			mkRedisClient("", "localhost:6379")
+			// It's possible there is a redis server listening on 6379 in ci environment, so
+			// use a random port.
+			mkRedisClient("", "localhost:12345")
 		})
 	})
 
