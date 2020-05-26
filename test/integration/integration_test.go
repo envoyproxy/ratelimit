@@ -381,6 +381,10 @@ func TestBasicConfigLegacy(t *testing.T) {
 	assert.Equal(http_resp.StatusCode, 429)
 	http_resp.Body.Close()
 
+	invalid_json := []byte(`{"unclosed quote: []}`)
+	http_resp, _ = http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(invalid_json))
+	assert.Equal(http_resp.StatusCode, 400)
+
 	response, err = c.ShouldRateLimit(
 		context.Background(),
 		common.NewRateLimitRequestLegacy("basic_legacy", [][][2]string{{{"key1", "foo"}}}, 1))

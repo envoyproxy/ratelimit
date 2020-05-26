@@ -364,9 +364,9 @@ ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.total_hi
 
 # HTTP Port
 
-The ratelimit service listens to http 1.1 (by default on port 8080) with two endpoints:
+The ratelimit service listens to HTTP 1.1 (by default on port 8080) with two endpoints:
 1. /healthcheck → return a 200 if this service is healthy
-1. /json → http 1.1 endpoint for interacting with ratelimit service
+1. /json → HTTP 1.1 endpoint for interacting with ratelimit service
 
 ## /json endpoint
 
@@ -382,13 +382,8 @@ Takes an HTTP POST with a JSON body of the form e.g.
   ]
 }
 ```
-The service will return an http 200 if this request is allowed (if no ratelimits exceeded) or 409 if one or more 
+The service will return an http 200 if this request is allowed (if no ratelimits exceeded) or 429 if one or more 
 ratelimits were exceeded. Endpoint does not currently return detailed information on which limits were exceeded.
-
-See the test case in `test/integration/integration_test.go` paired with the config file 
-`test/integration/runtime/current/ratelimit/config/basic.yaml` (which configures the `one_per_minute` descriptor in the
- `basic` domain) 
-for an example
 
 # Debug Port
 
