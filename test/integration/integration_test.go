@@ -115,6 +115,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
 		os.Setenv("REDIS_SOCKET_TYPE", "tcp")
 		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
+		os.Setenv("USE_STATSD", "false")
 
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
