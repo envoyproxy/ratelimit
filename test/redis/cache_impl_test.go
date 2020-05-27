@@ -438,8 +438,8 @@ func TestNewClientImpl(t *testing.T) {
 		return redis.NewClientImpl(statsStore, false, auth, addr, 1, 1*time.Millisecond, 1)
 	}
 
-	t.Run("no connection", func(t *testing.T) {
-		assert.Panics(t, func() {
+	t.Run("connection refused", func(t *testing.T) {
+		assert.PanicsWithError(t, "dial tcp 127.0.0.1:12345: connect: connection refused", func() {
 			// It's possible there is a redis server listening on 6379 in ci environment, so
 			// use a random port.
 			mkRedisClient("", "localhost:12345")
@@ -463,7 +463,7 @@ func TestNewClientImpl(t *testing.T) {
 
 		redisSrv.RequireAuth(redisAuth)
 
-		assert.Panics(t, func() {
+		assert.PanicsWithError(t, "NOAUTH Authentication required.", func() {
 			mkRedisClient("", redisSrv.Addr())
 		})
 	})
@@ -520,7 +520,6 @@ func TestDoCmd(t *testing.T) {
 		assert.Nil(t, client.DoCmd(nil, "SET", "foo", "bar"))
 
 		redisSrv.Close()
-		t.Log(client.DoCmd(nil, "GET", "foo"))
-		assert.NotNil(t, client.DoCmd(nil, "GET", "foo"))
+		assert.EqualError(t, client.DoCmd(nil, "GET", "foo"), "EOF")
 	})
 }
