@@ -8,8 +8,7 @@ VERSION ?= $(GIT_REF)
 SHELL := /bin/bash
 
 .PHONY: bootstrap
-bootstrap:
-	go get github.com/golang/mock/mockgen@v1.4.1
+bootstrap: ;
 
 define REDIS_STUNNEL
 cert = private.pem
