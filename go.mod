@@ -14,7 +14,7 @@ require (
 	github.com/kavu/go_reuseport v1.2.0
 	github.com/kelseyhightower/envconfig v1.1.0
 	github.com/lyft/goruntime v0.2.1
-	github.com/lyft/gostats v0.2.6
+	github.com/lyft/gostats v0.4.0
 	github.com/lyft/protoc-gen-validate v0.0.7-0.20180626203901-f9d2b11e4414 // indirect
 	github.com/mediocregopher/radix/v3 v3.5.1
 	github.com/onsi/ginkgo v1.12.0 // indirect

@@ -3,8 +3,10 @@
 package integration_test
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"os"
 	"strconv"
 	"testing"
@@ -113,6 +115,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
 		os.Setenv("REDIS_SOCKET_TYPE", "tcp")
 		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
+		os.Setenv("USE_STATSD", "false")
 
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
@@ -344,6 +347,7 @@ func TestBasicConfigLegacy(t *testing.T) {
 
 	assert := assert.New(t)
 	conn, err := grpc.Dial("localhost:8083", grpc.WithInsecure())
+
 	assert.NoError(err)
 	defer conn.Close()
 	c := pb_legacy.NewRateLimitServiceClient(conn)
@@ -357,6 +361,30 @@ func TestBasicConfigLegacy(t *testing.T) {
 			Statuses:    []*pb_legacy.RateLimitResponse_DescriptorStatus{{Code: pb_legacy.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
 		response)
 	assert.NoError(err)
+
+	json_body := []byte(`{
+		"domain": "basic",
+		"descriptors": [
+			{
+				"entries": [
+					{
+						"key": "one_per_minute"
+					}
+				]
+			}
+		]
+	}`)
+	http_resp, _ := http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(json_body))
+	assert.Equal(http_resp.StatusCode, 200)
+	http_resp.Body.Close()
+
+	http_resp, _ = http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(json_body))
+	assert.Equal(http_resp.StatusCode, 429)
+	http_resp.Body.Close()
+
+	invalid_json := []byte(`{"unclosed quote: []}`)
+	http_resp, _ = http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(invalid_json))
+	assert.Equal(http_resp.StatusCode, 400)
 
 	response, err = c.ShouldRateLimit(
 		context.Background(),
