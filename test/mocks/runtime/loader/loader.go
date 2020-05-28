@@ -35,16 +35,19 @@ func (m *MockIFace) EXPECT() *MockIFaceMockRecorder {
 
 // AddUpdateCallback mocks base method
 func (m *MockIFace) AddUpdateCallback(arg0 chan<- int) {
+	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddUpdateCallback", arg0)
 }
 
 // AddUpdateCallback indicates an expected call of AddUpdateCallback
 func (mr *MockIFaceMockRecorder) AddUpdateCallback(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddUpdateCallback", reflect.TypeOf((*MockIFace)(nil).AddUpdateCallback), arg0)
 }
 
 // Snapshot mocks base method
 func (m *MockIFace) Snapshot() snapshot.IFace {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Snapshot")
 	ret0, _ := ret[0].(snapshot.IFace)
 	return ret0
@@ -52,5 +55,6 @@ func (m *MockIFace) Snapshot() snapshot.IFace {
 
 // Snapshot indicates an expected call of Snapshot
 func (mr *MockIFaceMockRecorder) Snapshot() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Snapshot", reflect.TypeOf((*MockIFace)(nil).Snapshot))
 }

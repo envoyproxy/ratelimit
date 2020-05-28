@@ -2,6 +2,7 @@ package redis_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/coocood/freecache"
 
@@ -12,6 +13,7 @@ import (
 
 	"math/rand"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_redis "github.com/envoyproxy/ratelimit/test/mocks/redis"
 	"github.com/golang/mock/gomock"
@@ -29,40 +31,27 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		controller := gomock.NewController(t)
 		defer controller.Finish()
 
-		pool := mock_redis.NewMockPool(controller)
-		perSecondPool := mock_redis.NewMockPool(controller)
+		client := mock_redis.NewMockClient(controller)
+		perSecondClient := mock_redis.NewMockClient(controller)
 		timeSource := mock_redis.NewMockTimeSource(controller)
-		connection := mock_redis.NewMockConnection(controller)
-		perSecondConnection := mock_redis.NewMockConnection(controller)
-		response := mock_redis.NewMockResponse(controller)
 		var cache redis.RateLimitCache
 		if usePerSecondRedis {
-			cache = redis.NewRateLimitCacheImpl(pool, perSecondPool, timeSource, rand.New(rand.NewSource(1)), 0, nil)
+			cache = redis.NewRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil)
 		} else {
-			cache = redis.NewRateLimitCacheImpl(pool, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil)
+			cache = redis.NewRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil)
 		}
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
-		if usePerSecondRedis {
-			perSecondPool.EXPECT().Get().Return(perSecondConnection)
-		}
-		pool.EXPECT().Get().Return(connection)
 		timeSource.EXPECT().UnixNow().Return(int64(1234))
-		var connUsed *mock_redis.MockConnection
+		var clientUsed *mock_redis.MockClient
 		if usePerSecondRedis {
-			connUsed = perSecondConnection
+			clientUsed = perSecondClient
 		} else {
-			connUsed = connection
+			clientUsed = client
 		}
-		connUsed.EXPECT().PipeAppend("INCRBY", "domain_key_value_1234", uint32(1))
-		connUsed.EXPECT().PipeAppend("EXPIRE", "domain_key_value_1234", int64(1))
-		connUsed.EXPECT().PipeResponse().Return(response)
-		response.EXPECT().Int().Return(int64(5))
-		connUsed.EXPECT().PipeResponse()
-		if usePerSecondRedis {
-			perSecondPool.EXPECT().Put(perSecondConnection)
-		}
-		pool.EXPECT().Put(connection)
+
+		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(0, uint32(5))
+		clientUsed.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(1))
 
 		request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 		limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
@@ -74,21 +63,11 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 		assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 
-		if usePerSecondRedis {
-			perSecondPool.EXPECT().Get().Return(perSecondConnection)
-		}
-		pool.EXPECT().Get().Return(connection)
+		clientUsed = client
 		timeSource.EXPECT().UnixNow().Return(int64(1234))
-		connection.EXPECT().PipeAppend("INCRBY", "domain_key2_value2_subkey2_subvalue2_1200", uint32(1))
-		connection.EXPECT().PipeAppend(
+		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key2_value2_subkey2_subvalue2_1200", uint32(1)).SetArg(0, uint32(11))
+		clientUsed.EXPECT().DoCmd(gomock.Any(),
 			"EXPIRE", "domain_key2_value2_subkey2_subvalue2_1200", int64(60))
-		connection.EXPECT().PipeResponse().Return(response)
-		response.EXPECT().Int().Return(int64(11))
-		connection.EXPECT().PipeResponse()
-		if usePerSecondRedis {
-			perSecondPool.EXPECT().Put(perSecondConnection)
-		}
-		pool.EXPECT().Put(connection)
 
 		request = common.NewRateLimitRequest(
 			"domain",
@@ -107,27 +86,14 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		assert.Equal(uint64(1), limits[1].Stats.OverLimit.Value())
 		assert.Equal(uint64(0), limits[1].Stats.NearLimit.Value())
 
-		if usePerSecondRedis {
-			perSecondPool.EXPECT().Get().Return(perSecondConnection)
-		}
-		pool.EXPECT().Get().Return(connection)
+		clientUsed = client
 		timeSource.EXPECT().UnixNow().Return(int64(1000000))
-		connection.EXPECT().PipeAppend("INCRBY", "domain_key3_value3_997200", uint32(1))
-		connection.EXPECT().PipeAppend(
+		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key3_value3_997200", uint32(1)).SetArg(0, uint32(11))
+		clientUsed.EXPECT().DoCmd(gomock.Any(),
 			"EXPIRE", "domain_key3_value3_997200", int64(3600))
-		connection.EXPECT().PipeAppend("INCRBY", "domain_key3_value3_subkey3_subvalue3_950400", uint32(1))
-		connection.EXPECT().PipeAppend(
+		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key3_value3_subkey3_subvalue3_950400", uint32(1)).SetArg(0, uint32(13))
+		clientUsed.EXPECT().DoCmd(gomock.Any(),
 			"EXPIRE", "domain_key3_value3_subkey3_subvalue3_950400", int64(86400))
-		connection.EXPECT().PipeResponse().Return(response)
-		response.EXPECT().Int().Return(int64(11))
-		connection.EXPECT().PipeResponse()
-		connection.EXPECT().PipeResponse().Return(response)
-		response.EXPECT().Int().Return(int64(13))
-		connection.EXPECT().PipeResponse()
-		if usePerSecondRedis {
-			perSecondPool.EXPECT().Put(perSecondConnection)
-		}
-		pool.EXPECT().Put(connection)
 
 		request = common.NewRateLimitRequest(
 			"domain",
@@ -193,26 +159,19 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
-	pool := mock_redis.NewMockPool(controller)
+	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_redis.NewMockTimeSource(controller)
-	connection := mock_redis.NewMockConnection(controller)
-	response := mock_redis.NewMockResponse(controller)
 	localCache := freecache.NewCache(100)
-	cache := redis.NewRateLimitCacheImpl(pool, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache)
+	cache := redis.NewRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache)
 	sink := &common.TestStatSink{}
 	statsStore := stats.NewStore(sink, true)
 	localCacheStats := redis.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key4_value4_997200", uint32(1))
-	connection.EXPECT().PipeAppend(
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(11))
+	client.EXPECT().DoCmd(gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(11))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 
@@ -232,15 +191,10 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key4_value4_997200", uint32(1))
-	connection.EXPECT().PipeAppend(
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(13))
+	client.EXPECT().DoCmd(gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(13))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -255,15 +209,10 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
 
 	// Test Over limit stats
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key4_value4_997200", uint32(1))
-	connection.EXPECT().PipeAppend(
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(16))
+	client.EXPECT().DoCmd(gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(16))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -278,14 +227,10 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
 
 	// Test Over limit stats with local cache
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
-	connection.EXPECT().PipeAppend(
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
+	client.EXPECT().DoCmd(gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600)).Times(0)
-	connection.EXPECT().PipeResponse().Times(0)
-	response.EXPECT().Int().Times(0)
-	pool.EXPECT().Put(connection)
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
@@ -304,23 +249,16 @@ func TestNearLimit(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
-	pool := mock_redis.NewMockPool(controller)
+	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_redis.NewMockTimeSource(controller)
-	connection := mock_redis.NewMockConnection(controller)
-	response := mock_redis.NewMockResponse(controller)
-	cache := redis.NewRateLimitCacheImpl(pool, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil)
+	cache := redis.NewRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	// Test Near Limit Stats. Under Near Limit Ratio
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key4_value4_997200", uint32(1))
-	connection.EXPECT().PipeAppend(
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(11))
+	client.EXPECT().DoCmd(gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(11))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 
@@ -336,15 +274,10 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key4_value4_997200", uint32(1))
-	connection.EXPECT().PipeAppend(
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(13))
+	client.EXPECT().DoCmd(gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(13))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -356,15 +289,10 @@ func TestNearLimit(t *testing.T) {
 
 	// Test Near Limit Stats. We went OVER_LIMIT, but the near_limit counter only increases
 	// when we are near limit, not after we have passed the limit.
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key4_value4_997200", uint32(1))
-	connection.EXPECT().PipeAppend(
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(16))
+	client.EXPECT().DoCmd(gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(16))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -376,14 +304,9 @@ func TestNearLimit(t *testing.T) {
 
 	// Now test hitsAddend that is greater than 1
 	// All of it under limit, under near limit
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key5_value5_1234", uint32(3))
-	connection.EXPECT().PipeAppend("EXPIRE", "domain_key5_value5_1234", int64(1))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(5))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key5_value5_1234", uint32(3)).SetArg(0, uint32(5))
+	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key5_value5_1234", int64(1))
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key5", "value5"}}}, 3)
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key5_value5", statsStore)}
@@ -396,14 +319,9 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 
 	// All of it under limit, some over near limit
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key6_value6_1234", uint32(2))
-	connection.EXPECT().PipeAppend("EXPIRE", "domain_key6_value6_1234", int64(1))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(7))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key6_value6_1234", uint32(2)).SetArg(0, uint32(7))
+	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key6_value6_1234", int64(1))
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key6", "value6"}}}, 2)
 	limits = []*config.RateLimit{config.NewRateLimit(8, pb.RateLimitResponse_RateLimit_SECOND, "key6_value6", statsStore)}
@@ -416,14 +334,9 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
 
 	// All of it under limit, all of it over near limit
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key7_value7_1234", uint32(3))
-	connection.EXPECT().PipeAppend("EXPIRE", "domain_key7_value7_1234", int64(1))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(19))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key7_value7_1234", uint32(3)).SetArg(0, uint32(19))
+	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key7_value7_1234", int64(1))
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key7", "value7"}}}, 3)
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key7_value7", statsStore)}
@@ -436,14 +349,9 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(3), limits[0].Stats.NearLimit.Value())
 
 	// Some of it over limit, all of it over near limit
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key8_value8_1234", uint32(3))
-	connection.EXPECT().PipeAppend("EXPIRE", "domain_key8_value8_1234", int64(1))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(22))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key8_value8_1234", uint32(3)).SetArg(0, uint32(22))
+	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key8_value8_1234", int64(1))
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key8", "value8"}}}, 3)
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key8_value8", statsStore)}
@@ -456,14 +364,9 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
 
 	// Some of it in all three places
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key9_value9_1234", uint32(7))
-	connection.EXPECT().PipeAppend("EXPIRE", "domain_key9_value9_1234", int64(1))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(22))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key9_value9_1234", uint32(7)).SetArg(0, uint32(22))
+	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key9_value9_1234", int64(1))
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key9", "value9"}}}, 7)
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key9_value9", statsStore)}
@@ -476,14 +379,9 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(4), limits[0].Stats.NearLimit.Value())
 
 	// all of it over limit
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key10_value10_1234", uint32(3))
-	connection.EXPECT().PipeAppend("EXPIRE", "domain_key10_value10_1234", int64(1))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(30))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key10_value10_1234", uint32(3)).SetArg(0, uint32(30))
+	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key10_value10_1234", int64(1))
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key10", "value10"}}}, 3)
 	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key10_value10", statsStore)}
@@ -501,23 +399,16 @@ func TestRedisWithJitter(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
-	pool := mock_redis.NewMockPool(controller)
+	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_redis.NewMockTimeSource(controller)
-	connection := mock_redis.NewMockConnection(controller)
-	response := mock_redis.NewMockResponse(controller)
 	jitterSource := mock_redis.NewMockJitterRandSource(controller)
-	cache := redis.NewRateLimitCacheImpl(pool, nil, timeSource, rand.New(jitterSource), 3600, nil)
+	cache := redis.NewRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
-	pool.EXPECT().Get().Return(connection)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
 	jitterSource.EXPECT().Int63().Return(int64(100))
-	connection.EXPECT().PipeAppend("INCRBY", "domain_key_value_1234", uint32(1))
-	connection.EXPECT().PipeAppend("EXPIRE", "domain_key_value_1234", int64(101))
-	connection.EXPECT().PipeResponse().Return(response)
-	response.EXPECT().Int().Return(int64(5))
-	connection.EXPECT().PipeResponse()
-	pool.EXPECT().Put(connection)
+	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(0, uint32(5))
+	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(101))
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
@@ -528,4 +419,107 @@ func TestRedisWithJitter(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+}
+
+func mustNewRedisServer() *miniredis.Miniredis {
+	srv, err := miniredis.Run()
+	if err != nil {
+		panic(err)
+	}
+
+	return srv
+}
+
+func TestNewClientImpl(t *testing.T) {
+	redisAuth := "123"
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+
+	mkRedisClient := func(auth, addr string) redis.Client {
+		return redis.NewClientImpl(statsStore, false, auth, addr, 1, 1*time.Millisecond, 1)
+	}
+
+	t.Run("connection refused", func(t *testing.T) {
+		assert.PanicsWithError(t, "dial tcp 127.0.0.1:12345: connect: connection refused", func() {
+			// It's possible there is a redis server listening on 6379 in ci environment, so
+			// use a random port.
+			mkRedisClient("", "localhost:12345")
+		})
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		var client redis.Client
+		assert.NotPanics(t, func() {
+			client = mkRedisClient("", redisSrv.Addr())
+		})
+		assert.NotNil(t, client)
+	})
+
+	t.Run("auth fail", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		redisSrv.RequireAuth(redisAuth)
+
+		assert.PanicsWithError(t, "NOAUTH Authentication required.", func() {
+			mkRedisClient("", redisSrv.Addr())
+		})
+	})
+
+	t.Run("auth pass", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		redisSrv.RequireAuth(redisAuth)
+
+		assert.NotPanics(t, func() {
+			mkRedisClient(redisAuth, redisSrv.Addr())
+		})
+	})
+}
+
+func TestDoCmd(t *testing.T) {
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+
+	mkRedisClient := func(addr string) redis.Client {
+		return redis.NewClientImpl(statsStore, false, "", addr, 1, 0, 0)
+	}
+
+	t.Run("SETGET ok", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		client := mkRedisClient(redisSrv.Addr())
+		var res string
+
+		assert.Nil(t, client.DoCmd(nil, "SET", "foo", "bar"))
+		assert.Nil(t, client.DoCmd(&res, "GET", "foo"))
+		assert.Equal(t, "bar", res)
+	})
+
+	t.Run("INCRBY ok", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		client := mkRedisClient(redisSrv.Addr())
+		var res uint32
+		hits := uint32(1)
+
+		assert.Nil(t, client.DoCmd(&res, "INCRBY", "a", hits))
+		assert.Equal(t, hits, res)
+		assert.Nil(t, client.DoCmd(&res, "INCRBY", "a", hits))
+		assert.Equal(t, uint32(2), res)
+	})
+
+	t.Run("connection broken", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		client := mkRedisClient(redisSrv.Addr())
+
+		assert.Nil(t, client.DoCmd(nil, "SET", "foo", "bar"))
+
+		redisSrv.Close()
+		assert.EqualError(t, client.DoCmd(nil, "GET", "foo"), "EOF")
+	})
 }
