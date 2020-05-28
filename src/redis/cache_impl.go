@@ -18,12 +18,12 @@ import (
 )
 
 type rateLimitCacheImpl struct {
-	pool Pool
-	// Optional Pool for a dedicated cache of per second limits.
-	// If this pool is nil, then the Cache will use the pool for all
-	// limits regardless of unit. If this pool is not nil, then it
+	client Client
+	// Optional Client for a dedicated cache of per second limits.
+	// If this client is nil, then the Cache will use the client for all
+	// limits regardless of unit. If this client is not nil, then it
 	// is used for limits that have a SECOND unit.
-	perSecondPool              Pool
+	perSecondClient            Client
 	timeSource                 TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
@@ -105,16 +105,14 @@ type cacheKey struct {
 	perSecond bool
 }
 
-func pipelineAppend(conn Connection, key string, hitsAddend uint32, expirationSeconds int64) {
-	conn.PipeAppend("INCRBY", key, hitsAddend)
-	conn.PipeAppend("EXPIRE", key, expirationSeconds)
-}
-
-func pipelineFetch(conn Connection) uint32 {
-	ret := uint32(conn.PipeResponse().Int())
-	// Pop off EXPIRE response and check for error.
-	conn.PipeResponse()
-	return ret
+func pipelineAppend(client Client, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) (err error) {
+	if err = client.DoCmd(result, "INCRBY", key, hitsAddend); err != nil {
+		return
+	}
+	if err = client.DoCmd(nil, "EXPIRE", key, expirationSeconds); err != nil {
+		return
+	}
+	return
 }
 
 func (this *rateLimitCacheImpl) DoLimit(
@@ -123,17 +121,6 @@ func (this *rateLimitCacheImpl) DoLimit(
 	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
 
 	logger.Debugf("starting cache lookup")
-
-	conn := this.pool.Get()
-	defer this.pool.Put(conn)
-
-	// Optional connection for per second limits. If the cache has a perSecondPool setup,
-	// then use a connection from the pool for per second limits.
-	var perSecondConn Connection = nil
-	if this.perSecondPool != nil {
-		perSecondConn = this.perSecondPool.Get()
-		defer this.perSecondPool.Put(perSecondConn)
-	}
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
 	hitsAddend := max(1, request.HitsAddend)
@@ -154,6 +141,8 @@ func (this *rateLimitCacheImpl) DoLimit(
 	}
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
+	results := make([]uint32, len(request.Descriptors))
+	var err error
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
@@ -179,12 +168,17 @@ func (this *rateLimitCacheImpl) DoLimit(
 		}
 
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
-		if perSecondConn != nil && cacheKey.perSecond {
-			pipelineAppend(perSecondConn, cacheKey.key, hitsAddend, expirationSeconds)
+		if this.perSecondClient != nil && cacheKey.perSecond {
+			if err = pipelineAppend(this.perSecondClient, cacheKey.key, hitsAddend, &results[i], expirationSeconds); err != nil {
+				break
+			}
 		} else {
-			pipelineAppend(conn, cacheKey.key, hitsAddend, expirationSeconds)
+			if err = pipelineAppend(this.client, cacheKey.key, hitsAddend, &results[i], expirationSeconds); err != nil {
+				break
+			}
 		}
 	}
+	checkError(err)
 
 	// Now fetch the pipeline.
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
@@ -212,14 +206,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 			continue
 		}
 
-		var limitAfterIncrease uint32
-		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
-		if this.perSecondPool != nil && cacheKey.perSecond {
-			limitAfterIncrease = pipelineFetch(perSecondConn)
-		} else {
-			limitAfterIncrease = pipelineFetch(conn)
-		}
-
+		limitAfterIncrease := results[i]
 		limitBeforeIncrease := limitAfterIncrease - hitsAddend
 		overLimitThreshold := limits[i].Limit.RequestsPerUnit
 		// The nearLimitThreshold is the number of requests that can be made before hitting the NearLimitRatio.
@@ -288,10 +275,10 @@ func (this *rateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func NewRateLimitCacheImpl(pool Pool, perSecondPool Pool, timeSource TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache) RateLimitCache {
+func NewRateLimitCacheImpl(client Client, perSecondClient Client, timeSource TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache) RateLimitCache {
 	return &rateLimitCacheImpl{
-		pool:                       pool,
-		perSecondPool:              perSecondPool,
+		client:                     client,
+		perSecondClient:            perSecondClient,
 		timeSource:                 timeSource,
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
