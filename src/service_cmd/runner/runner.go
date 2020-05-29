@@ -14,6 +14,7 @@ import (
 	pb_legacy "github.com/envoyproxy/ratelimit/proto/ratelimit"
 
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
@@ -49,24 +50,15 @@ func (runner *Runner) Run() {
 
 	srv := server.NewServer("ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
 
-	var perSecondPool redis.Client
-	if s.RedisPerSecond {
-		perSecondPool = redis.NewClientImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondTls, s.RedisPerSecondAuth,
-			s.RedisPerSecondUrl, s.RedisPerSecondPoolSize, s.RedisPipelineWindow, s.RedisPipelineLimit)
-	}
-	var otherPool redis.Client
-	otherPool = redis.NewClientImpl(srv.Scope().Scope("redis_pool"), s.RedisTls, s.RedisAuth, s.RedisUrl, s.RedisPoolSize,
-		s.RedisPipelineWindow, s.RedisPipelineLimit)
-
 	service := ratelimit.NewService(
 		srv.Runtime(),
-		redis.NewRateLimitCacheImpl(
-			otherPool,
-			perSecondPool,
-			redis.NewTimeSourceImpl(),
-			rand.New(redis.NewLockedSource(time.Now().Unix())),
-			s.ExpirationJitterMaxSeconds,
-			localCache),
+		redis.NewRateLimiterCacheImplFromSettings(
+			s,
+			localCache,
+			srv,
+			limiter.NewTimeSourceImpl(),
+			rand.New(limiter.NewLockedSource(time.Now().Unix())),
+			s.ExpirationJitterMaxSeconds),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"))
 

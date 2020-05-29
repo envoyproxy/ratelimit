@@ -1,4 +1,4 @@
-package redis
+package limiter
 
 import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"

@@ -1,4 +1,4 @@
-package redis
+package limiter
 
 import (
 	"github.com/coocood/freecache"
