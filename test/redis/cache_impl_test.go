@@ -430,6 +430,17 @@ func mustNewRedisServer() *miniredis.Miniredis {
 	return srv
 }
 
+func expectPanicError(t *testing.T, f assert.PanicTestFunc) (result error) {
+	t.Helper()
+	defer func() {
+		panicResult := recover()
+		assert.NotNil(t, panicResult, "Expected a panic")
+		result = panicResult.(error)
+	}()
+	f()
+	return
+}
+
 func TestNewClientImpl(t *testing.T) {
 	redisAuth := "123"
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
@@ -439,11 +450,10 @@ func TestNewClientImpl(t *testing.T) {
 	}
 
 	t.Run("connection refused", func(t *testing.T) {
-		assert.PanicsWithError(t, "dial tcp 127.0.0.1:12345: connect: connection refused", func() {
-			// It's possible there is a redis server listening on 6379 in ci environment, so
-			// use a random port.
-			mkRedisClient("", "localhost:12345")
-		})
+		// It's possible there is a redis server listening on 6379 in ci environment, so
+		// use a random port.
+		panicErr := expectPanicError(t, func() { mkRedisClient("", "localhost:12345") })
+		assert.Contains(t, panicErr.Error(), "connection refused")
 	})
 
 	t.Run("ok", func(t *testing.T) {
