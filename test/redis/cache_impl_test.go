@@ -8,6 +8,7 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	stats "github.com/lyft/gostats"
 
@@ -15,6 +16,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/envoyproxy/ratelimit/test/common"
+	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
 	mock_redis "github.com/envoyproxy/ratelimit/test/mocks/redis"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -33,8 +35,8 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 
 		client := mock_redis.NewMockClient(controller)
 		perSecondClient := mock_redis.NewMockClient(controller)
-		timeSource := mock_redis.NewMockTimeSource(controller)
-		var cache redis.RateLimitCache
+		timeSource := mock_limiter.NewMockTimeSource(controller)
+		var cache limiter.RateLimitCache
 		if usePerSecondRedis {
 			cache = redis.NewRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil)
 		} else {
@@ -160,12 +162,12 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	defer controller.Finish()
 
 	client := mock_redis.NewMockClient(controller)
-	timeSource := mock_redis.NewMockTimeSource(controller)
+	timeSource := mock_limiter.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
 	cache := redis.NewRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache)
 	sink := &common.TestStatSink{}
 	statsStore := stats.NewStore(sink, true)
-	localCacheStats := redis.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
+	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
@@ -250,7 +252,7 @@ func TestNearLimit(t *testing.T) {
 	defer controller.Finish()
 
 	client := mock_redis.NewMockClient(controller)
-	timeSource := mock_redis.NewMockTimeSource(controller)
+	timeSource := mock_limiter.NewMockTimeSource(controller)
 	cache := redis.NewRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
@@ -400,8 +402,8 @@ func TestRedisWithJitter(t *testing.T) {
 	defer controller.Finish()
 
 	client := mock_redis.NewMockClient(controller)
-	timeSource := mock_redis.NewMockTimeSource(controller)
-	jitterSource := mock_redis.NewMockJitterRandSource(controller)
+	timeSource := mock_limiter.NewMockTimeSource(controller)
+	jitterSource := mock_limiter.NewMockJitterRandSource(controller)
 	cache := redis.NewRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
