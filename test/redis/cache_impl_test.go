@@ -10,7 +10,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
-	"github.com/envoyproxy/ratelimit/src/settings"
 	stats "github.com/lyft/gostats"
 
 	"math/rand"
@@ -30,7 +29,6 @@ func TestRedis(t *testing.T) {
 
 func testRedis(usePerSecondRedis bool) func(*testing.T) {
 	return func(t *testing.T) {
-		s := settings.NewSettings()
 		assert := assert.New(t)
 		controller := gomock.NewController(t)
 		defer controller.Finish()
@@ -159,7 +157,6 @@ func testLocalCacheStats(localCacheStats stats.StatGenerator, statsStore stats.S
 }
 
 func TestOverLimitWithLocalCache(t *testing.T) {
-	s := settings.NewSettings()
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
 	defer controller.Finish()
@@ -250,7 +247,6 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 }
 
 func TestNearLimit(t *testing.T) {
-	s := settings.NewSettings()
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
 	defer controller.Finish()
@@ -401,7 +397,6 @@ func TestNearLimit(t *testing.T) {
 }
 
 func TestRedisWithJitter(t *testing.T) {
-	s := settings.NewSettings()
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
 	defer controller.Finish()

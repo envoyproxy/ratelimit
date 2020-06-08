@@ -59,7 +59,7 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 			b.ResetTimer()
 
 			do(b, func() error {
-				cache.DoLimit(context.Background(), request, limits)
+				cache.DoLimit(context.Background(), request, limits, false, nil)
 				return nil
 			})
 		}
