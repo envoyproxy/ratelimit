@@ -3,6 +3,7 @@ package redis
 import (
 	"math"
 	"math/rand"
+	"net"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
@@ -49,7 +50,10 @@ func pipelineAppend(client Client, key string, hitsAddend uint32, result *uint32
 func (this *rateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
-	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
+	limits []*config.RateLimit,
+	forceFlag bool,
+	WhiteListIPNetList []*net.IPNet,
+) []*pb.RateLimitResponse_DescriptorStatus {
 
 	logger.Debugf("starting cache lookup")
 
@@ -61,10 +65,23 @@ func (this *rateLimitCacheImpl) DoLimit(
 	// all the same size.
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]limiter.CacheKey, len(request.Descriptors))
+	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
+		len(request.Descriptors))
+	if forceFlag {
+		for i := range cacheKeys {
+			responseDescriptorStatuses[i] =
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:           pb.RateLimitResponse_OK,
+					CurrentLimit:   nil,
+					LimitRemaining: 0,
+				}
+		}
+		return responseDescriptorStatuses
+	}
 	now := this.timeSource.UnixNow()
 	for i := 0; i < len(request.Descriptors); i++ {
 		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(
-			request.Domain, request.Descriptors[i], limits[i], now)
+			request.Domain, request.Descriptors[i], limits[i], now, WhiteListIPNetList)
 
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
@@ -113,8 +130,6 @@ func (this *rateLimitCacheImpl) DoLimit(
 	checkError(err)
 
 	// Now fetch the pipeline.
-	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
-		len(request.Descriptors))
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
 			responseDescriptorStatuses[i] =

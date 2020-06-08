@@ -36,15 +36,15 @@ func (m *MockRateLimitCache) EXPECT() *MockRateLimitCacheMockRecorder {
 }
 
 // DoLimit mocks base method
-func (m *MockRateLimitCache) DoLimit(arg0 context.Context, arg1 *v2.RateLimitRequest, arg2 []*config.RateLimit) []*v2.RateLimitResponse_DescriptorStatus {
+func (m *MockRateLimitCache) DoLimit(arg0 context.Context, arg1 *v2.RateLimitRequest, arg2 []*config.RateLimit, arg3 bool, arg4 string) []*v2.RateLimitResponse_DescriptorStatus {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DoLimit", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DoLimit", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].([]*v2.RateLimitResponse_DescriptorStatus)
 	return ret0
 }
 
 // DoLimit indicates an expected call of DoLimit
-func (mr *MockRateLimitCacheMockRecorder) DoLimit(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRateLimitCacheMockRecorder) DoLimit(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoLimit", reflect.TypeOf((*MockRateLimitCache)(nil).DoLimit), arg0, arg1, arg2)
 }

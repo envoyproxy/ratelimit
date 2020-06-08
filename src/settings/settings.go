@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"net"
+	"strings"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -10,6 +12,7 @@ import (
 type Settings struct {
 	// runtime options
 	GrpcUnaryInterceptor grpc.ServerOption
+	WhiteListIPNetList   []*net.IPNet
 	// env config
 	Port                         int           `envconfig:"PORT" default:"8080"`
 	GrpcPort                     int           `envconfig:"GRPC_PORT" default:"8081"`
@@ -21,10 +24,10 @@ type Settings struct {
 	RuntimeSubdirectory          string        `envconfig:"RUNTIME_SUBDIRECTORY"`
 	RuntimeIgnoreDotFiles        bool          `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
 	LogLevel                     string        `envconfig:"LOG_LEVEL" default:"WARN"`
-	RedisSocketType              string        `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
-	RedisUrl                     string        `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
+	RedisSocketType              string        `envconfig:"REDIS_SOCKET_TYPE" default:"tcp"`
+	RedisUrl                     string        `envconfig:"REDIS_URL" default:"redis:6379"`
 	RedisPoolSize                int           `envconfig:"REDIS_POOL_SIZE" default:"10"`
-	RedisAuth                    string        `envconfig:"REDIS_AUTH" default:""`
+	RedisAuth                    string        `envconfig:"REDIS_AUTH" default:"toor333666"`
 	RedisTls                     bool          `envconfig:"REDIS_TLS" default:"false"`
 	RedisPipelineWindow          time.Duration `envconfig:"REDIS_PIPELINE_WINDOW" default:"75µs"`
 	RedisPipelineLimit           int           `envconfig:"REDIS_PIPELINE_LIMIT" default:"8"`
@@ -38,18 +41,31 @@ type Settings struct {
 	RedisPerSecondPipelineLimit  int           `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"8"`
 	ExpirationJitterMaxSeconds   int64         `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	LocalCacheSizeInBytes        int           `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
+	WhiteListIPNetString         string        `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24,10.0.0.0/8"`
+	ForceFlag                    bool          `envconfig:"FORCE_FLAG" default:"false"`
 }
 
 type Option func(*Settings)
 
+var settings *Settings = nil
+
 func NewSettings() Settings {
+	if settings != nil {
+		return *settings
+	}
+
 	var s Settings
 
 	err := envconfig.Process("", &s)
 	if err != nil {
 		panic(err)
 	}
+	s.WhiteListIPNetList, err = ParseIPNetString(s.WhiteListIPNetString)
+	if err != nil {
+		panic(err)
+	}
 
+	settings = &s
 	return s
 }
 
@@ -57,4 +73,17 @@ func GrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 	return func(s *Settings) {
 		s.GrpcUnaryInterceptor = grpc.UnaryInterceptor(i)
 	}
+}
+
+func ParseIPNetString(IPNetString string) ([]*net.IPNet, error) {
+	ipNetStringList := strings.Split(IPNetString, ",")
+	var result []*net.IPNet
+	for _, ipNetString := range ipNetStringList {
+		_, ipNet, err := net.ParseCIDR(ipNetString)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, ipNet)
+	}
+	return result, nil
 }
