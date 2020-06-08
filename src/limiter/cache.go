@@ -1,10 +1,9 @@
 package limiter
 
 import (
-	"net"
-
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/filter"
 	"golang.org/x/net/context"
 )
 
@@ -38,5 +37,6 @@ type RateLimitCache interface {
 		request *pb.RateLimitRequest,
 		limits []*config.RateLimit,
 		forceFlag bool,
-		WhiteListIPNetList []*net.IPNet) []*pb.RateLimitResponse_DescriptorStatus
+		ipFilter filter.Filter,
+		uidFilter filter.Filter) []*pb.RateLimitResponse_DescriptorStatus
 }

@@ -9,12 +9,18 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
+	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/jsonpb"
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+)
+
+var (
+	ipFilter  = settings.NewSettings().IPFilter
+	uidFilter = settings.NewSettings().UIDFilter
 )
 
 func convertRatelimit(ratelimit *pb.RateLimitResponse_RateLimit) (*pb_legacy.RateLimit, error) {
@@ -70,7 +76,7 @@ func TestServiceLegacy(test *testing.T) {
 		t.assert.FailNow(err.Error())
 	}
 	t.config.EXPECT().GetLimit(nil, "test-domain", req.Descriptors[0]).Return(nil)
-	t.cache.EXPECT().DoLimit(nil, req, []*config.RateLimit{nil}, false, nil).Return(
+	t.cache.EXPECT().DoLimit(nil, req, []*config.RateLimit{nil}, false, ipFilter, uidFilter).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, legacyRequest)
@@ -107,7 +113,7 @@ func TestServiceLegacy(test *testing.T) {
 
 	t.config.EXPECT().GetLimit(nil, "different-domain", req.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", req.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, req, limits, false, nil).Return(
+	t.cache.EXPECT().DoLimit(nil, req, limits, false, ipFilter, uidFilter).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 	response, err = service.GetLegacyService().ShouldRateLimit(nil, legacyRequest)
@@ -142,7 +148,7 @@ func TestServiceLegacy(test *testing.T) {
 
 	t.config.EXPECT().GetLimit(nil, "different-domain", req.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", req.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, req, limits, false, nil).Return(
+	t.cache.EXPECT().DoLimit(nil, req, limits, false, ipFilter, uidFilter).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0}})
 	response, err = service.GetLegacyService().ShouldRateLimit(nil, legacyRequest)
@@ -198,7 +204,7 @@ func TestCacheErrorLegacy(test *testing.T) {
 	}
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", req.Descriptors[0]).Return(limits[0])
-	t.cache.EXPECT().DoLimit(nil, req, limits, false, nil).Do(
+	t.cache.EXPECT().DoLimit(nil, req, limits, false, ipFilter, uidFilter).Do(
 		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
 			panic(redis.RedisError("cache error"))
 		})

@@ -10,11 +10,17 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/settings"
 	stats "github.com/lyft/gostats"
 
 	"math/rand"
 
 	"github.com/envoyproxy/ratelimit/test/common"
+)
+
+var (
+	ipFilter  = settings.NewSettings().IPFilter
+	uidFilter = settings.NewSettings().UIDFilter
 )
 
 func BenchmarkParallelDoLimit(b *testing.B) {
@@ -59,7 +65,7 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 			b.ResetTimer()
 
 			do(b, func() error {
-				cache.DoLimit(context.Background(), request, limits, false, nil)
+				cache.DoLimit(context.Background(), request, limits, false, ipFilter, uidFilter)
 				return nil
 			})
 		}

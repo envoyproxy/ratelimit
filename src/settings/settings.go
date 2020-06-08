@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/envoyproxy/ratelimit/src/filter"
 	"github.com/kelseyhightower/envconfig"
 	"google.golang.org/grpc"
 )
@@ -41,8 +42,13 @@ type Settings struct {
 	RedisPerSecondPipelineLimit  int           `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"8"`
 	ExpirationJitterMaxSeconds   int64         `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	LocalCacheSizeInBytes        int           `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
-	WhiteListIPNetString         string        `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24,10.0.0.0/8"`
 	ForceFlag                    bool          `envconfig:"FORCE_FLAG" default:"false"`
+	BlackListIPNetString         string        `envconfig:"BLACKLIST_IP_NET" default:""`
+	WhiteListIPNetString         string        `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24,10.0.0.0/8"`
+	BlackListUIDString           string        `envconfig:"BLACKLIST_UID" default:"123,456,789"`
+	WhiteListUIDString           string        `envconfig:"WHITELIST_UID" default:""`
+	IPFilter                     filter.Filter
+	UIDFilter                    filter.Filter
 }
 
 type Option func(*Settings)
@@ -60,10 +66,17 @@ func NewSettings() Settings {
 	if err != nil {
 		panic(err)
 	}
-	s.WhiteListIPNetList, err = ParseIPNetString(s.WhiteListIPNetString)
+	whiteListIPNetList, err := parseIPNetString(s.WhiteListIPNetString)
 	if err != nil {
 		panic(err)
 	}
+	blackListIPNetList, err := parseIPNetString(s.BlackListIPNetString)
+	if err != nil {
+		panic(err)
+	}
+
+	s.IPFilter = filter.NewIPFilter(whiteListIPNetList, blackListIPNetList)
+	s.UIDFilter = filter.NewUIDFilter(parseUIDString(s.WhiteListUIDString), parseUIDString(s.BlackListUIDString))
 
 	settings = &s
 	return s
@@ -75,10 +88,14 @@ func GrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 	}
 }
 
-func ParseIPNetString(IPNetString string) ([]*net.IPNet, error) {
+func parseIPNetString(IPNetString string) ([]*net.IPNet, error) {
 	ipNetStringList := strings.Split(IPNetString, ",")
 	var result []*net.IPNet
 	for _, ipNetString := range ipNetStringList {
+		ipNetString = strings.TrimSpace(ipNetString)
+		if ipNetString == "" {
+			continue
+		}
 		_, ipNet, err := net.ParseCIDR(ipNetString)
 		if err != nil {
 			return nil, err
@@ -86,4 +103,18 @@ func ParseIPNetString(IPNetString string) ([]*net.IPNet, error) {
 		result = append(result, ipNet)
 	}
 	return result, nil
+}
+
+func parseUIDString(uidList string) map[string]struct{} {
+	uidMap := make(map[string]struct{})
+	uidItems := strings.Split(uidList, ",")
+	for _, v := range uidItems {
+		uid := strings.TrimSpace(v)
+		if uid == "" {
+			continue
+		}
+
+		uidMap[uid] = struct{}{}
+	}
+	return uidMap
 }

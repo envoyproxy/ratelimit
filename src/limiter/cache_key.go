@@ -2,15 +2,21 @@ package limiter
 
 import (
 	"bytes"
-	"net"
 	"strconv"
 	"sync"
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/filter"
 
 	logger "github.com/sirupsen/logrus"
+)
+
+const (
+	entryKeyRemoteAddr = "remote_address"
+	entryKeyUserID     = "user_id"
+	cacheKeyBlocked    = "_user_blocked"
 )
 
 type CacheKeyGenerator struct {
@@ -65,7 +71,8 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 	descriptor *pb_struct.RateLimitDescriptor,
 	limit *config.RateLimit,
 	now int64,
-	whiteListIPNet []*net.IPNet,
+	ipFilter filter.Filter,
+	uidFilter filter.Filter,
 ) CacheKey {
 
 	if limit == nil {
@@ -84,20 +91,39 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 
 	for _, entry := range descriptor.Entries {
 		if domain == "edge_proxy_per_ip" {
-			ip := net.ParseIP(entry.Value)
-			if ip != nil {
-				for _, ipNet := range whiteListIPNet {
-					if ipNet.Contains(ip) {
-						return CacheKey{
-							Key:       "",
-							PerSecond: false,
-						}
+			if entry.Key == entryKeyRemoteAddr {
+				switch action, reason := ipFilter.Match(entry.Value); action {
+				case filter.FilterActionAllow:
+					return CacheKey{
+						Key:       "",
+						PerSecond: false,
+					}
+				case filter.FilterActionDeny:
+					return CacheKey{
+						Key:       cacheKeyBlocked,
+						PerSecond: false,
+					}
+				case filter.FilterActionError:
+					logger.Warningf(reason)
+				}
+			}
+
+			if entry.Key == entryKeyUserID {
+				switch action, _ := uidFilter.Match(entry.Value); action {
+				case filter.FilterActionAllow:
+					return CacheKey{
+						Key:       "",
+						PerSecond: false,
+					}
+				case filter.FilterActionDeny:
+					return CacheKey{
+						Key:       cacheKeyBlocked,
+						PerSecond: false,
 					}
 				}
-			} else {
-				logger.Warningf("can't parse remote ip : %s", entry.Value)
 			}
 		}
+
 		b.WriteString(entry.Key)
 		b.WriteByte('_')
 		b.WriteString(entry.Value)

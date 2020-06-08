@@ -3,17 +3,23 @@ package redis
 import (
 	"math"
 	"math/rand"
-	"net"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/filter"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/settings"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+)
+
+const (
+	entryKeyRemoteAddr = "remote_address"
+	entryKeyUserID     = "user_id"
+	cacheKeyBlocked    = "_user_blocked"
 )
 
 type rateLimitCacheImpl struct {
@@ -52,7 +58,8 @@ func (this *rateLimitCacheImpl) DoLimit(
 	request *pb.RateLimitRequest,
 	limits []*config.RateLimit,
 	forceFlag bool,
-	WhiteListIPNetList []*net.IPNet,
+	ipFilter filter.Filter,
+	uidFilter filter.Filter,
 ) []*pb.RateLimitResponse_DescriptorStatus {
 
 	logger.Debugf("starting cache lookup")
@@ -81,7 +88,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 	now := this.timeSource.UnixNow()
 	for i := 0; i < len(request.Descriptors); i++ {
 		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(
-			request.Domain, request.Descriptors[i], limits[i], now, WhiteListIPNetList)
+			request.Domain, request.Descriptors[i], limits[i], now, ipFilter, uidFilter)
 
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
