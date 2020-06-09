@@ -1,11 +1,10 @@
-package redis
+package limiter
 
 import (
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/filter"
 	"golang.org/x/net/context"
-
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/filter"
 )
 
 // Interface for a time source.

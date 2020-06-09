@@ -36,6 +36,7 @@ func (m *MockIFace) EXPECT() *MockIFaceMockRecorder {
 
 // Entries mocks base method
 func (m *MockIFace) Entries() map[string]*entry.Entry {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Entries")
 	ret0, _ := ret[0].(map[string]*entry.Entry)
 	return ret0
@@ -43,11 +44,13 @@ func (m *MockIFace) Entries() map[string]*entry.Entry {
 
 // Entries indicates an expected call of Entries
 func (mr *MockIFaceMockRecorder) Entries() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Entries", reflect.TypeOf((*MockIFace)(nil).Entries))
 }
 
 // FeatureEnabled mocks base method
 func (m *MockIFace) FeatureEnabled(arg0 string, arg1 uint64) bool {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FeatureEnabled", arg0, arg1)
 	ret0, _ := ret[0].(bool)
 	return ret0
@@ -55,11 +58,13 @@ func (m *MockIFace) FeatureEnabled(arg0 string, arg1 uint64) bool {
 
 // FeatureEnabled indicates an expected call of FeatureEnabled
 func (mr *MockIFaceMockRecorder) FeatureEnabled(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FeatureEnabled", reflect.TypeOf((*MockIFace)(nil).FeatureEnabled), arg0, arg1)
 }
 
 // FeatureEnabledForID mocks base method
 func (m *MockIFace) FeatureEnabledForID(arg0 string, arg1 uint64, arg2 uint32) bool {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FeatureEnabledForID", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	return ret0
@@ -67,11 +72,13 @@ func (m *MockIFace) FeatureEnabledForID(arg0 string, arg1 uint64, arg2 uint32) b
 
 // FeatureEnabledForID indicates an expected call of FeatureEnabledForID
 func (mr *MockIFaceMockRecorder) FeatureEnabledForID(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FeatureEnabledForID", reflect.TypeOf((*MockIFace)(nil).FeatureEnabledForID), arg0, arg1, arg2)
 }
 
 // Get mocks base method
 func (m *MockIFace) Get(arg0 string) string {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", arg0)
 	ret0, _ := ret[0].(string)
 	return ret0
@@ -79,11 +86,13 @@ func (m *MockIFace) Get(arg0 string) string {
 
 // Get indicates an expected call of Get
 func (mr *MockIFaceMockRecorder) Get(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockIFace)(nil).Get), arg0)
 }
 
 // GetInteger mocks base method
 func (m *MockIFace) GetInteger(arg0 string, arg1 uint64) uint64 {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetInteger", arg0, arg1)
 	ret0, _ := ret[0].(uint64)
 	return ret0
@@ -91,11 +100,13 @@ func (m *MockIFace) GetInteger(arg0 string, arg1 uint64) uint64 {
 
 // GetInteger indicates an expected call of GetInteger
 func (mr *MockIFaceMockRecorder) GetInteger(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInteger", reflect.TypeOf((*MockIFace)(nil).GetInteger), arg0, arg1)
 }
 
 // GetModified mocks base method
 func (m *MockIFace) GetModified(arg0 string) time.Time {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetModified", arg0)
 	ret0, _ := ret[0].(time.Time)
 	return ret0
@@ -103,11 +114,13 @@ func (m *MockIFace) GetModified(arg0 string) time.Time {
 
 // GetModified indicates an expected call of GetModified
 func (mr *MockIFaceMockRecorder) GetModified(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModified", reflect.TypeOf((*MockIFace)(nil).GetModified), arg0)
 }
 
 // Keys mocks base method
 func (m *MockIFace) Keys() []string {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Keys")
 	ret0, _ := ret[0].([]string)
 	return ret0
@@ -115,15 +128,18 @@ func (m *MockIFace) Keys() []string {
 
 // Keys indicates an expected call of Keys
 func (mr *MockIFaceMockRecorder) Keys() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Keys", reflect.TypeOf((*MockIFace)(nil).Keys))
 }
 
 // SetEntry mocks base method
 func (m *MockIFace) SetEntry(arg0 string, arg1 *entry.Entry) {
+	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetEntry", arg0, arg1)
 }
 
 // SetEntry indicates an expected call of SetEntry
 func (mr *MockIFaceMockRecorder) SetEntry(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEntry", reflect.TypeOf((*MockIFace)(nil).SetEntry), arg0, arg1)
 }

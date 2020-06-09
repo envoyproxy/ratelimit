@@ -3,21 +3,20 @@ package ratelimit_test
 import (
 	"testing"
 
-	"github.com/lyft/ratelimit/src/settings"
-
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	pb_legacy "github.com/envoyproxy/ratelimit/proto/ratelimit"
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/filter"
+	"github.com/envoyproxy/ratelimit/src/redis"
+	ratelimit "github.com/envoyproxy/ratelimit/src/service"
+	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/jsonpb"
-	"golang.org/x/net/context"
-
-	"github.com/lyft/gostats"
-	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
-	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/redis"
-	"github.com/lyft/ratelimit/src/service"
-	"github.com/lyft/ratelimit/test/common"
+	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -67,8 +66,6 @@ func convertRatelimits(ratelimits []*config.RateLimit) ([]*pb_legacy.RateLimit, 
 }
 
 func TestServiceLegacy(test *testing.T) {
-	test.SkipNow()
-
 	t := commonSetup(test)
 	defer t.controller.Finish()
 	service := t.setupBasicService()
@@ -171,8 +168,6 @@ func TestServiceLegacy(test *testing.T) {
 }
 
 func TestEmptyDomainLegacy(test *testing.T) {
-	test.SkipNow()
-
 	t := commonSetup(test)
 	defer t.controller.Finish()
 	service := t.setupBasicService()
@@ -186,8 +181,6 @@ func TestEmptyDomainLegacy(test *testing.T) {
 }
 
 func TestEmptyDescriptorsLegacy(test *testing.T) {
-	test.SkipNow()
-
 	t := commonSetup(test)
 	defer t.controller.Finish()
 	service := t.setupBasicService()
@@ -201,8 +194,6 @@ func TestEmptyDescriptorsLegacy(test *testing.T) {
 }
 
 func TestCacheErrorLegacy(test *testing.T) {
-	test.SkipNow()
-
 	t := commonSetup(test)
 	defer t.controller.Finish()
 	service := t.setupBasicService()
@@ -215,7 +206,7 @@ func TestCacheErrorLegacy(test *testing.T) {
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", req.Descriptors[0]).Return(limits[0])
 	t.cache.EXPECT().DoLimit(nil, req, limits, false, ipFilter, uidFilter).Do(
-		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
+		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit, bool, filter.Filter, filter.Filter) {
 			panic(redis.RedisError("cache error"))
 		})
 
@@ -227,8 +218,6 @@ func TestCacheErrorLegacy(test *testing.T) {
 }
 
 func TestInitialLoadErrorLegacy(test *testing.T) {
-	test.SkipNow()
-
 	t := commonSetup(test)
 	defer t.controller.Finish()
 

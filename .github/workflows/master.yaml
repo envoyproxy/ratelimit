@@ -1,0 +1,35 @@
+name: Build and push :master image
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: check format
+        run: make check_format
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: deps
+        run: sudo apt-get update -y && sudo apt-get install stunnel4 redis -y
+
+      - name: build and push docker image
+        run: |
+          redis-server --port 6380 &
+          redis-server --port 6381 --requirepass password123 &
+          redis-server --port 6382 --requirepass password123 &
+          redis-server --port 6384 --requirepass password123 &
+          redis-server --port 6385 --requirepass password123 &
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+          make bootstrap bootstrap_redis_tls docker_push
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          VERSION: master

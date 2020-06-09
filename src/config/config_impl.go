@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lyft/gostats"
-	pb_struct "github.com/lyft/ratelimit/proto/envoy/api/v2/ratelimit"
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"gopkg.in/yaml.v2"
@@ -61,6 +61,7 @@ func newRateLimitStats(statsScope stats.Scope, key string) RateLimitStats {
 	ret.TotalHits = statsScope.NewCounter(key + ".total_hits")
 	ret.OverLimit = statsScope.NewCounter(key + ".over_limit")
 	ret.NearLimit = statsScope.NewCounter(key + ".near_limit")
+	ret.OverLimitWithLocalCache = statsScope.NewCounter(key + ".over_limit_with_local_cache")
 	return ret
 }
 

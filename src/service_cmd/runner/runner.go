@@ -6,52 +6,58 @@ import (
 	"net/http"
 	"time"
 
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
-	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
-	logger "github.com/sirupsen/logrus"
+	stats "github.com/lyft/gostats"
 
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/redis"
-	"github.com/lyft/ratelimit/src/server"
-	"github.com/lyft/ratelimit/src/service"
-	"github.com/lyft/ratelimit/src/settings"
+	"github.com/coocood/freecache"
+
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	pb_legacy "github.com/envoyproxy/ratelimit/proto/ratelimit"
+
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/server"
+	ratelimit "github.com/envoyproxy/ratelimit/src/service"
+	"github.com/envoyproxy/ratelimit/src/settings"
+	logger "github.com/sirupsen/logrus"
 )
 
-func InitLogLevel(level string) {
-	switch level {
-	case "WARN":
-		logger.SetLevel(logger.WarnLevel)
-		break
-	case "INFO":
-		logger.SetLevel(logger.InfoLevel)
-		break
-	case "DEBUG":
-		logger.SetLevel(logger.DebugLevel)
-		break
-	case "FATAL":
-		logger.SetLevel(logger.FatalLevel)
-		break
-	}
+type Runner struct {
+	statsStore stats.Store
 }
 
-func Run() {
+func NewRunner() Runner {
+	return Runner{stats.NewDefaultStore()}
+}
+
+func (runner *Runner) GetStatsStore() stats.Store {
+	return runner.statsStore
+}
+
+func (runner *Runner) Run() {
 	s := settings.NewSettings()
-	InitLogLevel(s.LogLevel)
-	srv := server.NewServer("ratelimit", settings.GrpcUnaryInterceptor(nil))
 
-	var perSecondPool redis.Pool
-	if s.RedisPerSecond {
-		perSecondPool = redis.NewPoolImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondSocketType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize)
-
+	logLevel, err := logger.ParseLevel(s.LogLevel)
+	if err != nil {
+		logger.Fatalf("Could not parse log level. %v\n", err)
+	} else {
+		logger.SetLevel(logLevel)
 	}
+	var localCache *freecache.Cache
+	if s.LocalCacheSizeInBytes != 0 {
+		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
+	}
+
+	srv := server.NewServer("ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
 
 	service := ratelimit.NewService(
 		srv.Runtime(),
-		redis.NewRateLimitCacheImpl(
-			redis.NewPoolImpl(srv.Scope().Scope("redis_pool"), s.RedisSocketType, s.RedisUrl, s.RedisPoolSize),
-			perSecondPool,
-			redis.NewTimeSourceImpl(),
-			rand.New(redis.NewLockedSource(time.Now().Unix())),
+		redis.NewRateLimiterCacheImplFromSettings(
+			s,
+			localCache,
+			srv,
+			limiter.NewTimeSourceImpl(),
+			rand.New(limiter.NewLockedSource(time.Now().Unix())),
 			s.ExpirationJitterMaxSeconds),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"))
@@ -63,10 +69,12 @@ func Run() {
 			io.WriteString(writer, service.GetCurrentConfig().Dump())
 		})
 
+	srv.AddJsonHandler(service)
+
 	// Ratelimit is compatible with two proto definitions
 	// 1. data-plane-api rls.proto: https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto
 	pb.RegisterRateLimitServiceServer(srv.GrpcServer(), service)
-	// 2. ratelimit.proto defined in this repository: https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto
+	// 2. ratelimit.proto defined in this repository: https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto
 	pb_legacy.RegisterRateLimitServiceServer(srv.GrpcServer(), service.GetLegacyService())
 	// (1) is the current definition, and (2) is the legacy definition.
 

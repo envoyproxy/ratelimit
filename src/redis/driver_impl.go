@@ -1,11 +1,14 @@
 package redis
 
 import (
-	"github.com/lyft/gostats"
-	"github.com/lyft/ratelimit/src/assert"
-	"github.com/lyft/ratelimit/src/settings"
-	"github.com/mediocregopher/radix.v2/pool"
-	"github.com/mediocregopher/radix.v2/redis"
+	"crypto/tls"
+	"fmt"
+	"time"
+
+	"github.com/mediocregopher/radix/v3/trace"
+
+	stats "github.com/lyft/gostats"
+	"github.com/mediocregopher/radix/v3"
 	logger "github.com/sirupsen/logrus"
 )
 
@@ -23,18 +26,22 @@ func newPoolStats(scope stats.Scope) poolStats {
 	return ret
 }
 
-type poolImpl struct {
-	pool  *pool.Pool
-	stats poolStats
+func poolTrace(ps *poolStats) trace.PoolTrace {
+	return trace.PoolTrace{
+		ConnCreated: func(_ trace.PoolConnCreated) {
+			ps.connectionTotal.Add(1)
+			ps.connectionActive.Add(1)
+		},
+		ConnClosed: func(_ trace.PoolConnClosed) {
+			ps.connectionActive.Sub(1)
+			ps.connectionClose.Add(1)
+		},
+	}
 }
 
-type connectionImpl struct {
-	client  *redis.Client
-	pending uint
-}
-
-type responseImpl struct {
-	response *redis.Resp
+type clientImpl struct {
+	client radix.Client
+	stats  poolStats
 }
 
 func checkError(err error) {
@@ -43,65 +50,60 @@ func checkError(err error) {
 	}
 }
 
-func (this *poolImpl) Get() Connection {
-	client, err := this.pool.Get()
-	checkError(err)
-	this.stats.connectionActive.Inc()
-	this.stats.connectionTotal.Inc()
-	return &connectionImpl{client, 0}
-}
+func NewClientImpl(scope stats.Scope, useTls bool, auth string, url string, poolSize int,
+	pipelineWindow time.Duration, pipelineLimit int) Client {
+	logger.Warnf("connecting to redis on %s with pool size %d", url, poolSize)
 
-func (this *poolImpl) Put(c Connection) {
-	impl := c.(*connectionImpl)
-	this.stats.connectionActive.Dec()
-	if impl.pending == 0 {
-		this.pool.Put(impl.client)
-	} else {
-		// radix does not appear to track if we attempt to put a connection back with pipelined
-		// responses that have not been flushed. If we are in this state, just kill the connection
-		// and don't put it back in the pool.
-		impl.client.Close()
-		this.stats.connectionClose.Inc()
-	}
-}
+	df := func(network, addr string) (radix.Conn, error) {
+		var dialOpts []radix.DialOpt
 
-func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int) Pool {
-	s := settings.NewSettings()
-	df := func(network, addr string) (*redis.Client, error) {
-		client, err := redis.Dial(network, addr)
+		var err error
+		if useTls {
+			dialOpts = append(dialOpts, radix.DialUseTLS(&tls.Config{}))
+		}
+
 		if err != nil {
 			return nil, err
 		}
-		if err = client.Cmd("AUTH", s.RedisPassword).Err; err != nil {
-			client.Close()
-			return nil, err
+		if auth != "" {
+			logger.Warnf("enabling authentication to redis on %s", url)
+
+			dialOpts = append(dialOpts, radix.DialAuthPass(auth))
 		}
-		return client, nil
+
+		return radix.Dial(network, addr, dialOpts...)
 	}
-	logger.Warnf("connecting to redis on %s %s with pool size %d", socketType, url, poolSize)
-	pool, err := pool.NewCustom(socketType, url, poolSize, df)
+
+	stats := newPoolStats(scope)
+
+	// TODO: support sentinel and redis cluster
+	pool, err := radix.NewPool("tcp", url, poolSize, radix.PoolConnFunc(df),
+		radix.PoolPipelineWindow(pipelineWindow, pipelineLimit),
+		radix.PoolWithTrace(poolTrace(&stats)),
+	)
 	checkError(err)
-	return &poolImpl{
-		pool:  pool,
-		stats: newPoolStats(scope)}
+
+	// Check if connection is good
+	var pingResponse string
+	checkError(pool.Do(radix.Cmd(&pingResponse, "PING")))
+	if pingResponse != "PONG" {
+		checkError(fmt.Errorf("connecting redis error: %s", pingResponse))
+	}
+
+	return &clientImpl{
+		client: pool,
+		stats:  stats,
+	}
 }
 
-func (this *connectionImpl) PipeAppend(cmd string, args ...interface{}) {
-	this.client.PipeAppend(cmd, args...)
-	this.pending++
+func (c *clientImpl) DoCmd(rcv interface{}, cmd, key string, args ...interface{}) error {
+	return c.client.Do(radix.FlatCmd(rcv, cmd, key, args...))
 }
 
-func (this *connectionImpl) PipeResponse() Response {
-	assert.Assert(this.pending > 0)
-	this.pending--
-
-	resp := this.client.PipeResp()
-	checkError(resp.Err)
-	return &responseImpl{resp}
+func (c *clientImpl) Close() error {
+	return c.client.Close()
 }
 
-func (this *responseImpl) Int() int64 {
-	i, err := this.response.Int64()
-	checkError(err)
-	return i
+func (c *clientImpl) NumActiveConns() int {
+	return int(c.stats.connectionActive.Value())
 }

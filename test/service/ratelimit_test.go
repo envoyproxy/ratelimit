@@ -4,20 +4,20 @@ import (
 	"sync"
 	"testing"
 
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/filter"
+	"github.com/envoyproxy/ratelimit/src/redis"
+	ratelimit "github.com/envoyproxy/ratelimit/src/service"
+	"github.com/envoyproxy/ratelimit/test/common"
+	mock_config "github.com/envoyproxy/ratelimit/test/mocks/config"
+	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
+	mock_loader "github.com/envoyproxy/ratelimit/test/mocks/runtime/loader"
+	mock_snapshot "github.com/envoyproxy/ratelimit/test/mocks/runtime/snapshot"
 	"github.com/golang/mock/gomock"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
-
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/redis"
-	"github.com/lyft/ratelimit/src/service"
-	"github.com/lyft/ratelimit/test/common"
-	"github.com/lyft/ratelimit/test/mocks/config"
-	"github.com/lyft/ratelimit/test/mocks/redis"
-	"github.com/lyft/ratelimit/test/mocks/runtime/loader"
-	"github.com/lyft/ratelimit/test/mocks/runtime/snapshot"
 )
 
 type barrier struct {
@@ -52,7 +52,7 @@ type rateLimitServiceTestSuite struct {
 	controller            *gomock.Controller
 	runtime               *mock_loader.MockIFace
 	snapshot              *mock_snapshot.MockIFace
-	cache                 *mock_redis.MockRateLimitCache
+	cache                 *mock_limiter.MockRateLimitCache
 	configLoader          *mock_config.MockRateLimitConfigLoader
 	config                *mock_config.MockRateLimitConfig
 	runtimeUpdateCallback chan<- int
@@ -65,7 +65,7 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret.controller = gomock.NewController(t)
 	ret.runtime = mock_loader.NewMockIFace(ret.controller)
 	ret.snapshot = mock_snapshot.NewMockIFace(ret.controller)
-	ret.cache = mock_redis.NewMockRateLimitCache(ret.controller)
+	ret.cache = mock_limiter.NewMockRateLimitCache(ret.controller)
 	ret.configLoader = mock_config.NewMockRateLimitConfigLoader(ret.controller)
 	ret.config = mock_config.NewMockRateLimitConfig(ret.controller)
 	ret.statStore = stats.NewStore(stats.NewNullSink(), false)
@@ -202,7 +202,7 @@ func TestCacheError(test *testing.T) {
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.cache.EXPECT().DoLimit(nil, request, limits, false, ipFilter, uidFilter).Do(
-		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit, bool, string) {
+		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit, bool, filter.Filter, filter.Filter) {
 			panic(redis.RedisError("cache error"))
 		})
 

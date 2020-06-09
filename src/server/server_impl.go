@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"expvar"
 	"fmt"
 	"io"
@@ -14,13 +15,18 @@ import (
 
 	"net"
 
+	"github.com/coocood/freecache"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/gorilla/mux"
-	"github.com/kavu/go_reuseport"
+	reuseport "github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
-	"github.com/lyft/gostats"
-	"github.com/lyft/ratelimit/src/settings"
+	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type serverDebugListener struct {
@@ -39,11 +45,43 @@ type server struct {
 	scope         stats.Scope
 	runtime       loader.IFace
 	debugListener serverDebugListener
+	health        *HealthChecker
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
 	server.debugListener.debugMux.HandleFunc(path, handler)
 	server.debugListener.endpoints[path] = help
+}
+
+// add an http/1 handler at the /json endpoint which allows this ratelimit service to work with
+// clients that cannot use the gRPC interface (e.g. lua)
+// example usage from cURL with domain "dummy" and descriptor "perday":
+// echo '{"domain": "dummy", "descriptors": [{"entries": [{"key": "perday"}]}]}' | curl -vvvXPOST --data @/dev/stdin localhost:8080/json
+func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
+	handler := func(writer http.ResponseWriter, request *http.Request) {
+		var req pb.RateLimitRequest
+
+		if err := json.NewDecoder(request.Body).Decode(&req); err != nil {
+			logger.Warnf("error: %s", err.Error())
+			http.Error(writer, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		resp, err := svc.ShouldRateLimit(nil, &req)
+		if err != nil {
+			logger.Warnf("error: %s", err.Error())
+			http.Error(writer, err.Error(), http.StatusBadRequest)
+			return
+		}
+		logger.Debugf("resp:%s", resp)
+		if resp.OverallCode == pb.RateLimitResponse_OVER_LIMIT {
+			http.Error(writer, "over limit", http.StatusTooManyRequests)
+		} else if resp.OverallCode == pb.RateLimitResponse_UNKNOWN {
+			http.Error(writer, "unknown", http.StatusInternalServerError)
+		}
+
+	}
+	server.router.HandleFunc("/json", handler)
 }
 
 func (server *server) GrpcServer() *grpc.Server {
@@ -96,11 +134,11 @@ func (server *server) Runtime() loader.IFace {
 	return server.runtime
 }
 
-func NewServer(name string, opts ...settings.Option) Server {
-	return newServer(name, opts...)
+func NewServer(name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) Server {
+	return newServer(name, store, localCache, opts...)
 }
 
-func newServer(name string, opts ...settings.Option) *server {
+func newServer(name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) *server {
 	s := settings.NewSettings()
 
 	for _, opt := range opts {
@@ -116,18 +154,35 @@ func newServer(name string, opts ...settings.Option) *server {
 	ret.debugPort = s.DebugPort
 
 	// setup stats
-	ret.store = stats.NewDefaultStore()
+	ret.store = store
 	ret.scope = ret.store.Scope(name)
 	ret.store.AddStatGenerator(stats.NewRuntimeStats(ret.scope.Scope("go")))
+	if localCache != nil {
+		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
+	}
 
 	// setup runtime
-	ret.runtime = loader.New(s.RuntimePath, s.RuntimeSubdirectory, ret.store.Scope("runtime"), &loader.SymlinkRefresher{s.RuntimePath})
+	loaderOpts := make([]loader.Option, 0, 1)
+	if s.RuntimeIgnoreDotFiles {
+		loaderOpts = append(loaderOpts, loader.IgnoreDotFiles)
+	} else {
+		loaderOpts = append(loaderOpts, loader.AllowDotFiles)
+	}
+
+	ret.runtime = loader.New(
+		s.RuntimePath,
+		s.RuntimeSubdirectory,
+		ret.store.Scope("runtime"),
+		&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
+		loaderOpts...)
 
 	// setup http router
 	ret.router = mux.NewRouter()
 
 	// setup healthcheck path
-	ret.router.Path("/healthcheck").Handler(NewHealthChecker())
+	ret.health = NewHealthChecker(health.NewServer(), "ratelimit")
+	ret.router.Path("/healthcheck").Handler(ret.health)
+	healthpb.RegisterHealthServer(ret.grpcServer, ret.health.Server())
 
 	// setup default debug listener
 	ret.debugListener.debugMux = http.NewServeMux()

@@ -6,6 +6,7 @@
 - [Deprecation of Legacy Ratelimit Proto](#deprecation-of-legacy-ratelimit-proto)
   - [Deprecation Schedule](#deprecation-schedule)
 - [Building and Testing](#building-and-testing)
+  - [Docker-compose setup](#docker-compose-setup)
 - [Configuration](#configuration)
   - [The configuration format](#the-configuration-format)
     - [Definitions](#definitions)
@@ -19,7 +20,10 @@
   - [Loading Configuration](#loading-configuration)
 - [Request Fields](#request-fields)
 - [Statistics](#statistics)
+- [HTTP Port](#http-port)
+  - [/json endpoint](#json-endpoint)
 - [Debug Port](#debug-port)
+- [Local Cache](#local-cache)
 - [Redis](#redis)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
@@ -38,10 +42,10 @@ decision is then returned to the caller.
 
 Envoy's data-plane-api defines a ratelimit service proto [rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto).
 Logically the data-plane-api [rls](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto)
-is equivalent to the [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto)
+is equivalent to the [ratelimit.proto](https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto)
 defined in this repo. However, due
 to the namespace differences and how gRPC routing works it is not possible to transparently route the
-legacy ratelimit (ones based in the [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto)
+legacy ratelimit (ones based in the [ratelimit.proto](https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto)
 defined in this repo) requests to the data-plane-api
 definitions. Therefore, the ratelimit service will upgrade the requests, process them internally as it would
 process a data-plane-api ratelimit request, and then downgrade the response to send back to the client. This means that,
@@ -52,7 +56,7 @@ for a slight performance hit for clients using the legacy proto, ratelimit is ba
 1. `v1.0.0` tagged on commit `0ded92a2af8261d43096eba4132e45b99a3b8b14`. Ratelimit has been in production
 use at Lyft for over 2 years.
 2. `v1.1.0` introduces the data-plane-api proto and initiates the deprecation of the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
-3. `v2.0.0` deletes support for the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto). This version will be tagged by the end of 2018Q3 (~September 2018)
+3. `v2.0.0` deletes support for the legacy [ratelimit.proto](https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto). This version will be tagged by the end of 2018Q3 (~September 2018)
 to give time to community members running ratelimit off of `master`.
 
 
@@ -63,8 +67,8 @@ to give time to community members running ratelimit off of `master`.
 go [here](https://golang.org/doc/install).
 * In order to run the integration tests using a local Redis server please run two Redis-server instances: one on port `6379` and another on port `6380`
   ```bash
-  Redis-server --port 6379 &
-  Redis-server --port 6380 &
+  redis-server --port 6379 &
+  redis-server --port 6380 &
   ```
 * To setup for the first time (only done once):
   ```bash
@@ -89,6 +93,21 @@ go [here](https://golang.org/doc/install).
   ```bash
   USE_STATSD=false LOG_LEVEL=debug REDIS_SOCKET_TYPE=tcp REDIS_URL=localhost:6379 RUNTIME_ROOT=/home/user/src/runtime/data RUNTIME_SUBDIRECTORY=ratelimit
   ```
+
+## Docker-compose setup
+
+The docker-compose setup has three containers: redis, ratelimit-build, and ratelimit. In order to run the docker-compose setup from the root of the repo, run
+
+```bash
+docker-compose up
+```
+
+The ratelimit-build container will build the ratelimit binary. Then via a shared volume the binary will be shared with the ratelimit container. This dual container setup is used in order to use a
+a minimal container to run the application, rather than the heftier container used to build it.
+
+If you want to run with [two redis instances](#two-redis-instances), you will need to modify
+the docker-compose.yaml file to run a second redis container, and change the environment variables
+as explained in the [two redis instances](#two-redis-instances) section.
 
 # Configuration
 
@@ -267,8 +286,8 @@ descriptors:
   - key: key
     value: value
     rate_limit:
-      -  requests_per_unit: 300
-         unit: second
+      requests_per_unit: 300
+      unit: second
 ```
 
 However, it would match the following configuration:
@@ -279,10 +298,10 @@ descriptors:
   - key: key
     value: value
     descriptors:
-      - key: subkey      
+      - key: subkey
         rate_limit:
-          -  requests_per_unit: 300
-             unit: second
+          requests_per_unit: 300
+          unit: second
 ```
 
 ## Loading Configuration
@@ -290,12 +309,13 @@ descriptors:
 The Ratelimit service uses a library written by Lyft called [goruntime](https://github.com/lyft/goruntime) to do configuration loading. Goruntime monitors
 a designated path, and watches for symlink swaps to files in the directory tree to reload configuration files.
 
-The path to watch can be configured via the [settings](https://github.com/lyft/ratelimit/blob/master/src/settings/settings.go)
+The path to watch can be configured via the [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go)
 package with the following environment variables:
 
 ```
-RUNTIME_ROOT default:"/srv/runtime_data/current"`
+RUNTIME_ROOT default:"/srv/runtime_data/current"
 RUNTIME_SUBDIRECTORY
+RUNTIME_IGNOREDOTFILES default:"false"
 ```
 
 **Configuration files are loaded from RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/\*.yaml**
@@ -305,7 +325,7 @@ For more information on how runtime works you can read its [README](https://gith
 # Request Fields
 
 For information on the fields of a Ratelimit gRPC request please read the information
-on the RateLimitRequest message type in the Ratelimit [proto file.](https://github.com/lyft/ratelimit/blob/master/proto/ratelimit/ratelimit.proto)
+on the RateLimitRequest message type in the Ratelimit [proto file.](https://github.com/envoyproxy/ratelimit/blob/master/proto/ratelimit/ratelimit.proto)
 
 # Statistics
 
@@ -342,6 +362,29 @@ ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.over_lim
 ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.total_hits: 0
 ```
 
+# HTTP Port
+
+The ratelimit service listens to HTTP 1.1 (by default on port 8080) with two endpoints:
+1. /healthcheck → return a 200 if this service is healthy
+1. /json → HTTP 1.1 endpoint for interacting with ratelimit service
+
+## /json endpoint
+
+Takes an HTTP POST with a JSON body of the form e.g. 
+```json
+{
+  "domain": "dummy",
+  "descriptors": [
+    {"entries": [
+      {"key": "one_per_day",
+       "value":  "something"}
+    ]}
+  ]
+}
+```
+The service will return an http 200 if this request is allowed (if no ratelimits exceeded) or 429 if one or more 
+ratelimits were exceeded. Endpoint does not currently return detailed information on which limits were exceeded.
+
 # Debug Port
 
 The debug port can be used to interact with the running process.
@@ -355,12 +398,30 @@ $ curl 0:6070/
 
 You can specify the debug port with the `DEBUG_PORT` environment variable. It defaults to `6070`.
 
+# Local Cache
+
+Ratelimit optionally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and thus avoids reading the 
+redis cache again for the already over-the-limit keys. The local cache size can be configured via `LocalCacheSizeInBytes` in the [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go).
+If `LocalCacheSizeInBytes` is 0, local cache is disabled.
+
 # Redis
 
 Ratelimit uses Redis as its caching layer. Ratelimit supports two operation modes:
 
 1. One Redis server for all limits.
 1. Two Redis instances: one for per second limits and another one for all other limits.
+
+As well Ratelimit supports TLS connections and authentication. These can be configured using the following environment variables:
+
+1. `REDIS_TLS` & `REDIS_PERSECOND_TLS`: set to `"true"` to enable a TLS connection for the specific connection type.
+1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable authentication to the redis host.
+
+Ratelimit use [implicit pipelining](https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L238) to send requests to redis. Pipelining can be configured using the following environment variables:
+
+1. `REDIS_PIPELINE_WINDOW` & `REDIS_PERSECOND_PIPELINE_WINDOW`:  sets the duration after which internal pipelines will be flushed.
+If window is zero then implicit pipelining will be disabled.
+1. `REDIS_PIPELINE_LIMIT` & `REDIS_PERSECOND_PIPELINE_LIMIT`: sets maximum number of commands that can be pipelined before flushing.
+If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
 
 ## One Redis Instance
 

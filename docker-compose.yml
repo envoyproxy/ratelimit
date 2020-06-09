@@ -6,27 +6,43 @@ services:
     expose:
       - 6379
     ports:
-      - "6379:6379"
+      - 6379:6379
     networks:
-      - data
+      - ratelimit-network
+
+  # minimal container that builds the ratelimit service binary and exits.
+  ratelimit-build:
+    image: golang:1.14-alpine
+    working_dir: /go/src/github.com/envoyproxy/ratelimit
+    command: go build -o /usr/local/bin/ratelimit ./src/service_cmd/main.go
     volumes:
-      - redis-data:/data
+      - .:/go/src/github.com/envoyproxy/ratelimit
+      - binary:/usr/local/bin/
+
+  ratelimit-client-build:
+    image: golang:1.14-alpine
+    working_dir: /go/src/github.com/envoyproxy/ratelimit
+    command: go build -o /usr/local/bin/ratelimit_client ./src/client_cmd/main.go
+    volumes:
+      - .:/go/src/github.com/envoyproxy/ratelimit
+      - binary:/usr/local/bin/
 
   ratelimit:
-    build:
-      context: ./
-      dockerfile: Dockerfile
+    image: alpine:3.6
+    command: /usr/local/bin/ratelimit
     ports:
       - 8080:8080
+      - 8081:8081
       - 6070:6070
     depends_on:
       - redis
+      - ratelimit-build
+      - ratelimit-client-build
     networks:
-      - data
-    links:
-      - redis
+      - ratelimit-network
     volumes:
-      - ./examples:/data/
+      - binary:/usr/local/bin/
+      - ./examples:/data
     environment:
       - USE_STATSD=false
       - LOG_LEVEL=debug
@@ -36,8 +52,7 @@ services:
       - RUNTIME_SUBDIRECTORY=ratelimit
 
 networks:
-  data:
+  ratelimit-network:
 
 volumes:
-  redis-data:
-  ratelimit-data:
+  binary:
