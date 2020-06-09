@@ -8,8 +8,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/filter"
 	"github.com/kelseyhightower/envconfig"
 	"google.golang.org/grpc"
-
-	"github.com/lyft/ratelimit/src/filter"
 )
 
 type Settings struct {
