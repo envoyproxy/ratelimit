@@ -27,7 +27,7 @@ func NewMockClient(ctrl *gomock.Controller) *MockClient {
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected usearg
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
