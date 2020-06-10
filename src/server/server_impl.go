@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"expvar"
 	"fmt"
 	"io"
@@ -19,6 +18,7 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/gorilla/mux"
 	reuseport "github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
@@ -58,10 +58,13 @@ func (server *server) AddDebugHttpEndpoint(path string, help string, handler htt
 // example usage from cURL with domain "dummy" and descriptor "perday":
 // echo '{"domain": "dummy", "descriptors": [{"entries": [{"key": "perday"}]}]}' | curl -vvvXPOST --data @/dev/stdin localhost:8080/json
 func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
+	// Default options include enums as strings and no identation.
+	m := &jsonpb.Marshaler{}
+
 	handler := func(writer http.ResponseWriter, request *http.Request) {
 		var req pb.RateLimitRequest
 
-		if err := json.NewDecoder(request.Body).Decode(&req); err != nil {
+		if err := jsonpb.Unmarshal(request.Body, &req); err != nil {
 			logger.Warnf("error: %s", err.Error())
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 			return
@@ -73,11 +76,20 @@ func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		logger.Debugf("resp:%s", resp)
+
+		writer.Header().Set("Content-Type", "application/json")
 		if resp.OverallCode == pb.RateLimitResponse_OVER_LIMIT {
-			http.Error(writer, "over limit", http.StatusTooManyRequests)
+			writer.WriteHeader(http.StatusTooManyRequests)
 		} else if resp.OverallCode == pb.RateLimitResponse_UNKNOWN {
-			http.Error(writer, "unknown", http.StatusInternalServerError)
+			writer.WriteHeader(http.StatusInternalServerError)
+		}
+
+		err = m.Marshal(writer, resp)
+		if err != nil {
+			writer.Header().Set("Content-Type", "text/plain")
+			fmt.Fprintf(writer, "Internal error marshaling proto3 to json: %v", err)
 		}
 
 	}
