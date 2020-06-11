@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"expvar"
 	"fmt"
 	"io"
@@ -53,15 +54,15 @@ func (server *server) AddDebugHttpEndpoint(path string, help string, handler htt
 	server.debugListener.endpoints[path] = help
 }
 
-// add an http/1 handler at the /json endpoint which allows this ratelimit service to work with
+// create an http/1 handler at the /json endpoint which allows this ratelimit service to work with
 // clients that cannot use the gRPC interface (e.g. lua)
 // example usage from cURL with domain "dummy" and descriptor "perday":
 // echo '{"domain": "dummy", "descriptors": [{"entries": [{"key": "perday"}]}]}' | curl -vvvXPOST --data @/dev/stdin localhost:8080/json
-func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
+func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *http.Request) {
 	// Default options include enums as strings and no identation.
 	m := &jsonpb.Marshaler{}
 
-	handler := func(writer http.ResponseWriter, request *http.Request) {
+	return func(writer http.ResponseWriter, request *http.Request) {
 		var req pb.RateLimitRequest
 
 		if err := jsonpb.Unmarshal(request.Body, &req); err != nil {
@@ -79,21 +80,26 @@ func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
 
 		logger.Debugf("resp:%s", resp)
 
-		writer.Header().Set("Content-Type", "application/json")
-		if resp.OverallCode == pb.RateLimitResponse_OVER_LIMIT {
-			writer.WriteHeader(http.StatusTooManyRequests)
-		} else if resp.OverallCode == pb.RateLimitResponse_UNKNOWN {
-			writer.WriteHeader(http.StatusInternalServerError)
-		}
-
-		err = m.Marshal(writer, resp)
+		buf := bytes.NewBuffer(nil)
+		err = m.Marshal(buf, resp)
 		if err != nil {
-			writer.Header().Set("Content-Type", "text/plain")
-			fmt.Fprintf(writer, "Internal error marshaling proto3 to json: %v", err)
+			logger.Errorf("error marshaling proto3 to json: %s", err.Error())
+			http.Error(writer, "error marshaling proto3 to json: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 
+		writer.Header().Set("Content-Type", "application/json")
+		if resp == nil || resp.OverallCode == pb.RateLimitResponse_UNKNOWN {
+			writer.WriteHeader(http.StatusInternalServerError)
+		} else if resp.OverallCode == pb.RateLimitResponse_OVER_LIMIT {
+			writer.WriteHeader(http.StatusTooManyRequests)
+		}
+		writer.Write(buf.Bytes())
 	}
-	server.router.HandleFunc("/json", handler)
+}
+
+func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
+	server.router.HandleFunc("/json", NewJsonHandler(svc))
 }
 
 func (server *server) GrpcServer() *grpc.Server {
