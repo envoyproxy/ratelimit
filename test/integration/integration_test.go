@@ -5,6 +5,7 @@ package integration_test
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -376,11 +377,15 @@ func TestBasicConfigLegacy(t *testing.T) {
 	}`)
 	http_resp, _ := http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(json_body))
 	assert.Equal(http_resp.StatusCode, 200)
+	body, _ := ioutil.ReadAll(http_resp.Body)
 	http_resp.Body.Close()
+	assert.Equal(`{"overallCode":"OK","statuses":[{"code":"OK","currentLimit":{"requestsPerUnit":1,"unit":"MINUTE"}}]}`, string(body))
 
 	http_resp, _ = http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(json_body))
 	assert.Equal(http_resp.StatusCode, 429)
+	body, _ = ioutil.ReadAll(http_resp.Body)
 	http_resp.Body.Close()
+	assert.Equal(`{"overallCode":"OVER_LIMIT","statuses":[{"code":"OVER_LIMIT","currentLimit":{"requestsPerUnit":1,"unit":"MINUTE"}}]}`, string(body))
 
 	invalid_json := []byte(`{"unclosed quote: []}`)
 	http_resp, _ = http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(invalid_json))

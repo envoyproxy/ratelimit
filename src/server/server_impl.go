@@ -1,7 +1,7 @@
 package server
 
 import (
-	"encoding/json"
+	"bytes"
 	"expvar"
 	"fmt"
 	"io"
@@ -19,6 +19,7 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/gorilla/mux"
 	reuseport "github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
@@ -53,15 +54,18 @@ func (server *server) AddDebugHttpEndpoint(path string, help string, handler htt
 	server.debugListener.endpoints[path] = help
 }
 
-// add an http/1 handler at the /json endpoint which allows this ratelimit service to work with
+// create an http/1 handler at the /json endpoint which allows this ratelimit service to work with
 // clients that cannot use the gRPC interface (e.g. lua)
 // example usage from cURL with domain "dummy" and descriptor "perday":
 // echo '{"domain": "dummy", "descriptors": [{"entries": [{"key": "perday"}]}]}' | curl -vvvXPOST --data @/dev/stdin localhost:8080/json
-func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
-	handler := func(writer http.ResponseWriter, request *http.Request) {
+func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *http.Request) {
+	// Default options include enums as strings and no identation.
+	m := &jsonpb.Marshaler{}
+
+	return func(writer http.ResponseWriter, request *http.Request) {
 		var req pb.RateLimitRequest
 
-		if err := json.NewDecoder(request.Body).Decode(&req); err != nil {
+		if err := jsonpb.Unmarshal(request.Body, &req); err != nil {
 			logger.Warnf("error: %s", err.Error())
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 			return
@@ -73,15 +77,29 @@ func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		logger.Debugf("resp:%s", resp)
-		if resp.OverallCode == pb.RateLimitResponse_OVER_LIMIT {
-			http.Error(writer, "over limit", http.StatusTooManyRequests)
-		} else if resp.OverallCode == pb.RateLimitResponse_UNKNOWN {
-			http.Error(writer, "unknown", http.StatusInternalServerError)
+
+		buf := bytes.NewBuffer(nil)
+		err = m.Marshal(buf, resp)
+		if err != nil {
+			logger.Errorf("error marshaling proto3 to json: %s", err.Error())
+			http.Error(writer, "error marshaling proto3 to json: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 
+		writer.Header().Set("Content-Type", "application/json")
+		if resp == nil || resp.OverallCode == pb.RateLimitResponse_UNKNOWN {
+			writer.WriteHeader(http.StatusInternalServerError)
+		} else if resp.OverallCode == pb.RateLimitResponse_OVER_LIMIT {
+			writer.WriteHeader(http.StatusTooManyRequests)
+		}
+		writer.Write(buf.Bytes())
 	}
-	server.router.HandleFunc("/json", handler)
+}
+
+func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
+	server.router.HandleFunc("/json", NewJsonHandler(svc))
 }
 
 func (server *server) GrpcServer() *grpc.Server {

@@ -383,7 +383,32 @@ Takes an HTTP POST with a JSON body of the form e.g.
 }
 ```
 The service will return an http 200 if this request is allowed (if no ratelimits exceeded) or 429 if one or more 
-ratelimits were exceeded. Endpoint does not currently return detailed information on which limits were exceeded.
+ratelimits were exceeded.
+
+The response is a RateLimitResponse encoded with
+[proto3-to-json mapping](https://developers.google.com/protocol-buffers/docs/proto3#json):
+```json
+{
+  "overallCode": "OVER_LIMIT",
+  "statuses": [
+    {
+      "code": "OVER_LIMIT",
+      "currentLimit": {
+        "requestsPerUnit": 1,
+        "unit": "MINUTE"
+      }
+    },
+    {
+      "code": "OK",
+      "currentLimit": {
+        "requestsPerUnit": 2,
+        "unit": "MINUTE"
+      },
+      "limitRemaining": 1
+    }
+  ]
+}
+```
 
 # Debug Port
 
