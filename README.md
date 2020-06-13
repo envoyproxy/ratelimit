@@ -320,6 +320,12 @@ RUNTIME_IGNOREDOTFILES default:"false"
 
 **Configuration files are loaded from RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/\*.yaml**
 
+There are two methods for triggering a configuration reload:
+1. Symlink RUNTIME_ROOT to a different directory.
+2. Update the contents inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` directly.
+
+The former is the default behavior. To use the latter method, set the `RUNTIME_WATCH_ROOT` environment variable to `false`. 
+
 For more information on how runtime works you can read its [README](https://github.com/lyft/goruntime).
 
 # Request Fields
