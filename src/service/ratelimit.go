@@ -57,6 +57,7 @@ type service struct {
 	stats              serviceStats
 	rlStatsScope       stats.Scope
 	legacy             *legacyService
+	runtimeWatchRoot   bool
 }
 
 func (this *service) reloadConfig() {
@@ -75,7 +76,8 @@ func (this *service) reloadConfig() {
 	files := []config.RateLimitConfigToLoad{}
 	snapshot := this.runtime.Snapshot()
 	for _, key := range snapshot.Keys() {
-		if !strings.HasPrefix(key, "config.") {
+		logger.Errorf("file key: %s", key)
+		if this.runtimeWatchRoot && !strings.HasPrefix(key, "config.") {
 			continue
 		}
 
@@ -176,7 +178,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, stats stats.Scope) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, stats stats.Scope, runtimeWatchRoot bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -187,6 +189,7 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		cache:              cache,
 		stats:              newServiceStats(stats),
 		rlStatsScope:       stats.Scope("rate_limit"),
+		runtimeWatchRoot:   runtimeWatchRoot,
 	}
 	newService.legacy = &legacyService{
 		s:                          newService,
