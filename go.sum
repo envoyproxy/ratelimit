@@ -43,8 +43,6 @@ github.com/kelseyhightower/envconfig v1.1.0 h1:4htXR8ameS6KBfrNBoqEgpg0IK2D6rozN
 github.com/kelseyhightower/envconfig v1.1.0/go.mod h1:cccZRl6mQpaq41TPp5QxidR+Sa3axMbJDNb//FQX6Gg=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
-github.com/lyft/goruntime v0.2.1 h1:7DebA8oMVuoQ5TQ0j1xR/X2xRagbGrm0e2SoMdt5tRs=
-github.com/lyft/goruntime v0.2.1/go.mod h1:8rUh5gwIPQtyIkIXHbLN1j45HOb8cMgDhrw5GA7DF4g=
 github.com/lyft/goruntime v0.2.5 h1:yRmwOXl3Zns3+Z03fDMWt5+p609rfhIErh7HYCayODg=
 github.com/lyft/goruntime v0.2.5/go.mod h1:8rUh5gwIPQtyIkIXHbLN1j45HOb8cMgDhrw5GA7DF4g=
 github.com/lyft/gostats v0.4.0 h1:PbRWmwidTPk6Y80S6itBWDa+XVt1hGvqFM88TBJYdOo=
