@@ -76,7 +76,6 @@ func (this *service) reloadConfig() {
 	files := []config.RateLimitConfigToLoad{}
 	snapshot := this.runtime.Snapshot()
 	for _, key := range snapshot.Keys() {
-		logger.Errorf("file key: %s", key)
 		if this.runtimeWatchRoot && !strings.HasPrefix(key, "config.") {
 			continue
 		}
