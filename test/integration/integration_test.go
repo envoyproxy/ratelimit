@@ -101,6 +101,47 @@ func TestBasicConfig(t *testing.T) {
 	})
 }
 
+func TestBasicConfig_ExtraTags(t *testing.T) {
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6383},
+	}, func() {
+		extraTagsSettings := makeSimpleRedisSettings(6383, 6380, false, 0)
+		extraTagsSettings.ExtraTags = map[string]string{"foo": "bar", "a": "b"}
+		runner := startTestRunner(t, extraTagsSettings)
+		defer runner.Stop()
+
+		assert := assert.New(t)
+		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", extraTagsSettings.GrpcPort), grpc.WithInsecure())
+		assert.NoError(err)
+		defer conn.Close()
+		c := pb.NewRateLimitServiceClient(conn)
+
+		_, err = c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", false), "foo"}}}, 1))
+		assert.NoError(err)
+
+		// Manually flush the cache for local_cache stats
+		runner.GetStatsStore().Flush()
+
+		// store.NewCounter returns the existing counter.
+		// This test looks for the extra tags requested.
+		key1HitCounter := runner.GetStatsStore().NewCounterWithTags(
+			fmt.Sprintf("ratelimit.service.rate_limit.basic.%s.total_hits", getCacheKey("key1", false)),
+			extraTagsSettings.ExtraTags)
+		assert.Equal(1, int(key1HitCounter.Value()))
+
+		configLoadStat := runner.GetStatsStore().NewCounterWithTags(
+			"ratelimit.service.config_load_success",
+			extraTagsSettings.ExtraTags)
+		assert.Equal(1, int(configLoadStat.Value()))
+
+		// NOTE: This doesn't currently test that the extra tags are present for:
+		// - local cache
+		// - go runtime stats.
+	})
+}
+
 func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS(false, 0))
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS(true, 0))
@@ -313,23 +354,8 @@ func getCacheKey(cacheKey string, enableLocalCache bool) string {
 func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 	return func(t *testing.T) {
 		enable_local_cache := s.LocalCacheSizeInBytes > 0
-		runner := runner.NewRunner(s)
+		runner := startTestRunner(t, s)
 		defer runner.Stop()
-
-		go func() {
-			// Catch a panic() to ensure that test name is printed.
-			// Otherwise go doesn't know what test this goroutine is
-			// associated with.
-			defer func() {
-				if r := recover(); r != nil {
-					t.Fatalf("Uncaught panic(): %v", r)
-				}
-			}()
-			runner.Run()
-		}()
-
-		// HACK: Wait for the server to come up. Make a hook that we can wait on.
-		time.Sleep(1 * time.Second)
 
 		assert := assert.New(t)
 		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", s.GrpcPort), grpc.WithInsecure())
@@ -557,23 +583,8 @@ func TestBasicConfigLegacy(t *testing.T) {
 func testBasicConfigLegacy(t *testing.T) {
 	s := makeSimpleRedisSettings(6383, 6380, false, 0)
 
-	runner := runner.NewRunner(s)
+	runner := startTestRunner(t, s)
 	defer runner.Stop()
-
-	go func() {
-		// Catch a panic() to ensure that test name is printed.
-		// Otherwise go doesn't know what test this goroutine is
-		// associated with.
-		defer func() {
-			if r := recover(); r != nil {
-				t.Fatalf("Uncaught panic(): %v", r)
-			}
-		}()
-		runner.Run()
-	}()
-
-	// HACK: Wait for the server to come up. Make a hook that we can wait on.
-	time.Sleep(100 * time.Millisecond)
 
 	assert := assert.New(t)
 	conn, err := grpc.Dial("localhost:8083", grpc.WithInsecure())
@@ -662,26 +673,33 @@ func testBasicConfigLegacy(t *testing.T) {
 	}
 }
 
+func startTestRunner(t *testing.T, s settings.Settings) *runner.Runner {
+	t.Helper()
+	runner := runner.NewRunner(s)
+
+	go func() {
+		// Catch a panic() to ensure that test name is printed.
+		// Otherwise go doesn't know what test this goroutine is
+		// associated with.
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("Uncaught panic(): %v", r)
+			}
+		}()
+		runner.Run()
+	}()
+
+	// HACK: Wait for the server to come up. Make a hook that we can wait on.
+	common.WaitForTcpPort(context.Background(), s.GrpcPort, 1*time.Second)
+
+	return &runner
+}
+
 func testConfigReload(s settings.Settings) func(*testing.T) {
 	return func(t *testing.T) {
 		enable_local_cache := s.LocalCacheSizeInBytes > 0
-		runner := runner.NewRunner(s)
+		runner := startTestRunner(t, s)
 		defer runner.Stop()
-
-		go func() {
-			// Catch a panic() to ensure that test name is printed.
-			// Otherwise go doesn't know what test this goroutine is
-			// associated with.
-			defer func() {
-				if r := recover(); r != nil {
-					t.Fatalf("Uncaught panic(): %v", r)
-				}
-			}()
-			runner.Run()
-		}()
-
-		// HACK: Wait for the server to come up. Make a hook that we can wait on.
-		time.Sleep(1 * time.Second)
 
 		assert := assert.New(t)
 		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", s.GrpcPort), grpc.WithInsecure())

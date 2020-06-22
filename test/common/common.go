@@ -96,6 +96,28 @@ type MemcacheConfig struct {
 	Port int
 }
 
+func WaitForTcpPort(ctx context.Context, port int, timeout time.Duration) error {
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, timeout)
+	defer timeoutCancel()
+
+	// Wait up to 1s for the redis instance to start accepting connections.
+	for {
+		var d net.Dialer
+		conn, err := d.DialContext(ctx, "tcp", "localhost:"+strconv.Itoa(port))
+		if err == nil {
+			conn.Close()
+			// TCP connections are working. All is well.
+			return nil
+		}
+		// Unable to connect to the TCP port. Wait and try again.
+		select {
+		case <-time.After(100 * time.Millisecond):
+		case <-timeoutCtx.Done():
+			return timeoutCtx.Err()
+		}
+	}
+}
+
 // startCacheProcess starts memcache or redis as a subprocess and waits until the TCP port is open.
 func startCacheProcess(ctx context.Context, command string, args []string, port int) (context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(ctx)
@@ -110,25 +132,10 @@ func startCacheProcess(ctx context.Context, command string, args []string, port 
 		return nil, fmt.Errorf("Problem starting %s subprocess: %v", command, err)
 	}
 
-	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 1*time.Second)
-	defer timeoutCancel()
-
-	// Wait up to 1s for the redis instance to start accepting connections.
-	for {
-		var d net.Dialer
-		conn, err := d.DialContext(ctx, "tcp", "localhost:"+strconv.Itoa(port))
-		if err == nil {
-			conn.Close()
-			// TCP connections are working. All is well.
-			break
-		}
-		// Unable to connect to the TCP port. Wait and try again.
-		select {
-		case <-time.After(100 * time.Millisecond):
-		case <-timeoutCtx.Done():
-			cancel()
-			return nil, fmt.Errorf("Timed out waiting for %s to start up and accept connections: %v", command, err)
-		}
+	err = WaitForTcpPort(ctx, port, 1*time.Second)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("Timed out waiting for %s to start up and accept connections: %v", command, err)
 	}
 
 	return func() {

@@ -424,6 +424,10 @@ ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.over_lim
 ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.total_hits: 0
 ```
 
+## Statistics options
+
+1. `EXTRA_TAGS==<k1:v1>,<k2:v2>` tags all emitted stats with the provided tags. You might want to tag build commit or release version, for example.
+
 # HTTP Port
 
 The ratelimit service listens to HTTP 1.1 (by default on port 8080) with two endpoints:

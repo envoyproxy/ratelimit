@@ -13,7 +13,7 @@ require (
 	github.com/golang/protobuf v1.4.2
 	github.com/gorilla/mux v1.7.4-0.20191121170500-49c01487a141
 	github.com/kavu/go_reuseport v1.2.0
-	github.com/kelseyhightower/envconfig v1.1.0
+	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/lyft/goruntime v0.2.5
 	github.com/lyft/gostats v0.4.0
 	github.com/mediocregopher/radix/v3 v3.5.1
