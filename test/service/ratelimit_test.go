@@ -82,7 +82,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 	this.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}},
 		gomock.Any()).Return(this.config)
-	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statStore)
+	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statStore, true)
 }
 
 func TestService(test *testing.T) {
@@ -225,7 +225,7 @@ func TestInitialLoadError(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Scope) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore, true)
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
