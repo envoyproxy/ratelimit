@@ -224,7 +224,7 @@ func TestInitialLoadErrorLegacy(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Scope) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore, true)
 
 	request := common.NewRateLimitRequestLegacy("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)

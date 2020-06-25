@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/pprof"
+	"path/filepath"
 	"sort"
 
 	"os"
@@ -187,12 +188,22 @@ func newServer(name string, store stats.Store, localCache *freecache.Cache, opts
 		loaderOpts = append(loaderOpts, loader.AllowDotFiles)
 	}
 
-	ret.runtime = loader.New(
-		s.RuntimePath,
-		s.RuntimeSubdirectory,
-		ret.store.Scope("runtime"),
-		&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
-		loaderOpts...)
+	if s.RuntimeWatchRoot {
+		ret.runtime = loader.New(
+			s.RuntimePath,
+			s.RuntimeSubdirectory,
+			ret.store.Scope("runtime"),
+			&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
+			loaderOpts...)
+
+	} else {
+		ret.runtime = loader.New(
+			filepath.Join(s.RuntimePath, s.RuntimeSubdirectory),
+			"config",
+			ret.store.Scope("runtime"),
+			&loader.DirectoryRefresher{},
+			loaderOpts...)
+	}
 
 	// setup http router
 	ret.router = mux.NewRouter()

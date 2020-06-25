@@ -1,0 +1,16 @@
+domain: reload
+descriptors:
+  - key: key1
+    rate_limit:
+      unit: second
+      requests_per_unit: 50
+
+  - key: block
+    rate_limit:
+      unit: second
+      requests_per_unit: 0
+
+  - key: one_per_minute
+    rate_limit:
+      unit: minute
+      requests_per_unit: 1
