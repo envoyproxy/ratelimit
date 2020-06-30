@@ -3,9 +3,10 @@ package ratelimit_test
 import (
 	"testing"
 
-	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	pb_legacy "github.com/envoyproxy/ratelimit/proto/ratelimit"
+	pb_struct_legacy "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
+	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/service"
@@ -17,7 +18,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-func convertRatelimit(ratelimit *pb.RateLimitResponse_RateLimit) (*pb_legacy.RateLimit, error) {
+func convertRatelimit(ratelimit *pb.RateLimitResponse_RateLimit) (*pb_legacy.RateLimitResponse_RateLimit, error) {
 	if ratelimit == nil {
 		return nil, nil
 	}
@@ -28,7 +29,7 @@ func convertRatelimit(ratelimit *pb.RateLimitResponse_RateLimit) (*pb_legacy.Rat
 		return nil, err
 	}
 
-	rl := &pb_legacy.RateLimit{}
+	rl := &pb_legacy.RateLimitResponse_RateLimit{}
 	err = jsonpb.UnmarshalString(s, rl)
 	if err != nil {
 		return nil, err
@@ -37,12 +38,12 @@ func convertRatelimit(ratelimit *pb.RateLimitResponse_RateLimit) (*pb_legacy.Rat
 	return rl, nil
 }
 
-func convertRatelimits(ratelimits []*config.RateLimit) ([]*pb_legacy.RateLimit, error) {
+func convertRatelimits(ratelimits []*config.RateLimit) ([]*pb_legacy.RateLimitResponse_RateLimit, error) {
 	if ratelimits == nil {
 		return nil, nil
 	}
 
-	ret := make([]*pb_legacy.RateLimit, 0)
+	ret := make([]*pb_legacy.RateLimitResponse_RateLimit, 0)
 	for _, rl := range ratelimits {
 		if rl == nil {
 			ret = append(ret, nil)
@@ -266,7 +267,7 @@ func TestConvertLegacyRequest(test *testing.T) {
 	{
 		request := &pb_legacy.RateLimitRequest{
 			Domain:      "test",
-			Descriptors: []*pb_legacy.RateLimitDescriptor{},
+			Descriptors: []*pb_struct_legacy.RateLimitDescriptor{},
 			HitsAddend:  10,
 		}
 
@@ -285,9 +286,9 @@ func TestConvertLegacyRequest(test *testing.T) {
 	}
 
 	{
-		descriptors := []*pb_legacy.RateLimitDescriptor{
+		descriptors := []*pb_struct_legacy.RateLimitDescriptor{
 			{
-				Entries: []*pb_legacy.RateLimitDescriptor_Entry{
+				Entries: []*pb_struct_legacy.RateLimitDescriptor_Entry{
 					{
 						Key:   "foo",
 						Value: "foo_value",
@@ -296,7 +297,7 @@ func TestConvertLegacyRequest(test *testing.T) {
 				},
 			},
 			{
-				Entries: []*pb_legacy.RateLimitDescriptor_Entry{},
+				Entries: []*pb_struct_legacy.RateLimitDescriptor_Entry{},
 			},
 			{
 				Entries: nil,
@@ -375,9 +376,9 @@ func TestConvertResponse(test *testing.T) {
 		Statuses:    statuses,
 	}
 
-	expectedRl := &pb_legacy.RateLimit{
+	expectedRl := &pb_legacy.RateLimitResponse_RateLimit{
 		RequestsPerUnit: 10,
-		Unit:            pb_legacy.RateLimit_DAY,
+		Unit:            pb_legacy.RateLimitResponse_RateLimit_DAY,
 	}
 
 	expectedStatuses := []*pb_legacy.RateLimitResponse_DescriptorStatus{

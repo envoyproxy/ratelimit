@@ -1,8 +1,8 @@
 package ratelimit
 
 import (
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	pb_legacy "github.com/envoyproxy/ratelimit/proto/ratelimit"
+	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/lyft/gostats"
 	"golang.org/x/net/context"
@@ -12,7 +12,7 @@ type RateLimitLegacyServiceServer interface {
 	pb_legacy.RateLimitServiceServer
 }
 
-// legacyService is used to implement ratelimit.proto (https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto)
+// legacyService is used to implement v2 rls.proto (https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto)
 // the legacyService receives RateLimitRequests, converts the request, and calls the service's ShouldRateLimit method.
 type legacyService struct {
 	s                          *service
