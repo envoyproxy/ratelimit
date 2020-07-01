@@ -7,7 +7,6 @@ RUN go mod download
 
 COPY src src
 COPY script script
-COPY proto proto
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /go/bin/ratelimit -ldflags="-w -s" -v github.com/envoyproxy/ratelimit/src/service_cmd
 

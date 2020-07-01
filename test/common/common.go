@@ -3,9 +3,10 @@ package common
 import (
 	"sync"
 
-	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	pb_legacy "github.com/envoyproxy/ratelimit/proto/ratelimit"
+	pb_struct_legacy "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
+	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 )
 
 type TestStatSink struct {
@@ -57,11 +58,11 @@ func NewRateLimitRequestLegacy(domain string, descriptors [][][2]string, hitsAdd
 	request := &pb_legacy.RateLimitRequest{}
 	request.Domain = domain
 	for _, descriptor := range descriptors {
-		newDescriptor := &pb_legacy.RateLimitDescriptor{}
+		newDescriptor := &pb_struct_legacy.RateLimitDescriptor{}
 		for _, entry := range descriptor {
 			newDescriptor.Entries = append(
 				newDescriptor.Entries,
-				&pb_legacy.RateLimitDescriptor_Entry{Key: entry[0], Value: entry[1]})
+				&pb_struct_legacy.RateLimitDescriptor_Entry{Key: entry[0], Value: entry[1]})
 		}
 		request.Descriptors = append(request.Descriptors, newDescriptor)
 	}

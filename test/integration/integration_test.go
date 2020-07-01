@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	pb_legacy "github.com/envoyproxy/ratelimit/proto/ratelimit"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
 	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/stretchr/testify/assert"
@@ -36,11 +36,11 @@ func newDescriptorStatus(
 
 func newDescriptorStatusLegacy(
 	status pb_legacy.RateLimitResponse_Code, requestsPerUnit uint32,
-	unit pb_legacy.RateLimit_Unit, limitRemaining uint32) *pb_legacy.RateLimitResponse_DescriptorStatus {
+	unit pb_legacy.RateLimitResponse_RateLimit_Unit, limitRemaining uint32) *pb_legacy.RateLimitResponse_DescriptorStatus {
 
 	return &pb_legacy.RateLimitResponse_DescriptorStatus{
 		Code:           status,
-		CurrentLimit:   &pb_legacy.RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit},
+		CurrentLimit:   &pb_legacy.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit},
 		LimitRemaining: limitRemaining,
 	}
 }
@@ -426,7 +426,7 @@ func TestBasicConfigLegacy(t *testing.T) {
 		&pb_legacy.RateLimitResponse{
 			OverallCode: pb_legacy.RateLimitResponse_OK,
 			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-				newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 50, pb_legacy.RateLimit_SECOND, 49)}},
+				newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 50, pb_legacy.RateLimitResponse_RateLimit_SECOND, 49)}},
 		response)
 	assert.NoError(err)
 
@@ -450,7 +450,7 @@ func TestBasicConfigLegacy(t *testing.T) {
 			&pb_legacy.RateLimitResponse{
 				OverallCode: status,
 				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatusLegacy(status, 20, pb_legacy.RateLimit_MINUTE, limitRemaining)}},
+					newDescriptorStatusLegacy(status, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining)}},
 			response)
 		assert.NoError(err)
 	}
@@ -478,8 +478,8 @@ func TestBasicConfigLegacy(t *testing.T) {
 			&pb_legacy.RateLimitResponse{
 				OverallCode: status,
 				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 20, pb_legacy.RateLimit_MINUTE, limitRemaining1),
-					newDescriptorStatusLegacy(status, 10, pb_legacy.RateLimit_HOUR, limitRemaining2)}},
+					newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining1),
+					newDescriptorStatusLegacy(status, 10, pb_legacy.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
 			response)
 		assert.NoError(err)
 	}

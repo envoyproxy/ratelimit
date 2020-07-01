@@ -6,7 +6,7 @@ package mock_v2
 
 import (
 	context "context"
-	v2 "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	v2 "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )
