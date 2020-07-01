@@ -10,8 +10,8 @@ import (
 
 	"github.com/coocood/freecache"
 
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	pb_legacy "github.com/envoyproxy/ratelimit/proto/ratelimit"
+	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
@@ -74,9 +74,9 @@ func (runner *Runner) Run() {
 	srv.AddJsonHandler(service)
 
 	// Ratelimit is compatible with two proto definitions
-	// 1. data-plane-api rls.proto: https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto
+	// 1. data-plane-api v3 rls.proto: https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto
 	pb.RegisterRateLimitServiceServer(srv.GrpcServer(), service)
-	// 2. ratelimit.proto defined in this repository: https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto
+	// 1. data-plane-api v2 rls.proto: https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto
 	pb_legacy.RegisterRateLimitServiceServer(srv.GrpcServer(), service.GetLegacyService())
 	// (1) is the current definition, and (2) is the legacy definition.
 

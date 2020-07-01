@@ -6,7 +6,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.11.4
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/coocood/freecache v1.1.0
-	github.com/envoyproxy/go-control-plane v0.6.9
+	github.com/envoyproxy/go-control-plane v0.9.5
 	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/golang/mock v1.4.1
 	github.com/golang/protobuf v1.3.2
@@ -27,7 +27,7 @@ require (
 	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a // indirect
 	golang.org/x/text v0.3.3-0.20191122225017-cbf43d21aaeb // indirect
 	google.golang.org/genproto v0.0.0-20191216205247-b31c10ee225f // indirect
-	google.golang.org/grpc v1.19.0
+	google.golang.org/grpc v1.25.1
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
 	gopkg.in/yaml.v2 v2.3.0
