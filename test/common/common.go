@@ -1,6 +1,9 @@
 package common
 
 import (
+	"fmt"
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"sync"
 
 	pb_struct_legacy "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
@@ -68,4 +71,9 @@ func NewRateLimitRequestLegacy(domain string, descriptors [][][2]string, hitsAdd
 	}
 	request.HitsAddend = hitsAddend
 	return request
+}
+
+func AssertProtoEqual(assert *assert.Assertions, expected proto.Message, actual proto.Message) {
+	assert.True(proto.Equal(expected, actual),
+		fmt.Sprintf("These two protobuf messages are not equal:\nexpected: %v\nactual:  %v", expected, actual))
 }

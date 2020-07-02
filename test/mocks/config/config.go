@@ -6,7 +6,7 @@ package mock_config
 
 import (
 	context "context"
-	ratelimit "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
+	envoy_extensions_common_ratelimit_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	config "github.com/envoyproxy/ratelimit/src/config"
 	gomock "github.com/golang/mock/gomock"
 	stats "github.com/lyft/gostats"
@@ -51,7 +51,7 @@ func (mr *MockRateLimitConfigMockRecorder) Dump() *gomock.Call {
 }
 
 // GetLimit mocks base method
-func (m *MockRateLimitConfig) GetLimit(arg0 context.Context, arg1 string, arg2 *ratelimit.RateLimitDescriptor) *config.RateLimit {
+func (m *MockRateLimitConfig) GetLimit(arg0 context.Context, arg1 string, arg2 *envoy_extensions_common_ratelimit_v3.RateLimitDescriptor) *config.RateLimit {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLimit", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*config.RateLimit)
