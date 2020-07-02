@@ -25,6 +25,7 @@ func convertRatelimit(ratelimit *pb.RateLimitResponse_RateLimit) (*pb_legacy.Rat
 	}
 
 	return &pb_legacy.RateLimitResponse_RateLimit{
+		Name:            ratelimit.GetName(),
 		RequestsPerUnit: ratelimit.GetRequestsPerUnit(),
 		Unit:            pb_legacy.RateLimitResponse_RateLimit_Unit(ratelimit.GetUnit()),
 	}, nil
