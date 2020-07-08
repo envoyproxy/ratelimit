@@ -2,6 +2,7 @@ export GO111MODULE=on
 PROJECT = ratelimit
 REGISTRY ?= envoyproxy
 IMAGE := $(REGISTRY)/$(PROJECT)
+INTEGRATION_IMAGE := $(REGISTRY)/$(PROJECT)_integration
 MODULE = github.com/envoyproxy/ratelimit
 GIT_REF = $(shell git describe --tags || git rev-parse --short=8 --verify HEAD)
 VERSION ?= $(GIT_REF)
@@ -70,8 +71,22 @@ tests_unit: compile
 tests: compile
 	go test -race -tags=integration $(MODULE)/...
 
+.PHONY: tests_with_redis
+tests_with_redis: bootstrap_redis_tls tests_unit
+	redis-server --port 6379 &
+	redis-server --port 6380 &
+	redis-server --port 6381 --requirepass password123 &
+	redis-server --port 6382 --requirepass password123 &
+	redis-server --port 6384 --requirepass password123 &
+	redis-server --port 6385 --requirepass password123 &
+	go test -race -tags=integration $(MODULE)/...
+
+.PHONY: docker_tests
+docker_tests:
+	docker build -f Dockerfile.integration . -t $(INTEGRATION_IMAGE):$(VERSION) && docker run -it $(INTEGRATION_IMAGE):$(VERSION)
+
 .PHONY: docker_image
-docker_image: tests
+docker_image: docker_tests
 	docker build . -t $(IMAGE):$(VERSION)
 
 .PHONY: docker_push
