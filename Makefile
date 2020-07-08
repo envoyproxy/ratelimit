@@ -83,7 +83,8 @@ tests_with_redis: bootstrap_redis_tls tests_unit
 
 .PHONY: docker_tests
 docker_tests:
-	docker build -f Dockerfile.integration . -t $(INTEGRATION_IMAGE):$(VERSION) && docker run -it $(INTEGRATION_IMAGE):$(VERSION)
+	docker build -f Dockerfile.integration . -t $(INTEGRATION_IMAGE):$(VERSION) && \
+	docker run $$(tty -s && echo "-it" || echo) $(INTEGRATION_IMAGE):$(VERSION)
 
 .PHONY: docker_image
 docker_image: docker_tests
