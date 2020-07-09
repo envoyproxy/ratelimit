@@ -17,6 +17,7 @@ type Settings struct {
 	UseStatsd                    bool          `envconfig:"USE_STATSD" default:"true"`
 	StatsdHost                   string        `envconfig:"STATSD_HOST" default:"localhost"`
 	StatsdPort                   int           `envconfig:"STATSD_PORT" default:"8125"`
+	StatsdProtocol               string        `envconfig:"STATSD_PROTOCOL" default:"tcp"`
 	RuntimePath                  string        `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`
 	RuntimeSubdirectory          string        `envconfig:"RUNTIME_SUBDIRECTORY"`
 	RuntimeIgnoreDotFiles        bool          `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
