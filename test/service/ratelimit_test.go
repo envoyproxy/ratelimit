@@ -97,7 +97,8 @@ func TestService(test *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 
 	response, err := service.ShouldRateLimit(nil, request)
-	t.assert.Equal(
+	common.AssertProtoEqual(
+		t.assert,
 		&pb.RateLimitResponse{
 			OverallCode: pb.RateLimitResponse_OK,
 			Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
@@ -124,7 +125,8 @@ func TestService(test *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 	response, err = service.ShouldRateLimit(nil, request)
-	t.assert.Equal(
+	common.AssertProtoEqual(
+		t.assert,
 		&pb.RateLimitResponse{
 			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
 			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
@@ -154,7 +156,8 @@ func TestService(test *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0}})
 	response, err = service.ShouldRateLimit(nil, request)
-	t.assert.Equal(
+	common.AssertProtoEqual(
+		t.assert,
 		&pb.RateLimitResponse{
 			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
 			Statuses: []*pb.RateLimitResponse_DescriptorStatus{

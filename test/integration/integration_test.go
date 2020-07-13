@@ -166,7 +166,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		response, err := c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("foo", [][][2]string{{{getCacheKey("hello", enable_local_cache), "world"}}}, 1))
-		assert.Equal(
+		common.AssertProtoEqual(
+			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
@@ -184,7 +185,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		response, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
-		assert.Equal(
+		common.AssertProtoEqual(
+			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses: []*pb.RateLimitResponse_DescriptorStatus{
@@ -224,7 +226,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				limitRemaining = 0
 			}
 
-			assert.Equal(
+			common.AssertProtoEqual(
+				assert,
 				&pb.RateLimitResponse{
 					OverallCode: status,
 					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
@@ -287,7 +290,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				limitRemaining2 = 0
 			}
 
-			assert.Equal(
+			common.AssertProtoEqual(
+				assert,
 				&pb.RateLimitResponse{
 					OverallCode: status,
 					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
@@ -384,7 +388,8 @@ func TestBasicConfigLegacy(t *testing.T) {
 	response, err := c.ShouldRateLimit(
 		context.Background(),
 		common.NewRateLimitRequestLegacy("foo", [][][2]string{{{"hello", "world"}}}, 1))
-	assert.Equal(
+	common.AssertProtoEqual(
+		assert,
 		&pb_legacy.RateLimitResponse{
 			OverallCode: pb_legacy.RateLimitResponse_OK,
 			Statuses:    []*pb_legacy.RateLimitResponse_DescriptorStatus{{Code: pb_legacy.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
