@@ -3,7 +3,9 @@ package ratelimit_test
 import (
 	"testing"
 
+	core_legacy "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	pb_struct_legacy "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -12,7 +14,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/golang/mock/gomock"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -23,19 +24,10 @@ func convertRatelimit(ratelimit *pb.RateLimitResponse_RateLimit) (*pb_legacy.Rat
 		return nil, nil
 	}
 
-	m := &jsonpb.Marshaler{}
-	s, err := m.MarshalToString(ratelimit)
-	if err != nil {
-		return nil, err
-	}
-
-	rl := &pb_legacy.RateLimitResponse_RateLimit{}
-	err = jsonpb.UnmarshalString(s, rl)
-	if err != nil {
-		return nil, err
-	}
-
-	return rl, nil
+	return &pb_legacy.RateLimitResponse_RateLimit{
+		RequestsPerUnit: ratelimit.GetRequestsPerUnit(),
+		Unit:            pb_legacy.RateLimitResponse_RateLimit_Unit(ratelimit.GetUnit()),
+	}, nil
 }
 
 func convertRatelimits(ratelimits []*config.RateLimit) ([]*pb_legacy.RateLimitResponse_RateLimit, error) {
@@ -75,7 +67,8 @@ func TestServiceLegacy(test *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, legacyRequest)
-	t.assert.Equal(
+	common.AssertProtoEqual(
+		t.assert,
 		&pb_legacy.RateLimitResponse{
 			OverallCode: pb_legacy.RateLimitResponse_OK,
 			Statuses:    []*pb_legacy.RateLimitResponse_DescriptorStatus{{Code: pb_legacy.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
@@ -112,7 +105,8 @@ func TestServiceLegacy(test *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 	response, err = service.GetLegacyService().ShouldRateLimit(nil, legacyRequest)
-	t.assert.Equal(
+	common.AssertProtoEqual(
+		t.assert,
 		&pb_legacy.RateLimitResponse{
 			OverallCode: pb_legacy.RateLimitResponse_OVER_LIMIT,
 			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
@@ -147,7 +141,8 @@ func TestServiceLegacy(test *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0}})
 	response, err = service.GetLegacyService().ShouldRateLimit(nil, legacyRequest)
-	t.assert.Equal(
+	common.AssertProtoEqual(
+		t.assert,
 		&pb_legacy.RateLimitResponse{
 			OverallCode: pb_legacy.RateLimitResponse_OVER_LIMIT,
 			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
@@ -261,7 +256,7 @@ func TestConvertLegacyRequest(test *testing.T) {
 			assert.FailNow(test, err.Error())
 		}
 
-		assert.Equal(test, expectedRequest, req)
+		common.AssertProtoEqual(assert.New(test), expectedRequest, req)
 	}
 
 	{
@@ -282,7 +277,7 @@ func TestConvertLegacyRequest(test *testing.T) {
 			assert.FailNow(test, err.Error())
 		}
 
-		assert.Equal(test, expectedRequest, req)
+		common.AssertProtoEqual(assert.New(test), expectedRequest, req)
 	}
 
 	{
@@ -341,7 +336,7 @@ func TestConvertLegacyRequest(test *testing.T) {
 			assert.FailNow(test, err.Error())
 		}
 
-		assert.Equal(test, expectedRequest, req)
+		common.AssertProtoEqual(assert.New(test), expectedRequest, req)
 	}
 }
 
@@ -371,9 +366,21 @@ func TestConvertResponse(test *testing.T) {
 		},
 	}
 
+	requestHeadersToAdd := []*core.HeaderValue{{
+		Key:   "test_request",
+		Value: "test_request_value",
+	}, nil}
+
+	responseHeadersToAdd := []*core.HeaderValue{{
+		Key:   "test_response",
+		Value: "test_response",
+	}, nil}
+
 	response := &pb.RateLimitResponse{
-		OverallCode: pb.RateLimitResponse_OVER_LIMIT,
-		Statuses:    statuses,
+		OverallCode:          pb.RateLimitResponse_OVER_LIMIT,
+		Statuses:             statuses,
+		RequestHeadersToAdd:  requestHeadersToAdd,
+		ResponseHeadersToAdd: responseHeadersToAdd,
 	}
 
 	expectedRl := &pb_legacy.RateLimitResponse_RateLimit{
@@ -395,9 +402,21 @@ func TestConvertResponse(test *testing.T) {
 		},
 	}
 
+	expectedRequestHeadersToAdd := []*core_legacy.HeaderValue{{
+		Key:   "test_request",
+		Value: "test_request_value",
+	}, nil}
+
+	expecpectedResponseHeadersToAdd := []*core_legacy.HeaderValue{{
+		Key:   "test_response",
+		Value: "test_response",
+	}, nil}
+
 	expectedResponse := &pb_legacy.RateLimitResponse{
-		OverallCode: pb_legacy.RateLimitResponse_OVER_LIMIT,
-		Statuses:    expectedStatuses,
+		OverallCode:         pb_legacy.RateLimitResponse_OVER_LIMIT,
+		Statuses:            expectedStatuses,
+		RequestHeadersToAdd: expectedRequestHeadersToAdd,
+		Headers:             expecpectedResponseHeadersToAdd,
 	}
 
 	resp, err = ratelimit.ConvertResponse(response)
@@ -405,5 +424,5 @@ func TestConvertResponse(test *testing.T) {
 		assert.FailNow(test, err.Error())
 	}
 
-	assert.Equal(test, expectedResponse, resp)
+	common.AssertProtoEqual(assert.New(test), expectedResponse, resp)
 }
