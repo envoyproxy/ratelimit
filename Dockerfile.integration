@@ -1,0 +1,17 @@
+# Running this docker image runs the integration tests.
+FROM golang:1.14
+
+RUN apt-get update -y && apt-get install sudo stunnel4 redis -y && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workdir
+
+ENV GOPROXY=https://proxy.golang.org
+COPY go.mod go.sum /workdir/
+RUN go mod download
+
+COPY Makefile /workdir
+RUN make bootstrap
+
+COPY src /workdir/src
+COPY test /workdir/test
+CMD make tests_with_redis
