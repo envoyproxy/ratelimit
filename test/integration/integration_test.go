@@ -427,7 +427,8 @@ func TestBasicConfigLegacy(t *testing.T) {
 	response, err = c.ShouldRateLimit(
 		context.Background(),
 		common.NewRateLimitRequestLegacy("basic_legacy", [][][2]string{{{"key1", "foo"}}}, 1))
-	assert.Equal(
+	common.AssertProtoEqual(
+		assert,
 		&pb_legacy.RateLimitResponse{
 			OverallCode: pb_legacy.RateLimitResponse_OK,
 			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
@@ -451,7 +452,8 @@ func TestBasicConfigLegacy(t *testing.T) {
 			limitRemaining = 0
 		}
 
-		assert.Equal(
+		common.AssertProtoEqual(
+			assert,
 			&pb_legacy.RateLimitResponse{
 				OverallCode: status,
 				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
@@ -479,7 +481,8 @@ func TestBasicConfigLegacy(t *testing.T) {
 			limitRemaining2 = 0
 		}
 
-		assert.Equal(
+		common.AssertProtoEqual(
+			assert,
 			&pb_legacy.RateLimitResponse{
 				OverallCode: status,
 				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
@@ -523,7 +526,8 @@ func testConfigReload(grpcPort, perSecond string, local_cache_size string) func(
 		response, err := c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("reload", [][][2]string{{{getCacheKey("block", enable_local_cache), "foo"}}}, 1))
-		assert.Equal(
+		common.AssertProtoEqual(
+			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK}}},
@@ -577,7 +581,8 @@ func testConfigReload(grpcPort, perSecond string, local_cache_size string) func(
 		response, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("reload", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
-		assert.Equal(
+		common.AssertProtoEqual(
+			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses: []*pb.RateLimitResponse_DescriptorStatus{

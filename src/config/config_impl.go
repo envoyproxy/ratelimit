@@ -39,7 +39,8 @@ type rateLimitDomain struct {
 }
 
 type rateLimitConfigImpl struct {
-	domains map[string]*rateLimitDomain
+	domains    map[string]*rateLimitDomain
+	statsScope stats.Scope
 }
 
 var validKeys = map[string]bool{
@@ -197,8 +198,7 @@ func validateYamlKeys(config RateLimitConfigToLoad, config_map map[interface{}]i
 
 // Load a single YAML config file into the global config.
 // @param config specifies the file contents to load.
-// @param statsScope supplies the owning scope.
-func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad, statsScope stats.Scope) {
+func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	// validate keys in config with generic map
 	any := map[interface{}]interface{}{}
 	err := yaml.Unmarshal([]byte(config.FileBytes), &any)
@@ -228,8 +228,22 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad, statsS
 
 	logger.Debugf("loading domain: %s", root.Domain)
 	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil}}
-	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, statsScope)
+	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsScope)
 	this.domains[root.Domain] = newDomain
+}
+
+func (this *rateLimitConfigImpl) descriptorToKey(descriptor *pb_struct.RateLimitDescriptor) string {
+	rateLimitKey := ""
+	for _, entry := range descriptor.Entries {
+		if rateLimitKey != "" {
+			rateLimitKey += "."
+		}
+		rateLimitKey += entry.Key
+		if entry.Value != "" {
+			rateLimitKey += "_" + entry.Value
+		}
+	}
+	return rateLimitKey
 }
 
 func (this *rateLimitConfigImpl) Dump() string {
@@ -249,6 +263,17 @@ func (this *rateLimitConfigImpl) GetLimit(
 	value := this.domains[domain]
 	if value == nil {
 		logger.Debugf("unknown domain '%s'", domain)
+		return rateLimit
+	}
+
+	if descriptor.GetLimit() != nil {
+		rateLimitKey := domain + "." + this.descriptorToKey(descriptor)
+		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
+		rateLimit = NewRateLimit(
+			descriptor.GetLimit().GetRequestsPerUnit(),
+			rateLimitOverrideUnit,
+			rateLimitKey,
+			this.statsScope)
 		return rateLimit
 	}
 
@@ -292,9 +317,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 func NewRateLimitConfigImpl(
 	configs []RateLimitConfigToLoad, statsScope stats.Scope) RateLimitConfig {
 
-	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}}
+	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsScope}
 	for _, config := range configs {
-		ret.loadConfig(config, statsScope)
+		ret.loadConfig(config)
 	}
 
 	return ret

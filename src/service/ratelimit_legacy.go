@@ -110,6 +110,7 @@ func ConvertResponse(response *pb.RateLimitResponse) (*pb_legacy.RateLimitRespon
 				}
 				if status.GetCurrentLimit() != nil {
 					statuses[i].CurrentLimit = &pb_legacy.RateLimitResponse_RateLimit{
+						Name:            status.GetCurrentLimit().GetName(),
 						RequestsPerUnit: status.GetCurrentLimit().GetRequestsPerUnit(),
 						Unit:            pb_legacy.RateLimitResponse_RateLimit_Unit(status.GetCurrentLimit().GetUnit()),
 					}
