@@ -36,7 +36,6 @@ type rateLimitDescriptor struct {
 
 type rateLimitDomain struct {
 	rateLimitDescriptor
-	overrides map[string]*RateLimit
 }
 
 type rateLimitConfigImpl struct {
@@ -228,7 +227,7 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	}
 
 	logger.Debugf("loading domain: %s", root.Domain)
-	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil}, map[string]*RateLimit{}}
+	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil}}
 	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsScope)
 	this.domains[root.Domain] = newDomain
 }
@@ -269,23 +268,12 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 	if descriptor.GetLimit() != nil {
 		rateLimitKey := domain + "." + this.descriptorToKey(descriptor)
-		rateLimit := value.overrides[rateLimitKey]
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
-		if rateLimit != nil {
-			if rateLimit.Limit.RequestsPerUnit != descriptor.GetLimit().GetRequestsPerUnit() ||
-				rateLimit.Limit.Unit != rateLimitOverrideUnit {
-
-				rateLimit.Limit.RequestsPerUnit = descriptor.GetLimit().GetRequestsPerUnit()
-				rateLimit.Limit.Unit = rateLimitOverrideUnit
-			}
-			return rateLimit
-		}
 		rateLimit = NewRateLimit(
 			descriptor.GetLimit().GetRequestsPerUnit(),
 			rateLimitOverrideUnit,
 			rateLimitKey,
 			this.statsScope)
-		value.overrides[rateLimitKey] = rateLimit
 		return rateLimit
 	}
 

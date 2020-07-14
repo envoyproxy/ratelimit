@@ -193,13 +193,16 @@ func TestConfigLimitOverride(t *testing.T) {
 			},
 		})
 	assert.Equal("test-domain.key1_value1.subkey1_something", rl.FullKey)
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
 	common.AssertProtoEqual(assert, &pb.RateLimitResponse_RateLimit{
 		RequestsPerUnit: 42,
 		Unit:            pb.RateLimitResponse_RateLimit_HOUR,
 	}, rl.Limit)
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
+	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
+	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
+	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
 
 	// Different value creates a different counter
 	rl = rlConfig.GetLimit(
