@@ -356,16 +356,26 @@ STAT:
 * near_limit: Number of rule hits over the NearLimit ratio threshold (currently 80%) but under the threshold rate.
 * over_limit: Number of rule hits exceeding the threshold rate
 * total_hits: Number of rule hits in total
+* limit_per_second|minute|hour|day: The currently configured limit (for the respective configured unit).
 
 These are examples of generated stats for some configured rate limit rules from the above examples:
 
 ```
 ratelimit.service.rate_limit.mongo_cps.database_default.over_limit: 0
 ratelimit.service.rate_limit.mongo_cps.database_default.total_hits: 2846
+ratelimit.service.rate_limit.mongo_cps.database_default.limit_per_second: 500
 ratelimit.service.rate_limit.mongo_cps.database_users.over_limit: 0
 ratelimit.service.rate_limit.mongo_cps.database_users.total_hits: 2939
+ratelimit.service.rate_limit.mongo_cps.database_users.limit_per_second: 500
 ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.over_limit: 0
 ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.total_hits: 0
+ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.limit_per_day: 5
+```
+
+The unit suffix in `limit_per_...` allows for safe use in queries and alarm conditions, e.g.
+```
+msum(1d, ts(ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.total_hits))
+/ ts(ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.limit_per_day)
 ```
 
 # HTTP Port

@@ -56,13 +56,17 @@ var validKeys = map[string]bool{
 // Create new rate limit stats for a config entry.
 // @param statsScope supplies the owning scope.
 // @param key supplies the fully resolved key name of the entry.
+// @param requestsPerUnit supplies the requests per unit of time for the entry.
+// @param unit supplies the unit of time for the entry.
 // @return new stats.
-func newRateLimitStats(statsScope stats.Scope, key string) RateLimitStats {
+func newRateLimitStats(statsScope stats.Scope, key string, requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit) RateLimitStats {
 	ret := RateLimitStats{}
 	ret.TotalHits = statsScope.NewCounter(key + ".total_hits")
 	ret.OverLimit = statsScope.NewCounter(key + ".over_limit")
 	ret.NearLimit = statsScope.NewCounter(key + ".near_limit")
 	ret.OverLimitWithLocalCache = statsScope.NewCounter(key + ".over_limit_with_local_cache")
+	ret.Limit = statsScope.NewGauge(key + fmt.Sprintf(".limit_per_%v", strings.ToLower(unit.String())))
+	ret.Limit.Set(uint64(requestsPerUnit))
 	return ret
 }
 
@@ -75,7 +79,7 @@ func newRateLimitStats(statsScope stats.Scope, key string) RateLimitStats {
 func NewRateLimit(
 	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, key string, scope stats.Scope) *RateLimit {
 
-	return &RateLimit{FullKey: key, Stats: newRateLimitStats(scope, key), Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
+	return &RateLimit{FullKey: key, Stats: newRateLimitStats(scope, key, requestsPerUnit, unit), Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
 }
 
 // Dump an individual descriptor for debugging purposes.

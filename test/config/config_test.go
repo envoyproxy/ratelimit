@@ -70,6 +70,7 @@ func TestBasicConfig(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.near_limit").Value())
+	assert.EqualValues(5, stats.NewGauge("test-domain.key1_value1.subkey1.limit_per_second").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -87,6 +88,8 @@ func TestBasicConfig(t *testing.T) {
 		1, stats.NewCounter("test-domain.key1_value1.subkey1_subvalue1.over_limit").Value())
 	assert.EqualValues(
 		1, stats.NewCounter("test-domain.key1_value1.subkey1_subvalue1.near_limit").Value())
+	assert.EqualValues(
+		10, stats.NewGauge("test-domain.key1_value1.subkey1_subvalue1.limit_per_second").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -101,6 +104,7 @@ func TestBasicConfig(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key2.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key2.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key2.near_limit").Value())
+	assert.EqualValues(20, stats.NewGauge("test-domain.key2.limit_per_minute").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -115,6 +119,7 @@ func TestBasicConfig(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.near_limit").Value())
+	assert.EqualValues(30, stats.NewGauge("test-domain.key2_value2.limit_per_minute").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -136,6 +141,7 @@ func TestBasicConfig(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key3.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key3.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key3.near_limit").Value())
+	assert.EqualValues(1, stats.NewGauge("test-domain.key3.limit_per_hour").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -150,6 +156,7 @@ func TestBasicConfig(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.near_limit").Value())
+	assert.EqualValues(1, stats.NewGauge("test-domain.key4.limit_per_day").Value())
 }
 
 func TestConfigLimitOverride(t *testing.T) {
@@ -182,6 +189,7 @@ func TestConfigLimitOverride(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
+	assert.EqualValues(10, stats.NewGauge("test-domain.key1_value1.subkey1_something.limit_per_day").Value())
 
 	// Change in override value doesn't erase stats
 	rl = rlConfig.GetLimit(
@@ -203,6 +211,8 @@ func TestConfigLimitOverride(t *testing.T) {
 	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
 	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
 	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
+	assert.EqualValues(10, stats.NewGauge("test-domain.key1_value1.subkey1_something.limit_per_day").Value())
+	assert.EqualValues(42, stats.NewGauge("test-domain.key1_value1.subkey1_something.limit_per_hour").Value())
 
 	// Different value creates a different counter
 	rl = rlConfig.GetLimit(
@@ -224,6 +234,7 @@ func TestConfigLimitOverride(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.near_limit").Value())
+	assert.EqualValues(42, stats.NewGauge("test-domain.key1_value1.subkey1_something_else.limit_per_hour").Value())
 }
 
 func expectConfigPanic(t *testing.T, call func(), expectedError string) {

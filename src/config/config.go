@@ -25,6 +25,7 @@ type RateLimitStats struct {
 	OverLimit               stats.Counter
 	NearLimit               stats.Counter
 	OverLimitWithLocalCache stats.Counter
+	Limit                   stats.Gauge
 }
 
 // Wrapper for an individual rate limit config entry which includes the defined limit and stats.
