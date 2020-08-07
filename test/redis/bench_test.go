@@ -18,7 +18,7 @@ import (
 )
 
 func BenchmarkParallelDoLimit(b *testing.B) {
-	b.Skip("Skip benchmark")
+	//b.Skip("Skip benchmark")
 
 	b.ReportAllocs()
 
@@ -67,28 +67,30 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 
 	b.Run("no pipeline", mkDoLimitBench(0, 0))
 
-	b.Run("pipeline 35us 1", mkDoLimitBench(35*time.Microsecond, 1))
-	b.Run("pipeline 75us 1", mkDoLimitBench(75*time.Microsecond, 1))
-	b.Run("pipeline 150us 1", mkDoLimitBench(150*time.Microsecond, 1))
-	b.Run("pipeline 300us 1", mkDoLimitBench(300*time.Microsecond, 1))
+	/*
+		b.Run("pipeline 35us 1", mkDoLimitBench(35*time.Microsecond, 1))
+		b.Run("pipeline 75us 1", mkDoLimitBench(75*time.Microsecond, 1))
+		b.Run("pipeline 150us 1", mkDoLimitBench(150*time.Microsecond, 1))
+		b.Run("pipeline 300us 1", mkDoLimitBench(300*time.Microsecond, 1))
 
-	b.Run("pipeline 35us 2", mkDoLimitBench(35*time.Microsecond, 2))
-	b.Run("pipeline 75us 2", mkDoLimitBench(75*time.Microsecond, 2))
-	b.Run("pipeline 150us 2", mkDoLimitBench(150*time.Microsecond, 2))
-	b.Run("pipeline 300us 2", mkDoLimitBench(300*time.Microsecond, 2))
+		b.Run("pipeline 35us 2", mkDoLimitBench(35*time.Microsecond, 2))
+		b.Run("pipeline 75us 2", mkDoLimitBench(75*time.Microsecond, 2))
+		b.Run("pipeline 150us 2", mkDoLimitBench(150*time.Microsecond, 2))
+		b.Run("pipeline 300us 2", mkDoLimitBench(300*time.Microsecond, 2))
 
-	b.Run("pipeline 35us 4", mkDoLimitBench(35*time.Microsecond, 4))
-	b.Run("pipeline 75us 4", mkDoLimitBench(75*time.Microsecond, 4))
-	b.Run("pipeline 150us 4", mkDoLimitBench(150*time.Microsecond, 4))
-	b.Run("pipeline 300us 4", mkDoLimitBench(300*time.Microsecond, 4))
+		b.Run("pipeline 35us 4", mkDoLimitBench(35*time.Microsecond, 4))
+		b.Run("pipeline 75us 4", mkDoLimitBench(75*time.Microsecond, 4))
+		b.Run("pipeline 150us 4", mkDoLimitBench(150*time.Microsecond, 4))
+		b.Run("pipeline 300us 4", mkDoLimitBench(300*time.Microsecond, 4))
 
-	b.Run("pipeline 35us 8", mkDoLimitBench(35*time.Microsecond, 8))
-	b.Run("pipeline 75us 8", mkDoLimitBench(75*time.Microsecond, 8))
-	b.Run("pipeline 150us 8", mkDoLimitBench(150*time.Microsecond, 8))
-	b.Run("pipeline 300us 8", mkDoLimitBench(300*time.Microsecond, 8))
+		b.Run("pipeline 35us 8", mkDoLimitBench(35*time.Microsecond, 8))
+		b.Run("pipeline 75us 8", mkDoLimitBench(75*time.Microsecond, 8))
+		b.Run("pipeline 150us 8", mkDoLimitBench(150*time.Microsecond, 8))
+		b.Run("pipeline 300us 8", mkDoLimitBench(300*time.Microsecond, 8))
 
-	b.Run("pipeline 35us 16", mkDoLimitBench(35*time.Microsecond, 16))
-	b.Run("pipeline 75us 16", mkDoLimitBench(75*time.Microsecond, 16))
-	b.Run("pipeline 150us 16", mkDoLimitBench(150*time.Microsecond, 16))
-	b.Run("pipeline 300us 16", mkDoLimitBench(300*time.Microsecond, 16))
+		b.Run("pipeline 35us 16", mkDoLimitBench(35*time.Microsecond, 16))
+		b.Run("pipeline 75us 16", mkDoLimitBench(75*time.Microsecond, 16))
+		b.Run("pipeline 150us 16", mkDoLimitBench(150*time.Microsecond, 16))
+		b.Run("pipeline 300us 16", mkDoLimitBench(300*time.Microsecond, 16))
+	*/
 }

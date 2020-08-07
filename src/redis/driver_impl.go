@@ -40,8 +40,9 @@ func poolTrace(ps *poolStats) trace.PoolTrace {
 }
 
 type clientImpl struct {
-	client radix.Client
-	stats  poolStats
+	client             radix.Client
+	stats              poolStats
+	implicitPipelining bool
 }
 
 func checkError(err error) {
@@ -76,11 +77,17 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, url string, pool
 
 	stats := newPoolStats(scope)
 
+	opts := []radix.PoolOpt{radix.PoolConnFunc(df), radix.PoolWithTrace(poolTrace(&stats))}
+
+	implicitPipelining := true
+	if pipelineWindow == 0 && pipelineLimit == 0 {
+		implicitPipelining = false
+	} else {
+		opts = append(opts, radix.PoolPipelineWindow(pipelineWindow, pipelineLimit))
+	}
+
 	// TODO: support sentinel and redis cluster
-	pool, err := radix.NewPool("tcp", url, poolSize, radix.PoolConnFunc(df),
-		radix.PoolPipelineWindow(pipelineWindow, pipelineLimit),
-		radix.PoolWithTrace(poolTrace(&stats)),
-	)
+	pool, err := radix.NewPool("tcp", url, poolSize, opts...)
 	checkError(err)
 
 	// Check if connection is good
@@ -91,8 +98,9 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, url string, pool
 	}
 
 	return &clientImpl{
-		client: pool,
-		stats:  stats,
+		client:             pool,
+		stats:              stats,
+		implicitPipelining: implicitPipelining,
 	}
 }
 
@@ -106,4 +114,21 @@ func (c *clientImpl) Close() error {
 
 func (c *clientImpl) NumActiveConns() int {
 	return int(c.stats.connectionActive.Value())
+}
+
+func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd, key string, args ...interface{}) Pipeline {
+	return append(pipeline, radix.FlatCmd(rcv, cmd, key, args...))
+}
+
+func (c *clientImpl) PipeDo(pipeline Pipeline) error {
+	if c.implicitPipelining {
+		for _, action := range pipeline {
+			if err := c.client.Do(action); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return c.client.Do(radix.Pipeline(pipeline...))
 }

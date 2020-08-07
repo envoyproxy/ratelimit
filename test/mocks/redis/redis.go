@@ -5,6 +5,7 @@
 package mock_redis
 
 import (
+	redis "github.com/envoyproxy/ratelimit/src/redis"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )
@@ -77,4 +78,37 @@ func (m *MockClient) NumActiveConns() int {
 func (mr *MockClientMockRecorder) NumActiveConns() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NumActiveConns", reflect.TypeOf((*MockClient)(nil).NumActiveConns))
+}
+
+// PipeAppend mocks base method
+func (m *MockClient) PipeAppend(arg0 redis.Pipeline, arg1 interface{}, arg2, arg3 string, arg4 ...interface{}) redis.Pipeline {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1, arg2, arg3}
+	for _, a := range arg4 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PipeAppend", varargs...)
+	ret0, _ := ret[0].(redis.Pipeline)
+	return ret0
+}
+
+// PipeAppend indicates an expected call of PipeAppend
+func (mr *MockClientMockRecorder) PipeAppend(arg0, arg1, arg2, arg3 interface{}, arg4 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1, arg2, arg3}, arg4...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PipeAppend", reflect.TypeOf((*MockClient)(nil).PipeAppend), varargs...)
+}
+
+// PipeDo mocks base method
+func (m *MockClient) PipeDo(arg0 redis.Pipeline) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PipeDo", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PipeDo indicates an expected call of PipeDo
+func (mr *MockClientMockRecorder) PipeDo(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PipeDo", reflect.TypeOf((*MockClient)(nil).PipeDo), arg0)
 }

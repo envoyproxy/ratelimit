@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/coocood/freecache"
+	"github.com/mediocregopher/radix/v3"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
@@ -25,6 +26,10 @@ import (
 func TestRedis(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testRedis(false))
 	t.Run("WithPerSecondRedis", testRedis(true))
+}
+
+func pipeAppend(pipeline redis.Pipeline, rcv interface{}, cmd, key string, args ...interface{}) redis.Pipeline {
+	return append(pipeline, radix.FlatCmd(rcv, cmd, key, args...))
 }
 
 func testRedis(usePerSecondRedis bool) func(*testing.T) {
@@ -52,8 +57,9 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 			clientUsed = client
 		}
 
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(0, uint32(5))
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(1))
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(1, uint32(5)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(1)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 		request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 		limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
@@ -67,9 +73,10 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 
 		clientUsed = client
 		timeSource.EXPECT().UnixNow().Return(int64(1234))
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key2_value2_subkey2_subvalue2_1200", uint32(1)).SetArg(0, uint32(11))
-		clientUsed.EXPECT().DoCmd(gomock.Any(),
-			"EXPIRE", "domain_key2_value2_subkey2_subvalue2_1200", int64(60))
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key2_value2_subkey2_subvalue2_1200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+			"EXPIRE", "domain_key2_value2_subkey2_subvalue2_1200", int64(60)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 		request = common.NewRateLimitRequest(
 			"domain",
@@ -90,12 +97,13 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 
 		clientUsed = client
 		timeSource.EXPECT().UnixNow().Return(int64(1000000))
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key3_value3_997200", uint32(1)).SetArg(0, uint32(11))
-		clientUsed.EXPECT().DoCmd(gomock.Any(),
-			"EXPIRE", "domain_key3_value3_997200", int64(3600))
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key3_value3_subkey3_subvalue3_950400", uint32(1)).SetArg(0, uint32(13))
-		clientUsed.EXPECT().DoCmd(gomock.Any(),
-			"EXPIRE", "domain_key3_value3_subkey3_subvalue3_950400", int64(86400))
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key3_value3_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+			"EXPIRE", "domain_key3_value3_997200", int64(3600)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key3_value3_subkey3_subvalue3_950400", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+			"EXPIRE", "domain_key3_value3_subkey3_subvalue3_950400", int64(86400)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 		request = common.NewRateLimitRequest(
 			"domain",
