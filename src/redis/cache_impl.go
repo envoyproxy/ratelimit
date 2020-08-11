@@ -112,7 +112,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 		checkError(this.client.PipeDo(pipeline))
 	}
 	if perSecondPipeline != nil {
-		checkError(this.perSecondClient.PipeDo(pipeline))
+		checkError(this.perSecondClient.PipeDo(perSecondPipeline))
 	}
 
 	// Now fetch the pipeline.

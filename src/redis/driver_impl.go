@@ -132,3 +132,7 @@ func (c *clientImpl) PipeDo(pipeline Pipeline) error {
 
 	return c.client.Do(radix.Pipeline(pipeline...))
 }
+
+func (c *clientImpl) ImplicitPipeliningEnabled() bool {
+	return c.implicitPipelining
+}

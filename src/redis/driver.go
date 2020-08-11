@@ -19,7 +19,7 @@ type Client interface {
 	// @param args supplies the additional arguments.
 	DoCmd(rcv interface{}, cmd, key string, args ...interface{}) error
 
-	// Pipe append a command onto the pipeline queue.
+	// PipeAppend append a command onto the pipeline queue.
 	//
 	// @param pipeline supplies the queue for pending commands.
 	// @param rcv supplies receiver for the result.
@@ -41,6 +41,9 @@ type Client interface {
 
 	// NumActiveConns return number of active connections, used in testing.
 	NumActiveConns() int
+
+	// ImplicitPipeliningEnabled return true if implicit pipelining is enabled.
+	ImplicitPipeliningEnabled() bool
 }
 
 type Pipeline []radix.CmdAction
