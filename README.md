@@ -25,6 +25,7 @@
 - [Debug Port](#debug-port)
 - [Local Cache](#local-cache)
 - [Redis](#redis)
+  - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
 - [Contact](#contact)
@@ -447,7 +448,11 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_TLS` & `REDIS_PERSECOND_TLS`: set to `"true"` to enable a TLS connection for the specific connection type.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable authentication to the redis host.
 
-Ratelimit use [implicit pipelining](https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L238) to send requests to redis. Pipelining can be configured using the following environment variables:
+## Pipelining
+
+By default, for each request, ratelimit will pick up a connection from pool, wirte multiple redis commands in a single write then reads their responses in a single read. This reduces network delay.
+
+For high throughput scenarios, ratelimit also support [implicit pipelining](https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L238) . It can be configured using the following environment variables:
 
 1. `REDIS_PIPELINE_WINDOW` & `REDIS_PERSECOND_PIPELINE_WINDOW`:  sets the duration after which internal pipelines will be flushed.
 If window is zero then implicit pipelining will be disabled.
