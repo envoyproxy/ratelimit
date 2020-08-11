@@ -27,16 +27,16 @@ type Settings struct {
 	RedisPoolSize                int           `envconfig:"REDIS_POOL_SIZE" default:"10"`
 	RedisAuth                    string        `envconfig:"REDIS_AUTH" default:""`
 	RedisTls                     bool          `envconfig:"REDIS_TLS" default:"false"`
-	RedisPipelineWindow          time.Duration `envconfig:"REDIS_PIPELINE_WINDOW" default:"75µs"`
-	RedisPipelineLimit           int           `envconfig:"REDIS_PIPELINE_LIMIT" default:"8"`
+	RedisPipelineWindow          time.Duration `envconfig:"REDIS_PIPELINE_WINDOW" default:"0"`
+	RedisPipelineLimit           int           `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
 	RedisPerSecond               bool          `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType     string        `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
 	RedisPerSecondUrl            string        `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize       int           `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	RedisPerSecondAuth           string        `envconfig:"REDIS_PERSECOND_AUTH" default:""`
 	RedisPerSecondTls            bool          `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
-	RedisPerSecondPipelineWindow time.Duration `envconfig:"REDIS_PERSECOND_PIPELINE_WINDOW" default:"75µs"`
-	RedisPerSecondPipelineLimit  int           `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"8"`
+	RedisPerSecondPipelineWindow time.Duration `envconfig:"REDIS_PERSECOND_PIPELINE_WINDOW" default:"0"`
+	RedisPerSecondPipelineLimit  int           `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 	ExpirationJitterMaxSeconds   int64         `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	LocalCacheSizeInBytes        int           `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
 }

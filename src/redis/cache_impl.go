@@ -36,14 +36,9 @@ func max(a uint32, b uint32) uint32 {
 	return b
 }
 
-func pipelineAppend(client Client, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) (err error) {
-	if err = client.DoCmd(result, "INCRBY", key, hitsAddend); err != nil {
-		return
-	}
-	if err = client.DoCmd(nil, "EXPIRE", key, expirationSeconds); err != nil {
-		return
-	}
-	return
+func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) {
+	*pipeline = client.PipeAppend(*pipeline, result, "INCRBY", key, hitsAddend)
+	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
 func (this *rateLimitCacheImpl) DoLimit(
@@ -74,7 +69,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	results := make([]uint32, len(request.Descriptors))
-	var err error
+	var pipeline, perSecondPipeline Pipeline
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
@@ -101,16 +96,24 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
 		if this.perSecondClient != nil && cacheKey.PerSecond {
-			if err = pipelineAppend(this.perSecondClient, cacheKey.Key, hitsAddend, &results[i], expirationSeconds); err != nil {
-				break
+			if perSecondPipeline == nil {
+				perSecondPipeline = Pipeline{}
 			}
+			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 		} else {
-			if err = pipelineAppend(this.client, cacheKey.Key, hitsAddend, &results[i], expirationSeconds); err != nil {
-				break
+			if pipeline == nil {
+				pipeline = Pipeline{}
 			}
+			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 		}
 	}
-	checkError(err)
+
+	if pipeline != nil {
+		checkError(this.client.PipeDo(pipeline))
+	}
+	if perSecondPipeline != nil {
+		checkError(this.perSecondClient.PipeDo(perSecondPipeline))
+	}
 
 	// Now fetch the pipeline.
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/coocood/freecache"
+	"github.com/mediocregopher/radix/v3"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
@@ -25,6 +26,10 @@ import (
 func TestRedis(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testRedis(false))
 	t.Run("WithPerSecondRedis", testRedis(true))
+}
+
+func pipeAppend(pipeline redis.Pipeline, rcv interface{}, cmd, key string, args ...interface{}) redis.Pipeline {
+	return append(pipeline, radix.FlatCmd(rcv, cmd, key, args...))
 }
 
 func testRedis(usePerSecondRedis bool) func(*testing.T) {
@@ -52,8 +57,9 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 			clientUsed = client
 		}
 
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(0, uint32(5))
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(1))
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(1, uint32(5)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(1)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 		request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 		limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
@@ -67,9 +73,10 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 
 		clientUsed = client
 		timeSource.EXPECT().UnixNow().Return(int64(1234))
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key2_value2_subkey2_subvalue2_1200", uint32(1)).SetArg(0, uint32(11))
-		clientUsed.EXPECT().DoCmd(gomock.Any(),
-			"EXPIRE", "domain_key2_value2_subkey2_subvalue2_1200", int64(60))
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key2_value2_subkey2_subvalue2_1200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+			"EXPIRE", "domain_key2_value2_subkey2_subvalue2_1200", int64(60)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 		request = common.NewRateLimitRequest(
 			"domain",
@@ -90,12 +97,13 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 
 		clientUsed = client
 		timeSource.EXPECT().UnixNow().Return(int64(1000000))
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key3_value3_997200", uint32(1)).SetArg(0, uint32(11))
-		clientUsed.EXPECT().DoCmd(gomock.Any(),
-			"EXPIRE", "domain_key3_value3_997200", int64(3600))
-		clientUsed.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key3_value3_subkey3_subvalue3_950400", uint32(1)).SetArg(0, uint32(13))
-		clientUsed.EXPECT().DoCmd(gomock.Any(),
-			"EXPIRE", "domain_key3_value3_subkey3_subvalue3_950400", int64(86400))
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key3_value3_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+			"EXPIRE", "domain_key3_value3_997200", int64(3600)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key3_value3_subkey3_subvalue3_950400", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+			"EXPIRE", "domain_key3_value3_subkey3_subvalue3_950400", int64(86400)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 		request = common.NewRateLimitRequest(
 			"domain",
@@ -171,9 +179,10 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(11))
-	client.EXPECT().DoCmd(gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 
@@ -194,9 +203,10 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(13))
-	client.EXPECT().DoCmd(gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -212,9 +222,10 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	// Test Over limit stats
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(16))
-	client.EXPECT().DoCmd(gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(16)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -230,8 +241,8 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	// Test Over limit stats with local cache
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
-	client.EXPECT().DoCmd(gomock.Any(),
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600)).Times(0)
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -258,9 +269,10 @@ func TestNearLimit(t *testing.T) {
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(11))
-	client.EXPECT().DoCmd(gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 
@@ -277,9 +289,10 @@ func TestNearLimit(t *testing.T) {
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(13))
-	client.EXPECT().DoCmd(gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -292,9 +305,10 @@ func TestNearLimit(t *testing.T) {
 	// Test Near Limit Stats. We went OVER_LIMIT, but the near_limit counter only increases
 	// when we are near limit, not after we have passed the limit.
 	timeSource.EXPECT().UnixNow().Return(int64(1000000))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(0, uint32(16))
-	client.EXPECT().DoCmd(gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(16)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -307,8 +321,9 @@ func TestNearLimit(t *testing.T) {
 	// Now test hitsAddend that is greater than 1
 	// All of it under limit, under near limit
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key5_value5_1234", uint32(3)).SetArg(0, uint32(5))
-	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key5_value5_1234", int64(1))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key5_value5_1234", uint32(3)).SetArg(1, uint32(5)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key5_value5_1234", int64(1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key5", "value5"}}}, 3)
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key5_value5", statsStore)}
@@ -322,8 +337,9 @@ func TestNearLimit(t *testing.T) {
 
 	// All of it under limit, some over near limit
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key6_value6_1234", uint32(2)).SetArg(0, uint32(7))
-	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key6_value6_1234", int64(1))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key6_value6_1234", uint32(2)).SetArg(1, uint32(7)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key6_value6_1234", int64(1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key6", "value6"}}}, 2)
 	limits = []*config.RateLimit{config.NewRateLimit(8, pb.RateLimitResponse_RateLimit_SECOND, "key6_value6", statsStore)}
@@ -337,8 +353,9 @@ func TestNearLimit(t *testing.T) {
 
 	// All of it under limit, all of it over near limit
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key7_value7_1234", uint32(3)).SetArg(0, uint32(19))
-	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key7_value7_1234", int64(1))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key7_value7_1234", uint32(3)).SetArg(1, uint32(19)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key7_value7_1234", int64(1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key7", "value7"}}}, 3)
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key7_value7", statsStore)}
@@ -352,8 +369,9 @@ func TestNearLimit(t *testing.T) {
 
 	// Some of it over limit, all of it over near limit
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key8_value8_1234", uint32(3)).SetArg(0, uint32(22))
-	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key8_value8_1234", int64(1))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key8_value8_1234", uint32(3)).SetArg(1, uint32(22)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key8_value8_1234", int64(1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key8", "value8"}}}, 3)
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key8_value8", statsStore)}
@@ -367,8 +385,9 @@ func TestNearLimit(t *testing.T) {
 
 	// Some of it in all three places
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key9_value9_1234", uint32(7)).SetArg(0, uint32(22))
-	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key9_value9_1234", int64(1))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key9_value9_1234", uint32(7)).SetArg(1, uint32(22)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key9_value9_1234", int64(1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key9", "value9"}}}, 7)
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key9_value9", statsStore)}
@@ -382,8 +401,9 @@ func TestNearLimit(t *testing.T) {
 
 	// all of it over limit
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key10_value10_1234", uint32(3)).SetArg(0, uint32(30))
-	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key10_value10_1234", int64(1))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key10_value10_1234", uint32(3)).SetArg(1, uint32(30)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key10_value10_1234", int64(1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key10", "value10"}}}, 3)
 	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key10_value10", statsStore)}
@@ -409,8 +429,9 @@ func TestRedisWithJitter(t *testing.T) {
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
 	jitterSource.EXPECT().Int63().Return(int64(100))
-	client.EXPECT().DoCmd(gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(0, uint32(5))
-	client.EXPECT().DoCmd(gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(101))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(1, uint32(5)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(101)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
@@ -443,53 +464,73 @@ func expectPanicError(t *testing.T, f assert.PanicTestFunc) (result error) {
 	return
 }
 
-func TestNewClientImpl(t *testing.T) {
-	redisAuth := "123"
-	statsStore := stats.NewStore(stats.NewNullSink(), false)
+func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) func(t *testing.T) {
+	return func(t *testing.T) {
+		redisAuth := "123"
+		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
-	mkRedisClient := func(auth, addr string) redis.Client {
-		return redis.NewClientImpl(statsStore, false, auth, addr, 1, 1*time.Millisecond, 1)
+		mkRedisClient := func(auth, addr string) redis.Client {
+			return redis.NewClientImpl(statsStore, false, auth, addr, 1, pipelineWindow, pipelineLimit)
+		}
+
+		t.Run("connection refused", func(t *testing.T) {
+			// It's possible there is a redis server listening on 6379 in ci environment, so
+			// use a random port.
+			panicErr := expectPanicError(t, func() { mkRedisClient("", "localhost:12345") })
+			assert.Contains(t, panicErr.Error(), "connection refused")
+		})
+
+		t.Run("ok", func(t *testing.T) {
+			redisSrv := mustNewRedisServer()
+			defer redisSrv.Close()
+
+			var client redis.Client
+			assert.NotPanics(t, func() {
+				client = mkRedisClient("", redisSrv.Addr())
+			})
+			assert.NotNil(t, client)
+		})
+
+		t.Run("auth fail", func(t *testing.T) {
+			redisSrv := mustNewRedisServer()
+			defer redisSrv.Close()
+
+			redisSrv.RequireAuth(redisAuth)
+
+			assert.PanicsWithError(t, "NOAUTH Authentication required.", func() {
+				mkRedisClient("", redisSrv.Addr())
+			})
+		})
+
+		t.Run("auth pass", func(t *testing.T) {
+			redisSrv := mustNewRedisServer()
+			defer redisSrv.Close()
+
+			redisSrv.RequireAuth(redisAuth)
+
+			assert.NotPanics(t, func() {
+				mkRedisClient(redisAuth, redisSrv.Addr())
+			})
+		})
+
+		t.Run("ImplicitPipeliningEnabled() return expected value", func(t *testing.T) {
+			redisSrv := mustNewRedisServer()
+			defer redisSrv.Close()
+
+			client := mkRedisClient("", redisSrv.Addr())
+
+			if pipelineWindow == 0 && pipelineLimit == 0 {
+				assert.False(t, client.ImplicitPipeliningEnabled())
+			} else {
+				assert.True(t, client.ImplicitPipeliningEnabled())
+			}
+		})
 	}
+}
 
-	t.Run("connection refused", func(t *testing.T) {
-		// It's possible there is a redis server listening on 6379 in ci environment, so
-		// use a random port.
-		panicErr := expectPanicError(t, func() { mkRedisClient("", "localhost:12345") })
-		assert.Contains(t, panicErr.Error(), "connection refused")
-	})
-
-	t.Run("ok", func(t *testing.T) {
-		redisSrv := mustNewRedisServer()
-		defer redisSrv.Close()
-
-		var client redis.Client
-		assert.NotPanics(t, func() {
-			client = mkRedisClient("", redisSrv.Addr())
-		})
-		assert.NotNil(t, client)
-	})
-
-	t.Run("auth fail", func(t *testing.T) {
-		redisSrv := mustNewRedisServer()
-		defer redisSrv.Close()
-
-		redisSrv.RequireAuth(redisAuth)
-
-		assert.PanicsWithError(t, "NOAUTH Authentication required.", func() {
-			mkRedisClient("", redisSrv.Addr())
-		})
-	})
-
-	t.Run("auth pass", func(t *testing.T) {
-		redisSrv := mustNewRedisServer()
-		defer redisSrv.Close()
-
-		redisSrv.RequireAuth(redisAuth)
-
-		assert.NotPanics(t, func() {
-			mkRedisClient(redisAuth, redisSrv.Addr())
-		})
-	})
+func TestNewClientImpl(t *testing.T) {
+	t.Run("ImplicitPipeliningEnabled", testNewClientImpl(t, 2*time.Millisecond, 2))
+	t.Run("ImplicitPipeliningDisabled", testNewClientImpl(t, 0, 0))
 }
 
 func TestDoCmd(t *testing.T) {
@@ -534,4 +575,65 @@ func TestDoCmd(t *testing.T) {
 		redisSrv.Close()
 		assert.EqualError(t, client.DoCmd(nil, "GET", "foo"), "EOF")
 	})
+}
+
+func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) func(t *testing.T) {
+	return func(t *testing.T) {
+		statsStore := stats.NewStore(stats.NewNullSink(), false)
+
+		mkRedisClient := func(addr string) redis.Client {
+			return redis.NewClientImpl(statsStore, false, "", addr, 1, pipelineWindow, pipelineLimit)
+		}
+
+		t.Run("SETGET ok", func(t *testing.T) {
+			redisSrv := mustNewRedisServer()
+			defer redisSrv.Close()
+
+			client := mkRedisClient(redisSrv.Addr())
+			var res string
+
+			pipeline := redis.Pipeline{}
+			pipeline = client.PipeAppend(pipeline, nil, "SET", "foo", "bar")
+			pipeline = client.PipeAppend(pipeline, &res, "GET", "foo")
+
+			assert.Nil(t, client.PipeDo(pipeline))
+			assert.Equal(t, "bar", res)
+		})
+
+		t.Run("INCRBY ok", func(t *testing.T) {
+			redisSrv := mustNewRedisServer()
+			defer redisSrv.Close()
+
+			client := mkRedisClient(redisSrv.Addr())
+			var res uint32
+			hits := uint32(1)
+
+			assert.Nil(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
+			assert.Equal(t, hits, res)
+
+			assert.Nil(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
+			assert.Equal(t, uint32(2), res)
+		})
+
+		t.Run("connection broken", func(t *testing.T) {
+			redisSrv := mustNewRedisServer()
+			client := mkRedisClient(redisSrv.Addr())
+
+			assert.Nil(t, nil, client.PipeDo(client.PipeAppend(redis.Pipeline{}, nil, "SET", "foo", "bar")))
+
+			redisSrv.Close()
+
+			expectErrContainEOF := func(t *testing.T, err error) {
+				assert.NotNil(t, err)
+				assert.Contains(t, err.Error(), "EOF")
+			}
+
+			expectErrContainEOF(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, nil, "GET", "foo")))
+		})
+	}
+}
+
+func TestPipeDo(t *testing.T) {
+	t.Run("ImplicitPipeliningEnabled", testPipeDo(t, 10*time.Millisecond, 2))
+	t.Run("ImplicitPipeliningDisabled", testPipeDo(t, 0, 0))
 }
