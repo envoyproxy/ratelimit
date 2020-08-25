@@ -8,7 +8,7 @@ require (
 	github.com/cncf/udpa/go v0.0.0-20200629203442-efcf912fb354 // indirect
 	github.com/coocood/freecache v1.1.0
 	github.com/envoyproxy/go-control-plane v0.9.6
-	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/golang/mock v1.4.1
 	github.com/golang/protobuf v1.4.2
 	github.com/gorilla/mux v1.7.4-0.20191121170500-49c01487a141
@@ -16,20 +16,14 @@ require (
 	github.com/kelseyhightower/envconfig v1.1.0
 	github.com/lyft/goruntime v0.2.5
 	github.com/lyft/gostats v0.4.0
-	github.com/lyft/protoc-gen-validate v0.0.7-0.20180626203901-f9d2b11e4414 // indirect
 	github.com/mediocregopher/radix/v3 v3.5.1
-	github.com/onsi/ginkgo v1.12.0 // indirect
-	github.com/onsi/gomega v1.9.0 // indirect
-	github.com/sirupsen/logrus v1.0.4
+	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.5.1
-	golang.org/x/crypto v0.0.0-20191219195013-becbf705a915 // indirect
 	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
-	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a // indirect
+	golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e // indirect
 	golang.org/x/text v0.3.3-0.20191122225017-cbf43d21aaeb // indirect
 	google.golang.org/grpc v1.27.0
 	google.golang.org/protobuf v1.25.0 // indirect
-	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
-	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
 	gopkg.in/yaml.v2 v2.3.0
 )
