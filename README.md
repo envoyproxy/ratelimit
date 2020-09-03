@@ -125,6 +125,8 @@ curl localhost:8888/twoheader -H "foo: foo" -H "bar: banned" # Ban a particular 
 ```
 Edit `examples/ratelimit/config/example.yaml` to test different rate limit configs. Hot reloading is enabled.
 
+The descriptors in `example.yaml` and the actions in `examples/envoy/proxy.yaml` should give you a good idea on how to configure rate limits.
+
 # Configuration
 
 ## The configuration format
