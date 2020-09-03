@@ -1,0 +1,97 @@
+admin:
+  access_log_path: "/dev/null"
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 8001
+static_resources:
+  clusters:
+    - name: ratelimit
+      type: STRICT_DNS
+      connect_timeout: 1s
+      lb_policy: ROUND_ROBIN
+      protocol_selection: USE_CONFIGURED_PROTOCOL
+      http2_protocol_options: {}
+      load_assignment:
+        cluster_name: ratelimit
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: ratelimit
+                      port_value: 8081
+    - name: mock
+      connect_timeout: 1s
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: mock
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: envoy-mock
+                      port_value: 9999
+  listeners:
+    - address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8888
+      filter_chains:
+        - filters:
+            - name: envoy.http_connection_manager
+              config:
+                codec_type: auto
+                stat_prefix: ingress
+                http_filters:
+                  - name: envoy.rate_limit
+                    config:
+                      domain: rl
+                      request_type: external
+                      stage: 0
+                      rate_limited_as_resource_exhausted: true
+                      failure_mode_deny: false
+                      rate_limit_service:
+                        grpc_service:
+                          envoy_grpc:
+                            cluster_name: ratelimit
+                  - name: envoy.router
+                    config: {}
+                route_config:
+                  name: route
+                  virtual_hosts:
+                    - name: backend
+                      domains:
+                        - "*"
+                      routes:
+                        - match:
+                            prefix: /test
+                          route:
+                            cluster: mock
+                            rate_limits:
+                              - actions:
+                                  - source_cluster: {}
+                                  - destination_cluster: {}
+                        - match:
+                            prefix: /header
+                          route:
+                            cluster: mock
+                            rate_limits:
+                              - actions:
+                                  - request_headers:
+                                      header_name: "foo"
+                                      descriptor_key: "foo"
+                        - match:
+                            prefix: /twoheader
+                          route:
+                            cluster: mock
+                            rate_limits:
+                              - actions:
+                                  - request_headers:
+                                      header_name: "foo"
+                                      descriptor_key: "foo"
+                                  - request_headers:
+                                      header_name: "bar"
+                                      descriptor_key: "bar"

@@ -110,6 +110,20 @@ If you want to run with [two redis instances](#two-redis-instances), you will ne
 the docker-compose.yaml file to run a second redis container, and change the environment variables
 as explained in the [two redis instances](#two-redis-instances) section.
 
+## Full test environment
+To run a fully configured environment to demo Envoy based rate limiting, run:
+```bash
+docker-compose -f docker-compose-example.yaml up
+```
+This will run ratelimit, redis, prom-statsd-exporter and two Envoy containers such that you can demo rate limiting by hitting the below endpoints.
+```bash
+curl localhost:8888/test
+curl localhost:8888/header -H "foo: foo" # Header based
+curl localhost:8888/twoheader -H "foo: foo" -H "bar: bar" # Two headers
+curl localhost:8888/twoheader -H "foo: foo" -H "bar: banned" # Ban a particular header value
+```
+Edit `examples/ratelimit/config/example.yaml` to test different rate limit configs. Hot reloading is enabled.
+
 # Configuration
 
 ## The configuration format
@@ -325,7 +339,7 @@ There are two methods for triggering a configuration reload:
 1. Symlink RUNTIME_ROOT to a different directory.
 2. Update the contents inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` directly.
 
-The former is the default behavior. To use the latter method, set the `RUNTIME_WATCH_ROOT` environment variable to `false`. 
+The former is the default behavior. To use the latter method, set the `RUNTIME_WATCH_ROOT` environment variable to `false`.
 
 For more information on how runtime works you can read its [README](https://github.com/lyft/goruntime).
 
@@ -377,7 +391,7 @@ The ratelimit service listens to HTTP 1.1 (by default on port 8080) with two end
 
 ## /json endpoint
 
-Takes an HTTP POST with a JSON body of the form e.g. 
+Takes an HTTP POST with a JSON body of the form e.g.
 ```json
 {
   "domain": "dummy",
@@ -389,7 +403,7 @@ Takes an HTTP POST with a JSON body of the form e.g.
   ]
 }
 ```
-The service will return an http 200 if this request is allowed (if no ratelimits exceeded) or 429 if one or more 
+The service will return an http 200 if this request is allowed (if no ratelimits exceeded) or 429 if one or more
 ratelimits were exceeded.
 
 The response is a RateLimitResponse encoded with
@@ -432,7 +446,7 @@ You can specify the debug port with the `DEBUG_PORT` environment variable. It de
 
 # Local Cache
 
-Ratelimit optionally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and thus avoids reading the 
+Ratelimit optionally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and thus avoids reading the
 redis cache again for the already over-the-limit keys. The local cache size can be configured via `LocalCacheSizeInBytes` in the [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go).
 If `LocalCacheSizeInBytes` is 0, local cache is disabled.
 
