@@ -79,6 +79,7 @@ tests_with_redis: bootstrap_redis_tls tests_unit
 	redis-server --port 6382 --requirepass password123 &
 	redis-server --port 6384 --requirepass password123 &
 	redis-server --port 6385 --requirepass password123 &
+	memcached -u root --port 6386 -m 64 &
 	go test -race -tags=integration $(MODULE)/...
 
 .PHONY: docker_tests

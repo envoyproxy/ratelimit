@@ -39,6 +39,8 @@ type Settings struct {
 	RedisPerSecondPipelineLimit  int           `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 	ExpirationJitterMaxSeconds   int64         `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	LocalCacheSizeInBytes        int           `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
+	MemcacheHostPort             string        `envconfig:"MEMCACHE_HOST_PORT" default:""`
+	BackendType                  string        `envconfig:"BACKEND_TYPE" default:"redis"`
 }
 
 type Option func(*Settings)
