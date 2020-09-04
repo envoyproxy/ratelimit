@@ -95,3 +95,10 @@ static_resources:
                                   - request_headers:
                                       header_name: "bar"
                                       descriptor_key: "bar"
+                              - actions:
+                                  - request_headers:
+                                      header_name: "foo"
+                                      descriptor_key: "foo"
+                                  - request_headers:
+                                      header_name: "baz"
+                                      descriptor_key: "baz"

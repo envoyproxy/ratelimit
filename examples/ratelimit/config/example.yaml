@@ -10,7 +10,6 @@ descriptors:
           unit: minute
           requests_per_unit: 1
   - key: foo
-    value: foo
     rate_limit:
       unit: minute
       requests_per_unit: 2
@@ -24,3 +23,7 @@ descriptors:
         rate_limit:
           unit: minute
           requests_per_unit: 0
+      - key: baz
+        rate_limit:
+          unit: second
+          requests_per_unit: 1

@@ -121,6 +121,7 @@ This will run ratelimit, redis, prom-statsd-exporter and two Envoy containers su
 curl localhost:8888/test
 curl localhost:8888/header -H "foo: foo" # Header based
 curl localhost:8888/twoheader -H "foo: foo" -H "bar: bar" # Two headers
+curl localhost:8888/twoheader -H "foo: foo" -H "baz: baz"
 curl localhost:8888/twoheader -H "foo: foo" -H "bar: banned" # Ban a particular header value
 ```
 Edit `examples/ratelimit/config/example.yaml` to test different rate limit configs. Hot reloading is enabled.

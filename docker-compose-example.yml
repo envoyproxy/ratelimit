@@ -10,7 +10,7 @@ services:
       - ratelimit-network
 
   statsd:
-    image: prom/statsd-exporter:v0.12.2
+    image: prom/statsd-exporter:v0.18.0
     expose:
       - 9125
     ports:
@@ -44,7 +44,7 @@ services:
       - RUNTIME_WATCH_ROOT=false
 
   envoy-proxy:
-    image: envoyproxy/envoy:v1.14.4
+    image: envoyproxy/envoy-dev:latest
     entrypoint: "/usr/local/bin/envoy"
     command:
       - "--service-node proxy"
@@ -65,7 +65,7 @@ services:
        - "8001:8001"
 
   envoy-mock:
-    image: envoyproxy/envoy:v1.14.4
+    image: envoyproxy/envoy-dev:latest
     entrypoint: "/usr/local/bin/envoy"
     command:
       - "--service-node mock"
