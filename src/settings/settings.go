@@ -22,6 +22,7 @@ type Settings struct {
 	RuntimeIgnoreDotFiles        bool          `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
 	RuntimeWatchRoot             bool          `envconfig:"RUNTIME_WATCH_ROOT" default:"true"`
 	LogLevel                     string        `envconfig:"LOG_LEVEL" default:"WARN"`
+	LogFormat                    string        `envconfig:"LOG_FORMAT" default:"text"`
 	RedisSocketType              string        `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisUrl                     string        `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
 	RedisPoolSize                int           `envconfig:"REDIS_POOL_SIZE" default:"10"`

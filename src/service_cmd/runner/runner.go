@@ -4,6 +4,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	stats "github.com/lyft/gostats"
@@ -43,6 +44,16 @@ func (runner *Runner) Run() {
 	} else {
 		logger.SetLevel(logLevel)
 	}
+	if strings.ToLower(s.LogFormat) == "json" {
+		logger.SetFormatter(&logger.JSONFormatter{
+			TimestampFormat: time.RFC3339Nano,
+			FieldMap: logger.FieldMap{
+				logger.FieldKeyTime: "@timestamp",
+				logger.FieldKeyMsg:  "@message",
+			},
+		})
+	}
+
 	var localCache *freecache.Cache
 	if s.LocalCacheSizeInBytes != 0 {
 		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
