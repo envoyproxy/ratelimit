@@ -93,13 +93,13 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, redisType string
 
 	var client radix.Client
 	var err error
-	switch redisType {
-	case "SINGLE":
+	switch strings.ToLower(redisType) {
+	case "single":
 		client, err = poolFunc("tcp", url)
-	case "CLUSTER":
+	case "cluster":
 		urls := strings.Split(url, ",")
 		client, err = radix.NewCluster(urls, radix.ClusterPoolFunc(poolFunc))
-	case "SENTINEL":
+	case "sentinel":
 		urls := strings.Split(url, ",")
 		if len(urls) < 2 {
 			panic(RedisError("Expected a list of urls for the sentinel mode, in the format: <primary>,<sentinel1>,...,<sentineln>"))
