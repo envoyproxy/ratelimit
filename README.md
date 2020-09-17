@@ -109,13 +109,13 @@ The ratelimit-build container will build the ratelimit binary. Then via a shared
 a minimal container to run the application, rather than the heftier container used to build it.
 
 If you want to run with [two redis instances](#two-redis-instances), you will need to modify
-the docker-compose.yaml file to run a second redis container, and change the environment variables
+the docker-compose.yml file to run a second redis container, and change the environment variables
 as explained in the [two redis instances](#two-redis-instances) section.
 
 ## Full test environment
 To run a fully configured environment to demo Envoy based rate limiting, run:
 ```bash
-docker-compose -f docker-compose-example.yaml up
+docker-compose -f docker-compose-example.yml up
 ```
 This will run ratelimit, redis, prom-statsd-exporter and two Envoy containers such that you can demo rate limiting by hitting the below endpoints.
 ```bash
