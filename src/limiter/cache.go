@@ -35,4 +35,8 @@ type RateLimitCache interface {
 		ctx context.Context,
 		request *pb.RateLimitRequest,
 		limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus
+
+	// Waits for any unfinished asynchronous work. This may be used by unit tests,
+	// since the memcache cache does increments in a background gorountine.
+	Flush()
 }

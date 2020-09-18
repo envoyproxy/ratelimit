@@ -210,6 +210,9 @@ func (this *rateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
+// Flush() is a no-op with redis since quota reads and updates happen synchronously.
+func (this *rateLimitCacheImpl) Flush() {}
+
 func NewRateLimitCacheImpl(client Client, perSecondClient Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache) limiter.RateLimitCache {
 	return &rateLimitCacheImpl{
 		client:                     client,

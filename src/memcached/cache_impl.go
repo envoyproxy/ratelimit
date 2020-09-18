@@ -34,19 +34,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/settings"
 )
 
-type rateLimitCache interface {
-	// Same as in limiter.RateLimitCache
-	DoLimit(
-		ctx context.Context,
-		request *pb.RateLimitRequest,
-		limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus
-
-	// Waits for any lingering goroutines that are incrementing memcache values.
-	// This is used for unit tests, since the memcache increments happen
-	// asynchronously in the background.
-	Flush()
-}
-
 type rateLimitMemcacheImpl struct {
 	client                     Client
 	timeSource                 limiter.TimeSource
@@ -277,7 +264,7 @@ func (this *rateLimitMemcacheImpl) Flush() {
 	this.wg.Wait()
 }
 
-func NewRateLimitCacheImpl(client Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope) rateLimitCache {
+func NewRateLimitCacheImpl(client Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
@@ -288,7 +275,7 @@ func NewRateLimitCacheImpl(client Client, timeSource limiter.TimeSource, jitterR
 	}
 }
 
-func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource limiter.TimeSource, jitterRand *rand.Rand, localCache *freecache.Cache, scope stats.Scope) rateLimitCache {
+func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource limiter.TimeSource, jitterRand *rand.Rand, localCache *freecache.Cache, scope stats.Scope) limiter.RateLimitCache {
 	return NewRateLimitCacheImpl(
 		memcache.New(s.MemcacheHostPort),
 		timeSource,

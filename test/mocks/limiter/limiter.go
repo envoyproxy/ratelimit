@@ -49,6 +49,18 @@ func (mr *MockRateLimitCacheMockRecorder) DoLimit(arg0, arg1, arg2 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoLimit", reflect.TypeOf((*MockRateLimitCache)(nil).DoLimit), arg0, arg1, arg2)
 }
 
+// Flush mocks base method
+func (m *MockRateLimitCache) Flush() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Flush")
+}
+
+// Flush indicates an expected call of Flush
+func (mr *MockRateLimitCacheMockRecorder) Flush() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockRateLimitCache)(nil).Flush))
+}
+
 // MockTimeSource is a mock of TimeSource interface
 type MockTimeSource struct {
 	ctrl     *gomock.Controller
