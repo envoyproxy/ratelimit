@@ -79,6 +79,14 @@ tests_with_redis: bootstrap_redis_tls tests_unit
 	redis-server --port 6382 --requirepass password123 &
 	redis-server --port 6384 --requirepass password123 &
 	redis-server --port 6385 --requirepass password123 &
+	redis-server --port 6386 --cluster-enabled yes --requirepass password123 &
+	redis-server --port 6387 --cluster-enabled yes --requirepass password123 &
+	redis-server --port 6388 --cluster-enabled yes --requirepass password123 &
+	redis-server --port 6389 --cluster-enabled yes --requirepass password123 &
+    redis-server --port 6390 --cluster-enabled yes --requirepass password123 &
+    redis-server --port 6391 --cluster-enabled yes --requirepass password123 &
+	redis-cli --cluster create -a password123 127.0.0.1:6386 127.0.0.1:6387 127.0.0.1:6388 --cluster-replicas 0 &
+	redis-cli --cluster create -a password123 127.0.0.1:6389 127.0.0.1:6390 127.0.0.1:6391 --cluster-replicas 0 &
 	go test -race -tags=integration $(MODULE)/...
 
 .PHONY: docker_tests
