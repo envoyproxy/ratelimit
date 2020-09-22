@@ -98,6 +98,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, redisType string
 		client, err = poolFunc("tcp", url)
 	case "cluster":
 		urls := strings.Split(url, ",")
+		logger.Warnf("Creating cluster with urls %v", urls)
 		client, err = radix.NewCluster(urls, radix.ClusterPoolFunc(poolFunc))
 	case "sentinel":
 		urls := strings.Split(url, ",")

@@ -79,14 +79,21 @@ tests_with_redis: bootstrap_redis_tls tests_unit
 	redis-server --port 6382 --requirepass password123 &
 	redis-server --port 6384 --requirepass password123 &
 	redis-server --port 6385 --requirepass password123 &
-	redis-server --port 6386 --cluster-enabled yes --requirepass password123 &
-	redis-server --port 6387 --cluster-enabled yes --requirepass password123 &
-	redis-server --port 6388 --cluster-enabled yes --requirepass password123 &
-	redis-server --port 6389 --cluster-enabled yes --requirepass password123 &
-    redis-server --port 6390 --cluster-enabled yes --requirepass password123 &
-    redis-server --port 6391 --cluster-enabled yes --requirepass password123 &
-	redis-cli --cluster create -a password123 127.0.0.1:6386 127.0.0.1:6387 127.0.0.1:6388 --cluster-replicas 0 &
-	redis-cli --cluster create -a password123 127.0.0.1:6389 127.0.0.1:6390 127.0.0.1:6391 --cluster-replicas 0 &
+	mkdir 6386 && cd 6386 && redis-server --port 6386 --cluster-enabled yes --requirepass password123 &
+	mkdir 6387 && cd 6387 && redis-server --port 6387 --cluster-enabled yes --requirepass password123 &
+	mkdir 6388 && cd 6388 && redis-server --port 6388 --cluster-enabled yes --requirepass password123 &
+	mkdir 6389 && cd 6389 && redis-server --port 6389 --cluster-enabled yes --requirepass password123 &
+	mkdir 6390 && cd 6390 && redis-server --port 6390 --cluster-enabled yes --requirepass password123 &
+	mkdir 6391 && cd 6391 && redis-server --port 6391 --cluster-enabled yes --requirepass password123 &
+	sleep 3
+	yes | redis-cli --cluster create -a password123 127.0.0.1:6386 127.0.0.1:6387 127.0.0.1:6388 --cluster-replicas 0
+	yes | redis-cli --cluster create -a password123 127.0.0.1:6389 127.0.0.1:6390 127.0.0.1:6391 --cluster-replicas 0
+	sleep 3
+	cat 6386/nodes.conf
+	cat 6387/nodes.conf
+	cat 6388/nodes.conf
+	redis-cli --cluster check -a password123 127.0.0.1:6386
+	redis-cli --cluster check -a password123 127.0.0.1:6389
 	go test -race -tags=integration $(MODULE)/...
 
 .PHONY: docker_tests
