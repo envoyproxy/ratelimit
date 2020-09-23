@@ -206,12 +206,12 @@ func (this *service) ShouldRateLimit(
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				descriptor := request.Descriptors[i]
 				for j, entry := range descriptor.Entries {
-					format := "%s_%s"
+					format := "%s_%.*s"
 					if j == 0 {
-						format = "%s"
+						format = "%.*s"
 					}
-					descriptorKey = fmt.Sprintf(format, descriptorKey, entry.Key)
-					descriptorValue = fmt.Sprintf(format, descriptorValue, entry.Value)
+					descriptorKey = fmt.Sprintf(format, 40, descriptorKey, entry.Key)
+					descriptorValue = fmt.Sprintf(format, 40, descriptorValue, entry.Value)
 				}
 			}
 		}
