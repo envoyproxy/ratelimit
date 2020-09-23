@@ -205,7 +205,7 @@ func (this *service) ShouldRateLimit(
 		for i, descriptorStatus := range response.Statuses {
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				descriptor := request.Descriptors[i]
-				for j, entry := range descriptor.Entries {
+				for _, entry := range descriptor.Entries {
 					format := "%s_%.*s"
 					if descriptorKey == "" {
 						format = "%.*s"
