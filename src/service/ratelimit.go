@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -25,10 +26,14 @@ type shouldRateLimitStats struct {
 }
 
 var (
-	shadowRequests = promauto.NewCounter(prometheus.CounterOpts{
+	shadowRequests = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "rate_limiting_shadow_requests",
 		Help: "The total number of requests that would of been rate limited not in shadow mode",
-	})
+	}, []string{"descriptor_key", "descriptor_value"})
+	limitedRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "rate_limiting_limited_requests",
+		Help: "The total number of requests that have been rate limited",
+	}, []string{"descriptor_key", "descriptor_value"})
 	rateLimitRequestSummary = promauto.NewSummary(prometheus.SummaryOpts{
 		Name:       "rate_limiting_request_time_sec",
 		Help:       "Summary of rate limiting request times",
@@ -111,6 +116,7 @@ func (this *service) reloadConfig() {
 	this.configLock.Lock()
 	this.config = newConfig
 	this.configLock.Unlock()
+
 }
 
 type serviceError string
@@ -192,14 +198,32 @@ func (this *service) ShouldRateLimit(
 	}()
 
 	response := this.shouldRateLimitWorker(ctx, request)
-	if this.shadowMode {
-		if response.OverallCode != pb.RateLimitResponse_OK {
+	if response.OverallCode != pb.RateLimitResponse_OK {
+		descriptorKey := ""
+		descriptorValue := ""
+
+		for i, descriptorStatus := range response.Statuses {
+			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
+				descriptor := request.Descriptors[i]
+				for j, entry := range descriptor.Entries {
+					format := "%s_%s"
+					if j == 0 {
+						format = "%s"
+					}
+					descriptorKey = fmt.Sprintf(format, descriptorKey, entry.Key)
+					descriptorValue = fmt.Sprintf(format, descriptorValue, entry.Value)
+				}
+			}
+		}
+		labels := map[string]string{"descriptor_key": descriptorKey, "descriptor_value": descriptorValue}
+		if this.shadowMode {
 			logger.Infof("shadow mode: would of returned %+v", response.OverallCode)
-			shadowRequests.Inc()
+			shadowRequests.With(labels).Inc()
 			response.OverallCode = pb.RateLimitResponse_OK
 			this.stats.shouldRateLimit.wouldOfRateLimited.Inc()
+		} else {
+			limitedRequests.With(labels).Inc()
 		}
-
 	}
 	logger.Debugf("returning normal response")
 	return response, nil
