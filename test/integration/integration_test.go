@@ -410,7 +410,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining2 = 0
 			}
-
+			
+                        assert.NoError(err)
 			common.AssertProtoEqual(
 				assert,
 				&pb.RateLimitResponse{
