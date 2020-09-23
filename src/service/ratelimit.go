@@ -207,7 +207,7 @@ func (this *service) ShouldRateLimit(
 				descriptor := request.Descriptors[i]
 				for j, entry := range descriptor.Entries {
 					format := "%s_%.*s"
-					if j == 0 {
+					if descriptorKey == "" {
 						format = "%.*s"
 					}
 					descriptorKey = fmt.Sprintf(format, 40, descriptorKey, entry.Key)
