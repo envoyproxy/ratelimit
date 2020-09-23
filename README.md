@@ -513,7 +513,7 @@ Ratelimit supports different types of redis deployments:
 The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TYPE` environment variables. Depending on the type defined, the `REDIS_URL` and `REDIS_PERSECOND_URL` are expected to have the following formats:
 
 1. "single": Depending on the socket type defined, either a single hostname:port pair or a unix domain socket reference.
-2. "sentinel": A comma separated list with the first string as the primary node name of the sentinel cluster followed by hostname:port pairs. The list size should be >= 2. The first item is the name of the primary node and the rest are the sentinels.
+2. "sentinel": A comma separated list with the first string as the master name of the sentinel cluster followed by hostname:port pairs. The list size should be >= 2. The first item is the name of the master and the rest are the sentinels.
 3. "cluster": A comma separated list of hostname:port pairs with all the nodes in the cluster.
 
 ## Pipelining
