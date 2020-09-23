@@ -110,21 +110,6 @@ func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string)
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
 
-func testBasicConfigAuthTLSWithRedisCluster(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
-	os.Setenv("REDIS_PERSECOND_TYPE", "cluster")
-	os.Setenv("REDIS_PERSECOND_URL", "localhost:16389,localhost:16390,localhost:16391")
-	os.Setenv("REDIS_TYPE", "cluster")
-	os.Setenv("REDIS_URL", "localhost:16386,localhost:16387,localhost:16388")
-	os.Setenv("REDIS_TLS", "true")
-	os.Setenv("REDIS_AUTH", "password123")
-	os.Setenv("REDIS_PERSECOND_TLS", "true")
-	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
-	os.Setenv("REDIS_PERSECOND_PIPELINE_LIMIT", "8")
-	os.Setenv("REDIS_PIPELINE_LIMIT", "8")
-
-	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
-}
-
 func testBasicConfig(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
 	os.Setenv("REDIS_URL", "localhost:6379")
