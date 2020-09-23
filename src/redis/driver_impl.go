@@ -107,7 +107,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, redisType string
 	case "sentinel":
 		urls := strings.Split(url, ",")
 		if len(urls) < 2 {
-			panic(RedisError("Expected primary node name and a list of urls for the sentinels, in the format: <redis primary node name>,<sentinel1>,...,<sentineln>"))
+			panic(RedisError("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>"))
 		}
 		client, err = radix.NewSentinel(urls[0], urls[1:], radix.SentinelPoolFunc(poolFunc))
 	default:
