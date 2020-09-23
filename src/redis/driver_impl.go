@@ -86,6 +86,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, redisType string
 	} else {
 		opts = append(opts, radix.PoolPipelineWindow(pipelineWindow, pipelineLimit))
 	}
+	logger.Debugf("Implicit pipelining enabled: %v", implicitPipelining)
 
 	poolFunc := func(network, addr string) (radix.Client, error) {
 		return radix.NewPool(network, addr, poolSize, opts...)

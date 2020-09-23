@@ -3,8 +3,12 @@
 package integration_test
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
 	"strconv"
 	"testing"
@@ -44,57 +48,59 @@ func newDescriptorStatusLegacy(
 // TODO: Once adding the ability of stopping the server in the runner (https://github.com/envoyproxy/ratelimit/issues/119),
 //  stop the server at the end of each test, thus we can reuse the grpc port among these integration tests.
 func TestBasicConfig(t *testing.T) {
-	//	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0"))
-	//	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0"))
-	//	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("18083", "false", "1000"))
-	//	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000"))
+	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0"))
+	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0"))
+	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("18083", "false", "1000"))
+	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000"))
 }
 
 func TestBasicConfigWithRedisCluster(t *testing.T) {
-	//	t.Run("WithoutPerSecondRedis", testBasicConfigWithRedisCluster("8083", "false", "0"))
-	//	t.Run("WithPerSecondRedis", testBasicConfigWithRedisCluster("8085", "true", "0"))
-	//	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfigWithRedisCluster("18083", "false", "1000"))
-	//	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfigWithRedisCluster("18085", "true", "1000"))
+	t.Run("WithoutPerSecondRedis", testBasicConfigWithRedisCluster("8183", "false", "0"))
+	t.Run("WithPerSecondRedis", testBasicConfigWithRedisCluster("8185", "true", "0"))
+	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfigWithRedisCluster("18183", "false", "1000"))
+	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfigWithRedisCluster("18185", "true", "1000"))
 }
 
-/*func TestBasicTLSConfig(t *testing.T) {
+func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false", "0"))
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS("8089", "true", "0"))
 	t.Run("WithoutPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18087", "false", "1000"))
 	t.Run("WithPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18089", "true", "1000"))
-}*/
+}
 
 func TestBasicAuthConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisAuth", testBasicConfigAuth("8091", "false", "0"))
-	//	t.Run("WithPerSecondRedisAuth", testBasicConfigAuth("8093", "true", "0"))
-	//	t.Run("WithoutPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18091", "false", "1000"))
-	//	t.Run("WithPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18093", "true", "1000"))
+	t.Run("WithPerSecondRedisAuth", testBasicConfigAuth("8093", "true", "0"))
+	t.Run("WithoutPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18091", "false", "1000"))
+	t.Run("WithPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18093", "true", "1000"))
 }
 
 func TestBasicAuthConfigWithRedisCluster(t *testing.T) {
-	t.Run("WithoutPerSecondRedisAuth", testBasicConfigAuthWithRedisCluster("8091", "false", "0"))
-	//	t.Run("WithPerSecondRedisAuth", testBasicConfigAuthWithRedisCluster("8093", "true", "0"))
-	//	t.Run("WithoutPerSecondRedisAuthWithLocalCache", testBasicConfigAuthWithRedisCluster("18091", "false", "1000"))
-	//	t.Run("WithPerSecondRedisAuthWithLocalCache", testBasicConfigAuthWithRedisCluster("18093", "true", "1000"))
+	t.Run("WithoutPerSecondRedisAuth", testBasicConfigAuthWithRedisCluster("8191", "false", "0"))
+	t.Run("WithPerSecondRedisAuth", testBasicConfigAuthWithRedisCluster("8193", "true", "0"))
+	t.Run("WithoutPerSecondRedisAuthWithLocalCache", testBasicConfigAuthWithRedisCluster("18191", "false", "1000"))
+	t.Run("WithPerSecondRedisAuthWithLocalCache", testBasicConfigAuthWithRedisCluster("18193", "true", "1000"))
 }
 
 func TestBasicReloadConfig(t *testing.T) {
-	//	t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRoot("8095", "false", "0"))
-	//	t.Run("ReloadWithoutWatchRoot", testBasicConfigReload("8097", "false", "0", "false"))
+	t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRoot("8095", "false", "0"))
+	t.Run("ReloadWithoutWatchRoot", testBasicConfigReload("8097", "false", "0", "false"))
 }
 
-func TestBasicReloadConfigWithRedisCluster(t *testing.T) {
-	//	t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRootWithRedisCluster("8095", "false", "0"))
-	//	t.Run("ReloadWithoutWatchRoot", testBasicConfigReloadWithRedisCluster("8097", "false", "0", "false"))
-}
+// func TestBasicReloadConfigWithRedisCluster(t *testing.T) {
+// 	t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRootWithRedisCluster("8195", "false", "0"))
+// 	t.Run("ReloadWithoutWatchRoot", testBasicConfigReloadWithRedisCluster("8197", "false", "0", "false"))
+// }
 
-/*func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
+func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
 	os.Setenv("REDIS_URL", "localhost:16381")
 	os.Setenv("REDIS_AUTH", "password123")
 	os.Setenv("REDIS_TLS", "true")
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
 	os.Setenv("REDIS_PERSECOND_TLS", "true")
+	os.Setenv("REDIS_TYPE", "single")
+	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
 
@@ -105,8 +111,10 @@ func testBasicConfig(grpcPort, perSecond string, local_cache_size string) func(*
 	os.Setenv("REDIS_TLS", "false")
 	os.Setenv("REDIS_PERSECOND_AUTH", "")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
+	os.Setenv("REDIS_TYPE", "single")
+	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
-}*/
+}
 
 func testBasicConfigAuth(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:6385")
@@ -115,10 +123,12 @@ func testBasicConfigAuth(grpcPort, perSecond string, local_cache_size string) fu
 	os.Setenv("REDIS_AUTH", "password123")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
+	os.Setenv("REDIS_TYPE", "single")
+	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
 
-/*func testBasicConfigWithoutWatchRoot(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
+func testBasicConfigWithoutWatchRoot(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
 	os.Setenv("REDIS_URL", "localhost:6379")
 	os.Setenv("REDIS_AUTH", "")
@@ -126,6 +136,8 @@ func testBasicConfigAuth(grpcPort, perSecond string, local_cache_size string) fu
 	os.Setenv("REDIS_PERSECOND_AUTH", "")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("RUNTIME_WATCH_ROOT", "false")
+	os.Setenv("REDIS_TYPE", "single")
+	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
 
@@ -137,6 +149,8 @@ func testBasicConfigReload(grpcPort, perSecond string, local_cache_size, runtime
 	os.Setenv("REDIS_PERSECOND_AUTH", "")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("RUNTIME_WATCH_ROOT", runtimeWatchRoot)
+	os.Setenv("REDIS_TYPE", "single")
+	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 	return testConfigReload(grpcPort, perSecond, local_cache_size)
 }
 
@@ -149,22 +163,29 @@ func testBasicConfigWithRedisCluster(grpcPort, perSecond string, local_cache_siz
 	os.Setenv("REDIS_TLS", "false")
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
+
+	os.Setenv("REDIS_PERSECOND_PIPELINE_LIMIT", "1")
+	os.Setenv("REDIS_PIPELINE_LIMIT", "1")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
-}*/
+}
 
 func testBasicConfigAuthWithRedisCluster(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_TYPE", "cluster")
-	os.Setenv("REDIS_PERSECOND_URL", "127.0.0.1:6389,127.0.0.1:6390,127.0.0.1:6391")
+	os.Setenv("REDIS_PERSECOND_URL", "localhost:6389,localhost:6390,localhost:6391")
 	os.Setenv("REDIS_TYPE", "cluster")
-	os.Setenv("REDIS_URL", "127.0.0.1:6386,127.0.0.1:6387,127.0.0.1:6388")
+	os.Setenv("REDIS_URL", "localhost:6386,localhost:6387,localhost:6388")
 	os.Setenv("REDIS_TLS", "false")
 	os.Setenv("REDIS_AUTH", "password123")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
+	// os.Setenv("LOG_LEVEL", "DEBUG")
+	// TODO These seem to be required to be != 0 for cluster, we should check during initialization
+	os.Setenv("REDIS_PERSECOND_PIPELINE_LIMIT", "1")
+	os.Setenv("REDIS_PIPELINE_LIMIT", "1")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
 
-/*func testBasicConfigWithoutWatchRootWithRedisCluster(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
+func testBasicConfigWithoutWatchRootWithRedisCluster(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_TYPE", "cluster")
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:6389,localhost:6390,localhost:6391")
 	os.Setenv("REDIS_TYPE", "cluster")
@@ -174,19 +195,24 @@ func testBasicConfigAuthWithRedisCluster(grpcPort, perSecond string, local_cache
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("RUNTIME_WATCH_ROOT", "false")
+
+	os.Setenv("REDIS_PERSECOND_PIPELINE_LIMIT", "1")
+	os.Setenv("REDIS_PIPELINE_LIMIT", "1")
+
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
 
-func testBasicConfigReloadWithRedisCluster(grpcPort, perSecond string, local_cache_size, runtimeWatchRoot string) func(*testing.T) {
-	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
-	os.Setenv("REDIS_URL", "localhost:6379")
-	os.Setenv("REDIS_AUTH", "")
-	os.Setenv("REDIS_TLS", "false")
-	os.Setenv("REDIS_PERSECOND_AUTH", "")
-	os.Setenv("REDIS_PERSECOND_TLS", "false")
-	os.Setenv("RUNTIME_WATCH_ROOT", runtimeWatchRoot)
-	return testConfigReload(grpcPort, perSecond, local_cache_size)
-}*/
+// func testBasicConfigReloadWithRedisCluster(grpcPort, perSecond string, local_cache_size, runtimeWatchRoot string) func(*testing.T) {
+// 	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
+// 	os.Setenv("REDIS_URL", "localhost:6379")
+// 	os.Setenv("REDIS_AUTH", "")
+// 	os.Setenv("REDIS_TLS", "false")
+// 	os.Setenv("REDIS_PERSECOND_AUTH", "")
+// 	os.Setenv("REDIS_PERSECOND_TLS", "false")
+// 	os.Setenv("RUNTIME_WATCH_ROOT", runtimeWatchRoot)
+
+// 	return testConfigReload(grpcPort, perSecond, local_cache_size)
+// }
 
 func getCacheKey(cacheKey string, enableLocalCache bool) string {
 	if enableLocalCache {
@@ -353,6 +379,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				limitRemaining2 = 0
 			}
 
+			assert.NoError(err)
 			common.AssertProtoEqual(
 				assert,
 				&pb.RateLimitResponse{
@@ -361,7 +388,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 						newDescriptorStatus(pb.RateLimitResponse_OK, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining1),
 						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
 				response)
-			assert.NoError(err)
 			key2HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
 			assert.Equal(i+26, int(key2HitCounter.Value()))
 			key2OverlimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key2", enable_local_cache)))
@@ -419,7 +445,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 	}
 }
 
-/*func TestBasicConfigLegacy(t *testing.T) {
+func TestBasicConfigLegacy(t *testing.T) {
 	os.Setenv("PORT", "8082")
 	os.Setenv("GRPC_PORT", "8083")
 	os.Setenv("DEBUG_PORT", "8084")
@@ -432,6 +458,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 	os.Setenv("REDIS_AUTH", "")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("REDIS_PERSECOND_AUTH", "")
+	os.Setenv("REDIS_TYPE", "single")
+	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 
 	runner := runner.NewRunner()
 	go func() {
@@ -658,4 +686,4 @@ func testConfigReload(grpcPort, perSecond string, local_cache_size string) func(
 			panic(err)
 		}
 	}
-}*/
+}

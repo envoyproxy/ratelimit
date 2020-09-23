@@ -85,10 +85,9 @@ tests_with_redis: bootstrap_redis_tls tests_unit
 	mkdir 6389 && cd 6389 && redis-server --port 6389 --cluster-enabled yes --requirepass password123 &
 	mkdir 6390 && cd 6390 && redis-server --port 6390 --cluster-enabled yes --requirepass password123 &
 	mkdir 6391 && cd 6391 && redis-server --port 6391 --cluster-enabled yes --requirepass password123 &
-	sleep 3
+	sleep 2
 	echo "yes" | redis-cli --cluster create -a password123 127.0.0.1:6386 127.0.0.1:6387 127.0.0.1:6388 --cluster-replicas 0
 	echo "yes" | redis-cli --cluster create -a password123 127.0.0.1:6389 127.0.0.1:6390 127.0.0.1:6391 --cluster-replicas 0
-	sleep 3
 	redis-cli --cluster check -a password123 127.0.0.1:6386
 	redis-cli --cluster check -a password123 127.0.0.1:6389
 	go test -race -tags=integration $(MODULE)/...
