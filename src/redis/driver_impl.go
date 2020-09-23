@@ -99,12 +99,15 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, redisType string
 		client, err = poolFunc("tcp", url)
 	case "cluster":
 		urls := strings.Split(url, ",")
+		if implicitPipelining == false {
+			panic(RedisError("Implicit Pipelining must be enabled to work with Redis Cluster Mode. Set values for REDIS_PIPELINE_WINDOW or REDIS_PIPELINE_LIMIT to enable implicit pipelining"))
+		}
 		logger.Warnf("Creating cluster with urls %v", urls)
 		client, err = radix.NewCluster(urls, radix.ClusterPoolFunc(poolFunc))
 	case "sentinel":
 		urls := strings.Split(url, ",")
 		if len(urls) < 2 {
-			panic(RedisError("Expected a list of urls for the sentinel mode, in the format: <primary>,<sentinel1>,...,<sentineln>"))
+			panic(RedisError("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>"))
 		}
 		client, err = radix.NewSentinel(urls[0], urls[1:], radix.SentinelPoolFunc(poolFunc))
 	default:
