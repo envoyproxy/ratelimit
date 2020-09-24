@@ -1,9 +1,9 @@
 package config
 
 import (
-	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	"github.com/lyft/gostats"
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	stats "github.com/lyft/gostats"
 	"golang.org/x/net/context"
 )
 
@@ -21,9 +21,10 @@ func (e RateLimitConfigError) Error() string {
 
 // Stats for an individual rate limit config entry.
 type RateLimitStats struct {
-	TotalHits stats.Counter
-	OverLimit stats.Counter
-	NearLimit stats.Counter
+	TotalHits               stats.Counter
+	OverLimit               stats.Counter
+	NearLimit               stats.Counter
+	OverLimitWithLocalCache stats.Counter
 }
 
 // Wrapper for an individual rate limit config entry which includes the defined limit and stats.

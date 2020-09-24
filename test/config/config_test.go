@@ -1,13 +1,15 @@
 package config_test
 
 import (
+	"github.com/envoyproxy/ratelimit/test/common"
 	"io/ioutil"
 	"testing"
 
-	pb_struct "github.com/envoyproxy/go-control-plane/envoy/api/v2/ratelimit"
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	pb_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/lyft/gostats"
-	"github.com/lyft/ratelimit/src/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -148,6 +150,80 @@ func TestBasicConfig(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.near_limit").Value())
+}
+
+func TestConfigLimitOverride(t *testing.T) {
+	assert := assert.New(t)
+	stats := stats.NewStore(stats.NewNullSink(), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), stats)
+	rlConfig.Dump()
+	// No matching domain
+	assert.Nil(rlConfig.GetLimit(nil, "foo_domain", &pb_struct.RateLimitDescriptor{
+		Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+			RequestsPerUnit: 10, Unit: pb_type.RateLimitUnit_DAY,
+		},
+	}))
+	rl := rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey1", Value: "something"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 10, Unit: pb_type.RateLimitUnit_DAY,
+			},
+		})
+	assert.Equal("test-domain.key1_value1.subkey1_something", rl.FullKey)
+	common.AssertProtoEqual(assert, &pb.RateLimitResponse_RateLimit{
+		RequestsPerUnit: 10,
+		Unit:            pb.RateLimitResponse_RateLimit_DAY,
+	}, rl.Limit)
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
+
+	// Change in override value doesn't erase stats
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey1", Value: "something"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 42, Unit: pb_type.RateLimitUnit_HOUR,
+			},
+		})
+	assert.Equal("test-domain.key1_value1.subkey1_something", rl.FullKey)
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	common.AssertProtoEqual(assert, &pb.RateLimitResponse_RateLimit{
+		RequestsPerUnit: 42,
+		Unit:            pb.RateLimitResponse_RateLimit_HOUR,
+	}, rl.Limit)
+	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
+	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
+	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
+
+	// Different value creates a different counter
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey1", Value: "something_else"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 42, Unit: pb_type.RateLimitUnit_HOUR,
+			},
+		})
+	assert.Equal("test-domain.key1_value1.subkey1_something_else", rl.FullKey)
+	common.AssertProtoEqual(assert, &pb.RateLimitResponse_RateLimit{
+		RequestsPerUnit: 42,
+		Unit:            pb.RateLimitResponse_RateLimit_HOUR,
+	}, rl.Limit)
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.near_limit").Value())
 }
 
 func expectConfigPanic(t *testing.T, call func(), expectedError string) {

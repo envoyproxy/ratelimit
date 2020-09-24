@@ -5,12 +5,13 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/envoyproxy/ratelimit/src/assert"
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/lyft/goruntime/loader"
 	stats "github.com/lyft/gostats"
-	"github.com/lyft/ratelimit/src/assert"
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/redis"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	logger "github.com/sirupsen/logrus"
@@ -73,11 +74,12 @@ type service struct {
 	configLoader       config.RateLimitConfigLoader
 	config             config.RateLimitConfig
 	runtimeUpdateEvent chan int
-	cache              redis.RateLimitCache
+	cache              limiter.RateLimitCache
 	stats              serviceStats
 	rlStatsScope       stats.Scope
 	legacy             *legacyService
 	shadowMode         bool
+	runtimeWatchRoot   bool
 }
 
 func (this *service) reloadConfig() {
@@ -97,7 +99,7 @@ func (this *service) reloadConfig() {
 	files := []config.RateLimitConfigToLoad{}
 	snapshot := this.runtime.Snapshot()
 	for _, key := range snapshot.Keys() {
-		if !strings.HasPrefix(key, "config.") {
+		if this.runtimeWatchRoot && !strings.HasPrefix(key, "config.") {
 			continue
 		}
 
@@ -213,8 +215,8 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 	return this.config
 }
 
-func NewService(runtime loader.IFace, cache redis.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, stats stats.Scope, shadowMode bool) RateLimitServiceServer {
+func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
+	configLoader config.RateLimitConfigLoader, stats stats.Scope, shadowMode bool, runtimeWatchRoot bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -226,6 +228,7 @@ func NewService(runtime loader.IFace, cache redis.RateLimitCache,
 		stats:              newServiceStats(stats),
 		rlStatsScope:       stats.Scope("rate_limit"),
 		shadowMode:         shadowMode,
+		runtimeWatchRoot:   runtimeWatchRoot,
 	}
 	newService.legacy = &legacyService{
 		s:                          newService,

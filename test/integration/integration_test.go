@@ -3,17 +3,21 @@
 package integration_test
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
+	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"strconv"
 	"testing"
 	"time"
 
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	pb_legacy "github.com/lyft/ratelimit/proto/ratelimit"
-	"github.com/lyft/ratelimit/src/service_cmd/runner"
-	"github.com/lyft/ratelimit/test/common"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
+	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -32,38 +36,104 @@ func newDescriptorStatus(
 
 func newDescriptorStatusLegacy(
 	status pb_legacy.RateLimitResponse_Code, requestsPerUnit uint32,
-	unit pb_legacy.RateLimit_Unit, limitRemaining uint32) *pb_legacy.RateLimitResponse_DescriptorStatus {
+	unit pb_legacy.RateLimitResponse_RateLimit_Unit, limitRemaining uint32) *pb_legacy.RateLimitResponse_DescriptorStatus {
 
 	return &pb_legacy.RateLimitResponse_DescriptorStatus{
 		Code:           status,
-		CurrentLimit:   &pb_legacy.RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit},
+		CurrentLimit:   &pb_legacy.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit},
 		LimitRemaining: limitRemaining,
 	}
 }
 
+// TODO: Once adding the ability of stopping the server in the runner (https://github.com/envoyproxy/ratelimit/issues/119),
+//  stop the server at the end of each test, thus we can reuse the grpc port among these integration tests.
 func TestBasicConfig(t *testing.T) {
-	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false"))
-	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true"))
+	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0"))
+	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0"))
+	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("18083", "false", "1000"))
+	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000"))
 }
+
 func TestBasicTLSConfig(t *testing.T) {
-	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false"))
-	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS("8089", "true"))
+	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS("8087", "false", "0"))
+	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS("8089", "true", "0"))
+	t.Run("WithoutPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18087", "false", "1000"))
+	t.Run("WithPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS("18089", "true", "1000"))
 }
-func testBasicConfigAuthTLS(grpcPort, perSecond string) func(*testing.T) {
+
+func TestBasicAuthConfig(t *testing.T) {
+	t.Run("WithoutPerSecondRedisAuth", testBasicConfigAuth("8091", "false", "0"))
+	t.Run("WithPerSecondRedisAuth", testBasicConfigAuth("8093", "true", "0"))
+	t.Run("WithoutPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18091", "false", "1000"))
+	t.Run("WithPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18093", "true", "1000"))
+}
+
+func TestBasicReloadConfig(t *testing.T) {
+	t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRoot("8095", "false", "0"))
+	t.Run("ReloadWithoutWatchRoot", testBasicConfigReload("8097", "false", "0", "false"))
+}
+
+func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
 	os.Setenv("REDIS_URL", "localhost:16381")
 	os.Setenv("REDIS_AUTH", "password123")
+	os.Setenv("REDIS_TLS", "true")
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
-	return testBasicBaseConfig(grpcPort, perSecond)
+	os.Setenv("REDIS_PERSECOND_TLS", "true")
+	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
-func testBasicConfig(grpcPort, perSecond string) func(*testing.T) {
+
+func testBasicConfig(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
 	os.Setenv("REDIS_URL", "localhost:6379")
+	os.Setenv("REDIS_AUTH", "")
 	os.Setenv("REDIS_TLS", "false")
+	os.Setenv("REDIS_PERSECOND_AUTH", "")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
-	return testBasicBaseConfig(grpcPort, perSecond)
+	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
-func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
+
+func testBasicConfigAuth(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
+	os.Setenv("REDIS_PERSECOND_URL", "localhost:6385")
+	os.Setenv("REDIS_URL", "localhost:6384")
+	os.Setenv("REDIS_TLS", "false")
+	os.Setenv("REDIS_AUTH", "password123")
+	os.Setenv("REDIS_PERSECOND_TLS", "false")
+	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
+	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
+}
+
+func testBasicConfigWithoutWatchRoot(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
+	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
+	os.Setenv("REDIS_URL", "localhost:6379")
+	os.Setenv("REDIS_AUTH", "")
+	os.Setenv("REDIS_TLS", "false")
+	os.Setenv("REDIS_PERSECOND_AUTH", "")
+	os.Setenv("REDIS_PERSECOND_TLS", "false")
+	os.Setenv("RUNTIME_WATCH_ROOT", "false")
+	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
+}
+
+func testBasicConfigReload(grpcPort, perSecond string, local_cache_size, runtimeWatchRoot string) func(*testing.T) {
+	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
+	os.Setenv("REDIS_URL", "localhost:6379")
+	os.Setenv("REDIS_AUTH", "")
+	os.Setenv("REDIS_TLS", "false")
+	os.Setenv("REDIS_PERSECOND_AUTH", "")
+	os.Setenv("REDIS_PERSECOND_TLS", "false")
+	os.Setenv("RUNTIME_WATCH_ROOT", runtimeWatchRoot)
+	return testConfigReload(grpcPort, perSecond, local_cache_size)
+}
+
+func getCacheKey(cacheKey string, enableLocalCache bool) string {
+	if enableLocalCache {
+		return cacheKey + "_local"
+	}
+
+	return cacheKey
+}
+
+func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	return func(t *testing.T) {
 		os.Setenv("REDIS_PERSECOND", perSecond)
 		os.Setenv("PORT", "8082")
@@ -73,6 +143,12 @@ func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 		os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
 		os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
 		os.Setenv("REDIS_SOCKET_TYPE", "tcp")
+		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
+		os.Setenv("USE_STATSD", "false")
+
+		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
+		enable_local_cache := local_cache_size_val > 0
+		runner := runner.NewRunner()
 
 		go func() {
 			runner.Run()
@@ -89,24 +165,50 @@ func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 
 		response, err := c.ShouldRateLimit(
 			context.Background(),
-			common.NewRateLimitRequest("foo", [][][2]string{{{"hello", "world"}}}, 1))
-		assert.Equal(
+			common.NewRateLimitRequest("foo", [][][2]string{{{getCacheKey("hello", enable_local_cache), "world"}}}, 1))
+		common.AssertProtoEqual(
+			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
 			response)
 		assert.NoError(err)
 
+		// Manually flush the cache for local_cache stats
+		runner.GetStatsStore().Flush()
+		localCacheHitCounter := runner.GetStatsStore().NewGauge("ratelimit.localcache.hitCount")
+		assert.Equal(0, int(localCacheHitCounter.Value()))
+
+		localCacheMissCounter := runner.GetStatsStore().NewGauge("ratelimit.localcache.missCount")
+		assert.Equal(0, int(localCacheMissCounter.Value()))
+
 		response, err = c.ShouldRateLimit(
 			context.Background(),
-			common.NewRateLimitRequest("basic", [][][2]string{{{"key1", "foo"}}}, 1))
-		assert.Equal(
+			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
+		common.AssertProtoEqual(
+			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses: []*pb.RateLimitResponse_DescriptorStatus{
 					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49)}},
 			response)
 		assert.NoError(err)
+
+		// store.NewCounter returns the existing counter.
+		key1HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.basic.%s.total_hits", getCacheKey("key1", enable_local_cache)))
+		assert.Equal(1, int(key1HitCounter.Value()))
+
+		// Manually flush the cache for local_cache stats
+		runner.GetStatsStore().Flush()
+		localCacheHitCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.hitCount")
+		assert.Equal(0, int(localCacheHitCounter.Value()))
+
+		localCacheMissCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.missCount")
+		if enable_local_cache {
+			assert.Equal(1, int(localCacheMissCounter.Value()))
+		} else {
+			assert.Equal(0, int(localCacheMissCounter.Value()))
+		}
 
 		// Now come up with a random key, and go over limit for a minute limit which should always work.
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -115,7 +217,7 @@ func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 			response, err = c.ShouldRateLimit(
 				context.Background(),
 				common.NewRateLimitRequest(
-					"another", [][][2]string{{{"key2", strconv.Itoa(randomInt)}}}, 1))
+					"another", [][][2]string{{{getCacheKey("key2", enable_local_cache), strconv.Itoa(randomInt)}}}, 1))
 
 			status := pb.RateLimitResponse_OK
 			limitRemaining := uint32(20 - (i + 1))
@@ -124,13 +226,49 @@ func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 				limitRemaining = 0
 			}
 
-			assert.Equal(
+			common.AssertProtoEqual(
+				assert,
 				&pb.RateLimitResponse{
 					OverallCode: status,
 					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
 						newDescriptorStatus(status, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining)}},
 				response)
 			assert.NoError(err)
+			key2HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
+			assert.Equal(i+1, int(key2HitCounter.Value()))
+			key2OverlimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key2", enable_local_cache)))
+			if i >= 20 {
+				assert.Equal(i-19, int(key2OverlimitCounter.Value()))
+			} else {
+				assert.Equal(0, int(key2OverlimitCounter.Value()))
+			}
+
+			key2LocalCacheOverLimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key2", enable_local_cache)))
+			if enable_local_cache && i >= 20 {
+				assert.Equal(i-20, int(key2LocalCacheOverLimitCounter.Value()))
+			} else {
+				assert.Equal(0, int(key2LocalCacheOverLimitCounter.Value()))
+			}
+
+			// Manually flush the cache for local_cache stats
+			runner.GetStatsStore().Flush()
+			localCacheHitCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.hitCount")
+			if enable_local_cache && i >= 20 {
+				assert.Equal(i-20, int(localCacheHitCounter.Value()))
+			} else {
+				assert.Equal(0, int(localCacheHitCounter.Value()))
+			}
+
+			localCacheMissCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.missCount")
+			if enable_local_cache {
+				if i < 20 {
+					assert.Equal(i+2, int(localCacheMissCounter.Value()))
+				} else {
+					assert.Equal(22, int(localCacheMissCounter.Value()))
+				}
+			} else {
+				assert.Equal(0, int(localCacheMissCounter.Value()))
+			}
 		}
 
 		// Limit now against 2 keys in the same domain.
@@ -141,8 +279,8 @@ func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 				common.NewRateLimitRequest(
 					"another",
 					[][][2]string{
-						{{"key2", strconv.Itoa(randomInt)}},
-						{{"key3", strconv.Itoa(randomInt)}}}, 1))
+						{{getCacheKey("key2", enable_local_cache), strconv.Itoa(randomInt)}},
+						{{getCacheKey("key3", enable_local_cache), strconv.Itoa(randomInt)}}}, 1))
 
 			status := pb.RateLimitResponse_OK
 			limitRemaining1 := uint32(20 - (i + 1))
@@ -152,7 +290,8 @@ func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 				limitRemaining2 = 0
 			}
 
-			assert.Equal(
+			common.AssertProtoEqual(
+				assert,
 				&pb.RateLimitResponse{
 					OverallCode: status,
 					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
@@ -160,6 +299,59 @@ func testBasicBaseConfig(grpcPort, perSecond string) func(*testing.T) {
 						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
 				response)
 			assert.NoError(err)
+			key2HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
+			assert.Equal(i+26, int(key2HitCounter.Value()))
+			key2OverlimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key2", enable_local_cache)))
+			assert.Equal(5, int(key2OverlimitCounter.Value()))
+			key2LocalCacheOverLimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key2", enable_local_cache)))
+			if enable_local_cache {
+				assert.Equal(4, int(key2LocalCacheOverLimitCounter.Value()))
+			} else {
+				assert.Equal(0, int(key2LocalCacheOverLimitCounter.Value()))
+			}
+
+			key3HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key3", enable_local_cache)))
+			assert.Equal(i+1, int(key3HitCounter.Value()))
+			key3OverlimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key3", enable_local_cache)))
+			if i >= 10 {
+				assert.Equal(i-9, int(key3OverlimitCounter.Value()))
+			} else {
+				assert.Equal(0, int(key3OverlimitCounter.Value()))
+			}
+			key3LocalCacheOverLimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key3", enable_local_cache)))
+			if enable_local_cache && i >= 10 {
+				assert.Equal(i-10, int(key3LocalCacheOverLimitCounter.Value()))
+			} else {
+				assert.Equal(0, int(key3LocalCacheOverLimitCounter.Value()))
+			}
+
+			// Manually flush the cache for local_cache stats
+			runner.GetStatsStore().Flush()
+			localCacheHitCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.hitCount")
+			if enable_local_cache {
+				if i < 10 {
+					assert.Equal(4, int(localCacheHitCounter.Value()))
+				} else {
+					// key3 caches hit
+					assert.Equal(i-6, int(localCacheHitCounter.Value()))
+				}
+			} else {
+				assert.Equal(0, int(localCacheHitCounter.Value()))
+			}
+
+			localCacheMissCounter = runner.GetStatsStore().NewGauge("ratelimit.localcache.missCount")
+			if enable_local_cache {
+				if i < 10 {
+					// both key2 and key3 cache miss.
+					assert.Equal(i*2+24, int(localCacheMissCounter.Value()))
+				} else {
+					// key2 caches miss.
+					assert.Equal(i+34, int(localCacheMissCounter.Value()))
+				}
+			} else {
+				assert.Equal(0, int(localCacheMissCounter.Value()))
+			}
+
 		}
 	}
 }
@@ -174,7 +366,11 @@ func TestBasicConfigLegacy(t *testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:6380")
 	os.Setenv("REDIS_URL", "localhost:6379")
 	os.Setenv("REDIS_TLS", "false")
+	os.Setenv("REDIS_AUTH", "")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
+	os.Setenv("REDIS_PERSECOND_AUTH", "")
+
+	runner := runner.NewRunner()
 	go func() {
 		runner.Run()
 	}()
@@ -184,6 +380,7 @@ func TestBasicConfigLegacy(t *testing.T) {
 
 	assert := assert.New(t)
 	conn, err := grpc.Dial("localhost:8083", grpc.WithInsecure())
+
 	assert.NoError(err)
 	defer conn.Close()
 	c := pb_legacy.NewRateLimitServiceClient(conn)
@@ -191,21 +388,51 @@ func TestBasicConfigLegacy(t *testing.T) {
 	response, err := c.ShouldRateLimit(
 		context.Background(),
 		common.NewRateLimitRequestLegacy("foo", [][][2]string{{{"hello", "world"}}}, 1))
-	assert.Equal(
+	common.AssertProtoEqual(
+		assert,
 		&pb_legacy.RateLimitResponse{
 			OverallCode: pb_legacy.RateLimitResponse_OK,
 			Statuses:    []*pb_legacy.RateLimitResponse_DescriptorStatus{{Code: pb_legacy.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
 		response)
 	assert.NoError(err)
 
+	json_body := []byte(`{
+		"domain": "basic",
+		"descriptors": [
+			{
+				"entries": [
+					{
+						"key": "one_per_minute"
+					}
+				]
+			}
+		]
+	}`)
+	http_resp, _ := http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(json_body))
+	assert.Equal(http_resp.StatusCode, 200)
+	body, _ := ioutil.ReadAll(http_resp.Body)
+	http_resp.Body.Close()
+	assert.Equal(`{"overallCode":"OK","statuses":[{"code":"OK","currentLimit":{"requestsPerUnit":1,"unit":"MINUTE"}}]}`, string(body))
+
+	http_resp, _ = http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(json_body))
+	assert.Equal(http_resp.StatusCode, 429)
+	body, _ = ioutil.ReadAll(http_resp.Body)
+	http_resp.Body.Close()
+	assert.Equal(`{"overallCode":"OVER_LIMIT","statuses":[{"code":"OVER_LIMIT","currentLimit":{"requestsPerUnit":1,"unit":"MINUTE"}}]}`, string(body))
+
+	invalid_json := []byte(`{"unclosed quote: []}`)
+	http_resp, _ = http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(invalid_json))
+	assert.Equal(http_resp.StatusCode, 400)
+
 	response, err = c.ShouldRateLimit(
 		context.Background(),
 		common.NewRateLimitRequestLegacy("basic_legacy", [][][2]string{{{"key1", "foo"}}}, 1))
-	assert.Equal(
+	common.AssertProtoEqual(
+		assert,
 		&pb_legacy.RateLimitResponse{
 			OverallCode: pb_legacy.RateLimitResponse_OK,
 			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-				newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 50, pb_legacy.RateLimit_SECOND, 49)}},
+				newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 50, pb_legacy.RateLimitResponse_RateLimit_SECOND, 49)}},
 		response)
 	assert.NoError(err)
 
@@ -225,11 +452,12 @@ func TestBasicConfigLegacy(t *testing.T) {
 			limitRemaining = 0
 		}
 
-		assert.Equal(
+		common.AssertProtoEqual(
+			assert,
 			&pb_legacy.RateLimitResponse{
 				OverallCode: status,
 				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatusLegacy(status, 20, pb_legacy.RateLimit_MINUTE, limitRemaining)}},
+					newDescriptorStatusLegacy(status, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining)}},
 			response)
 		assert.NoError(err)
 	}
@@ -253,13 +481,118 @@ func TestBasicConfigLegacy(t *testing.T) {
 			limitRemaining2 = 0
 		}
 
-		assert.Equal(
+		common.AssertProtoEqual(
+			assert,
 			&pb_legacy.RateLimitResponse{
 				OverallCode: status,
 				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 20, pb_legacy.RateLimit_MINUTE, limitRemaining1),
-					newDescriptorStatusLegacy(status, 10, pb_legacy.RateLimit_HOUR, limitRemaining2)}},
+					newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining1),
+					newDescriptorStatusLegacy(status, 10, pb_legacy.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
 			response)
 		assert.NoError(err)
+	}
+}
+
+func testConfigReload(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
+	return func(t *testing.T) {
+		os.Setenv("REDIS_PERSECOND", perSecond)
+		os.Setenv("PORT", "8082")
+		os.Setenv("GRPC_PORT", grpcPort)
+		os.Setenv("DEBUG_PORT", "8084")
+		os.Setenv("RUNTIME_ROOT", "runtime/current")
+		os.Setenv("RUNTIME_SUBDIRECTORY", "ratelimit")
+		os.Setenv("REDIS_PERSECOND_SOCKET_TYPE", "tcp")
+		os.Setenv("REDIS_SOCKET_TYPE", "tcp")
+		os.Setenv("LOCAL_CACHE_SIZE_IN_BYTES", local_cache_size)
+		os.Setenv("USE_STATSD", "false")
+
+		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
+		enable_local_cache := local_cache_size_val > 0
+		runner := runner.NewRunner()
+
+		go func() {
+			runner.Run()
+		}()
+
+		// HACK: Wait for the server to come up. Make a hook that we can wait on.
+		time.Sleep(1 * time.Second)
+
+		assert := assert.New(t)
+		conn, err := grpc.Dial(fmt.Sprintf("localhost:%s", grpcPort), grpc.WithInsecure())
+		assert.NoError(err)
+		defer conn.Close()
+		c := pb.NewRateLimitServiceClient(conn)
+
+		response, err := c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("reload", [][][2]string{{{getCacheKey("block", enable_local_cache), "foo"}}}, 1))
+		common.AssertProtoEqual(
+			assert,
+			&pb.RateLimitResponse{
+				OverallCode: pb.RateLimitResponse_OK,
+				Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK}}},
+			response)
+		assert.NoError(err)
+
+		runner.GetStatsStore().Flush()
+		loadCount1 := runner.GetStatsStore().NewCounter("ratelimit.service.config_load_success").Value()
+
+		// Copy a new file to config folder to test config reload functionality
+		in, err := os.Open("runtime/current/ratelimit/reload.yaml")
+		if err != nil {
+			panic(err)
+		}
+		defer in.Close()
+		out, err := os.Create("runtime/current/ratelimit/config/reload.yaml")
+		if err != nil {
+			panic(err)
+		}
+		defer out.Close()
+		_, err = io.Copy(out, in)
+		if err != nil {
+			panic(err)
+		}
+		err = out.Close()
+		if err != nil {
+			panic(err)
+		}
+
+		// Need to wait for config reload to take place and new descriptors to be loaded.
+		// Shouldn't take more than 5 seconds but wait 120 at most just to be safe.
+		wait := 120
+		reloaded := false
+		loadCount2 := uint64(0)
+
+		for i := 0; i < wait; i++ {
+			time.Sleep(1 * time.Second)
+			runner.GetStatsStore().Flush()
+			loadCount2 = runner.GetStatsStore().NewCounter("ratelimit.service.config_load_success").Value()
+
+			// Check that successful loads count has increased before continuing.
+			if loadCount2 > loadCount1 {
+				reloaded = true
+				break
+			}
+		}
+
+		assert.True(reloaded)
+		assert.Greater(loadCount2, loadCount1)
+
+		response, err = c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("reload", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
+		common.AssertProtoEqual(
+			assert,
+			&pb.RateLimitResponse{
+				OverallCode: pb.RateLimitResponse_OK,
+				Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49)}},
+			response)
+		assert.NoError(err)
+
+		err = os.Remove("runtime/current/ratelimit/config/reload.yaml")
+		if err != nil {
+			panic(err)
+		}
 	}
 }
