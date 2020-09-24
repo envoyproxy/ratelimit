@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/lyft/gostats"
-	"github.com/lyft/ratelimit/src/config"
 )
 
 func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {

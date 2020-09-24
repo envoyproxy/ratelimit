@@ -2,11 +2,13 @@ package redis
 
 import (
 	"crypto/tls"
+	"fmt"
+	"time"
+
+	"github.com/mediocregopher/radix/v3/trace"
 
 	stats "github.com/lyft/gostats"
-	"github.com/lyft/ratelimit/src/assert"
-	"github.com/mediocregopher/radix.v2/pool"
-	"github.com/mediocregopher/radix.v2/redis"
+	"github.com/mediocregopher/radix/v3"
 	logger "github.com/sirupsen/logrus"
 )
 
@@ -24,18 +26,23 @@ func newPoolStats(scope stats.Scope) poolStats {
 	return ret
 }
 
-type poolImpl struct {
-	pool  *pool.Pool
-	stats poolStats
+func poolTrace(ps *poolStats) trace.PoolTrace {
+	return trace.PoolTrace{
+		ConnCreated: func(_ trace.PoolConnCreated) {
+			ps.connectionTotal.Add(1)
+			ps.connectionActive.Add(1)
+		},
+		ConnClosed: func(_ trace.PoolConnClosed) {
+			ps.connectionActive.Sub(1)
+			ps.connectionClose.Add(1)
+		},
+	}
 }
 
-type connectionImpl struct {
-	client  *redis.Client
-	pending uint
-}
-
-type responseImpl struct {
-	response *redis.Resp
+type clientImpl struct {
+	client             radix.Client
+	stats              poolStats
+	implicitPipelining bool
 }
 
 func checkError(err error) {
@@ -44,81 +51,88 @@ func checkError(err error) {
 	}
 }
 
-func (this *poolImpl) Get() Connection {
-	client, err := this.pool.Get()
-	checkError(err)
-	this.stats.connectionActive.Inc()
-	this.stats.connectionTotal.Inc()
-	return &connectionImpl{client, 0}
-}
+func NewClientImpl(scope stats.Scope, useTls bool, auth string, url string, poolSize int,
+	pipelineWindow time.Duration, pipelineLimit int) Client {
+	logger.Warnf("connecting to redis on %s with pool size %d", url, poolSize)
 
-func (this *poolImpl) Put(c Connection) {
-	impl := c.(*connectionImpl)
-	this.stats.connectionActive.Dec()
-	if impl.pending == 0 {
-		this.pool.Put(impl.client)
-	} else {
-		// radix does not appear to track if we attempt to put a connection back with pipelined
-		// responses that have not been flushed. If we are in this state, just kill the connection
-		// and don't put it back in the pool.
-		impl.client.Close()
-		this.stats.connectionClose.Inc()
-	}
-}
+	df := func(network, addr string) (radix.Conn, error) {
+		var dialOpts []radix.DialOpt
 
-func NewPoolImpl(scope stats.Scope, socketType string, url string, poolSize int) Pool {
-	logger.Warnf("connecting to redis on %s %s with pool size %d", socketType, url, poolSize)
-	pool, err := pool.New(socketType, url, poolSize)
-	checkError(err)
-	return &poolImpl{
-		pool:  pool,
-		stats: newPoolStats(scope)}
-}
-
-func NewAuthTLSPoolImpl(scope stats.Scope, auth string, url string, poolSize int) Pool {
-	logger.Warnf("connecting to redis on tls %s with pool size %d", url, poolSize)
-	df := func(network, addr string) (*redis.Client, error) {
-		conn, err := tls.Dial(network, addr, &tls.Config{})
-		if err != nil {
-			return nil, err
+		var err error
+		if useTls {
+			dialOpts = append(dialOpts, radix.DialUseTLS(&tls.Config{}))
 		}
-		client, err := redis.NewClient(conn)
 
 		if err != nil {
 			return nil, err
 		}
 		if auth != "" {
-			logger.Warnf("enabling authentication to redis on tls %s", url)
-			if err = client.Cmd("AUTH", auth).Err; err != nil {
-				client.Close()
-				return nil, err
+			logger.Warnf("enabling authentication to redis on %s", url)
+
+			dialOpts = append(dialOpts, radix.DialAuthPass(auth))
+		}
+
+		return radix.Dial(network, addr, dialOpts...)
+	}
+
+	stats := newPoolStats(scope)
+
+	opts := []radix.PoolOpt{radix.PoolConnFunc(df), radix.PoolWithTrace(poolTrace(&stats))}
+
+	implicitPipelining := true
+	if pipelineWindow == 0 && pipelineLimit == 0 {
+		implicitPipelining = false
+	} else {
+		opts = append(opts, radix.PoolPipelineWindow(pipelineWindow, pipelineLimit))
+	}
+
+	// TODO: support sentinel and redis cluster
+	pool, err := radix.NewPool("tcp", url, poolSize, opts...)
+	checkError(err)
+
+	// Check if connection is good
+	var pingResponse string
+	checkError(pool.Do(radix.Cmd(&pingResponse, "PING")))
+	if pingResponse != "PONG" {
+		checkError(fmt.Errorf("connecting redis error: %s", pingResponse))
+	}
+
+	return &clientImpl{
+		client:             pool,
+		stats:              stats,
+		implicitPipelining: implicitPipelining,
+	}
+}
+
+func (c *clientImpl) DoCmd(rcv interface{}, cmd, key string, args ...interface{}) error {
+	return c.client.Do(radix.FlatCmd(rcv, cmd, key, args...))
+}
+
+func (c *clientImpl) Close() error {
+	return c.client.Close()
+}
+
+func (c *clientImpl) NumActiveConns() int {
+	return int(c.stats.connectionActive.Value())
+}
+
+func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd, key string, args ...interface{}) Pipeline {
+	return append(pipeline, radix.FlatCmd(rcv, cmd, key, args...))
+}
+
+func (c *clientImpl) PipeDo(pipeline Pipeline) error {
+	if c.implicitPipelining {
+		for _, action := range pipeline {
+			if err := c.client.Do(action); err != nil {
+				return err
 			}
 		}
-		return client, nil
+		return nil
 	}
-	pool, err := pool.NewCustom("tcp", url, poolSize, df)
-	checkError(err)
-	return &poolImpl{
-		pool:  pool,
-		stats: newPoolStats(scope)}
+
+	return c.client.Do(radix.Pipeline(pipeline...))
 }
 
-func (this *connectionImpl) PipeAppend(cmd string, args ...interface{}) {
-	this.client.PipeAppend(cmd, args...)
-	this.pending++
-}
-
-func (this *connectionImpl) PipeResponse() Response {
-	assert.Assert(this.pending > 0)
-	this.pending--
-
-	resp := this.client.PipeResp()
-	checkError(resp.Err)
-	return &responseImpl{resp}
-}
-
-func (this *responseImpl) Int() int64 {
-	i, err := this.response.Int64()
-	checkError(err)
-	return i
+func (c *clientImpl) ImplicitPipeliningEnabled() bool {
+	return c.implicitPipelining
 }

@@ -1,8 +1,8 @@
-package redis
+package limiter
 
 import (
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	"github.com/lyft/ratelimit/src/config"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/envoyproxy/ratelimit/src/config"
 	"golang.org/x/net/context"
 )
 
