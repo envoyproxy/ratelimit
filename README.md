@@ -27,6 +27,7 @@
 - [Debug Port](#debug-port)
 - [Local Cache](#local-cache)
 - [Redis](#redis)
+  - [Redis type](#redis-type)
   - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
@@ -501,6 +502,20 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_TLS` & `REDIS_PERSECOND_TLS`: set to `"true"` to enable a TLS connection for the specific connection type.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable authentication to the redis host.
 
+## Redis type
+
+Ratelimit supports different types of redis deployments:
+
+1. Single instance (default): Talk to a single instance of redis, or a redis proxy (e.g. https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/other_protocols/redis)
+1. Sentinel: Talk to a redis deployment with sentinel instances (see https://redis.io/topics/sentinel)
+1. Cluster: Talk to a redis in cluster mode (see https://redis.io/topics/cluster-spec)
+
+The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TYPE` environment variables. Depending on the type defined, the `REDIS_URL` and `REDIS_PERSECOND_URL` are expected to have the following formats:
+
+1. "single": Depending on the socket type defined, either a single hostname:port pair or a unix domain socket reference.
+2. "sentinel": A comma separated list with the first string as the master name of the sentinel cluster followed by hostname:port pairs. The list size should be >= 2. The first item is the name of the master and the rest are the sentinels.
+3. "cluster": A comma separated list of hostname:port pairs with all the nodes in the cluster.
+
 ## Pipelining
 
 By default, for each request, ratelimit will pick up a connection from pool, wirte multiple redis commands in a single write then reads their responses in a single read. This reduces network delay.
@@ -519,6 +534,7 @@ To configure one Redis instance use the following environment variables:
 1. `REDIS_SOCKET_TYPE`
 1. `REDIS_URL`
 1. `REDIS_POOL_SIZE`
+1. `REDIS_TYPE` (optional)
 
 This setup will use the same Redis server for all limits.
 
@@ -533,6 +549,7 @@ To configure two Redis instances use the following environment variables:
 1. `REDIS_PERSECOND_SOCKET_TYPE`
 1. `REDIS_PERSECOND_URL`
 1. `REDIS_PERSECOND_POOL_SIZE`
+1. `REDIS_PERSECOND_TYPE` (optional)
 
 This setup will use the Redis server configured with the `_PERSECOND_` vars for
 per second limits, and the other Redis server for all other limits.

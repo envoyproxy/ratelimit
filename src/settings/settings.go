@@ -24,6 +24,7 @@ type Settings struct {
 	LogLevel                     string        `envconfig:"LOG_LEVEL" default:"WARN"`
 	LogFormat                    string        `envconfig:"LOG_FORMAT" default:"text"`
 	RedisSocketType              string        `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
+	RedisType                    string        `envconfig:"REDIS_TYPE" default:"SINGLE"`
 	RedisUrl                     string        `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
 	RedisPoolSize                int           `envconfig:"REDIS_POOL_SIZE" default:"10"`
 	RedisAuth                    string        `envconfig:"REDIS_AUTH" default:""`
@@ -32,6 +33,7 @@ type Settings struct {
 	RedisPipelineLimit           int           `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
 	RedisPerSecond               bool          `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType     string        `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
+	RedisPerSecondType           string        `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`
 	RedisPerSecondUrl            string        `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize       int           `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	RedisPerSecondAuth           string        `envconfig:"REDIS_PERSECOND_AUTH" default:""`
