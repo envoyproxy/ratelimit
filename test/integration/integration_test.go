@@ -411,7 +411,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				limitRemaining2 = 0
 			}
 			
-                        assert.NoError(err)
 			common.AssertProtoEqual(
 				assert,
 				&pb.RateLimitResponse{
@@ -420,6 +419,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 						newDescriptorStatus(pb.RateLimitResponse_OK, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining1),
 						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
 				response)
+			assert.NoError(err)
+			
 			key2HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
 			assert.Equal(i+26, int(key2HitCounter.Value()))
 			key2OverlimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key2", enable_local_cache)))
