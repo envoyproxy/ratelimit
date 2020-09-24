@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,11 +30,11 @@ var (
 	shadowRequests = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "rate_limiting_shadow_requests",
 		Help: "The total number of requests that would of been rate limited not in shadow mode",
-	}, []string{"descriptor_key", "descriptor_value"})
+	}, []string{"descriptor_key", "descriptor_value", "limit", "unit"})
 	limitedRequests = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "rate_limiting_limited_requests",
 		Help: "The total number of requests that have been rate limited",
-	}, []string{"descriptor_key", "descriptor_value"})
+	}, []string{"descriptor_key", "descriptor_value", "limit", "unit"})
 	rateLimitRequestSummary = promauto.NewSummary(prometheus.SummaryOpts{
 		Name:       "rate_limiting_request_time_sec",
 		Help:       "Summary of rate limiting request times",
@@ -201,7 +202,8 @@ func (this *service) ShouldRateLimit(
 	if response.OverallCode != pb.RateLimitResponse_OK {
 		descriptorKey := ""
 		descriptorValue := ""
-
+		limit := ""
+		unit := ""
 		for i, descriptorStatus := range response.Statuses {
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				descriptor := request.Descriptors[i]
@@ -215,9 +217,14 @@ func (this *service) ShouldRateLimit(
 					descriptorKey += entry.Key
 					descriptorValue += fmt.Sprintf("%.*s", 40, entry.Value)
 				}
+				if descriptorStatus.CurrentLimit != nil {
+					limit = strconv.FormatUint(uint64(descriptorStatus.CurrentLimit.RequestsPerUnit), 10)
+					unit = descriptorStatus.CurrentLimit.Unit.String()
+				}
+
 			}
 		}
-		labels := map[string]string{"descriptor_key": descriptorKey, "descriptor_value": descriptorValue}
+		labels := map[string]string{"descriptor_key": descriptorKey, "descriptor_value": descriptorValue, "limit": limit, "unit": unit}
 		if this.shadowMode {
 			logger.Infof("shadow mode: would of returned %+v", response.OverallCode)
 			shadowRequests.With(labels).Inc()
