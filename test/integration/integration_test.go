@@ -87,16 +87,6 @@ func TestBasicReloadConfig(t *testing.T) {
 	t.Run("ReloadWithoutWatchRoot", testBasicConfigReload("8097", "false", "0", "false"))
 }
 
-func TestBasicReloadConfigWithRedisCluster(t *testing.T) {
-	t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRootWithRedisCluster("8096", "false", "0"))
-	t.Run("ReloadWithoutWatchRoot", testBasicConfigReloadWithRedisCluster("8098", "false", "0", "false"))
-}
-
-func TestBasicReloadConfigWithRedisSentinel(t *testing.T) {
-	t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRootWithRedisSentinel("8296", "false", "0"))
-	t.Run("ReloadWithoutWatchRoot", testBasicConfigReloadWithRedisSentinel("8298", "false", "0", "false"))
-}
-
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_URL", "localhost:16382")
 	os.Setenv("REDIS_URL", "localhost:16381")
@@ -174,7 +164,6 @@ func testBasicConfigWithoutWatchRoot(grpcPort, perSecond string, local_cache_siz
 	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size)
 }
-
 
 func testBasicConfigWithoutWatchRootWithRedisCluster(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
 	os.Setenv("REDIS_PERSECOND_TYPE", "cluster")
@@ -410,7 +399,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining2 = 0
 			}
-			
+
 			common.AssertProtoEqual(
 				assert,
 				&pb.RateLimitResponse{
@@ -420,7 +409,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
 				response)
 			assert.NoError(err)
-			
+
 			key2HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
 			assert.Equal(i+26, int(key2HitCounter.Value()))
 			key2OverlimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit", getCacheKey("key2", enable_local_cache)))
