@@ -1,7 +1,6 @@
 package ratelimit
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -200,22 +199,22 @@ func (this *service) ShouldRateLimit(
 
 	response := this.shouldRateLimitWorker(ctx, request)
 	if response.OverallCode != pb.RateLimitResponse_OK {
-		descriptorKey := ""
-		descriptorValue := ""
+		var descriptorKey strings.Builder
+		var descriptorValue strings.Builder
 		limit := ""
 		unit := ""
 		for i, descriptorStatus := range response.Statuses {
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				descriptor := request.Descriptors[i]
 				for _, entry := range descriptor.Entries {
-					if descriptorKey != "" {
-						descriptorKey += "_"
+					if descriptorKey.Len() != 0 {
+						descriptorKey.WriteString("_")
 					}
-					if descriptorValue != "" {
-						descriptorValue += "_"
+					if descriptorValue.Len() != 0 {
+						descriptorValue.WriteString("_")
 					}
-					descriptorKey += entry.Key
-					descriptorValue += fmt.Sprintf("%.*s", 40, entry.Value)
+					descriptorKey.WriteString(entry.Key)
+					descriptorValue.WriteString(entry.Value[:40])
 				}
 				if descriptorStatus.CurrentLimit != nil {
 					limit = strconv.FormatUint(uint64(descriptorStatus.CurrentLimit.RequestsPerUnit), 10)
@@ -224,7 +223,7 @@ func (this *service) ShouldRateLimit(
 
 			}
 		}
-		labels := map[string]string{"descriptor_key": descriptorKey, "descriptor_value": descriptorValue, "limit": limit, "unit": unit}
+		labels := map[string]string{"descriptor_key": descriptorKey.String(), "descriptor_value": descriptorValue.String(), "limit": limit, "unit": unit}
 		if this.shadowMode {
 			logger.Infof("shadow mode: would of returned %+v", response.OverallCode)
 			shadowRequests.With(labels).Inc()
