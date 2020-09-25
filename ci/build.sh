@@ -18,7 +18,7 @@ setEnvs
 installLamp &
 
 eval $(aws ecr get-login --region us-west-2 --no-include-email)
-for img in "golang:1.10.4" "alpine:3.8"
+for img in "golang:1.14" "alpine:3.11"
 do
     docker pull $img
 done
