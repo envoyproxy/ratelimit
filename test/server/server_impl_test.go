@@ -12,9 +12,9 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 
-	"github.com/envoyproxy/ratelimit/src/server"
-	mock_v3 "github.com/envoyproxy/ratelimit/test/mocks/rls"
 	"github.com/golang/mock/gomock"
+	"github.com/replicon/ratelimit/src/server"
+	mock_v3 "github.com/replicon/ratelimit/test/mocks/rls"
 	"github.com/stretchr/testify/assert"
 )
 
