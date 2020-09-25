@@ -1,6 +1,8 @@
 package ratelimit
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,10 +27,14 @@ type shouldRateLimitStats struct {
 }
 
 var (
-	shadowRequests = promauto.NewCounter(prometheus.CounterOpts{
+	shadowRequests = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "rate_limiting_shadow_requests",
 		Help: "The total number of requests that would of been rate limited not in shadow mode",
-	})
+	}, []string{"descriptor_key", "descriptor_value", "limit", "unit"})
+	limitedRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "rate_limiting_limited_requests",
+		Help: "The total number of requests that have been rate limited",
+	}, []string{"descriptor_key", "descriptor_value", "limit", "unit"})
 	rateLimitRequestSummary = promauto.NewSummary(prometheus.SummaryOpts{
 		Name:       "rate_limiting_request_time_sec",
 		Help:       "Summary of rate limiting request times",
@@ -111,6 +117,7 @@ func (this *service) reloadConfig() {
 	this.configLock.Lock()
 	this.config = newConfig
 	this.configLock.Unlock()
+
 }
 
 type serviceError string
@@ -192,14 +199,40 @@ func (this *service) ShouldRateLimit(
 	}()
 
 	response := this.shouldRateLimitWorker(ctx, request)
-	if this.shadowMode {
-		if response.OverallCode != pb.RateLimitResponse_OK {
+	if response.OverallCode != pb.RateLimitResponse_OK {
+		var descriptorKey strings.Builder
+		var descriptorValue strings.Builder
+		limit := ""
+		unit := ""
+		for i, descriptorStatus := range response.Statuses {
+			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
+				descriptor := request.Descriptors[i]
+				for _, entry := range descriptor.Entries {
+					if descriptorKey.Len() != 0 {
+						descriptorKey.WriteString("_")
+					}
+					if descriptorValue.Len() != 0 {
+						descriptorValue.WriteString("_")
+					}
+					descriptorKey.WriteString(entry.Key)
+					descriptorValue.WriteString(fmt.Sprintf("%.*s", 40, entry.Value))
+				}
+				if descriptorStatus.CurrentLimit != nil {
+					limit = strconv.FormatUint(uint64(descriptorStatus.CurrentLimit.RequestsPerUnit), 10)
+					unit = descriptorStatus.CurrentLimit.Unit.String()
+				}
+
+			}
+		}
+		labels := map[string]string{"descriptor_key": descriptorKey.String(), "descriptor_value": descriptorValue.String(), "limit": limit, "unit": unit}
+		if this.shadowMode {
 			logger.Infof("shadow mode: would of returned %+v", response.OverallCode)
-			shadowRequests.Inc()
+			shadowRequests.With(labels).Inc()
 			response.OverallCode = pb.RateLimitResponse_OK
 			this.stats.shouldRateLimit.wouldOfRateLimited.Inc()
+		} else {
+			limitedRequests.With(labels).Inc()
 		}
-
 	}
 	logger.Debugf("returning normal response")
 	return response, nil
