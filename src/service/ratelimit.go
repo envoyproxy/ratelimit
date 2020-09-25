@@ -6,14 +6,14 @@ import (
 	"time"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/assert"
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/lyft/goruntime/loader"
 	stats "github.com/lyft/gostats"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/replicon/ratelimit/src/assert"
+	"github.com/replicon/ratelimit/src/config"
+	"github.com/replicon/ratelimit/src/limiter"
+	"github.com/replicon/ratelimit/src/redis"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )

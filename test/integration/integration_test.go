@@ -5,8 +5,8 @@ package integration_test
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
-	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
-	"github.com/envoyproxy/ratelimit/test/common"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/replicon/ratelimit/src/service_cmd/runner"
+	"github.com/replicon/ratelimit/test/common"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -45,7 +45,7 @@ func newDescriptorStatusLegacy(
 	}
 }
 
-// TODO: Once adding the ability of stopping the server in the runner (https://github.com/envoyproxy/ratelimit/issues/119),
+// TODO: Once adding the ability of stopping the server in the runner (https://github.com/replicon/ratelimit/issues/119),
 //  stop the server at the end of each test, thus we can reuse the grpc port among these integration tests.
 func TestBasicConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0"))

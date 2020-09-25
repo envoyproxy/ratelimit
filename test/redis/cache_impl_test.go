@@ -8,18 +8,18 @@ import (
 	"github.com/mediocregopher/radix/v3"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/redis"
 	stats "github.com/lyft/gostats"
+	"github.com/replicon/ratelimit/src/config"
+	"github.com/replicon/ratelimit/src/limiter"
+	"github.com/replicon/ratelimit/src/redis"
 
 	"math/rand"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/envoyproxy/ratelimit/test/common"
-	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
-	mock_redis "github.com/envoyproxy/ratelimit/test/mocks/redis"
 	"github.com/golang/mock/gomock"
+	"github.com/replicon/ratelimit/test/common"
+	mock_limiter "github.com/replicon/ratelimit/test/mocks/limiter"
+	mock_redis "github.com/replicon/ratelimit/test/mocks/redis"
 	"github.com/stretchr/testify/assert"
 )
 

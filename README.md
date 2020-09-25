@@ -58,7 +58,7 @@ but support for it and was removed in 2.0.0.
 
 1. `v1.0.0` tagged on commit `0ded92a2af8261d43096eba4132e45b99a3b8b14`. Ratelimit has been in production use at Lyft for over 2 years.
 2. `v1.1.0` introduces the data-plane-api proto and initiates the deprecation of the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
-3. `v2.0.0` deleted support for the legacy [ratelimit.proto](https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
+3. `v2.0.0` deleted support for the legacy [ratelimit.proto](https://github.com/replicon/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
 The current version of ratelimit protocol is changed to [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
 while [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is still supported
 as a legacy protocol.
@@ -330,7 +330,7 @@ descriptors:
 The Ratelimit service uses a library written by Lyft called [goruntime](https://github.com/lyft/goruntime) to do configuration loading. Goruntime monitors
 a designated path, and watches for symlink swaps to files in the directory tree to reload configuration files.
 
-The path to watch can be configured via the [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go)
+The path to watch can be configured via the [settings](https://github.com/replicon/ratelimit/blob/master/src/settings/settings.go)
 package with the following environment variables:
 
 ```
@@ -487,7 +487,7 @@ You can specify the debug port with the `DEBUG_PORT` environment variable. It de
 # Local Cache
 
 Ratelimit optionally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and thus avoids reading the
-redis cache again for the already over-the-limit keys. The local cache size can be configured via `LocalCacheSizeInBytes` in the [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go).
+redis cache again for the already over-the-limit keys. The local cache size can be configured via `LocalCacheSizeInBytes` in the [settings](https://github.com/replicon/ratelimit/blob/master/src/settings/settings.go).
 If `LocalCacheSizeInBytes` is 0, local cache is disabled.
 
 # Redis

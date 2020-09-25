@@ -7,14 +7,14 @@ import (
 	"time"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/redis"
 	stats "github.com/lyft/gostats"
+	"github.com/replicon/ratelimit/src/config"
+	"github.com/replicon/ratelimit/src/limiter"
+	"github.com/replicon/ratelimit/src/redis"
 
 	"math/rand"
 
-	"github.com/envoyproxy/ratelimit/test/common"
+	"github.com/replicon/ratelimit/test/common"
 )
 
 func BenchmarkParallelDoLimit(b *testing.B) {

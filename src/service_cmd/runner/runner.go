@@ -16,12 +16,12 @@ import (
 	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/redis"
-	"github.com/envoyproxy/ratelimit/src/server"
-	ratelimit "github.com/envoyproxy/ratelimit/src/service"
-	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/replicon/ratelimit/src/config"
+	"github.com/replicon/ratelimit/src/limiter"
+	"github.com/replicon/ratelimit/src/redis"
+	"github.com/replicon/ratelimit/src/server"
+	ratelimit "github.com/replicon/ratelimit/src/service"
+	"github.com/replicon/ratelimit/src/settings"
 	logger "github.com/sirupsen/logrus"
 )
 
