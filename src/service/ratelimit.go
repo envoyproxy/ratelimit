@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -214,7 +215,7 @@ func (this *service) ShouldRateLimit(
 						descriptorValue.WriteString("_")
 					}
 					descriptorKey.WriteString(entry.Key)
-					descriptorValue.WriteString(entry.Value[:40])
+					descriptorValue.WriteString(fmt.Sprintf("%.*s", 40, entry.Value))
 				}
 				if descriptorStatus.CurrentLimit != nil {
 					limit = strconv.FormatUint(uint64(descriptorStatus.CurrentLimit.RequestsPerUnit), 10)
