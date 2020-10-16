@@ -65,7 +65,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
 
 		assert.Equal(
-			[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5}},
+			[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 			cache.DoLimit(nil, request, limits))
 		assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 		assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
@@ -89,7 +89,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key2_value2_subkey2_subvalue2", statsStore)}
 		assert.Equal(
 			[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
-				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0}},
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: redis.CalculateReset(limits[1].Limit)}},
 			cache.DoLimit(nil, request, limits))
 		assert.Equal(uint64(1), limits[1].Stats.TotalHits.Value())
 		assert.Equal(uint64(1), limits[1].Stats.OverLimit.Value())
@@ -116,8 +116,8 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_DAY, "key3_value3_subkey3_subvalue3", statsStore)}
 		assert.Equal(
 			[]*pb.RateLimitResponse_DescriptorStatus{
-				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
-				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0}},
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: redis.CalculateReset(limits[0].Limit)},
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: redis.CalculateReset(limits[1].Limit)}},
 			cache.DoLimit(nil, request, limits))
 		assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 		assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
@@ -191,7 +191,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4}},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
@@ -210,7 +210,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2}},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
@@ -229,7 +229,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
@@ -246,7 +246,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 		"EXPIRE", "domain_key4_value4_997200", int64(3600)).Times(0)
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(4), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
@@ -281,7 +281,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4}},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
@@ -296,7 +296,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2}},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
@@ -312,7 +312,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
@@ -329,7 +329,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key5_value5", statsStore)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
@@ -345,7 +345,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(8, pb.RateLimitResponse_RateLimit_SECOND, "key6_value6", statsStore)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
@@ -361,7 +361,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key7_value7", statsStore)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
@@ -377,7 +377,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key8_value8", statsStore)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
@@ -393,7 +393,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key9_value9", statsStore)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(7), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
@@ -409,7 +409,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key10_value10", statsStore)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(3), limits[0].Stats.OverLimit.Value())
@@ -437,7 +437,7 @@ func TestRedisWithJitter(t *testing.T) {
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: redis.CalculateReset(limits[0].Limit)}},
 		cache.DoLimit(nil, request, limits))
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())

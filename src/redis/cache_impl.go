@@ -11,6 +11,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/golang/protobuf/ptypes/duration"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
@@ -132,9 +133,10 @@ func (this *rateLimitCacheImpl) DoLimit(
 		if isOverLimitWithLocalCache[i] {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
-					Code:           pb.RateLimitResponse_OVER_LIMIT,
-					CurrentLimit:   limits[i].Limit,
-					LimitRemaining: 0,
+					Code:               pb.RateLimitResponse_OVER_LIMIT,
+					CurrentLimit:       limits[i].Limit,
+					LimitRemaining:     0,
+					DurationUntilReset: CalculateReset(limits[i].Limit),
 				}
 			limits[i].Stats.OverLimit.Add(uint64(hitsAddend))
 			limits[i].Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
@@ -152,9 +154,10 @@ func (this *rateLimitCacheImpl) DoLimit(
 		if limitAfterIncrease > overLimitThreshold {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
-					Code:           pb.RateLimitResponse_OVER_LIMIT,
-					CurrentLimit:   limits[i].Limit,
-					LimitRemaining: 0,
+					Code:               pb.RateLimitResponse_OVER_LIMIT,
+					CurrentLimit:       limits[i].Limit,
+					LimitRemaining:     0,
+					DurationUntilReset: CalculateReset(limits[i].Limit),
 				}
 
 			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
@@ -187,9 +190,10 @@ func (this *rateLimitCacheImpl) DoLimit(
 		} else {
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
-					Code:           pb.RateLimitResponse_OK,
-					CurrentLimit:   limits[i].Limit,
-					LimitRemaining: overLimitThreshold - limitAfterIncrease,
+					Code:               pb.RateLimitResponse_OK,
+					CurrentLimit:       limits[i].Limit,
+					LimitRemaining:     overLimitThreshold - limitAfterIncrease,
+					DurationUntilReset: CalculateReset(limits[i].Limit),
 				}
 
 			// The limit is OK but we additionally want to know if we are near the limit.
@@ -208,6 +212,27 @@ func (this *rateLimitCacheImpl) DoLimit(
 	}
 
 	return responseDescriptorStatuses
+}
+
+func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit ) *duration.Duration {
+	sec := unitInSeconds(currentLimit.Unit)
+	now := limiter.NewTimeSourceImpl().UnixNow()
+	return &duration.Duration{Seconds: sec - now%sec}
+}
+
+func unitInSeconds( unit pb.RateLimitResponse_RateLimit_Unit) int64 {
+	switch unit {
+	case pb.RateLimitResponse_RateLimit_SECOND:
+		return 1
+	case pb.RateLimitResponse_RateLimit_MINUTE:
+		return 60
+	case pb.RateLimitResponse_RateLimit_HOUR:
+		return 60 * 60
+	case pb.RateLimitResponse_RateLimit_DAY:
+		return 60 * 60 * 24
+	default:
+		panic("unknown rate limit unit")
+	}
 }
 
 func NewRateLimitCacheImpl(client Client, perSecondClient Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache) limiter.RateLimitCache {
