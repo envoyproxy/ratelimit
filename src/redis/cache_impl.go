@@ -214,13 +214,13 @@ func (this *rateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit ) *duration.Duration {
+func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit) *duration.Duration {
 	sec := unitInSeconds(currentLimit.Unit)
 	now := limiter.NewTimeSourceImpl().UnixNow()
 	return &duration.Duration{Seconds: sec - now%sec}
 }
 
-func unitInSeconds( unit pb.RateLimitResponse_RateLimit_Unit) int64 {
+func unitInSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 	switch unit {
 	case pb.RateLimitResponse_RateLimit_SECOND:
 		return 1
