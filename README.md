@@ -7,6 +7,7 @@
   - [Deprecation Schedule](#deprecation-schedule)
 - [Building and Testing](#building-and-testing)
   - [Docker-compose setup](#docker-compose-setup)
+  - [Full test environment](#full-test-environment)
 - [Configuration](#configuration)
   - [The configuration format](#the-configuration-format)
     - [Definitions](#definitions)
@@ -18,6 +19,7 @@
       - [Example 3](#example-3)
       - [Example 4](#example-4)
   - [Loading Configuration](#loading-configuration)
+  - [Log Format](#log-format)
 - [Request Fields](#request-fields)
 - [Statistics](#statistics)
 - [HTTP Port](#http-port)
@@ -25,6 +27,7 @@
 - [Debug Port](#debug-port)
 - [Local Cache](#local-cache)
 - [Redis](#redis)
+  - [Redis type](#redis-type)
   - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
@@ -107,8 +110,25 @@ The ratelimit-build container will build the ratelimit binary. Then via a shared
 a minimal container to run the application, rather than the heftier container used to build it.
 
 If you want to run with [two redis instances](#two-redis-instances), you will need to modify
-the docker-compose.yaml file to run a second redis container, and change the environment variables
+the docker-compose.yml file to run a second redis container, and change the environment variables
 as explained in the [two redis instances](#two-redis-instances) section.
+
+## Full test environment
+To run a fully configured environment to demo Envoy based rate limiting, run:
+```bash
+docker-compose -f docker-compose-example.yml up
+```
+This will run ratelimit, redis, prom-statsd-exporter and two Envoy containers such that you can demo rate limiting by hitting the below endpoints.
+```bash
+curl localhost:8888/test
+curl localhost:8888/header -H "foo: foo" # Header based
+curl localhost:8888/twoheader -H "foo: foo" -H "bar: bar" # Two headers
+curl localhost:8888/twoheader -H "foo: foo" -H "baz: baz"
+curl localhost:8888/twoheader -H "foo: foo" -H "bar: banned" # Ban a particular header value
+```
+Edit `examples/ratelimit/config/example.yaml` to test different rate limit configs. Hot reloading is enabled.
+
+The descriptors in `example.yaml` and the actions in `examples/envoy/proxy.yaml` should give you a good idea on how to configure rate limits.
 
 # Configuration
 
@@ -325,9 +345,43 @@ There are two methods for triggering a configuration reload:
 1. Symlink RUNTIME_ROOT to a different directory.
 2. Update the contents inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` directly.
 
-The former is the default behavior. To use the latter method, set the `RUNTIME_WATCH_ROOT` environment variable to `false`. 
+The former is the default behavior. To use the latter method, set the `RUNTIME_WATCH_ROOT` environment variable to `false`.
 
 For more information on how runtime works you can read its [README](https://github.com/lyft/goruntime).
+
+## Log Format
+
+A centralized log collection system works better with logs in json format. JSON format avoids the need for custom parsing rules.
+The Ratelimit service produces logs in a text format by default. For Example:
+
+```
+time="2020-09-10T17:22:35Z" level=debug msg="loading domain: messaging"
+time="2020-09-10T17:22:35Z" level=debug msg="loading descriptor: key=messaging.message_type_marketing"
+time="2020-09-10T17:22:35Z" level=debug msg="loading descriptor: key=messaging.message_type_marketing.to_number ratelimit={requests_per_unit=5, unit=DAY}"
+time="2020-09-10T17:22:35Z" level=debug msg="loading descriptor: key=messaging.to_number ratelimit={requests_per_unit=100, unit=DAY}"
+time="2020-09-10T17:21:55Z" level=warning msg="Listening for debug on ':6070'"
+time="2020-09-10T17:21:55Z" level=warning msg="Listening for HTTP on ':8080'"
+time="2020-09-10T17:21:55Z" level=debug msg="waiting for runtime update"
+time="2020-09-10T17:21:55Z" level=warning msg="Listening for gRPC on ':8081'"
+```
+
+JSON Log format can be configured using the following environment variables:
+
+```
+LOG_FORMAT=json
+```
+
+Output example:
+```
+{"@message":"loading domain: messaging","@timestamp":"2020-09-10T17:22:44.926010192Z","level":"debug"}
+{"@message":"loading descriptor: key=messaging.message_type_marketing","@timestamp":"2020-09-10T17:22:44.926019315Z","level":"debug"}
+{"@message":"loading descriptor: key=messaging.message_type_marketing.to_number ratelimit={requests_per_unit=5, unit=DAY}","@timestamp":"2020-09-10T17:22:44.926037174Z","level":"debug"}
+{"@message":"loading descriptor: key=messaging.to_number ratelimit={requests_per_unit=100, unit=DAY}","@timestamp":"2020-09-10T17:22:44.926048993Z","level":"debug"}
+{"@message":"Listening for debug on ':6070'","@timestamp":"2020-09-10T17:22:44.926113905Z","level":"warning"}
+{"@message":"Listening for gRPC on ':8081'","@timestamp":"2020-09-10T17:22:44.926182006Z","level":"warning"}
+{"@message":"Listening for HTTP on ':8080'","@timestamp":"2020-09-10T17:22:44.926227031Z","level":"warning"}
+{"@message":"waiting for runtime update","@timestamp":"2020-09-10T17:22:44.926267808Z","level":"debug"}
+```
 
 # Request Fields
 
@@ -377,7 +431,7 @@ The ratelimit service listens to HTTP 1.1 (by default on port 8080) with two end
 
 ## /json endpoint
 
-Takes an HTTP POST with a JSON body of the form e.g. 
+Takes an HTTP POST with a JSON body of the form e.g.
 ```json
 {
   "domain": "dummy",
@@ -389,7 +443,7 @@ Takes an HTTP POST with a JSON body of the form e.g.
   ]
 }
 ```
-The service will return an http 200 if this request is allowed (if no ratelimits exceeded) or 429 if one or more 
+The service will return an http 200 if this request is allowed (if no ratelimits exceeded) or 429 if one or more
 ratelimits were exceeded.
 
 The response is a RateLimitResponse encoded with
@@ -432,7 +486,7 @@ You can specify the debug port with the `DEBUG_PORT` environment variable. It de
 
 # Local Cache
 
-Ratelimit optionally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and thus avoids reading the 
+Ratelimit optionally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and thus avoids reading the
 redis cache again for the already over-the-limit keys. The local cache size can be configured via `LocalCacheSizeInBytes` in the [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go).
 If `LocalCacheSizeInBytes` is 0, local cache is disabled.
 
@@ -447,6 +501,20 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 
 1. `REDIS_TLS` & `REDIS_PERSECOND_TLS`: set to `"true"` to enable a TLS connection for the specific connection type.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable authentication to the redis host.
+
+## Redis type
+
+Ratelimit supports different types of redis deployments:
+
+1. Single instance (default): Talk to a single instance of redis, or a redis proxy (e.g. https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/other_protocols/redis)
+1. Sentinel: Talk to a redis deployment with sentinel instances (see https://redis.io/topics/sentinel)
+1. Cluster: Talk to a redis in cluster mode (see https://redis.io/topics/cluster-spec)
+
+The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TYPE` environment variables. Depending on the type defined, the `REDIS_URL` and `REDIS_PERSECOND_URL` are expected to have the following formats:
+
+1. "single": Depending on the socket type defined, either a single hostname:port pair or a unix domain socket reference.
+1. "sentinel": A comma separated list with the first string as the master name of the sentinel cluster followed by hostname:port pairs. The list size should be >= 2. The first item is the name of the master and the rest are the sentinels.
+1. "cluster": A comma separated list of hostname:port pairs with all the nodes in the cluster.
 
 ## Pipelining
 
@@ -466,6 +534,7 @@ To configure one Redis instance use the following environment variables:
 1. `REDIS_SOCKET_TYPE`
 1. `REDIS_URL`
 1. `REDIS_POOL_SIZE`
+1. `REDIS_TYPE` (optional)
 
 This setup will use the same Redis server for all limits.
 
@@ -480,6 +549,7 @@ To configure two Redis instances use the following environment variables:
 1. `REDIS_PERSECOND_SOCKET_TYPE`
 1. `REDIS_PERSECOND_URL`
 1. `REDIS_PERSECOND_POOL_SIZE`
+1. `REDIS_PERSECOND_TYPE` (optional)
 
 This setup will use the Redis server configured with the `_PERSECOND_` vars for
 per second limits, and the other Redis server for all other limits.
