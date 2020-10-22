@@ -5,9 +5,8 @@ go 1.14
 require (
 	github.com/alicebob/miniredis/v2 v2.11.4
 	github.com/cespare/xxhash v1.1.0 // indirect
-	github.com/cncf/udpa/go v0.0.0-20200629203442-efcf912fb354 // indirect
 	github.com/coocood/freecache v1.1.0
-	github.com/envoyproxy/go-control-plane v0.9.6
+	github.com/envoyproxy/go-control-plane v0.9.7
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/golang/mock v1.4.1
 	github.com/golang/protobuf v1.4.2

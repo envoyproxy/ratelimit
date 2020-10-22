@@ -3,12 +3,9 @@
 package integration_test
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
-	"net/http"
 	"os"
 	"strconv"
 	"testing"
@@ -17,7 +14,9 @@ import (
 	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
+	"github.com/envoyproxy/ratelimit/src/utils"
 	"github.com/envoyproxy/ratelimit/test/common"
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -27,10 +26,14 @@ func newDescriptorStatus(
 	status pb.RateLimitResponse_Code, requestsPerUnit uint32,
 	unit pb.RateLimitResponse_RateLimit_Unit, limitRemaining uint32) *pb.RateLimitResponse_DescriptorStatus {
 
+	limit := &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}
+	sec := utils.UnitToDivider(unit)
+	now := time.Now().Unix()
 	return &pb.RateLimitResponse_DescriptorStatus{
 		Code:           status,
-		CurrentLimit:   &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit},
+		CurrentLimit:   limit,
 		LimitRemaining: limitRemaining,
+		DurationUntilReset: &duration.Duration{Seconds: sec - now%sec},
 	}
 }
 
@@ -508,34 +511,6 @@ func TestBasicConfigLegacy(t *testing.T) {
 			Statuses:    []*pb_legacy.RateLimitResponse_DescriptorStatus{{Code: pb_legacy.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
 		response)
 	assert.NoError(err)
-
-	json_body := []byte(`{
-		"domain": "basic",
-		"descriptors": [
-			{
-				"entries": [
-					{
-						"key": "one_per_minute"
-					}
-				]
-			}
-		]
-	}`)
-	http_resp, _ := http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(json_body))
-	assert.Equal(http_resp.StatusCode, 200)
-	body, _ := ioutil.ReadAll(http_resp.Body)
-	http_resp.Body.Close()
-	assert.Equal(`{"overallCode":"OK","statuses":[{"code":"OK","currentLimit":{"requestsPerUnit":1,"unit":"MINUTE"}}]}`, string(body))
-
-	http_resp, _ = http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(json_body))
-	assert.Equal(http_resp.StatusCode, 429)
-	body, _ = ioutil.ReadAll(http_resp.Body)
-	http_resp.Body.Close()
-	assert.Equal(`{"overallCode":"OVER_LIMIT","statuses":[{"code":"OVER_LIMIT","currentLimit":{"requestsPerUnit":1,"unit":"MINUTE"}}]}`, string(body))
-
-	invalid_json := []byte(`{"unclosed quote: []}`)
-	http_resp, _ = http.Post("http://localhost:8082/json", "application/json", bytes.NewBuffer(invalid_json))
-	assert.Equal(http_resp.StatusCode, 400)
 
 	response, err = c.ShouldRateLimit(
 		context.Background(),
