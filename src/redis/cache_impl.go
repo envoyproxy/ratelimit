@@ -11,6 +11,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/utils"
 	"github.com/golang/protobuf/ptypes/duration"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -90,7 +91,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 		logger.Debugf("looking up cache key: %s", cacheKey.Key)
 
-		expirationSeconds := limiter.UnitToDivider(limits[i].Limit.Unit)
+		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
 		if this.expirationJitterMaxSeconds > 0 {
 			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 		}
@@ -136,7 +137,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 					Code:               pb.RateLimitResponse_OVER_LIMIT,
 					CurrentLimit:       limits[i].Limit,
 					LimitRemaining:     0,
-					DurationUntilReset: CalculateReset(limits[i].Limit),
+					DurationUntilReset: CalculateReset(limits[i].Limit, this.timeSource),
 				}
 			limits[i].Stats.OverLimit.Add(uint64(hitsAddend))
 			limits[i].Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
@@ -157,7 +158,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 					Code:               pb.RateLimitResponse_OVER_LIMIT,
 					CurrentLimit:       limits[i].Limit,
 					LimitRemaining:     0,
-					DurationUntilReset: CalculateReset(limits[i].Limit),
+					DurationUntilReset: CalculateReset(limits[i].Limit, this.timeSource),
 				}
 
 			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
@@ -182,7 +183,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
 				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
 				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
-				err := this.localCache.Set([]byte(cacheKey.Key), []byte{}, int(limiter.UnitToDivider(limits[i].Limit.Unit)))
+				err := this.localCache.Set([]byte(cacheKey.Key), []byte{}, int(utils.UnitToDivider(limits[i].Limit.Unit)))
 				if err != nil {
 					logger.Errorf("Failing to set local cache key: %s", cacheKey.Key)
 				}
@@ -193,7 +194,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 					Code:               pb.RateLimitResponse_OK,
 					CurrentLimit:       limits[i].Limit,
 					LimitRemaining:     overLimitThreshold - limitAfterIncrease,
-					DurationUntilReset: CalculateReset(limits[i].Limit),
+					DurationUntilReset: CalculateReset(limits[i].Limit, this.timeSource),
 				}
 
 			// The limit is OK but we additionally want to know if we are near the limit.
@@ -214,25 +215,10 @@ func (this *rateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit) *duration.Duration {
-	sec := unitInSeconds(currentLimit.Unit)
-	now := limiter.NewTimeSourceImpl().UnixNow()
+func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit, timeSource limiter.TimeSource) *duration.Duration {
+	sec := utils.UnitToDivider(currentLimit.Unit)
+	now := timeSource.UnixNow()
 	return &duration.Duration{Seconds: sec - now%sec}
-}
-
-func unitInSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
-	switch unit {
-	case pb.RateLimitResponse_RateLimit_SECOND:
-		return 1
-	case pb.RateLimitResponse_RateLimit_MINUTE:
-		return 60
-	case pb.RateLimitResponse_RateLimit_HOUR:
-		return 60 * 60
-	case pb.RateLimitResponse_RateLimit_DAY:
-		return 60 * 60 * 24
-	default:
-		panic("unknown rate limit unit")
-	}
 }
 
 func NewRateLimitCacheImpl(client Client, perSecondClient Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache) limiter.RateLimitCache {

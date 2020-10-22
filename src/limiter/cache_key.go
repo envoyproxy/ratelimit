@@ -8,6 +8,7 @@ import (
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
 type CacheKeyGenerator struct {
@@ -31,24 +32,6 @@ type CacheKey struct {
 
 func isPerSecondLimit(unit pb.RateLimitResponse_RateLimit_Unit) bool {
 	return unit == pb.RateLimitResponse_RateLimit_SECOND
-}
-
-// Convert a rate limit into a time divider.
-// @param unit supplies the unit to convert.
-// @return the divider to use in time computations.
-func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
-	switch unit {
-	case pb.RateLimitResponse_RateLimit_SECOND:
-		return 1
-	case pb.RateLimitResponse_RateLimit_MINUTE:
-		return 60
-	case pb.RateLimitResponse_RateLimit_HOUR:
-		return 60 * 60
-	case pb.RateLimitResponse_RateLimit_DAY:
-		return 60 * 60 * 24
-	}
-
-	panic("should not get here")
 }
 
 // Generate a cache key for a limit lookup.
@@ -81,7 +64,7 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 		b.WriteByte('_')
 	}
 
-	divider := UnitToDivider(limit.Limit.Unit)
+	divider := utils.UnitToDivider(limit.Limit.Unit)
 	b.WriteString(strconv.FormatInt((now/divider)*divider, 10))
 
 	return CacheKey{

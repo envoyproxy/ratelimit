@@ -13,9 +13,10 @@ import (
 
 	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
+	"github.com/envoyproxy/ratelimit/src/utils"
 	"github.com/envoyproxy/ratelimit/test/common"
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -26,11 +27,13 @@ func newDescriptorStatus(
 	unit pb.RateLimitResponse_RateLimit_Unit, limitRemaining uint32) *pb.RateLimitResponse_DescriptorStatus {
 
 	limit := &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}
+	sec := utils.UnitToDivider(unit)
+	now := time.Now().Unix()
 	return &pb.RateLimitResponse_DescriptorStatus{
 		Code:           status,
 		CurrentLimit:   limit,
 		LimitRemaining: limitRemaining,
-		DurationUntilReset: redis.CalculateReset(limit),
+		DurationUntilReset: &duration.Duration{Seconds: sec - now%sec},
 	}
 }
 
