@@ -42,6 +42,7 @@ type Settings struct {
 	RedisPerSecondPipelineLimit  int           `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 	ExpirationJitterMaxSeconds   int64         `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	LocalCacheSizeInBytes        int           `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
+	NearLimitRatio               float32       `envconfig:"NEAR_LIMIT_RATIO" default:"0.8"`
 }
 
 type Option func(*Settings)

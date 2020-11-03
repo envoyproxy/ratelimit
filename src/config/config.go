@@ -7,11 +7,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-// The NearLimitRation constant defines the ratio of total_hits over
-// the Limit's RequestPerUnit that need to happen before triggering a near_limit
-// stat increase
-const NearLimitRatio = 0.8
-
 // Errors that may be raised during config parsing.
 type RateLimitConfigError string
 

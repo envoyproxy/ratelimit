@@ -29,6 +29,7 @@ type rateLimitCacheImpl struct {
 	expirationJitterMaxSeconds int64
 	cacheKeyGenerator          limiter.CacheKeyGenerator
 	localCache                 *freecache.Cache
+	nearLimitRatio             float32
 }
 
 func max(a uint32, b uint32) uint32 {
@@ -149,7 +150,7 @@ func (this *rateLimitCacheImpl) DoLimit(
 		overLimitThreshold := limits[i].Limit.RequestsPerUnit
 		// The nearLimitThreshold is the number of requests that can be made before hitting the NearLimitRatio.
 		// We need to know it in both the OK and OVER_LIMIT scenarios.
-		nearLimitThreshold := uint32(math.Floor(float64(float32(overLimitThreshold) * config.NearLimitRatio)))
+		nearLimitThreshold := uint32(math.Floor(float64(float32(overLimitThreshold) * this.nearLimitRatio)))
 
 		logger.Debugf("cache key: %s current: %d", cacheKey.Key, limitAfterIncrease)
 		if limitAfterIncrease > overLimitThreshold {
@@ -221,7 +222,7 @@ func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit, timeSource lim
 	return &duration.Duration{Seconds: sec - now%sec}
 }
 
-func NewRateLimitCacheImpl(client Client, perSecondClient Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache) limiter.RateLimitCache {
+func NewRateLimitCacheImpl(client Client, perSecondClient Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32) limiter.RateLimitCache {
 	return &rateLimitCacheImpl{
 		client:                     client,
 		perSecondClient:            perSecondClient,
@@ -230,6 +231,7 @@ func NewRateLimitCacheImpl(client Client, perSecondClient Client, timeSource lim
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		cacheKeyGenerator:          limiter.NewCacheKeyGenerator(),
 		localCache:                 localCache,
+		nearLimitRatio:             nearLimitRatio,
 	}
 }
 
@@ -249,5 +251,6 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 		timeSource,
 		jitterRand,
 		expirationJitterMaxSeconds,
-		localCache)
+		localCache,
+		s.NearLimitRatio)
 }
