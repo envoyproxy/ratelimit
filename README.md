@@ -412,7 +412,7 @@ STAT:
 * over_limit: Number of rule hits exceeding the threshold rate
 * total_hits: Number of rule hits in total
 
-These are examples of generated stats for some configured rate limit rules from the above examples:
+To costum near_limit ratio threshold, you can specify with `NEAR_LIMIT_RATIO` environment variable. It defaults to `0.8` (0-1 scale). These are examples of generated stats for some configured rate limit rules from the above examples:
 
 ```
 ratelimit.service.rate_limit.mongo_cps.database_default.over_limit: 0
