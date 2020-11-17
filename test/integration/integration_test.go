@@ -336,7 +336,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining = 0
 			}
-			//fmt.Println("DurationUntilReset: ", response.GetStatuses()[0].DurationUntilReset)
 			durRemaining = response.GetStatuses()[0].DurationUntilReset
 
 			common.AssertProtoEqual(
@@ -471,13 +470,13 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		// Test DurationUntilReset by hitting same key twice
 		resp1, err := c.ShouldRateLimit(
 			context.Background(),
-			common.NewRateLimitRequest("another", [][][2]string{{{getCacheKey("key2", enable_local_cache), "durTest"}}}, 1))
+			common.NewRateLimitRequest("another", [][][2]string{{{getCacheKey("key4", enable_local_cache), "durTest"}}}, 1))
 
-		time.Sleep(5 * time.Second) // Wait 1 sec to allow duration to tick down
+		time.Sleep(2 * time.Second) // Wait 1 sec to allow duration to tick down
 
 		resp2, err := c.ShouldRateLimit(
 			context.Background(),
-			common.NewRateLimitRequest("another", [][][2]string{{{getCacheKey("key2", enable_local_cache), "durTest"}}}, 1))
+			common.NewRateLimitRequest("another", [][][2]string{{{getCacheKey("key4", enable_local_cache), "durTest"}}}, 1))
 
 		assert.Less(resp2.GetStatuses()[0].DurationUntilReset.GetSeconds(), resp1.GetStatuses()[0].DurationUntilReset.GetSeconds())
 	}

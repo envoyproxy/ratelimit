@@ -19,3 +19,8 @@ descriptors:
     rate_limit:
       unit: hour
       requests_per_unit: 10
+
+  - key: key4
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
