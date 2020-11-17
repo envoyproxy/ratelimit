@@ -305,6 +305,15 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			response)
 		assert.NoError(err)
 
+		// Test DurationUntilReset by hitting same key after waiting 1 sec
+		time.Sleep(1 * time.Second)
+
+		response, err = c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
+
+		assert.Less(response.GetStatuses()[0].DurationUntilReset, durRemain)
+
 		// store.NewCounter returns the existing counter.
 		key1HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.basic.%s.total_hits", getCacheKey("key1", enable_local_cache)))
 		assert.Equal(1, int(key1HitCounter.Value()))
