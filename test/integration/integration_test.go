@@ -335,7 +335,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining = 0
 			}
-			fmt.Println("DurationUntilReset: ", response.GetStatuses()[0].DurationUntilReset)
+			//fmt.Println("DurationUntilReset: ", response.GetStatuses()[0].DurationUntilReset)
 			durRemain = response.GetStatuses()[0].DurationUntilReset
 
 			common.AssertProtoEqual(
@@ -407,8 +407,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				&pb.RateLimitResponse{
 					OverallCode: status,
 					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
-						newDescriptorStatus(pb.RateLimitResponse_OK, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining1, durRemain2),
-						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2, durRemain1)}},
+						newDescriptorStatus(pb.RateLimitResponse_OK, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining1, durRemain1),
+						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2, durRemain2)}},
 				response)
 			assert.NoError(err)
 
