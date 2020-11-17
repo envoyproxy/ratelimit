@@ -290,11 +290,12 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 
 		localCacheMissCounter := runner.GetStatsStore().NewGauge("ratelimit.localcache.missCount")
 		assert.Equal(0, int(localCacheMissCounter.Value()))
-		durRemain := response.GetStatuses()[0].DurationUntilReset
 
 		response, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
+		durRemain := response.GetStatuses()[0].DurationUntilReset
+
 		common.AssertProtoEqual(
 			assert,
 			&pb.RateLimitResponse{
