@@ -328,7 +328,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				context.Background(),
 				common.NewRateLimitRequest(
 					"another", [][][2]string{{{getCacheKey("key2", enable_local_cache), strconv.Itoa(randomInt)}}}, 1))
-			assert.NotNil(err)
 
 			status := pb.RateLimitResponse_OK
 			limitRemaining := uint32(20 - (i + 1))
@@ -355,7 +354,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			} else {
 				assert.Equal(0, int(key2OverlimitCounter.Value()))
 			}
-			assert.NotNil(nil)
 			key2LocalCacheOverLimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key2", enable_local_cache)))
 			if enable_local_cache && i >= 20 {
 				assert.Equal(i-20, int(key2LocalCacheOverLimitCounter.Value()))
@@ -394,7 +392,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 					[][][2]string{
 						{{getCacheKey("key2", enable_local_cache), strconv.Itoa(randomInt)}},
 						{{getCacheKey("key3", enable_local_cache), strconv.Itoa(randomInt)}}}, 1))
-			assert.NotNil(err)
 
 			status := pb.RateLimitResponse_OK
 			limitRemaining1 := uint32(20 - (i + 1))
@@ -403,8 +400,8 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining2 = 0
 			}
-			durRemain1 = response.GetStatuses()[0].DurationUntilReset
-			durRemain2 = response.GetStatuses()[1].DurationUntilReset
+			durRemain1 := response.GetStatuses()[0].DurationUntilReset
+			durRemain2 := response.GetStatuses()[1].DurationUntilReset
 			common.AssertProtoEqual(
 				assert,
 				&pb.RateLimitResponse{
@@ -671,7 +668,6 @@ func testConfigReload(grpcPort, perSecond string, local_cache_size string) func(
 		response, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("reload", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
-		assert.NotNil(err)
 
 		durRemain := response.GetStatuses()[0].DurationUntilReset
 		common.AssertProtoEqual(
