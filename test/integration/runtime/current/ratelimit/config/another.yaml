@@ -22,5 +22,5 @@ descriptors:
 
   - key: key4
     rate_limit:
-      unit: minute
+      unit: day
       requests_per_unit: 20
