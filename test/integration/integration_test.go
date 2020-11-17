@@ -472,7 +472,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			context.Background(),
 			common.NewRateLimitRequest("another", [][][2]string{{{getCacheKey("key4", enable_local_cache), "durTest"}}}, 1))
 
-		time.Sleep(2 * time.Second) // Wait 1 sec to allow duration to tick down
+		time.Sleep(2 * time.Second) // Wait to allow duration to tick down
 
 		resp2, err := c.ShouldRateLimit(
 			context.Background(),
