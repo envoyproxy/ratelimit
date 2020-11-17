@@ -26,9 +26,9 @@ func newDescriptorStatus(status pb.RateLimitResponse_Code, requestsPerUnit uint3
 	limit := &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}
 
 	return &pb.RateLimitResponse_DescriptorStatus{
-		Code:           status,
-		CurrentLimit:   limit,
-		LimitRemaining: limitRemaining,
+		Code:               status,
+		CurrentLimit:       limit,
+		LimitRemaining:     limitRemaining,
 		DurationUntilReset: &duration.Duration{Seconds: durRemaining.GetSeconds()},
 	}
 }
@@ -305,15 +305,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			response)
 		assert.NoError(err)
 
-		// Test DurationUntilReset by hitting same key after waiting 1 sec
-		time.Sleep(1 * time.Second)
-
-		response, err = c.ShouldRateLimit(
-			context.Background(),
-			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
-
-		assert.Less(response.GetStatuses()[0].DurationUntilReset, durRemaining)
-
 		// store.NewCounter returns the existing counter.
 		key1HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.basic.%s.total_hits", getCacheKey("key1", enable_local_cache)))
 		assert.Equal(1, int(key1HitCounter.Value()))
@@ -476,6 +467,19 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			}
 
 		}
+
+		// Test DurationUntilReset by hitting same key twice
+		resp1, err = c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "durTest"}}}, 1))
+
+		time.Sleep(1 * time.Second) // Wait 1 sec to allow duration to tick down
+
+		resp2, err = c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "durTest"}}}, 1))
+
+		assert.Less(resp2.GetStatuses()[0].DurationUntilReset, resp1.GetStatuses()[0].DurationUntilReset)
 	}
 }
 
