@@ -469,17 +469,17 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		}
 
 		// Test DurationUntilReset by hitting same key twice
-		resp1, err = c.ShouldRateLimit(
+		resp1, err := c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "durTest"}}}, 1))
 
 		time.Sleep(1 * time.Second) // Wait 1 sec to allow duration to tick down
 
-		resp2, err = c.ShouldRateLimit(
+		resp2, err := c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "durTest"}}}, 1))
 
-		assert.Less(resp2.GetStatuses()[0].DurationUntilReset, resp1.GetStatuses()[0].DurationUntilReset)
+		assert.Less(resp2.GetStatuses()[0].DurationUntilReset.GetSeconds(), resp1.GetStatuses()[0].DurationUntilReset.GetSeconds())
 	}
 }
 
