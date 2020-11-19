@@ -14,7 +14,6 @@ import (
 	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
-	"github.com/envoyproxy/ratelimit/src/utils"
 	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/stretchr/testify/assert"
@@ -22,18 +21,15 @@ import (
 	"google.golang.org/grpc"
 )
 
-func newDescriptorStatus(
-	status pb.RateLimitResponse_Code, requestsPerUnit uint32,
-	unit pb.RateLimitResponse_RateLimit_Unit, limitRemaining uint32) *pb.RateLimitResponse_DescriptorStatus {
+func newDescriptorStatus(status pb.RateLimitResponse_Code, requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, limitRemaining uint32, durRemaining *duration.Duration) *pb.RateLimitResponse_DescriptorStatus {
 
 	limit := &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}
-	sec := utils.UnitToDivider(unit)
-	now := time.Now().Unix()
+
 	return &pb.RateLimitResponse_DescriptorStatus{
-		Code:           status,
-		CurrentLimit:   limit,
-		LimitRemaining: limitRemaining,
-		DurationUntilReset: &duration.Duration{Seconds: sec - now%sec},
+		Code:               status,
+		CurrentLimit:       limit,
+		LimitRemaining:     limitRemaining,
+		DurationUntilReset: &duration.Duration{Seconds: durRemaining.GetSeconds()},
 	}
 }
 
@@ -298,12 +294,14 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 		response, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("basic", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
+		durRemaining := response.GetStatuses()[0].DurationUntilReset
+
 		common.AssertProtoEqual(
 			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses: []*pb.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49)}},
+					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49, durRemaining)}},
 			response)
 		assert.NoError(err)
 
@@ -338,13 +336,14 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining = 0
 			}
+			durRemaining = response.GetStatuses()[0].DurationUntilReset
 
 			common.AssertProtoEqual(
 				assert,
 				&pb.RateLimitResponse{
 					OverallCode: status,
 					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
-						newDescriptorStatus(status, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining)}},
+						newDescriptorStatus(status, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining, durRemaining)}},
 				response)
 			assert.NoError(err)
 			key2HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
@@ -355,7 +354,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			} else {
 				assert.Equal(0, int(key2OverlimitCounter.Value()))
 			}
-
 			key2LocalCacheOverLimitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.over_limit_with_local_cache", getCacheKey("key2", enable_local_cache)))
 			if enable_local_cache && i >= 20 {
 				assert.Equal(i-20, int(key2LocalCacheOverLimitCounter.Value()))
@@ -402,14 +400,15 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining2 = 0
 			}
-
+			durRemaining1 := response.GetStatuses()[0].DurationUntilReset
+			durRemaining2 := response.GetStatuses()[1].DurationUntilReset
 			common.AssertProtoEqual(
 				assert,
 				&pb.RateLimitResponse{
 					OverallCode: status,
 					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
-						newDescriptorStatus(pb.RateLimitResponse_OK, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining1),
-						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
+						newDescriptorStatus(pb.RateLimitResponse_OK, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining1, durRemaining1),
+						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2, durRemaining2)}},
 				response)
 			assert.NoError(err)
 
@@ -465,8 +464,20 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			} else {
 				assert.Equal(0, int(localCacheMissCounter.Value()))
 			}
-
 		}
+
+		// Test DurationUntilReset by hitting same key twice
+		resp1, err := c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("another", [][][2]string{{{getCacheKey("key4", enable_local_cache), "durTest"}}}, 1))
+
+		time.Sleep(2 * time.Second) // Wait to allow duration to tick down
+
+		resp2, err := c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("another", [][][2]string{{{getCacheKey("key4", enable_local_cache), "durTest"}}}, 1))
+
+		assert.Less(resp2.GetStatuses()[0].DurationUntilReset.GetSeconds(), resp1.GetStatuses()[0].DurationUntilReset.GetSeconds())
 	}
 }
 
@@ -669,12 +680,14 @@ func testConfigReload(grpcPort, perSecond string, local_cache_size string) func(
 		response, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("reload", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
+
+		durRemaining := response.GetStatuses()[0].DurationUntilReset
 		common.AssertProtoEqual(
 			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses: []*pb.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49)}},
+					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49, durRemaining)}},
 			response)
 		assert.NoError(err)
 
