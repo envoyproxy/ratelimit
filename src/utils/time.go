@@ -24,6 +24,10 @@ func (this *timeSourceImpl) UnixNow() int64 {
 	return time.Now().Unix()
 }
 
+func (this *timeSourceImpl) UnixNanoNow() int64 {
+	return time.Now().UnixNano()
+}
+
 // rand for jitter.
 type lockedSource struct {
 	lk  sync.Mutex
