@@ -464,7 +464,6 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			} else {
 				assert.Equal(0, int(localCacheMissCounter.Value()))
 			}
-
 		}
 
 		// Test DurationUntilReset by hitting same key twice
@@ -478,9 +477,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string) fu
 			context.Background(),
 			common.NewRateLimitRequest("another", [][][2]string{{{getCacheKey("key4", enable_local_cache), "durTest"}}}, 1))
 
-		if resp2.GetStatuses()[0].DurationUntilReset != nil {
-			assert.Less(resp2.GetStatuses()[0].DurationUntilReset.GetSeconds(), resp1.GetStatuses()[0].DurationUntilReset.GetSeconds())
-		}
+		assert.Less(resp2.GetStatuses()[0].DurationUntilReset.GetSeconds(), resp1.GetStatuses()[0].DurationUntilReset.GetSeconds())
 	}
 }
 

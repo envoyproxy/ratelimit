@@ -24,3 +24,8 @@ descriptors:
     rate_limit:
       unit: day
       requests_per_unit: 20
+
+  - key: key4_local
+    rate_limit:
+      unit: day
+      requests_per_unit: 20
