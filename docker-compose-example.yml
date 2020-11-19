@@ -11,12 +11,19 @@ services:
 
   statsd:
     image: prom/statsd-exporter:v0.18.0
+    entrypoint: /bin/statsd_exporter
+    command:
+      - "--statsd.mapping-config=/etc/statsd-exporter/conf.yaml"
     expose:
       - 9125
+      - 9102
     ports:
       - 9125:9125
+      - 9102:9102 # Visit http://localhost:9102/metrics to see metrics in Prometheus format
     networks:
       - ratelimit-network
+    volumes:
+      - ./examples/prom-statsd-exporter/conf.yaml:/etc/statsd-exporter/conf.yaml
 
   ratelimit:
     image: envoyproxy/ratelimit:master
