@@ -192,6 +192,9 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 
 		// Store newTat
 		expirationSeconds := nanosecondsToSeconds(newTat-arrivedAt) + 1
+		if this.expirationJitterMaxSeconds > 0 {
+			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
+		}
 		if this.perSecondClient != nil && cacheKey.PerSecond {
 			if perSecondPipeline == nil {
 				perSecondPipeline = Pipeline{}

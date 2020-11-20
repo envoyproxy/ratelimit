@@ -191,3 +191,36 @@ func TestNearLimitWindowed(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
 }
+
+func TestRedisWindowedWithJitter(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	client := mock_redis.NewMockClient(controller)
+	timeSource := mock_limiter.NewMockTimeSource(controller)
+	jitterSource := mock_limiter.NewMockJitterRandSource(controller)
+	cache := redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+
+	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
+	jitterSource.EXPECT().Int63().Return(int64(100))
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "SETNX", "domain_key_value_0", int64(0)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key_value_0", int64(1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key_value_0").SetArg(1, int64(0)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "SET", "domain_key_value_0", int64(1e9+1e8)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key_value_0", int64(101)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: &duration.Duration{Nanos: 1e8}}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+}
