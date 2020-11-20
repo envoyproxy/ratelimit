@@ -225,5 +225,3 @@ func NewWindowedRateLimitCacheImpl(client Client, perSecondClient Client, timeSo
 		nearLimitRatio:             nearLimitRatio,
 	}
 }
-
-// TODO: Test nearlimit

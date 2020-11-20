@@ -123,3 +123,71 @@ func testRedisWindowed(usePerSecondRedis bool) func(*testing.T) {
 		assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 	}
 }
+
+func TestNearLimitWindowed(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	client := mock_redis.NewMockClient(controller)
+	timeSource := mock_limiter.NewMockTimeSource(controller)
+	cache := redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key4_value4", statsStore)}
+
+	// Test Near Limit Stats. Under Near Limit Ratio
+	timeSource.EXPECT().UnixNanoNow().Return(int64(50e9)).MaxTimes(1)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "SETNX", "domain_key4_value4_0", int64(0)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key4_value4_0", int64(60)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key4_value4_0").SetArg(1, int64(50e9)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "SET", "domain_key4_value4_0", int64(50e9+6e9)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key4_value4_0", int64(50+6-50+1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: &duration.Duration{Seconds: 6}}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+
+	// Test Near Limit Stats. At Near Limit Ratio, still OK
+	timeSource.EXPECT().UnixNanoNow().Return(int64(50e9)).MaxTimes(1)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "SETNX", "domain_key4_value4_0", int64(0)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key4_value4_0", int64(60)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key4_value4_0").SetArg(1, int64(98e9)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "SET", "domain_key4_value4_0", int64(98e9+6e9)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key4_value4_0", int64(98+6-50+1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: &duration.Duration{Seconds: 54}}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+
+	// Test Near Limit Stats. We went OVER_LIMIT, but the near_limit counter only increases
+	// when we are near limit, not after we have passed the limit.
+	timeSource.EXPECT().UnixNanoNow().Return(int64(50e9)).MaxTimes(1)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "SETNX", "domain_key4_value4_0", int64(0)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key4_value4_0", int64(60)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key4_value4_0").SetArg(1, int64(110e9)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: &duration.Duration{Seconds: 110 - 50}}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+}
