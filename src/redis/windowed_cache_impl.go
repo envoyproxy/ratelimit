@@ -96,11 +96,22 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	}
 
 	// Get existing tat value for each cache keys
+	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	tats := make([]int64, len(request.Descriptors))
 	var pipeline, perSecondPipeline Pipeline
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
 			continue
+		}
+
+		if this.localCache != nil {
+			// Get returns the value or not found error.
+			_, err := this.localCache.Get([]byte(cacheKey.Key))
+			if err == nil {
+				isOverLimitWithLocalCache[i] = true
+				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
+				continue
+			}
 		}
 
 		logger.Debugf("looking up tat for cache key: %s", cacheKey.Key)
@@ -144,6 +155,21 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 			continue
 		}
 
+		if isOverLimitWithLocalCache[i] {
+			secondsToReset := utils.UnitToDivider(limits[i].Limit.Unit)
+			secondsToReset -= nanosecondsToSeconds(now) % secondsToReset
+			responseDescriptorStatuses[i] =
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:               pb.RateLimitResponse_OVER_LIMIT,
+					CurrentLimit:       limits[i].Limit,
+					LimitRemaining:     0,
+					DurationUntilReset: &duration.Duration{Seconds: secondsToReset},
+				}
+			limits[i].Stats.OverLimit.Add(uint64(hitsAddend))
+			limits[i].Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
+			continue
+		}
+
 		// Time during computation should be in nanosecond
 		limit := int64(limits[i].Limit.RequestsPerUnit)
 		period := secondsToNanoseconds(utils.UnitToDivider(limits[i].Limit.Unit))
@@ -174,6 +200,13 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 
 			limits[i].Stats.OverLimit.Add(uint64(quantity - previousLimitRemaining))
 			limits[i].Stats.NearLimit.Add(uint64(minInt64(previousLimitRemaining, nearLimitWindow)))
+
+			if this.localCache != nil {
+				err := this.localCache.Set([]byte(cacheKey.Key), []byte{}, int(nanosecondsToSeconds(-diff)))
+				if err != nil {
+					logger.Errorf("Failing to set local cache key: %s", cacheKey.Key)
+				}
+			}
 			continue
 		}
 
