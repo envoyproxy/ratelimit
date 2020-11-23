@@ -181,6 +181,21 @@ The rate limit block specifies the actual rate limit that will be used when ther
 Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
 future based on user demand.
 
+### Rate limit algorithm
+
+Ratelimit supports two algorithms:
+
+1. Fixed window
+For a limit of 60 requests per hour, there can only 60 requests in a single time window (e.g: 01:00 - 01:59).
+Fixed window algorithm does not care when did the request arrive, all 60 can arrive at 01:01 or 01:50 and the limit will still reset at 02:00.
+
+2. Rolling window
+For a limit of 60 requests per hour. Initially it able to take a burst of 60 requests at once, then the limit restore by 1 each minute.
+Requests are allowed as long as there's still some available limit.
+
+Configure rate limit algorithm with `RATE_LIMIT_ALGORITHM` environment variable.
+Use `FIXED_WINDOW` and `ROLLING_WINDOW` respectively.
+
 ### Examples
 
 #### Example 1
