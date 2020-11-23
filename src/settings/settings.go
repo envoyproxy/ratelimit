@@ -23,6 +23,7 @@ type Settings struct {
 	RuntimeWatchRoot             bool          `envconfig:"RUNTIME_WATCH_ROOT" default:"true"`
 	LogLevel                     string        `envconfig:"LOG_LEVEL" default:"WARN"`
 	LogFormat                    string        `envconfig:"LOG_FORMAT" default:"text"`
+	RateLimitAlgorithm           string        `envconfig:"RATE_LIMIT_ALGORITHM" default:"FIXED_WINDOW"`
 	RedisSocketType              string        `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisType                    string        `envconfig:"REDIS_TYPE" default:"SINGLE"`
 	RedisUrl                     string        `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`

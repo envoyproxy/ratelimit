@@ -38,19 +38,19 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 		})
 	}
 
-	mkDoLimitBench := func(pipelineWindow time.Duration, pipelineLimit int, rateLimitType string) func(*testing.B) {
+	mkDoLimitBench := func(pipelineWindow time.Duration, pipelineLimit int, rateLimitAlgorithm string) func(*testing.B) {
 		return func(b *testing.B) {
 			statsStore := stats.NewStore(stats.NewNullSink(), false)
 			client := redis.NewClientImpl(statsStore, false, "", "single", "127.0.0.1:6379", poolSize, pipelineWindow, pipelineLimit)
 			defer client.Close()
 
 			var cache limiter.RateLimitCache
-			if rateLimitType == "FIXED" {
+			if rateLimitAlgorithm == "FIXED_WINDOW" {
 				cache = redis.NewFixedRateLimitCacheImpl(client, nil, limiter.NewTimeSourceImpl(), rand.New(limiter.NewLockedSource(time.Now().Unix())), 10, nil, 0.8)
-			} else if rateLimitType == "WINDOWED" {
+			} else if rateLimitAlgorithm == "ROLLING_WINDOW" {
 				cache = redis.NewWindowedRateLimitCacheImpl(client, nil, limiter.NewTimeSourceImpl(), rand.New(limiter.NewLockedSource(time.Now().Unix())), 10, nil, 0.8)
 			} else {
-				b.Fatalf("unknown rate limit type %s", rateLimitType)
+				b.Fatalf("unknown rate limit type %s", rateLimitAlgorithm)
 			}
 			request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 			limits := []*config.RateLimit{config.NewRateLimit(1000000000, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
@@ -73,58 +73,58 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 	}
 
 	// Fixed ratelimit
-	b.Run("fixed ratelimit with no pipeline", mkDoLimitBench(0, 0, "FIXED"))
+	b.Run("fixed ratelimit with no pipeline", mkDoLimitBench(0, 0, "FIXED_WINDOW"))
 
-	b.Run("fixed ratelimit with pipeline 35us 1", mkDoLimitBench(35*time.Microsecond, 1, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 75us 1", mkDoLimitBench(75*time.Microsecond, 1, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 150us 1", mkDoLimitBench(150*time.Microsecond, 1, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 300us 1", mkDoLimitBench(300*time.Microsecond, 1, "FIXED"))
+	b.Run("fixed ratelimit with pipeline 35us 1", mkDoLimitBench(35*time.Microsecond, 1, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 75us 1", mkDoLimitBench(75*time.Microsecond, 1, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 150us 1", mkDoLimitBench(150*time.Microsecond, 1, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 300us 1", mkDoLimitBench(300*time.Microsecond, 1, "FIXED_WINDOW"))
 
-	b.Run("fixed ratelimit with pipeline 35us 2", mkDoLimitBench(35*time.Microsecond, 2, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 75us 2", mkDoLimitBench(75*time.Microsecond, 2, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 150us 2", mkDoLimitBench(150*time.Microsecond, 2, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 300us 2", mkDoLimitBench(300*time.Microsecond, 2, "FIXED"))
+	b.Run("fixed ratelimit with pipeline 35us 2", mkDoLimitBench(35*time.Microsecond, 2, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 75us 2", mkDoLimitBench(75*time.Microsecond, 2, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 150us 2", mkDoLimitBench(150*time.Microsecond, 2, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 300us 2", mkDoLimitBench(300*time.Microsecond, 2, "FIXED_WINDOW"))
 
-	b.Run("fixed ratelimit with pipeline 35us 4", mkDoLimitBench(35*time.Microsecond, 4, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 75us 4", mkDoLimitBench(75*time.Microsecond, 4, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 150us 4", mkDoLimitBench(150*time.Microsecond, 4, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 300us 4", mkDoLimitBench(300*time.Microsecond, 4, "FIXED"))
+	b.Run("fixed ratelimit with pipeline 35us 4", mkDoLimitBench(35*time.Microsecond, 4, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 75us 4", mkDoLimitBench(75*time.Microsecond, 4, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 150us 4", mkDoLimitBench(150*time.Microsecond, 4, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 300us 4", mkDoLimitBench(300*time.Microsecond, 4, "FIXED_WINDOW"))
 
-	b.Run("fixed ratelimit with pipeline 35us 8", mkDoLimitBench(35*time.Microsecond, 8, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 75us 8", mkDoLimitBench(75*time.Microsecond, 8, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 150us 8", mkDoLimitBench(150*time.Microsecond, 8, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 300us 8", mkDoLimitBench(300*time.Microsecond, 8, "FIXED"))
+	b.Run("fixed ratelimit with pipeline 35us 8", mkDoLimitBench(35*time.Microsecond, 8, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 75us 8", mkDoLimitBench(75*time.Microsecond, 8, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 150us 8", mkDoLimitBench(150*time.Microsecond, 8, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 300us 8", mkDoLimitBench(300*time.Microsecond, 8, "FIXED_WINDOW"))
 
-	b.Run("fixed ratelimit with pipeline 35us 16", mkDoLimitBench(35*time.Microsecond, 16, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 75us 16", mkDoLimitBench(75*time.Microsecond, 16, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 150us 16", mkDoLimitBench(150*time.Microsecond, 16, "FIXED"))
-	b.Run("fixed ratelimit with pipeline 300us 16", mkDoLimitBench(300*time.Microsecond, 16, "FIXED"))
+	b.Run("fixed ratelimit with pipeline 35us 16", mkDoLimitBench(35*time.Microsecond, 16, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 75us 16", mkDoLimitBench(75*time.Microsecond, 16, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 150us 16", mkDoLimitBench(150*time.Microsecond, 16, "FIXED_WINDOW"))
+	b.Run("fixed ratelimit with pipeline 300us 16", mkDoLimitBench(300*time.Microsecond, 16, "FIXED_WINDOW"))
 
 	// Windowed ratelimit
-	b.Run("windowed ratelimit with no pipeline", mkDoLimitBench(0, 0, "WINDOWED"))
+	b.Run("windowed ratelimit with no pipeline", mkDoLimitBench(0, 0, "ROLLING_WINDOW"))
 
-	b.Run("windowed ratelimit with pipeline 35us 1", mkDoLimitBench(35*time.Microsecond, 1, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 75us 1", mkDoLimitBench(75*time.Microsecond, 1, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 150us 1", mkDoLimitBench(150*time.Microsecond, 1, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 300us 1", mkDoLimitBench(300*time.Microsecond, 1, "WINDOWED"))
+	b.Run("windowed ratelimit with pipeline 35us 1", mkDoLimitBench(35*time.Microsecond, 1, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 75us 1", mkDoLimitBench(75*time.Microsecond, 1, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 150us 1", mkDoLimitBench(150*time.Microsecond, 1, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 300us 1", mkDoLimitBench(300*time.Microsecond, 1, "ROLLING_WINDOW"))
 
-	b.Run("windowed ratelimit with pipeline 35us 2", mkDoLimitBench(35*time.Microsecond, 2, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 75us 2", mkDoLimitBench(75*time.Microsecond, 2, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 150us 2", mkDoLimitBench(150*time.Microsecond, 2, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 300us 2", mkDoLimitBench(300*time.Microsecond, 2, "WINDOWED"))
+	b.Run("windowed ratelimit with pipeline 35us 2", mkDoLimitBench(35*time.Microsecond, 2, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 75us 2", mkDoLimitBench(75*time.Microsecond, 2, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 150us 2", mkDoLimitBench(150*time.Microsecond, 2, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 300us 2", mkDoLimitBench(300*time.Microsecond, 2, "ROLLING_WINDOW"))
 
-	b.Run("windowed ratelimit with pipeline 35us 4", mkDoLimitBench(35*time.Microsecond, 4, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 75us 4", mkDoLimitBench(75*time.Microsecond, 4, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 150us 4", mkDoLimitBench(150*time.Microsecond, 4, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 300us 4", mkDoLimitBench(300*time.Microsecond, 4, "WINDOWED"))
+	b.Run("windowed ratelimit with pipeline 35us 4", mkDoLimitBench(35*time.Microsecond, 4, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 75us 4", mkDoLimitBench(75*time.Microsecond, 4, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 150us 4", mkDoLimitBench(150*time.Microsecond, 4, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 300us 4", mkDoLimitBench(300*time.Microsecond, 4, "ROLLING_WINDOW"))
 
-	b.Run("windowed ratelimit with pipeline 35us 8", mkDoLimitBench(35*time.Microsecond, 8, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 75us 8", mkDoLimitBench(75*time.Microsecond, 8, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 150us 8", mkDoLimitBench(150*time.Microsecond, 8, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 300us 8", mkDoLimitBench(300*time.Microsecond, 8, "WINDOWED"))
+	b.Run("windowed ratelimit with pipeline 35us 8", mkDoLimitBench(35*time.Microsecond, 8, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 75us 8", mkDoLimitBench(75*time.Microsecond, 8, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 150us 8", mkDoLimitBench(150*time.Microsecond, 8, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 300us 8", mkDoLimitBench(300*time.Microsecond, 8, "ROLLING_WINDOW"))
 
-	b.Run("windowed ratelimit with pipeline 35us 16", mkDoLimitBench(35*time.Microsecond, 16, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 75us 16", mkDoLimitBench(75*time.Microsecond, 16, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 150us 16", mkDoLimitBench(150*time.Microsecond, 16, "WINDOWED"))
-	b.Run("windowed ratelimit with pipeline 300us 16", mkDoLimitBench(300*time.Microsecond, 16, "WINDOWED"))
+	b.Run("windowed ratelimit with pipeline 35us 16", mkDoLimitBench(35*time.Microsecond, 16, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 75us 16", mkDoLimitBench(75*time.Microsecond, 16, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 150us 16", mkDoLimitBench(150*time.Microsecond, 16, "ROLLING_WINDOW"))
+	b.Run("windowed ratelimit with pipeline 300us 16", mkDoLimitBench(300*time.Microsecond, 16, "ROLLING_WINDOW"))
 }
