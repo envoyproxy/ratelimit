@@ -47,8 +47,9 @@ static_resources:
                 codec_type: AUTO
                 stat_prefix: ingress
                 http_filters:
-                  - name: envoy.rate_limit
-                    config:
+                  - name: envoy.filters.http.ratelimit
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit
                       domain: rl
                       request_type: external
                       stage: 0
@@ -74,7 +75,7 @@ static_resources:
                             rate_limits:
                               - actions:
                                   - source_cluster: {} # This action's value is populated by the "service-cluster" arg passed in when starting Envoy. In this example, it's "proxy" (see docker-compose-example.yml)
-                                  - destination_cluster: {} # This action's value is populated by the value set in the above "cluster" field -- "mock"
+                                  - destination_cluster: {} # This action's value is populated by the value set in the above egress "cluster" field -- "mock"
                         - match:
                             prefix: /header
                           route:
