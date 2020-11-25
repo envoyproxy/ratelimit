@@ -7,6 +7,9 @@ import (
 	"google.golang.org/grpc"
 )
 
+const FixedRateLimit = "FIXED_WINDOW"
+const WindowedRateLimit = "ROLLING_WINDOW"
+
 type Settings struct {
 	// runtime options
 	GrpcUnaryInterceptor grpc.ServerOption

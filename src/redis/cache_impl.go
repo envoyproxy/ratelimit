@@ -20,7 +20,7 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 	otherPool = NewClientImpl(srv.Scope().Scope("redis_pool"), s.RedisTls, s.RedisAuth, s.RedisType, s.RedisUrl, s.RedisPoolSize,
 		s.RedisPipelineWindow, s.RedisPipelineLimit)
 
-	if s.RateLimitAlgorithm == "FIXED_WINDOW" {
+	if s.RateLimitAlgorithm == settings.FixedRateLimit {
 		return NewFixedRateLimitCacheImpl(
 			otherPool,
 			perSecondPool,
@@ -29,7 +29,7 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 			expirationJitterMaxSeconds,
 			localCache,
 			s.NearLimitRatio)
-	} else if s.RateLimitAlgorithm == "ROLLING_WINDOW" {
+	} else if s.RateLimitAlgorithm == settings.WindowedRateLimit {
 		return NewWindowedRateLimitCacheImpl(
 			otherPool,
 			perSecondPool,
