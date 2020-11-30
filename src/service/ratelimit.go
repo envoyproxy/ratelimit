@@ -114,23 +114,27 @@ func (this *service) shouldRateLimitWorker(
 
 	limitsToCheck := make([]*config.RateLimit, len(request.Descriptors))
 	for i, descriptor := range request.Descriptors {
-		var descriptorEntryStrings []string
-		for _, descriptorEntry := range descriptor.GetEntries() {
-			descriptorEntryStrings = append(
-				descriptorEntryStrings,
-				fmt.Sprintf("(%s=%s)", descriptorEntry.Key, descriptorEntry.Value),
-			)
+		if logger.IsLevelEnabled(logger.DebugLevel) {
+			var descriptorEntryStrings []string
+			for _, descriptorEntry := range descriptor.GetEntries() {
+				descriptorEntryStrings = append(
+					descriptorEntryStrings,
+					fmt.Sprintf("(%s=%s)", descriptorEntry.Key, descriptorEntry.Value),
+				)
+			}
+			logger.Debugf("got descriptor: %s", strings.Join(descriptorEntryStrings, ","))
 		}
-		logger.Debugf("got descriptor: %s", strings.Join(descriptorEntryStrings, ","))
 		limitsToCheck[i] = snappedConfig.GetLimit(ctx, request.Domain, descriptor)
-		if limitsToCheck[i] == nil {
-			logger.Debugf("descriptor does not match any limit, no limits applied")
-		} else {
-			logger.Debugf(
-				"applying limit: %d requests per %s",
-				limitsToCheck[i].Limit.RequestsPerUnit,
-				limitsToCheck[i].Limit.Unit.String(),
-			)
+		if logger.IsLevelEnabled(logger.DebugLevel) {
+			if limitsToCheck[i] == nil {
+				logger.Debugf("descriptor does not match any limit, no limits applied")
+			} else {
+				logger.Debugf(
+					"applying limit: %d requests per %s",
+					limitsToCheck[i].Limit.RequestsPerUnit,
+					limitsToCheck[i].Limit.Unit.String(),
+				)
+			}
 		}
 	}
 
