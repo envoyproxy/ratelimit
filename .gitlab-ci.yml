@@ -1,0 +1,41 @@
+variables:
+  ITA_TEMPLATE: hello-service
+  ITA_ADD_BUILD_ARGS: "ITA_JOB_TOKEN ITA_PROJECT_NAME"
+
+stages:
+  - pre-test
+  - build
+  - test
+  - tag
+  - release
+
+include:
+  - project: "contextlogic/includes"
+    ref: master
+    file: "/templates/job-go-lint/default.yml"
+  - project: "contextlogic/includes"
+    ref: master
+    file: "/templates/job-go-unit-test/default.yml"
+  - project: "contextlogic/includes"
+    ref: master
+    file: "/templates/job-build-tag-and-deploy/default.yml"
+
+
+# Below is an example of integration test
+# Please note this is only for reference, you should always write your own integration tests.
+
+# integration-test:
+#   stage: test
+#   services: # For knowledge on services - https://docs.gitlab.com/ee/ci/docker/using_docker_images.html#what-is-a-service
+#     - name: $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHORT_SHA
+#       alias: hello-service-ci
+#       command:
+#         - /bin/hello-service
+#         - server
+#         - -c
+#         - /config/service.json
+#   image: registry-gitlab.i.wish.com/contextlogic/tooling-image/go/master
+#   script:
+#     # These scripts should be replaced with actual tests that validate the expected logic
+#     - curl -X GET http://hello-service-ci:8080/status
+#     - grpcurl -plaintext hello-service-ci:8081 contextlogic.hello_service.v1.Greeter.ReadAllGreets
