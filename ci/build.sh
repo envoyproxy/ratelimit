@@ -16,7 +16,7 @@ set -eo nounset
 setEnvs
 
 installLamp &
-
+docker login -u "$DOCKER_USER" -p "$DOCKER_PASSWORD"
 eval $(aws ecr get-login --region us-west-2 --no-include-email)
 for img in "golang:1.14" "alpine:3.11"
 do
