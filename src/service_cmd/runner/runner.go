@@ -1,15 +1,18 @@
 package runner
 
 import (
+	"context"
 	"io"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	stats "github.com/lyft/gostats"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"grpc.go4.org"
 
 	"github.com/coocood/freecache"
 
@@ -67,8 +70,21 @@ func (runner *Runner) Run() {
 	if s.LocalCacheSizeInBytes != 0 {
 		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
 	}
+	loggingHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		req_id := uuid.New()
+		logger.WithFields(logger.Fields{"req_id": req_id, "method": info.FullMethod, "req": req}).Trace("incoming gRPC request")
 
-	srv := server.NewServer("ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
+		resp, err := handler(ctx, req)
+
+		if err != nil {
+			logger.WithFields(logger.Fields{"req_id": req_id, "method": info.FullMethod, "req": req, "err": err}).Error("incoming gRPC request error")
+		} else {
+			logger.WithFields(logger.Fields{"req_id": req_id, "method": info.FullMethod, "req": req, "resp": resp}).Trace("incoming gRPC request success")
+		}
+
+		return resp, err
+	}
+	srv := server.NewServer("ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(loggingHandler))
 	if s.ShadowMode {
 		logger.Info("Shadow Mode Enabled")
 		shadowModeEnabled.Set(1)

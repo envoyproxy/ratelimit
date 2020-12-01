@@ -164,7 +164,7 @@ func newServer(name string, store stats.Store, localCache *freecache.Cache, opts
 	for _, opt := range opts {
 		opt(&s)
 	}
-
+	
 	ret := new(server)
 	ret.grpcServer = grpc.NewServer(s.GrpcUnaryInterceptor)
 
