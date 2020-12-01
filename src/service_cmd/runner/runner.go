@@ -12,7 +12,7 @@ import (
 	stats "github.com/lyft/gostats"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"grpc.go4.org"
+	"google.golang.org/grpc"
 
 	"github.com/coocood/freecache"
 
@@ -70,7 +70,8 @@ func (runner *Runner) Run() {
 	if s.LocalCacheSizeInBytes != 0 {
 		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
 	}
-	loggingHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	var loggingHandler grpc.UnaryServerInterceptor
+	loggingHandler = func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		req_id := uuid.New()
 		logger.WithFields(logger.Fields{"req_id": req_id, "method": info.FullMethod, "req": req}).Trace("incoming gRPC request")
 
