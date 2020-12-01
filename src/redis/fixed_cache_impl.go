@@ -1,52 +1,33 @@
-// The memcached limiter uses GetMulti() to check keys in parallel and then does
-// increments asynchronously in the backend, since the memcache interface doesn't
-// support multi-increment and it seems worthwhile to minimize the number of
-// concurrent or sequential RPCs in the critical path.
-//
-// Another difference from redis is that memcache doesn't create a key implicitly by
-// incrementing a missing entry. Instead, when increment fails an explicit "add" needs
-// to be called. The process of increment becomes a bit of a dance since we try to
-// limit the number of RPCs. First we call increment, then add if the increment
-// failed, then increment again if the add failed (which could happen if there was
-// a race to call "add").
-
-package memcached
+package redis
 
 import (
-	"context"
 	"math"
 	"math/rand"
-	"strconv"
-	"sync"
 
 	"github.com/coocood/freecache"
-	stats "github.com/lyft/gostats"
-
-	"github.com/bradfitz/gomemcache/memcache"
-
-	logger "github.com/sirupsen/logrus"
-
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/utils"
+	logger "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
 )
 
-type rateLimitMemcacheImpl struct {
-	client                     Client
+type fixedRateLimitCacheImpl struct {
+	client Client
+	// Optional Client for a dedicated cache of per second limits.
+	// If this client is nil, then the Cache will use the client for all
+	// limits regardless of unit. If this client is not nil, then it
+	// is used for limits that have a SECOND unit.
+	perSecondClient            Client
 	timeSource                 utils.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
 	cacheKeyGenerator          limiter.CacheKeyGenerator
 	localCache                 *freecache.Cache
-	wg                         sync.WaitGroup
 	nearLimitRatio             float32
 }
-
-var _ limiter.RateLimitCache = (*rateLimitMemcacheImpl)(nil)
 
 func max(a uint32, b uint32) uint32 {
 	if a > b {
@@ -55,7 +36,12 @@ func max(a uint32, b uint32) uint32 {
 	return b
 }
 
-func (this *rateLimitMemcacheImpl) DoLimit(
+func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) {
+	*pipeline = client.PipeAppend(*pipeline, result, "INCRBY", key, hitsAddend)
+	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
+}
+
+func (this *fixedRateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
 	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
@@ -65,14 +51,15 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
 	hitsAddend := max(1, request.HitsAddend)
 
-	// First build a list of all cache keys that we are actually going to hit. generateCacheKey()
+	// First build a list of all cache keys that we are actually going to hit. GenerateCacheKey()
 	// returns an empty string in the key if there is no limit so that we can keep the arrays
 	// all the same size.
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]limiter.CacheKey, len(request.Descriptors))
 	now := this.timeSource.UnixNow()
 	for i := 0; i < len(request.Descriptors); i++ {
-		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
+		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(
+			request.Domain, request.Descriptors[i], limits[i], now)
 
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
@@ -81,9 +68,10 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	}
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
+	results := make([]uint32, len(request.Descriptors))
+	var pipeline, perSecondPipeline Pipeline
 
-	keysToGet := make([]string, 0, len(request.Descriptors))
-
+	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
 			continue
@@ -100,23 +88,36 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		}
 
 		logger.Debugf("looking up cache key: %s", cacheKey.Key)
-		keysToGet = append(keysToGet, cacheKey.Key)
+
+		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
+		if this.expirationJitterMaxSeconds > 0 {
+			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
+		}
+
+		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
+		if this.perSecondClient != nil && cacheKey.PerSecond {
+			if perSecondPipeline == nil {
+				perSecondPipeline = Pipeline{}
+			}
+			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+		} else {
+			if pipeline == nil {
+				pipeline = Pipeline{}
+			}
+			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+		}
+	}
+
+	if pipeline != nil {
+		checkError(this.client.PipeDo(pipeline))
+	}
+	if perSecondPipeline != nil {
+		checkError(this.perSecondClient.PipeDo(perSecondPipeline))
 	}
 
 	// Now fetch the pipeline.
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
 		len(request.Descriptors))
-
-	var memcacheValues map[string]*memcache.Item
-	var err error
-
-	if len(keysToGet) > 0 {
-		memcacheValues, err = this.client.GetMulti(keysToGet)
-		if err != nil {
-			logger.Errorf("Error multi-getting memcache keys (%s): %s", keysToGet, err)
-		}
-	}
-
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
 			responseDescriptorStatuses[i] =
@@ -141,19 +142,8 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 			continue
 		}
 
-		rawMemcacheValue, ok := memcacheValues[cacheKey.Key]
-		var limitBeforeIncrease uint32
-		if ok {
-			decoded, err := strconv.ParseInt(string(rawMemcacheValue.Value), 10, 32)
-			if err != nil {
-				logger.Errorf("Unexpected non-numeric value in memcached: %v", rawMemcacheValue)
-			} else {
-				limitBeforeIncrease = uint32(decoded)
-			}
-
-		}
-
-		limitAfterIncrease := limitBeforeIncrease + hitsAddend
+		limitAfterIncrease := results[i]
+		limitBeforeIncrease := limitAfterIncrease - hitsAddend
 		overLimitThreshold := limits[i].Limit.RequestsPerUnit
 		// The nearLimitThreshold is the number of requests that can be made before hitting the NearLimitRatio.
 		// We need to know it in both the OK and OVER_LIMIT scenarios.
@@ -220,75 +210,21 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		}
 	}
 
-	this.wg.Add(1)
-	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
-
 	return responseDescriptorStatuses
 }
 
-func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, isOverLimitWithLocalCache []bool, limits []*config.RateLimit, hitsAddend uint64) {
-	defer this.wg.Done()
-	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] {
-			continue
-		}
+// Flush() is a no-op with redis since quota reads and updates happen synchronously.
+func (this *fixedRateLimitCacheImpl) Flush() {}
 
-		_, err := this.client.Increment(cacheKey.Key, hitsAddend)
-		if err == memcache.ErrCacheMiss {
-			expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
-			if this.expirationJitterMaxSeconds > 0 {
-				expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
-			}
-
-			// Need to add instead of increment
-			err = this.client.Add(&memcache.Item{
-				Key:        cacheKey.Key,
-				Value:      []byte(strconv.FormatUint(hitsAddend, 10)),
-				Expiration: int32(expirationSeconds),
-			})
-			if err == memcache.ErrNotStored {
-				// There was a race condition to do this add. We should be able to increment
-				// now instead.
-				_, err := this.client.Increment(cacheKey.Key, hitsAddend)
-				if err != nil {
-					logger.Errorf("Failed to increment key %s after failing to add: %s", cacheKey.Key, err)
-					continue
-				}
-			} else if err != nil {
-				logger.Errorf("Failed to add key %s: %s", cacheKey.Key, err)
-				continue
-			}
-		} else if err != nil {
-			logger.Errorf("Failed to increment key %s: %s", cacheKey.Key, err)
-			continue
-		}
-	}
-}
-
-func (this *rateLimitMemcacheImpl) Flush() {
-	this.wg.Wait()
-}
-
-func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32) limiter.RateLimitCache {
-	return &rateLimitMemcacheImpl{
+func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32) limiter.RateLimitCache {
+	return &fixedRateLimitCacheImpl{
 		client:                     client,
+		perSecondClient:            perSecondClient,
 		timeSource:                 timeSource,
-		cacheKeyGenerator:          limiter.NewCacheKeyGenerator(),
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
+		cacheKeyGenerator:          limiter.NewCacheKeyGenerator(),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 	}
-}
-
-func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand, localCache *freecache.Cache, scope stats.Scope) limiter.RateLimitCache {
-	return NewRateLimitCacheImpl(
-		memcache.New(s.MemcacheHostPort),
-		timeSource,
-		jitterRand,
-		s.ExpirationJitterMaxSeconds,
-		localCache,
-		scope,
-		s.NearLimitRatio,
-	)
 }

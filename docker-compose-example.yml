@@ -1,0 +1,94 @@
+version: "3"
+services:
+  redis:
+    image: redis:alpine
+    expose:
+      - 6379
+    ports:
+      - 6379:6379
+    networks:
+      - ratelimit-network
+
+  statsd:
+    image: prom/statsd-exporter:v0.18.0
+    entrypoint: /bin/statsd_exporter
+    command:
+      - "--statsd.mapping-config=/etc/statsd-exporter/conf.yaml"
+    expose:
+      - 9125
+      - 9102
+    ports:
+      - 9125:9125
+      - 9102:9102 # Visit http://localhost:9102/metrics to see metrics in Prometheus format
+    networks:
+      - ratelimit-network
+    volumes:
+      - ./examples/prom-statsd-exporter/conf.yaml:/etc/statsd-exporter/conf.yaml
+
+  ratelimit:
+    image: envoyproxy/ratelimit:master
+    command: /bin/ratelimit
+    ports:
+      - 8080:8080
+      - 8081:8081
+      - 6070:6070
+    depends_on:
+      - redis
+      - statsd
+    networks:
+      - ratelimit-network
+    volumes:
+      - ./examples/ratelimit/config:/data/ratelimit/config
+    environment:
+      - USE_STATSD=true
+      - STATSD_HOST=statsd
+      - STATSD_PORT=9125
+      - LOG_LEVEL=debug
+      - REDIS_SOCKET_TYPE=tcp
+      - REDIS_URL=redis:6379
+      - RUNTIME_ROOT=/data
+      - RUNTIME_SUBDIRECTORY=ratelimit
+      - RUNTIME_WATCH_ROOT=false
+
+  envoy-proxy:
+    image: envoyproxy/envoy-dev:latest
+    entrypoint: "/usr/local/bin/envoy"
+    command:
+      - "--service-node proxy"
+      - "--service-cluster proxy"
+      - "--config-path /etc/envoy/envoy.yaml"
+      - "--concurrency 1"
+      - "--mode serve"
+      - "--log-level info"
+    volumes:
+      - ./examples/envoy/proxy.yaml:/etc/envoy/envoy.yaml
+    networks:
+      - ratelimit-network
+    expose:
+       - "8888"
+       - "8001"
+    ports:
+       - "8888:8888"
+       - "8001:8001"
+
+  envoy-mock:
+    image: envoyproxy/envoy-dev:latest
+    entrypoint: "/usr/local/bin/envoy"
+    command:
+      - "--service-node mock"
+      - "--service-cluster mock"
+      - "--config-path /etc/envoy/envoy.yaml"
+      - "--concurrency 1"
+      - "--mode serve"
+      - "--log-level info"
+    volumes:
+      - ./examples/envoy/mock.yaml:/etc/envoy/envoy.yaml
+    networks:
+      - ratelimit-network
+    expose:
+       - "9999"
+    ports:
+       - "9999:9999"
+
+networks:
+  ratelimit-network:

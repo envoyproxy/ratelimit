@@ -22,7 +22,9 @@ type Settings struct {
 	RuntimeIgnoreDotFiles        bool          `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
 	RuntimeWatchRoot             bool          `envconfig:"RUNTIME_WATCH_ROOT" default:"true"`
 	LogLevel                     string        `envconfig:"LOG_LEVEL" default:"WARN"`
+	LogFormat                    string        `envconfig:"LOG_FORMAT" default:"text"`
 	RedisSocketType              string        `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
+	RedisType                    string        `envconfig:"REDIS_TYPE" default:"SINGLE"`
 	RedisUrl                     string        `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
 	RedisPoolSize                int           `envconfig:"REDIS_POOL_SIZE" default:"10"`
 	RedisAuth                    string        `envconfig:"REDIS_AUTH" default:""`
@@ -31,6 +33,7 @@ type Settings struct {
 	RedisPipelineLimit           int           `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
 	RedisPerSecond               bool          `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType     string        `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
+	RedisPerSecondType           string        `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`
 	RedisPerSecondUrl            string        `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize       int           `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	RedisPerSecondAuth           string        `envconfig:"REDIS_PERSECOND_AUTH" default:""`
@@ -39,6 +42,7 @@ type Settings struct {
 	RedisPerSecondPipelineLimit  int           `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 	ExpirationJitterMaxSeconds   int64         `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	LocalCacheSizeInBytes        int           `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
+	NearLimitRatio               float32       `envconfig:"NEAR_LIMIT_RATIO" default:"0.8"`
 	MemcacheHostPort             string        `envconfig:"MEMCACHE_HOST_PORT" default:""`
 	BackendType                  string        `envconfig:"BACKEND_TYPE" default:"redis"`
 }

@@ -4,6 +4,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	stats "github.com/lyft/gostats"
@@ -20,6 +21,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/utils"
 	logger "github.com/sirupsen/logrus"
 )
 
@@ -42,14 +44,14 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 			s,
 			localCache,
 			srv,
-			limiter.NewTimeSourceImpl(),
-			rand.New(limiter.NewLockedSource(time.Now().Unix())),
+			utils.NewTimeSourceImpl(),
+			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			s.ExpirationJitterMaxSeconds)
 	case "memcache":
 		return memcached.NewRateLimitCacheImplFromSettings(
 			s,
-			limiter.NewTimeSourceImpl(),
-			rand.New(limiter.NewLockedSource(time.Now().Unix())),
+			utils.NewTimeSourceImpl(),
+			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			localCache,
 			srv.Scope())
 	default:
@@ -67,6 +69,16 @@ func (runner *Runner) Run() {
 	} else {
 		logger.SetLevel(logLevel)
 	}
+	if strings.ToLower(s.LogFormat) == "json" {
+		logger.SetFormatter(&logger.JSONFormatter{
+			TimestampFormat: time.RFC3339Nano,
+			FieldMap: logger.FieldMap{
+				logger.FieldKeyTime: "@timestamp",
+				logger.FieldKeyMsg:  "@message",
+			},
+		})
+	}
+
 	var localCache *freecache.Cache
 	if s.LocalCacheSizeInBytes != 0 {
 		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)

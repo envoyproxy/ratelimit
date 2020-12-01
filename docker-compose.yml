@@ -38,7 +38,8 @@ services:
 
   ratelimit:
     image: alpine:3.6
-    command: /usr/local/bin/ratelimit
+    command: >
+        sh -c "until test -f /usr/local/bin/ratelimit; do sleep 5; done; /usr/local/bin/ratelimit"
     ports:
       - 8080:8080
       - 8081:8081
