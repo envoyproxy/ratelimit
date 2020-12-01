@@ -38,11 +38,11 @@ bootstrap_redis_tls: redis.conf redis-per-second.conf
     -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost" \
     -keyout key.pem  -out cert.pem
 	cat key.pem cert.pem > private.pem
-	sudo cp cert.pem /usr/local/share/ca-certificates/redis-stunnel.crt
+	 cp cert.pem /usr/local/share/ca-certificates/redis-stunnel.crt
 	chmod 640 key.pem cert.pem private.pem
-	sudo update-ca-certificates
-	sudo stunnel redis.conf
-	sudo stunnel redis-per-second.conf
+	 update-ca-certificates
+	 stunnel redis.conf
+	 stunnel redis-per-second.conf
 .PHONY: docs_format
 docs_format:
 	script/docs_check_format
