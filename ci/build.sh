@@ -24,6 +24,12 @@ do
 done
 wait
 
+set -e
+apt-get update -y
+apt-get install -y  redis-server
+
+make tests_with_redis
+
 docker build -t $ECR_REPO:b-$VERSION .
 if [ "$REPLICON_GIT_BRANCH" = "master" ]
 then
