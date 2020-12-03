@@ -11,6 +11,7 @@ require (
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.4.2
 	github.com/gomodule/redigo v1.7.1-0.20190322064113-39e2c31b7ca3 // indirect
+	github.com/google/uuid v1.1.2
 	github.com/gorilla/mux v1.8.0
 	github.com/kavu/go_reuseport v1.5.0
 	github.com/kelseyhightower/envconfig v1.4.0

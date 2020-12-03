@@ -16,13 +16,19 @@ set -eo nounset
 setEnvs
 
 installLamp &
-
+docker login -u "$DOCKER_USER" -p "$DOCKER_PASSWORD"
 eval $(aws ecr get-login --region us-west-2 --no-include-email)
 for img in "golang:1.14" "alpine:3.11"
 do
     docker pull $img
 done
 wait
+
+set -e
+apt-get update -y
+apt-get install -y  redis-server
+
+make tests_with_redis
 
 docker build -t $ECR_REPO:b-$VERSION .
 if [ "$REPLICON_GIT_BRANCH" = "master" ]
