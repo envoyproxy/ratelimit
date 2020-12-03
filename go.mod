@@ -32,5 +32,4 @@ require (
 	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
-	grpc.go4.org v0.0.0-20170609214715-11d0a25b4919
 )
