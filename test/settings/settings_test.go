@@ -3,7 +3,6 @@ package settings_test
 import (
 	"os"
 	"testing"
-	"time"
 
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/stretchr/testify/assert"
@@ -70,7 +69,7 @@ func (ts *TestSettings) TestShouldReturnDefaultValueIfNotSet() {
 	assert.Equal(ts.T(), 10, s.RedisPoolSize)
 	assert.Equal(ts.T(), "", s.RedisAuth)
 	assert.Equal(ts.T(), false, s.RedisTls)
-	assert.Equal(ts.T(), time.Duration(0)*time.Second, s.RedisPipelineWindow)
+	assert.Equal(ts.T(), int64(0), s.RedisPipelineWindow)
 	assert.Equal(ts.T(), 0, s.RedisPipelineLimit)
 	assert.Equal(ts.T(), false, s.RedisPerSecond)
 	assert.Equal(ts.T(), "unix", s.RedisPerSecondSocketType)
@@ -79,7 +78,7 @@ func (ts *TestSettings) TestShouldReturnDefaultValueIfNotSet() {
 	assert.Equal(ts.T(), 10, s.RedisPerSecondPoolSize)
 	assert.Equal(ts.T(), "", s.RedisPerSecondAuth)
 	assert.Equal(ts.T(), false, s.RedisPerSecondTls)
-	assert.Equal(ts.T(), time.Duration(0)*time.Second, s.RedisPerSecondPipelineWindow)
+	assert.Equal(ts.T(), int64(0), s.RedisPerSecondPipelineWindow)
 	assert.Equal(ts.T(), 0, s.RedisPerSecondPipelineLimit)
 	assert.Equal(ts.T(), int64(300), s.ExpirationJitterMaxSeconds)
 	assert.Equal(ts.T(), 0, s.LocalCacheSizeInBytes)
@@ -90,13 +89,10 @@ func (ts *TestSettings) TestShouldReturnCorrectValue() {
 	os.Setenv("REDIS_PIPELINE_WINDOW", "100")
 	os.Setenv("REDIS_PERSECOND_PIPELINE_WINDOW", "200")
 
-	expectedRedisPipelineWindowExpectedValue := time.Duration(100) * time.Second
-	expectedRedisPerSecondPipelineWindowValue := time.Duration(200) * time.Second
-
 	s := settings.NewSettings()
 
-	assert.Equal(ts.T(), expectedRedisPipelineWindowExpectedValue, s.RedisPipelineWindow)
-	assert.Equal(ts.T(), expectedRedisPerSecondPipelineWindowValue, s.RedisPerSecondPipelineWindow)
+	assert.Equal(ts.T(), int64(100), s.RedisPipelineWindow)
+	assert.Equal(ts.T(), int64(200), s.RedisPerSecondPipelineWindow)
 }
 
 func TestSettingsSuite(t *testing.T) {
