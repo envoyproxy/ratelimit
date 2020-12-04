@@ -9,6 +9,9 @@
 // limit the number of RPCs. First we call increment, then add if the increment
 // failed, then increment again if the add failed (which could happen if there was
 // a race to call "add").
+//
+// Note that max memcache key length is 250 characters. Attempting to get or increment
+// a longer key will return memcache.ErrMalformedKey
 
 package memcached
 

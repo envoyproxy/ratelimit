@@ -567,6 +567,9 @@ To configure a Memcache instance use the following environment variables instead
 With memcache mode increments will happen asynchronously, so it's technically possible for
 a client to exceed quota briefly if multiple requests happen at exactly the same time.
 
+Note that Memcache has a max key length of 250 characters, so operations referencing very long
+descriptors will fail.
+
 # Contact
 
 * [envoy-announce](https://groups.google.com/forum/#!forum/envoy-announce): Low frequency mailing
