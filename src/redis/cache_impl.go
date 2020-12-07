@@ -1,16 +1,16 @@
 package redis
 
 import (
+	"fmt"
 	"math/rand"
 
 	"github.com/coocood/freecache"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/settings"
-	logger "github.com/sirupsen/logrus"
 )
 
-func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64) limiter.RateLimitCache {
+func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64) (limiter.RateLimitCache, error) {
 	var perSecondPool Client
 	if s.RedisPerSecond {
 		perSecondPool = NewClientImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondTls, s.RedisPerSecondAuth,
@@ -28,8 +28,9 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 			jitterRand,
 			expirationJitterMaxSeconds,
 			localCache,
-			s.NearLimitRatio)
-	} else if s.RateLimitAlgorithm == settings.WindowedRateLimit {
+			s.NearLimitRatio), nil
+	}
+	if s.RateLimitAlgorithm == settings.WindowedRateLimit {
 		return NewWindowedRateLimitCacheImpl(
 			otherPool,
 			perSecondPool,
@@ -37,9 +38,7 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 			jitterRand,
 			expirationJitterMaxSeconds,
 			localCache,
-			s.NearLimitRatio)
-	} else {
-		logger.Fatalf("Unknown rate limit algorithm. %s\n", s.RateLimitAlgorithm)
+			s.NearLimitRatio), nil
 	}
-	return nil
+	return nil, fmt.Errorf("Unknown rate limit algorithm. %s\n", s.RateLimitAlgorithm)
 }

@@ -85,10 +85,20 @@ func (runner *Runner) Run() {
 	}
 
 	srv := server.NewServer("ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
+	rateLimitCache, err := redis.NewRateLimiterCacheImplFromSettings(
+		s,
+		localCache,
+		srv,
+		limiter.NewTimeSourceImpl(),
+		rand.New(limiter.NewLockedSource(time.Now().Unix())),
+		s.ExpirationJitterMaxSeconds)
+	if err != nil {
+		logger.Fatalf("Could not setup ratelimit cache. %v\n", err)
+	}
 
 	service := ratelimit.NewService(
 		srv.Runtime(),
-		createLimiter(srv, s, localCache),
+		rateLimitCache,
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"),
 		s.RuntimeWatchRoot,
