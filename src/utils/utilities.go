@@ -29,13 +29,21 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 	panic("should not get here")
 }
 
-func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit, timeSource TimeSource) *duration.Duration {
-	sec := UnitToDivider(currentLimit.Unit)
-	now := timeSource.UnixNow()
-	return &duration.Duration{Seconds: sec - now%sec}
+func MaxInt64(a int64, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
-func Max(a uint32, b uint32) uint32 {
+func MinInt64(a int64, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func MaxUint32(a uint32, b uint32) uint32 {
 	if a > b {
 		return a
 	}

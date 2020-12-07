@@ -30,20 +30,6 @@ type windowedRateLimitCacheImpl struct {
 	nearLimitRatio             float32
 }
 
-func maxInt64(a int64, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func minInt64(a int64, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func nanosecondsToDuration(nanoseconds int64) *duration.Duration {
 	nanos := nanoseconds
 	secs := nanos / 1e9
@@ -78,7 +64,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	logger.Debugf("starting windowed cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
-	hitsAddend := max(1, request.HitsAddend)
+	hitsAddend := utils.MaxUint32(1, request.HitsAddend)
 
 	// First build a list of all cache keys that we are actually going to hit. GenerateCacheKey()
 	// returns an empty string in the key if there is no limit so that we can keep the arrays
@@ -178,7 +164,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 
 		emissionInterval := period / limit
 		increment := emissionInterval * quantity
-		tat := maxInt64(tats[i], arrivedAt)
+		tat := utils.MaxInt64(tats[i], arrivedAt)
 		newTat := tat + increment
 		delayVariationTolerance := limit * emissionInterval
 		previousAllowAt := tat - delayVariationTolerance
@@ -186,7 +172,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 		diff := arrivedAt - allowAt
 		limitRemaining := int64(math.Ceil(float64((arrivedAt - allowAt) / emissionInterval)))
 		previousLimitRemaining := int64(math.Ceil(float64((arrivedAt - previousAllowAt) / emissionInterval)))
-		previousLimitRemaining = maxInt64(previousLimitRemaining, 0)
+		previousLimitRemaining = utils.MaxInt64(previousLimitRemaining, 0)
 		nearLimitWindow := int64(math.Ceil(float64(float32(limits[i].Limit.RequestsPerUnit) * (1.0 - this.nearLimitRatio))))
 
 		if diff < 0 {
@@ -199,7 +185,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 				}
 
 			limits[i].Stats.OverLimit.Add(uint64(quantity - previousLimitRemaining))
-			limits[i].Stats.NearLimit.Add(uint64(minInt64(previousLimitRemaining, nearLimitWindow)))
+			limits[i].Stats.NearLimit.Add(uint64(utils.MinInt64(previousLimitRemaining, nearLimitWindow)))
 
 			if this.localCache != nil {
 				err := this.localCache.Set([]byte(cacheKey.Key), []byte{}, int(nanosecondsToSeconds(-diff)))
@@ -218,7 +204,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 				DurationUntilReset: nanosecondsToDuration(newTat - arrivedAt),
 			}
 
-		hitNearLimit := quantity - (maxInt64(previousLimitRemaining, nearLimitWindow) - nearLimitWindow)
+		hitNearLimit := quantity - (utils.MaxInt64(previousLimitRemaining, nearLimitWindow) - nearLimitWindow)
 		if hitNearLimit > 0 {
 			limits[i].Stats.NearLimit.Add(uint64(hitNearLimit))
 		}
