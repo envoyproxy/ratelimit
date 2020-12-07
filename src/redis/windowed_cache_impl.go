@@ -15,6 +15,15 @@ import (
 	"golang.org/x/net/context"
 )
 
+// This rolling window limit implemented using Generic Cell Rate Algorithm (GCRA)
+// GCRA works by tracking remaining limit through a time called the “theoretical arrival time” (TAT).
+// Request cost is represented as a multiplier of “emission interval”, which is derived from the duration of equally spread request.
+// TAT is seeded by the current request arrival if not set then add the request costs.
+// Subtract the window duration from TAT to get the time to allow a request
+// Requests are allowed if the time to allow a request is in the past
+// Store the TAT for next process
+// https://blog.ian.stapletoncordas.co/2018/12/understanding-generic-cell-rate-limiting.html
+
 type windowedRateLimitCacheImpl struct {
 	client Client
 	// Optional Client for a dedicated cache of per second limits.
@@ -51,6 +60,7 @@ func windowedPipelineAppend(client Client, pipeline *Pipeline, key string, resul
 	*pipeline = client.PipeAppend(*pipeline, result, "GET", key)
 }
 
+// store new tat (Theoretical arrival time)
 func windowedSetNewTatPipelineAppend(client Client, pipeline *Pipeline, key string, newTat int64, expirationSeconds int64) {
 	*pipeline = client.PipeAppend(*pipeline, nil, "SET", key, newTat)
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
@@ -127,7 +137,6 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 		perSecondPipeline = nil
 	}
 
-	// Rate limit GCRA logic
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
 	now := this.timeSource.UnixNanoNow()
 	for i, cacheKey := range cacheKeys {
@@ -162,18 +171,22 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 		quantity := int64(hitsAddend)
 		arrivedAt := now
 
+		// GCRA computation
+		// Emission interval is the cost of each request
 		emissionInterval := period / limit
-		increment := emissionInterval * quantity
+		// Tat is set to current request timestamp if not set before
 		tat := utils.MaxInt64(tats[i], arrivedAt)
-		newTat := tat + increment
-		delayVariationTolerance := limit * emissionInterval
-		previousAllowAt := tat - delayVariationTolerance
-		allowAt := newTat - delayVariationTolerance
+		// New tat define the end of the window
+		newTat := tat + emissionInterval*quantity
+		// We allow the request if it's inside the window
+		allowAt := newTat - period
 		diff := arrivedAt - allowAt
-		limitRemaining := int64(math.Ceil(float64((arrivedAt - allowAt) / emissionInterval)))
+
+		previousAllowAt := tat - period
 		previousLimitRemaining := int64(math.Ceil(float64((arrivedAt - previousAllowAt) / emissionInterval)))
 		previousLimitRemaining = utils.MaxInt64(previousLimitRemaining, 0)
 		nearLimitWindow := int64(math.Ceil(float64(float32(limits[i].Limit.RequestsPerUnit) * (1.0 - this.nearLimitRatio))))
+		limitRemaining := int64(math.Ceil(float64(diff / emissionInterval)))
 
 		if diff < 0 {
 			responseDescriptorStatuses[i] =
@@ -209,7 +222,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 			limits[i].Stats.NearLimit.Add(uint64(hitNearLimit))
 		}
 
-		// Store newTat
+		// Store new tat for initial tat of next requests
 		expirationSeconds := nanosecondsToSeconds(newTat-arrivedAt) + 1
 		if this.expirationJitterMaxSeconds > 0 {
 			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
