@@ -72,7 +72,13 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, url string, pool
 			dialOpts = append(dialOpts, radix.DialAuthPass(auth))
 		}
 
-		return radix.Dial(network, addr, dialOpts...)
+		conn, err := radix.Dial(network, addr, dialOpts...)
+		if err != nil {
+			logger.Errorf("error connecting to redis instance: %s", err.Error())
+			
+			
+		}
+		return conn, err
 	}
 
 	stats := newPoolStats(scope)
