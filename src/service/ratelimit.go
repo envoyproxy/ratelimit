@@ -10,11 +10,10 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/lyft/goruntime/loader"
 	stats "github.com/lyft/gostats"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/replicon/ratelimit/src/assert"
 	"github.com/replicon/ratelimit/src/config"
 	"github.com/replicon/ratelimit/src/limiter"
+	"github.com/replicon/ratelimit/src/metrics"
 	"github.com/replicon/ratelimit/src/redis"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -25,26 +24,6 @@ type shouldRateLimitStats struct {
 	serviceError       stats.Counter
 	wouldOfRateLimited stats.Counter
 }
-
-var (
-	shadowRequests = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "rate_limiting_shadow_requests",
-		Help: "The total number of requests that would of been rate limited not in shadow mode",
-	}, []string{"descriptor_key", "descriptor_value", "limit", "unit"})
-	limitedRequests = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "rate_limiting_limited_requests",
-		Help: "The total number of requests that have been rate limited",
-	}, []string{"descriptor_key", "descriptor_value", "limit", "unit"})
-	rateLimitRequestSummary = promauto.NewSummary(prometheus.SummaryOpts{
-		Name:       "rate_limiting_request_time_sec",
-		Help:       "Summary of rate limiting request times",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-	})
-	rateLimitErrors = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "rate_limiting_service_errors",
-		Help: "Count of different rate limiting errors",
-	}, []string{"type"})
-)
 
 func newShouldRateLimitStats(scope stats.Scope) shouldRateLimitStats {
 	ret := shouldRateLimitStats{}
@@ -97,7 +76,7 @@ func (this *service) reloadConfig() {
 			}
 
 			this.stats.configLoadError.Inc()
-			rateLimitErrors.WithLabelValues("config_reload").Inc()
+			metrics.RateLimitErrors.WithLabelValues("config_reload").Inc()
 			logger.Errorf("error loading new configuration from runtime: %s", configError.Error())
 		}
 	}()
@@ -169,7 +148,7 @@ func (this *service) ShouldRateLimit(
 	start := time.Now()
 
 	defer func(t time.Time) {
-		rateLimitRequestSummary.Observe(time.Now().Sub(start).Seconds())
+		metrics.RateLimitRequestSummary.Observe(time.Now().Sub(start).Seconds())
 	}(start)
 
 	defer func() {
@@ -178,19 +157,19 @@ func (this *service) ShouldRateLimit(
 			return
 		}
 
-		logger.Errorf("caught error during call")
+		logger.Debugf("caught error during call")
 		finalResponse = nil
 		switch t := err.(type) {
 		case redis.RedisError:
 			{
 				this.stats.shouldRateLimit.redisError.Inc()
-				rateLimitErrors.WithLabelValues("redis").Inc()
+				metrics.RateLimitErrors.WithLabelValues("redis").Inc()
 				finalError = t
 			}
 		case serviceError:
 			{
 				this.stats.shouldRateLimit.serviceError.Inc()
-				rateLimitErrors.WithLabelValues("service").Inc()
+				metrics.RateLimitErrors.WithLabelValues("service").Inc()
 				finalError = t
 			}
 		default:
@@ -227,11 +206,11 @@ func (this *service) ShouldRateLimit(
 		labels := map[string]string{"descriptor_key": descriptorKey.String(), "descriptor_value": descriptorValue.String(), "limit": limit, "unit": unit}
 		if this.shadowMode {
 			logger.Infof("shadow mode: would of returned %+v", response.OverallCode)
-			shadowRequests.With(labels).Inc()
+			metrics.ShadowRequests.With(labels).Inc()
 			response.OverallCode = pb.RateLimitResponse_OK
 			this.stats.shouldRateLimit.wouldOfRateLimited.Inc()
 		} else {
-			limitedRequests.With(labels).Inc()
+			metrics.LimitedRequests.With(labels).Inc()
 		}
 	}
 	logger.Debugf("returning normal response")

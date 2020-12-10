@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mediocregopher/radix/v3/trace"
-
 	stats "github.com/lyft/gostats"
 	"github.com/mediocregopher/radix/v3"
+	"github.com/mediocregopher/radix/v3/trace"
+	"github.com/replicon/ratelimit/src/metrics"
 	logger "github.com/sirupsen/logrus"
 )
 
@@ -75,8 +75,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, url string, pool
 		conn, err := radix.Dial(network, addr, dialOpts...)
 		if err != nil {
 			logger.Errorf("error connecting to redis instance: %s", err.Error())
-			
-			
+			metrics.RateLimitErrors.WithLabelValues("redis_connection").Inc()
 		}
 		return conn, err
 	}
