@@ -45,7 +45,7 @@ type rateLimitMemcacheImpl struct {
 	expirationJitterMaxSeconds int64
 	cacheKeyGenerator          limiter.CacheKeyGenerator
 	localCache                 *freecache.Cache
-	wg                         sync.WaitGroup
+	waitGroup                  sync.WaitGroup
 	nearLimitRatio             float32
 }
 
@@ -106,7 +106,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		keysToGet = append(keysToGet, cacheKey.Key)
 	}
 
-	// Now fetch the pipeline.
+	// Now fetch from memcache.
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
 		len(request.Descriptors))
 
@@ -223,14 +223,14 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		}
 	}
 
-	this.wg.Add(1)
+	this.waitGroup.Add(1)
 	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
 
 	return responseDescriptorStatuses
 }
 
 func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, isOverLimitWithLocalCache []bool, limits []*config.RateLimit, hitsAddend uint64) {
-	defer this.wg.Done()
+	defer this.waitGroup.Done()
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] {
 			continue
@@ -269,7 +269,7 @@ func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, i
 }
 
 func (this *rateLimitMemcacheImpl) Flush() {
-	this.wg.Wait()
+	this.waitGroup.Wait()
 }
 
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32) limiter.RateLimitCache {

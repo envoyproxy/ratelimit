@@ -48,9 +48,9 @@ func newDescriptorStatusLegacy(
 //  stop the server at the end of each test, thus we can reuse the grpc port among these integration tests.
 func TestBasicConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0", ""))
-	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0", ""))
+	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0", "redis"))
 	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("18083", "false", "1000", ""))
-	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000", ""))
+	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000", "redis"))
 }
 
 func TestBasicTLSConfig(t *testing.T) {
