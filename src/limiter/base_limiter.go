@@ -35,7 +35,7 @@ func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint32, limit
 }
 
 // Generates cache keys for given rate limit request. Each cache key is represented by a concatenation of
-// domain, descriptor, optional limit and current timestamp.
+// domain, descriptor and current timestamp.
 func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 	limits []*config.RateLimit, hitsAddend uint32) []CacheKey {
 	assert.Assert(len(request.Descriptors) == len(limits))
@@ -169,9 +169,9 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{
-			Code:               responseCode,
-			CurrentLimit:       limit,
-			LimitRemaining:     limitRemaining,
+			Code:           responseCode,
+			CurrentLimit:   limit,
+			LimitRemaining: limitRemaining,
 		}
 	}
 }
