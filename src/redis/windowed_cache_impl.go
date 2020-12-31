@@ -39,21 +39,6 @@ type windowedRateLimitCacheImpl struct {
 	nearLimitRatio             float32
 }
 
-func nanosecondsToDuration(nanoseconds int64) *duration.Duration {
-	nanos := nanoseconds
-	secs := nanos / 1e9
-	nanos -= secs * 1e9
-	return &duration.Duration{Seconds: secs, Nanos: int32(nanos)}
-}
-
-func secondsToNanoseconds(second int64) int64 {
-	return second * 1e9
-}
-
-func nanosecondsToSeconds(nanoseconds int64) int64 {
-	return nanoseconds / 1e9
-}
-
 func windowedPipelineAppend(client Client, pipeline *Pipeline, key string, result *int64, expirationSeconds int64) {
 	*pipeline = client.PipeAppend(*pipeline, nil, "SETNX", key, int64(0))
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
@@ -152,7 +137,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 
 		if isOverLimitWithLocalCache[i] {
 			secondsToReset := utils.UnitToDivider(limits[i].Limit.Unit)
-			secondsToReset -= nanosecondsToSeconds(now) % secondsToReset
+			secondsToReset -= utils.NanosecondsToSeconds(now) % secondsToReset
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
 					Code:               pb.RateLimitResponse_OVER_LIMIT,
@@ -167,7 +152,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 
 		// Time during computation should be in nanosecond
 		limit := int64(limits[i].Limit.RequestsPerUnit)
-		period := secondsToNanoseconds(utils.UnitToDivider(limits[i].Limit.Unit))
+		period := utils.SecondsToNanoseconds(utils.UnitToDivider(limits[i].Limit.Unit))
 		quantity := int64(hitsAddend)
 		arrivedAt := now
 
@@ -194,14 +179,14 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 					Code:               pb.RateLimitResponse_OVER_LIMIT,
 					CurrentLimit:       limits[i].Limit,
 					LimitRemaining:     0,
-					DurationUntilReset: nanosecondsToDuration(int64(math.Ceil(float64(tat - arrivedAt)))),
+					DurationUntilReset: utils.NanosecondsToDuration(int64(math.Ceil(float64(tat - arrivedAt)))),
 				}
 
 			limits[i].Stats.OverLimit.Add(uint64(quantity - previousLimitRemaining))
 			limits[i].Stats.NearLimit.Add(uint64(utils.MinInt64(previousLimitRemaining, nearLimitWindow)))
 
 			if this.localCache != nil {
-				err := this.localCache.Set([]byte(cacheKey.Key), []byte{}, int(nanosecondsToSeconds(-diff)))
+				err := this.localCache.Set([]byte(cacheKey.Key), []byte{}, int(utils.NanosecondsToSeconds(-diff)))
 				if err != nil {
 					logger.Errorf("Failing to set local cache key: %s", cacheKey.Key)
 				}
@@ -214,7 +199,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 				Code:               pb.RateLimitResponse_OK,
 				CurrentLimit:       limits[i].Limit,
 				LimitRemaining:     uint32(limitRemaining),
-				DurationUntilReset: nanosecondsToDuration(newTat - arrivedAt),
+				DurationUntilReset: utils.NanosecondsToDuration(newTat - arrivedAt),
 			}
 
 		hitNearLimit := quantity - (utils.MaxInt64(previousLimitRemaining, nearLimitWindow) - nearLimitWindow)
@@ -223,7 +208,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 		}
 
 		// Store new tat for initial tat of next requests
-		expirationSeconds := nanosecondsToSeconds(newTat-arrivedAt) + 1
+		expirationSeconds := utils.NanosecondsToSeconds(newTat-arrivedAt) + 1
 		if this.expirationJitterMaxSeconds > 0 {
 			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 		}

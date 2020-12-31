@@ -1,52 +1,24 @@
 package utils
 
 import (
-	"math/rand"
-	"sync"
+	"github.com/golang/protobuf/ptypes/duration"
 	"time"
 )
 
-// Interface for a rand Source for expiration jitter.
-type JitterRandSource interface {
-	// @return a non-negative pseudo-random 63-bit integer as an int64.
-	Int63() int64
-	// @param seed initializes pseudo-random generator to a deterministic state.
-	Seed(seed int64)
+const secondToNanosecondRate = 1e9
+
+func NanosecondsToSeconds(nanoseconds int64) int64 {
+	return nanoseconds / secondToNanosecondRate
 }
 
-type timeSourceImpl struct{}
-
-func NewTimeSourceImpl() TimeSource {
-	return &timeSourceImpl{}
+func NanosecondsToDuration(nanoseconds int64) *duration.Duration {
+	nanos := nanoseconds
+	secs := nanos / secondToNanosecondRate
+	nanos -= secs * secondToNanosecondRate
+	return &duration.Duration{Seconds: secs, Nanos: int32(nanos)}
 }
 
-func (this *timeSourceImpl) UnixNow() int64 {
-	return time.Now().Unix()
-}
-
-func (this *timeSourceImpl) UnixNanoNow() int64 {
-	return time.Now().UnixNano()
-}
-
-// rand for jitter.
-type lockedSource struct {
-	lk  sync.Mutex
-	src rand.Source
-}
-
-func NewLockedSource(seed int64) JitterRandSource {
-	return &lockedSource{src: rand.NewSource(seed)}
-}
-
-func (r *lockedSource) Int63() (n int64) {
-	r.lk.Lock()
-	n = r.src.Int63()
-	r.lk.Unlock()
-	return
-}
-
-func (r *lockedSource) Seed(seed int64) {
-	r.lk.Lock()
-	r.src.Seed(seed)
-	r.lk.Unlock()
+func SecondsToNanoseconds(second int64) int64 {
+	time.Now()
+	return second * secondToNanosecondRate
 }
