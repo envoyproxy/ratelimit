@@ -16,10 +16,12 @@ import (
 
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/utils"
 	logger "github.com/sirupsen/logrus"
 )
 
@@ -33,6 +35,29 @@ func NewRunner() Runner {
 
 func (runner *Runner) GetStatsStore() stats.Store {
 	return runner.statsStore
+}
+
+func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache) limiter.RateLimitCache {
+	switch s.BackendType {
+	case "redis", "":
+		return redis.NewRateLimiterCacheImplFromSettings(
+			s,
+			localCache,
+			srv,
+			utils.NewTimeSourceImpl(),
+			rand.New(utils.NewLockedSource(time.Now().Unix())),
+			s.ExpirationJitterMaxSeconds)
+	case "memcache":
+		return memcached.NewRateLimitCacheImplFromSettings(
+			s,
+			utils.NewTimeSourceImpl(),
+			rand.New(utils.NewLockedSource(time.Now().Unix())),
+			localCache,
+			srv.Scope())
+	default:
+		logger.Fatalf("Invalid setting for BackendType: %s", s.BackendType)
+		panic("This line should not be reachable")
+	}
 }
 
 func (runner *Runner) Run() {
@@ -63,13 +88,7 @@ func (runner *Runner) Run() {
 
 	service := ratelimit.NewService(
 		srv.Runtime(),
-		redis.NewRateLimiterCacheImplFromSettings(
-			s,
-			localCache,
-			srv,
-			limiter.NewTimeSourceImpl(),
-			rand.New(limiter.NewLockedSource(time.Now().Unix())),
-			s.ExpirationJitterMaxSeconds),
+		createLimiter(srv, s, localCache),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"),
 		s.RuntimeWatchRoot,
