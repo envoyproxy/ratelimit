@@ -10,6 +10,15 @@ services:
     networks:
       - ratelimit-network
 
+  memcached:
+    image: memcached:alpine
+    expose:
+      - 11211
+    ports:
+      - 11211:11211
+    networks:
+      - ratelimit-network
+
   # minimal container that builds the ratelimit service binary and exits.
   ratelimit-build:
     image: golang:1.14-alpine
@@ -51,6 +60,7 @@ services:
       - REDIS_URL=redis:6379
       - RUNTIME_ROOT=/data
       - RUNTIME_SUBDIRECTORY=ratelimit
+      - MEMCACHE_HOST_PORT=memcached:11211
 
 networks:
   ratelimit-network:

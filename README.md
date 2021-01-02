@@ -31,6 +31,7 @@
   - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
+- [Memcache](#memcache)
 - [Contact](#contact)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -553,6 +554,21 @@ To configure two Redis instances use the following environment variables:
 
 This setup will use the Redis server configured with the `_PERSECOND_` vars for
 per second limits, and the other Redis server for all other limits.
+
+# Memcache
+
+Experimental Memcache support has been added as an alternative to Redis in v1.5.
+
+To configure a Memcache instance use the following environment variables instead of the Redis variables:
+
+1. `MEMCACHE_HOST_PORT=<host:port>`
+1. `BACKEND_TYPE=memcache`
+
+With memcache mode increments will happen asynchronously, so it's technically possible for
+a client to exceed quota briefly if multiple requests happen at exactly the same time.
+
+Note that Memcache has a max key length of 250 characters, so operations referencing very long
+descriptors will fail.
 
 # Contact
 
