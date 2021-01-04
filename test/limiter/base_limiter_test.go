@@ -74,8 +74,9 @@ func TestGetResponseStatusOverLimitWithLocalCache(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
+	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 4, 5)
+	//as `isOverLimitWithLocalCache` is passed as `true`, immediate response is returned with no checks of the limits
 	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, true, 2)
 	assert.Equal(pb.RateLimitResponse_OVER_LIMIT, responseStatus.GetCode())
 	assert.Equal(uint32(0), responseStatus.GetLimitRemaining())
@@ -94,7 +95,7 @@ func TestGetResponseStatusOverLimit(t *testing.T) {
 	localCache := freecache.NewCache(100)
 	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, localCache, 0.8)
 	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
-	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 4, 5)
+	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 7, 4, 5)
 	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1)
 	assert.Equal(pb.RateLimitResponse_OVER_LIMIT, responseStatus.GetCode())
 	assert.Equal(uint32(0), responseStatus.GetLimitRemaining())
@@ -102,7 +103,7 @@ func TestGetResponseStatusOverLimit(t *testing.T) {
 	result, _ := localCache.Get([]byte("key"))
 	//local cache should have been populated with over the limit key
 	assert.Equal("", string(result))
-	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
 }
 
