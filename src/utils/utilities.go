@@ -34,3 +34,10 @@ func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit, timeSource Tim
 	now := timeSource.UnixNow()
 	return &duration.Duration{Seconds: sec - now%sec}
 }
+
+func Max(a uint32, b uint32) uint32 {
+	if a > b {
+		return a
+	}
+	return b
+}
