@@ -50,7 +50,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			continue
 		}
 
-		//Check if key is over the limit in local cache
+		// Check if key is over the limit in local cache.
 		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
 			isOverLimitWithLocalCache[i] = true
 			logger.Debugf("cache key is over the limit: %s", cacheKey.Key)

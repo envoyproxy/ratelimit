@@ -39,7 +39,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	localCache := freecache.NewCache(100)
 	localCache.Set([]byte("key"), []byte("value"), 100)
 	baseRateLimit := limiter.NewBaseRateLimit(nil, nil, 3600, localCache, 0.8)
-	//returns true, as local cache contains over limit value for the key
+	// Returns true, as local cache contains over limit value for the key.
 	assert.Equal(true, baseRateLimit.IsOverLimitWithLocalCache("key"))
 }
 
@@ -48,11 +48,11 @@ func TestNoOverLimitWithLocalCache(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	baseRateLimit := limiter.NewBaseRateLimit(nil, nil, 3600, nil, 0.8)
-	//returns false, as local cache is nil
+	// Returns false, as local cache is nil.
 	assert.Equal(false, baseRateLimit.IsOverLimitWithLocalCache("domain_key_value_1234"))
 	localCache := freecache.NewCache(100)
 	baseRateLimitWithLocalCache := limiter.NewBaseRateLimit(nil, nil, 3600, localCache, 0.8)
-	//returns false, as local cache does not contain value for cache key
+	// Returns false, as local cache does not contain value for cache key.
 	assert.Equal(false, baseRateLimitWithLocalCache.IsOverLimitWithLocalCache("domain_key_value_1234"))
 }
 
@@ -76,7 +76,7 @@ func TestGetResponseStatusOverLimitWithLocalCache(t *testing.T) {
 	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8)
 	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 4, 5)
-	//as `isOverLimitWithLocalCache` is passed as `true`, immediate response is returned with no checks of the limits
+	// As `isOverLimitWithLocalCache` is passed as `true`, immediate response is returned with no checks of the limits.
 	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, true, 2)
 	assert.Equal(pb.RateLimitResponse_OVER_LIMIT, responseStatus.GetCode())
 	assert.Equal(uint32(0), responseStatus.GetLimitRemaining())
@@ -101,7 +101,7 @@ func TestGetResponseStatusOverLimit(t *testing.T) {
 	assert.Equal(uint32(0), responseStatus.GetLimitRemaining())
 	assert.Equal(limits[0].Limit, responseStatus.GetCurrentLimit())
 	result, _ := localCache.Get([]byte("key"))
-	//local cache should have been populated with over the limit key
+	// Local cache should have been populated with over the limit key.
 	assert.Equal("", string(result))
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())

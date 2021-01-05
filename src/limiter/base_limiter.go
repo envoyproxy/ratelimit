@@ -65,7 +65,7 @@ func (this *BaseRateLimiter) IsOverLimitWithLocalCache(key string) bool {
 	return false
 }
 
-//Generates response descriptor status based on cache key, over the limit with local cache, over the limit and
+// Generates response descriptor status based on cache key, over the limit with local cache, over the limit and
 // near the limit thresholds. Thresholds are checked in order and are mutually exclusive.
 func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *LimitInfo,
 	isOverLimitWithLocalCache bool, hitsAddend uint32) *pb.RateLimitResponse_DescriptorStatus {

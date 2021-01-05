@@ -72,7 +72,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 			continue
 		}
 
-		//Check if key is over the limit in local cache
+		// Check if key is over the limit in local cache.
 		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
 			isOverLimitWithLocalCache[i] = true
 			logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
@@ -140,7 +140,7 @@ func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, i
 				expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 			}
 
-			// Need to add instead of increment
+			// Need to add instead of increment.
 			err = this.client.Add(&memcache.Item{
 				Key:        cacheKey.Key,
 				Value:      []byte(strconv.FormatUint(hitsAddend, 10)),
