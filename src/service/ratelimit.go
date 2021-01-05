@@ -9,7 +9,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/redis/driver"
 	"github.com/lyft/goruntime/loader"
 	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
@@ -168,7 +168,7 @@ func (this *service) ShouldRateLimit(
 		logger.Debugf("caught error during call")
 		finalResponse = nil
 		switch t := err.(type) {
-		case redis.RedisError:
+		case driver.RedisError:
 			{
 				this.stats.shouldRateLimit.redisError.Inc()
 				finalError = t

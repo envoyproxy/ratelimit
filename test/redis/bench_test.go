@@ -10,8 +10,10 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	stats "github.com/lyft/gostats"
 
+	"github.com/envoyproxy/ratelimit/src/algorithm"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/redis/driver"
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/test/common"
 )
@@ -40,14 +42,17 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 	mkDoLimitBench := func(pipelineWindow time.Duration, pipelineLimit int, rateLimitAlgorithm string) func(*testing.B) {
 		return func(b *testing.B) {
 			statsStore := stats.NewStore(stats.NewNullSink(), false)
-			client := redis.NewClientImpl(statsStore, false, "", "single", "127.0.0.1:6379", poolSize, pipelineWindow, pipelineLimit)
+			client := driver.NewClientImpl(statsStore, false, "", "single", "127.0.0.1:6379", poolSize, pipelineWindow, pipelineLimit)
 			defer client.Close()
 
 			var cache limiter.RateLimitCache
+			timeSource := limiter.NewTimeSourceImpl()
 			if rateLimitAlgorithm == settings.FixedRateLimit {
-				cache = redis.NewFixedRateLimitCacheImpl(client, nil, limiter.NewTimeSourceImpl(), rand.New(limiter.NewLockedSource(time.Now().Unix())), 10, nil, 0.8)
+				algorithmImpl := algorithm.NewFixedWindowAlgorithm(timeSource)
+				cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(limiter.NewLockedSource(time.Now().Unix())), 10, nil, 0.8, algorithmImpl)
 			} else if rateLimitAlgorithm == settings.WindowedRateLimit {
-				cache = redis.NewWindowedRateLimitCacheImpl(client, nil, limiter.NewTimeSourceImpl(), rand.New(limiter.NewLockedSource(time.Now().Unix())), 10, nil, 0.8)
+				algorithmImpl := algorithm.NewRollingWindowAlgorithm()
+				cache = redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(limiter.NewLockedSource(time.Now().Unix())), 10, nil, 0.8, algorithmImpl)
 			} else {
 				b.Fatalf("unknown rate limit type %s", rateLimitAlgorithm)
 			}

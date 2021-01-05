@@ -6,9 +6,11 @@ import (
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/envoyproxy/ratelimit/src/algorithm"
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/redis/driver"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	"github.com/golang/protobuf/ptypes/duration"
 	logger "github.com/sirupsen/logrus"
@@ -25,28 +27,29 @@ import (
 // https://blog.ian.stapletoncordas.co/2018/12/understanding-generic-cell-rate-limiting.html
 
 type windowedRateLimitCacheImpl struct {
-	client Client
+	client driver.Client
 	// Optional Client for a dedicated cache of per second limits.
 	// If this client is nil, then the Cache will use the client for all
 	// limits regardless of unit. If this client is not nil, then it
 	// is used for limits that have a SECOND unit.
-	perSecondClient            Client
+	perSecondClient            driver.Client
 	timeSource                 limiter.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
 	cacheKeyGenerator          limiter.CacheKeyGenerator
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
+	algorithm                  algorithm.RatelimitAlgorithm
 }
 
-func windowedPipelineAppend(client Client, pipeline *Pipeline, key string, result *int64, expirationSeconds int64) {
+func windowedPipelineAppend(client driver.Client, pipeline *driver.Pipeline, key string, result *int64, expirationSeconds int64) {
 	*pipeline = client.PipeAppend(*pipeline, nil, "SETNX", key, int64(0))
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 	*pipeline = client.PipeAppend(*pipeline, result, "GET", key)
 }
 
 // store new tat (Theoretical arrival time)
-func windowedSetNewTatPipelineAppend(client Client, pipeline *Pipeline, key string, newTat int64, expirationSeconds int64) {
+func windowedSetNewTatPipelineAppend(client driver.Client, pipeline *driver.Pipeline, key string, newTat int64, expirationSeconds int64) {
 	*pipeline = client.PipeAppend(*pipeline, nil, "SET", key, newTat)
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
@@ -67,8 +70,8 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]limiter.CacheKey, len(request.Descriptors))
 	for i := 0; i < len(request.Descriptors); i++ {
-		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(
-			request.Domain, request.Descriptors[i], limits[i], 0)
+		cacheKeys[i] = this.algorithm.GenerateCacheKey(
+			request.Domain, request.Descriptors[i], limits[i])
 
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
@@ -79,7 +82,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	// Get existing tat value for each cache keys
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	tats := make([]int64, len(request.Descriptors))
-	var pipeline, perSecondPipeline Pipeline
+	var pipeline, perSecondPipeline driver.Pipeline
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
 			continue
@@ -102,23 +105,25 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
 		if this.perSecondClient != nil && cacheKey.PerSecond {
 			if perSecondPipeline == nil {
-				perSecondPipeline = Pipeline{}
+				perSecondPipeline = driver.Pipeline{}
 			}
-			windowedPipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, &tats[i], expirationSeconds)
+			perSecondPipeline = this.algorithm.AppendPipeline(this.perSecondClient, perSecondPipeline, cacheKey.Key, hitsAddend, &tats[i], expirationSeconds)
+			//windowedPipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, &tats[i], expirationSeconds)
 		} else {
 			if pipeline == nil {
-				pipeline = Pipeline{}
+				pipeline = driver.Pipeline{}
 			}
-			windowedPipelineAppend(this.client, &pipeline, cacheKey.Key, &tats[i], expirationSeconds)
+			pipeline = this.algorithm.AppendPipeline(this.client, pipeline, cacheKey.Key, hitsAddend, &tats[i], expirationSeconds)
+			//windowedPipelineAppend(this.client, &pipeline, cacheKey.Key, &tats[i], expirationSeconds)
 		}
 	}
 
 	if pipeline != nil {
-		checkError(this.client.PipeDo(pipeline))
+		driver.CheckError(this.client.PipeDo(pipeline))
 		pipeline = nil
 	}
 	if perSecondPipeline != nil {
-		checkError(this.perSecondClient.PipeDo(perSecondPipeline))
+		driver.CheckError(this.perSecondClient.PipeDo(perSecondPipeline))
 		perSecondPipeline = nil
 	}
 
@@ -214,26 +219,26 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 		}
 		if this.perSecondClient != nil && cacheKey.PerSecond {
 			if perSecondPipeline == nil {
-				perSecondPipeline = Pipeline{}
+				perSecondPipeline = driver.Pipeline{}
 			}
 			windowedSetNewTatPipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, newTat, expirationSeconds)
 		} else {
 			if pipeline == nil {
-				pipeline = Pipeline{}
+				pipeline = driver.Pipeline{}
 			}
 			windowedSetNewTatPipelineAppend(this.client, &pipeline, cacheKey.Key, newTat, expirationSeconds)
 		}
 	}
 	if pipeline != nil {
-		checkError(this.client.PipeDo(pipeline))
+		driver.CheckError(this.client.PipeDo(pipeline))
 	}
 	if perSecondPipeline != nil {
-		checkError(this.perSecondClient.PipeDo(perSecondPipeline))
+		driver.CheckError(this.perSecondClient.PipeDo(perSecondPipeline))
 	}
 	return responseDescriptorStatuses
 }
 
-func NewWindowedRateLimitCacheImpl(client Client, perSecondClient Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32) limiter.RateLimitCache {
+func NewWindowedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
 	return &windowedRateLimitCacheImpl{
 		client:                     client,
 		perSecondClient:            perSecondClient,
@@ -243,5 +248,6 @@ func NewWindowedRateLimitCacheImpl(client Client, perSecondClient Client, timeSo
 		cacheKeyGenerator:          limiter.NewCacheKeyGenerator(),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
+		algorithm:                  algorithm,
 	}
 }

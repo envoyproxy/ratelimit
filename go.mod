@@ -9,7 +9,7 @@ require (
 	github.com/coocood/freecache v1.1.0
 	github.com/envoyproxy/go-control-plane v0.9.7
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
-	github.com/golang/mock v1.4.1
+	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.4.2
 	github.com/gorilla/mux v1.7.4-0.20191121170500-49c01487a141
 	github.com/kavu/go_reuseport v1.2.0
@@ -26,4 +26,5 @@ require (
 	google.golang.org/grpc v1.27.0
 	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0
+	rsc.io/quote/v3 v3.1.0 // indirect
 )

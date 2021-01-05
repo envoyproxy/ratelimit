@@ -5,29 +5,33 @@ import (
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/envoyproxy/ratelimit/src/algorithm"
+	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/redis/driver"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
 type fixedRateLimitCacheImpl struct {
-	client Client
+	client driver.Client
 	// Optional Client for a dedicated cache of per second limits.
 	// If this client is nil, then the Cache will use the client for all
 	// limits regardless of unit. If this client is not nil, then it
 	// is used for limits that have a SECOND unit.
-	perSecondClient            Client
+	perSecondClient            driver.Client
 	timeSource                 limiter.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
 	cacheKeyGenerator          limiter.CacheKeyGenerator
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
+	algorithm                  algorithm.RatelimitAlgorithm
 }
 
-func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) {
+func pipelineAppend(client driver.Client, pipeline *driver.Pipeline, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) {
 	*pipeline = client.PipeAppend(*pipeline, result, "INCRBY", key, hitsAddend)
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
@@ -47,10 +51,9 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	// all the same size.
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]limiter.CacheKey, len(request.Descriptors))
-	now := this.timeSource.UnixNow()
 	for i := 0; i < len(request.Descriptors); i++ {
-		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(
-			request.Domain, request.Descriptors[i], limits[i], now)
+		cacheKeys[i] = this.algorithm.GenerateCacheKey(
+			request.Domain, request.Descriptors[i], limits[i])
 
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
@@ -60,7 +63,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	results := make([]uint32, len(request.Descriptors))
-	var pipeline, perSecondPipeline Pipeline
+	var pipeline, perSecondPipeline driver.Pipeline
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
@@ -85,22 +88,24 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
 		if this.perSecondClient != nil && cacheKey.PerSecond {
 			if perSecondPipeline == nil {
-				perSecondPipeline = Pipeline{}
+				perSecondPipeline = driver.Pipeline{}
 			}
-			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			perSecondPipeline = this.algorithm.AppendPipeline(this.perSecondClient, perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			//pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 		} else {
 			if pipeline == nil {
-				pipeline = Pipeline{}
+				pipeline = driver.Pipeline{}
 			}
-			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			pipeline = this.algorithm.AppendPipeline(this.client, pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			//pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 		}
 	}
 
 	if pipeline != nil {
-		checkError(this.client.PipeDo(pipeline))
+		driver.CheckError(this.client.PipeDo(pipeline))
 	}
 	if perSecondPipeline != nil {
-		checkError(this.perSecondClient.PipeDo(perSecondPipeline))
+		driver.CheckError(this.perSecondClient.PipeDo(perSecondPipeline))
 	}
 
 	// Now fetch the pipeline.
@@ -182,11 +187,16 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 // Flush() is a no-op with redis since quota reads and updates happen synchronously.
 func (this *fixedRateLimitCacheImpl) Flush() {}
 
-func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSource utils.TimeSource,
-	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32) limiter.RateLimitCache {
+func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
-		client:          client,
-		perSecondClient: perSecondClient,
-		baseRateLimiter: limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio),
+		client:                     client,
+		perSecondClient:            perSecondClient,
+		timeSource:                 timeSource,
+		jitterRand:                 jitterRand,
+		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
+		cacheKeyGenerator:          limiter.NewCacheKeyGenerator(),
+		localCache:                 localCache,
+		nearLimitRatio:             nearLimitRatio,
+		algorithm:                  algorithm,
 	}
 }

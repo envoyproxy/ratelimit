@@ -1,4 +1,4 @@
-package redis
+package driver
 
 import (
 	"crypto/tls"
@@ -46,7 +46,7 @@ type clientImpl struct {
 	implicitPipelining bool
 }
 
-func checkError(err error) {
+func CheckError(err error) {
 	if err != nil {
 		panic(RedisError(err.Error()))
 	}
@@ -114,13 +114,13 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, redisType string
 		panic(RedisError("Unrecognized redis type " + redisType))
 	}
 
-	checkError(err)
+	CheckError(err)
 
 	// Check if connection is good
 	var pingResponse string
-	checkError(client.Do(radix.Cmd(&pingResponse, "PING")))
+	CheckError(client.Do(radix.Cmd(&pingResponse, "PING")))
 	if pingResponse != "PONG" {
-		checkError(fmt.Errorf("connecting redis error: %s", pingResponse))
+		CheckError(fmt.Errorf("connecting redis error: %s", pingResponse))
 	}
 
 	return &clientImpl{

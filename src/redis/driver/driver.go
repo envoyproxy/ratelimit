@@ -1,4 +1,4 @@
-package redis
+package driver
 
 import "github.com/mediocregopher/radix/v3"
 

@@ -6,7 +6,7 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/redis/driver"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_config "github.com/envoyproxy/ratelimit/test/mocks/config"
@@ -205,7 +205,7 @@ func TestCacheError(test *testing.T) {
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.cache.EXPECT().DoLimit(nil, request, limits).Do(
 		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
-			panic(redis.RedisError("cache error"))
+			panic(driver.RedisError("cache error"))
 		})
 
 	response, err := service.ShouldRateLimit(nil, request)
