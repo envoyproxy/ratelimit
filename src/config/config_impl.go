@@ -21,6 +21,7 @@ type yamlDescriptor struct {
 	Key         string
 	Value       string
 	RateLimit   *yamlRateLimit `yaml:"rate_limit"`
+	ShadowMode  bool
 	Descriptors []yamlDescriptor
 }
 
@@ -73,9 +74,9 @@ func newRateLimitStats(statsScope stats.Scope, key string) RateLimitStats {
 // @param scope supplies the owning scope.
 // @return the new config entry.
 func NewRateLimit(
-	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, key string, scope stats.Scope) *RateLimit {
+	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, key string, shadowMode bool, scope stats.Scope) *RateLimit {
 
-	return &RateLimit{FullKey: key, Stats: newRateLimitStats(scope, key), Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
+	return &RateLimit{FullKey: key, Stats: newRateLimitStats(scope, key), Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}, ShadowMode: shadowMode}
 }
 
 // Dump an individual descriptor for debugging purposes.
@@ -137,7 +138,7 @@ func (this *rateLimitDescriptor) loadDescriptors(
 			}
 
 			rateLimit = NewRateLimit(
-				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), newParentKey,
+				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), newParentKey, descriptorConfig.ShadowMode,
 				statsScope)
 			rateLimitDebugString = fmt.Sprintf(
 				" ratelimit={requests_per_unit=%d, unit=%s}", rateLimit.Limit.RequestsPerUnit,
@@ -267,12 +268,14 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
+		//TODO: Eval when this is actually called and how it impacts setting this to false always
 		rateLimitKey := domain + "." + this.descriptorToKey(descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		rateLimit = NewRateLimit(
 			descriptor.GetLimit().GetRequestsPerUnit(),
 			rateLimitOverrideUnit,
 			rateLimitKey,
+			false,
 			this.statsScope)
 		return rateLimit
 	}
