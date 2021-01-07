@@ -1,8 +1,6 @@
 package ratelimit
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +13,7 @@ import (
 	"github.com/replicon/ratelimit/src/limiter"
 	"github.com/replicon/ratelimit/src/metrics"
 	"github.com/replicon/ratelimit/src/redis"
+	"github.com/replicon/ratelimit/src/util"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
@@ -179,38 +178,13 @@ func (this *service) ShouldRateLimit(
 
 	response := this.shouldRateLimitWorker(ctx, request)
 	if response.OverallCode != pb.RateLimitResponse_OK {
-		var descriptorKey strings.Builder
-		var descriptorValue strings.Builder
-		limit := ""
-		unit := ""
 		for i, descriptorStatus := range response.Statuses {
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				descriptor := request.Descriptors[i]
-				for _, entry := range descriptor.Entries {
-					if descriptorKey.Len() != 0 {
-						descriptorKey.WriteString("_")
-					}
-					if descriptorValue.Len() != 0 {
-						descriptorValue.WriteString("_")
-					}
-					descriptorKey.WriteString(entry.Key)
-					descriptorValue.WriteString(fmt.Sprintf("%.*s", 40, entry.Value))
-				}
-				if descriptorStatus.CurrentLimit != nil {
-					limit = strconv.FormatUint(uint64(descriptorStatus.CurrentLimit.RequestsPerUnit), 10)
-					unit = descriptorStatus.CurrentLimit.Unit.String()
-				}
-
+				kvMeta := util.GetDescriptorKV(descriptorStatus, descriptor)
+				labels := map[string]string{"descriptor_key": kvMeta.Key, "descriptor_value": kvMeta.Value, "limit": kvMeta.Limit, "unit": kvMeta.Unit}
+				metrics.LimitedRequests.With(labels).Inc()
 			}
-		}
-		labels := map[string]string{"descriptor_key": descriptorKey.String(), "descriptor_value": descriptorValue.String(), "limit": limit, "unit": unit}
-		if this.shadowMode {
-			logger.Infof("shadow mode: would of returned %+v", response.OverallCode)
-			metrics.ShadowRequests.With(labels).Inc()
-			response.OverallCode = pb.RateLimitResponse_OK
-			this.stats.shouldRateLimit.wouldOfRateLimited.Inc()
-		} else {
-			metrics.LimitedRequests.With(labels).Inc()
 		}
 	}
 	logger.Debugf("returning normal response")

@@ -271,6 +271,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 	if descriptor.GetLimit() != nil {
 		//TODO: Eval when this is actually called and how it impacts setting this to false always
+		logger.Info("Get limit called without context. Shadow mode is disabled now")
 		rateLimitKey := domain + "." + this.descriptorToKey(descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		rateLimit = NewRateLimit(
