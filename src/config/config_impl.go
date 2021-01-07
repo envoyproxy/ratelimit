@@ -184,8 +184,9 @@ func validateYamlKeys(config RateLimitConfigToLoad, config_map map[interface{}]i
 		case map[interface{}]interface{}:
 			validateYamlKeys(config, v)
 		// string is a leaf type in ratelimit config. No need to keep validating.
-		case bool:
 		case string:
+		// bool is a leaf type in ratelimit config. No need to keep validating.
+		case bool:
 		// int is a leaf type in ratelimit config. No need to keep validating.
 		case int:
 		// nil case is an incorrectly formed yaml. However, because this function's purpose is to validate
@@ -270,8 +271,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
-		//TODO: Eval when this is actually called and how it impacts setting this to false always
-		logger.Info("Get limit called without context. Shadow mode is disabled now")
+		logger.Info("get limit called without context. Shadow mode is disabled for this rate limit")
 		rateLimitKey := domain + "." + this.descriptorToKey(descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		rateLimit = NewRateLimit(

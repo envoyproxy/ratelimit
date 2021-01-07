@@ -63,6 +63,10 @@ compile:
 	go build -mod=readonly -o ./bin/ratelimit_client $(MODULE)/src/client_cmd
 	go build -mod=readonly -o ./bin/ratelimit_config_check $(MODULE)/src/config_check_cmd
 
+.PHONY: tests_unit_no_cache
+tests_unit_no_cache: compile
+	go test -count=1 -race $(MODULE)/...
+
 .PHONY: tests_unit
 tests_unit: compile
 	go test -race $(MODULE)/...

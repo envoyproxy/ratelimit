@@ -9,14 +9,14 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 )
 
-type KVDesc struct {
+type MetricsDescriptor struct {
 	Limit string
 	Unit  string
 	Key   string
 	Value string
 }
 
-func GetDescriptorKV(descriptorStatus *pb.RateLimitResponse_DescriptorStatus, descriptor *envoy_extensions_common_ratelimit_v3.RateLimitDescriptor) KVDesc {
+func ConvertToMetricsDescriptor(descriptorStatus *pb.RateLimitResponse_DescriptorStatus, descriptor *envoy_extensions_common_ratelimit_v3.RateLimitDescriptor) MetricsDescriptor {
 	var descriptorKey strings.Builder
 	var descriptorValue strings.Builder
 	limit := ""
@@ -37,7 +37,7 @@ func GetDescriptorKV(descriptorStatus *pb.RateLimitResponse_DescriptorStatus, de
 		unit = descriptorStatus.CurrentLimit.Unit.String()
 	}
 
-	return KVDesc{
+	return MetricsDescriptor{
 		Unit:  unit,
 		Limit: limit,
 		Key:   descriptorKey.String(),

@@ -179,11 +179,10 @@ func (this *service) ShouldRateLimit(
 	response := this.shouldRateLimitWorker(ctx, request)
 	if response.OverallCode != pb.RateLimitResponse_OK {
 		for i, descriptorStatus := range response.Statuses {
-			//per rule shadow mode will change this metric since the Code will be OK even if we have
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				descriptor := request.Descriptors[i]
-				kvMeta := util.GetDescriptorKV(descriptorStatus, descriptor)
-				labels := map[string]string{"descriptor_key": kvMeta.Key, "descriptor_value": kvMeta.Value, "limit": kvMeta.Limit, "unit": kvMeta.Unit}
+				metricsDescriptor := util.ConvertToMetricsDescriptor(descriptorStatus, descriptor)
+				labels := map[string]string{"descriptor_key": metricsDescriptor.Key, "descriptor_value": metricsDescriptor.Value, "limit": metricsDescriptor.Limit, "unit": metricsDescriptor.Unit}
 				if this.shadowMode {
 					metrics.ShadowRequests.With(labels).Inc()
 				} else {

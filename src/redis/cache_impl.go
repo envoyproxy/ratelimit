@@ -138,12 +138,10 @@ func (this *rateLimitCacheImpl) DoLimit(
 				LimitRemaining: 0,
 			}
 			if limits[i].ShadowMode {
-				//TODO: add metrics
-				logger.Info("Would of rate limited ", cacheKey.Key, " but shadow mode is enabled")
-				kvMeta := util.GetDescriptorKV(status, request.Descriptors[i])
+				logger.Debugf("Would of rate limited %s but shadow mode is enabled on this rule", cacheKey.Key)
+				metricsDescriptor := util.ConvertToMetricsDescriptor(status, request.Descriptors[i])
 
-				labels := map[string]string{"descriptor_key": kvMeta.Key, "descriptor_value": kvMeta.Value, "limit": kvMeta.Limit, "unit": kvMeta.Unit}
-				logger.Info(labels)
+				labels := map[string]string{"descriptor_key": metricsDescriptor.Key, "descriptor_value": metricsDescriptor.Value, "limit": metricsDescriptor.Limit, "unit": metricsDescriptor.Unit}
 				metrics.ShadowRequests.With(labels).Inc()
 
 				status.Code = pb.RateLimitResponse_OK
@@ -170,12 +168,10 @@ func (this *rateLimitCacheImpl) DoLimit(
 				LimitRemaining: 0,
 			}
 			if limits[i].ShadowMode {
-				//TODO: add metrics
-				logger.Info("Would of rate limited", cacheKey.Key, " but shadow mode is enabled")
-				kvMeta := util.GetDescriptorKV(status, request.Descriptors[i])
+				logger.Debugf("Would of rate limited %s but shadow mode is enabled", cacheKey.Key)
+				metricsDescriptor := util.ConvertToMetricsDescriptor(status, request.Descriptors[i])
 
-				labels := map[string]string{"descriptor_key": kvMeta.Key, "descriptor_value": kvMeta.Value, "limit": kvMeta.Limit, "unit": kvMeta.Unit}
-				logger.Info(labels)
+				labels := map[string]string{"descriptor_key": metricsDescriptor.Key, "descriptor_value": metricsDescriptor.Value, "limit": metricsDescriptor.Limit, "unit": metricsDescriptor.Unit}
 				metrics.ShadowRequests.With(labels).Inc()
 				status.Code = pb.RateLimitResponse_OK
 			}
