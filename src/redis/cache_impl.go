@@ -130,9 +130,15 @@ func (this *rateLimitCacheImpl) DoLimit(
 		}
 
 		if isOverLimitWithLocalCache[i] {
+			status := pb.RateLimitResponse_OVER_LIMIT
+			if limits[i].ShadowMode {
+				//TODO: add metrics
+				logger.Info("Would of rate limited", cacheKey.Key, " but shadow mode is enabled")
+				status = pb.RateLimitResponse_OK
+			}
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
-					Code:           pb.RateLimitResponse_OVER_LIMIT,
+					Code:           status,
 					CurrentLimit:   limits[i].Limit,
 					LimitRemaining: 0,
 				}
@@ -150,9 +156,15 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 		logger.Debugf("cache key: %s current: %d", cacheKey.Key, limitAfterIncrease)
 		if limitAfterIncrease > overLimitThreshold {
+			status := pb.RateLimitResponse_OVER_LIMIT
+			if limits[i].ShadowMode {
+				//TODO: add metrics
+				logger.Info("Would of rate limited", cacheKey.Key, " but shadow mode is enabled")
+				status = pb.RateLimitResponse_OK
+			}
 			responseDescriptorStatuses[i] =
 				&pb.RateLimitResponse_DescriptorStatus{
-					Code:           pb.RateLimitResponse_OVER_LIMIT,
+					Code:           status,
 					CurrentLimit:   limits[i].Limit,
 					LimitRemaining: 0,
 				}
