@@ -52,6 +52,7 @@ var validKeys = map[string]bool{
 	"rate_limit":        true,
 	"unit":              true,
 	"requests_per_unit": true,
+	"shadowmode":        true,
 }
 
 // Create new rate limit stats for a config entry.
