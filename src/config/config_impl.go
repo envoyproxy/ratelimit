@@ -184,6 +184,7 @@ func validateYamlKeys(config RateLimitConfigToLoad, config_map map[interface{}]i
 		case map[interface{}]interface{}:
 			validateYamlKeys(config, v)
 		// string is a leaf type in ratelimit config. No need to keep validating.
+		case bool:
 		case string:
 		// int is a leaf type in ratelimit config. No need to keep validating.
 		case int:
