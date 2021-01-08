@@ -62,7 +62,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		clientUsed.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 		request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
-		limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
+		limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", false, statsStore)}
 
 		assert.Equal(
 			[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5}},
@@ -86,7 +86,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 			}, 1)
 		limits = []*config.RateLimit{
 			nil,
-			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key2_value2_subkey2_subvalue2", statsStore)}
+			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key2_value2_subkey2_subvalue2", false, statsStore)}
 		assert.Equal(
 			[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0}},
@@ -112,8 +112,8 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 				{{"key3", "value3"}, {"subkey3", "subvalue3"}},
 			}, 1)
 		limits = []*config.RateLimit{
-			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_HOUR, "key3_value3", statsStore),
-			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_DAY, "key3_value3_subkey3_subvalue3", statsStore)}
+			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_HOUR, "key3_value3", false, statsStore),
+			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_DAY, "key3_value3_subkey3_subvalue3", false, statsStore)}
 		assert.Equal(
 			[]*pb.RateLimitResponse_DescriptorStatus{
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
@@ -187,7 +187,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 
 	limits := []*config.RateLimit{
-		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, "key4_value4", statsStore)}
+		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, "key4_value4", false, statsStore)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -277,7 +277,7 @@ func TestNearLimit(t *testing.T) {
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 
 	limits := []*config.RateLimit{
-		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, "key4_value4", statsStore)}
+		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, "key4_value4", false, statsStore)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -326,7 +326,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key5", "value5"}}}, 3)
-	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key5_value5", statsStore)}
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key5_value5", false, statsStore)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15}},
@@ -342,7 +342,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key6", "value6"}}}, 2)
-	limits = []*config.RateLimit{config.NewRateLimit(8, pb.RateLimitResponse_RateLimit_SECOND, "key6_value6", statsStore)}
+	limits = []*config.RateLimit{config.NewRateLimit(8, pb.RateLimitResponse_RateLimit_SECOND, "key6_value6", false, statsStore)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1}},
@@ -358,7 +358,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key7", "value7"}}}, 3)
-	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key7_value7", statsStore)}
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key7_value7", false, statsStore)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1}},
@@ -374,7 +374,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key8", "value8"}}}, 3)
-	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key8_value8", statsStore)}
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key8_value8", false, statsStore)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
@@ -390,7 +390,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key9", "value9"}}}, 7)
-	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key9_value9", statsStore)}
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, "key9_value9", false, statsStore)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
@@ -406,7 +406,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key10", "value10"}}}, 3)
-	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key10_value10", statsStore)}
+	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key10_value10", false, statsStore)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0}},
@@ -434,7 +434,7 @@ func TestRedisWithJitter(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", false, statsStore)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5}},

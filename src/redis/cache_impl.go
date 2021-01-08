@@ -9,8 +9,10 @@ import (
 	"github.com/replicon/ratelimit/src/assert"
 	"github.com/replicon/ratelimit/src/config"
 	"github.com/replicon/ratelimit/src/limiter"
+	"github.com/replicon/ratelimit/src/metrics"
 	"github.com/replicon/ratelimit/src/server"
 	"github.com/replicon/ratelimit/src/settings"
+	"github.com/replicon/ratelimit/src/util"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
@@ -130,12 +132,22 @@ func (this *rateLimitCacheImpl) DoLimit(
 		}
 
 		if isOverLimitWithLocalCache[i] {
-			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{
-					Code:           pb.RateLimitResponse_OVER_LIMIT,
-					CurrentLimit:   limits[i].Limit,
-					LimitRemaining: 0,
-				}
+			status := &pb.RateLimitResponse_DescriptorStatus{
+				Code:           pb.RateLimitResponse_OVER_LIMIT,
+				CurrentLimit:   limits[i].Limit,
+				LimitRemaining: 0,
+			}
+			if limits[i].ShadowMode {
+				logger.Debugf("Would of rate limited %s but shadow mode is enabled on this rule", cacheKey.Key)
+				metricsDescriptor := util.ConvertToMetricsDescriptor(status, request.Descriptors[i])
+
+				labels := map[string]string{"descriptor_key": metricsDescriptor.Key, "descriptor_value": metricsDescriptor.Value, "limit": metricsDescriptor.Limit, "unit": metricsDescriptor.Unit}
+				metrics.ShadowRequests.With(labels).Inc()
+
+				status.Code = pb.RateLimitResponse_OK
+			}
+			responseDescriptorStatuses[i] = status
+
 			limits[i].Stats.OverLimit.Add(uint64(hitsAddend))
 			limits[i].Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
 			continue
@@ -150,12 +162,20 @@ func (this *rateLimitCacheImpl) DoLimit(
 
 		logger.Debugf("cache key: %s current: %d", cacheKey.Key, limitAfterIncrease)
 		if limitAfterIncrease > overLimitThreshold {
-			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{
-					Code:           pb.RateLimitResponse_OVER_LIMIT,
-					CurrentLimit:   limits[i].Limit,
-					LimitRemaining: 0,
-				}
+			status := &pb.RateLimitResponse_DescriptorStatus{
+				Code:           pb.RateLimitResponse_OVER_LIMIT,
+				CurrentLimit:   limits[i].Limit,
+				LimitRemaining: 0,
+			}
+			if limits[i].ShadowMode {
+				logger.Debugf("Would of rate limited %s but shadow mode is enabled", cacheKey.Key)
+				metricsDescriptor := util.ConvertToMetricsDescriptor(status, request.Descriptors[i])
+
+				labels := map[string]string{"descriptor_key": metricsDescriptor.Key, "descriptor_value": metricsDescriptor.Value, "limit": metricsDescriptor.Limit, "unit": metricsDescriptor.Unit}
+				metrics.ShadowRequests.With(labels).Inc()
+				status.Code = pb.RateLimitResponse_OK
+			}
+			responseDescriptorStatuses[i] = status
 
 			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
 			// assess if the entire hitsAddend were over the limit. That is, if the limit's value before adding the

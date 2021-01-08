@@ -1,14 +1,15 @@
 package config_test
 
 import (
-	"github.com/replicon/ratelimit/test/common"
 	"io/ioutil"
 	"testing"
+
+	"github.com/replicon/ratelimit/test/common"
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	pb_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	"github.com/replicon/ratelimit/src/config"
 	"github.com/stretchr/testify/assert"
 )
@@ -342,4 +343,141 @@ func TestNonMapList(t *testing.T) {
 				stats.NewStore(stats.NewNullSink(), false))
 		},
 		"non_map_list.yaml: config error, yaml file contains list of type other than map: a")
+}
+
+func TestShadowModeConfig(t *testing.T) {
+	assert := assert.New(t)
+	stats := stats.NewStore(stats.NewNullSink(), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("shadowmode_config.yaml"), stats)
+	rlConfig.Dump()
+	assert.Nil(rlConfig.GetLimit(nil, "foo_domain", &pb_struct.RateLimitDescriptor{}))
+	assert.Nil(rlConfig.GetLimit(nil, "test-domain", &pb_struct.RateLimitDescriptor{}))
+
+	rl := rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "something"}},
+		})
+	assert.Nil(rl)
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}},
+		})
+	assert.Nil(rl)
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key2", Value: "value2"}, {Key: "subkey", Value: "subvalue"}},
+		})
+	assert.Nil(rl)
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key5", Value: "value5"}, {Key: "subkey5", Value: "subvalue"}},
+		})
+	assert.Nil(rl)
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey1", Value: "something"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	assert.Equal(rl.ShadowMode, true)
+	assert.EqualValues(5, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_SECOND, rl.Limit.Unit)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.near_limit").Value())
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey1", Value: "subvalue1"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	assert.Equal(rl.ShadowMode, false)
+	assert.EqualValues(10, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_SECOND, rl.Limit.Unit)
+	assert.EqualValues(
+		1, stats.NewCounter("test-domain.key1_value1.subkey1_subvalue1.total_hits").Value())
+	assert.EqualValues(
+		1, stats.NewCounter("test-domain.key1_value1.subkey1_subvalue1.over_limit").Value())
+	assert.EqualValues(
+		1, stats.NewCounter("test-domain.key1_value1.subkey1_subvalue1.near_limit").Value())
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key2", Value: "something"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	assert.Equal(rl.ShadowMode, true)
+	assert.EqualValues(20, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2.near_limit").Value())
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key2", Value: "value2"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	assert.Equal(rl.ShadowMode, false)
+	assert.EqualValues(30, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.near_limit").Value())
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key2", Value: "value3"}},
+		})
+	assert.Nil(rl)
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key3", Value: "foo"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	assert.Equal(rl.ShadowMode, false)
+	assert.EqualValues(1, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_HOUR, rl.Limit.Unit)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key3.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key3.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key3.near_limit").Value())
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key4", Value: "foo"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	assert.Equal(rl.ShadowMode, false)
+	assert.EqualValues(1, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_DAY, rl.Limit.Unit)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key4.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key4.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key4.near_limit").Value())
 }

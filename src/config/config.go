@@ -29,9 +29,10 @@ type RateLimitStats struct {
 
 // Wrapper for an individual rate limit config entry which includes the defined limit and stats.
 type RateLimit struct {
-	FullKey string
-	Stats   RateLimitStats
-	Limit   *pb.RateLimitResponse_RateLimit
+	FullKey    string
+	Stats      RateLimitStats
+	Limit      *pb.RateLimitResponse_RateLimit
+	ShadowMode bool
 }
 
 // Interface for interacting with a loaded rate limit config.

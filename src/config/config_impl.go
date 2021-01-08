@@ -21,6 +21,7 @@ type yamlDescriptor struct {
 	Key         string
 	Value       string
 	RateLimit   *yamlRateLimit `yaml:"rate_limit"`
+	ShadowMode  bool
 	Descriptors []yamlDescriptor
 }
 
@@ -51,6 +52,7 @@ var validKeys = map[string]bool{
 	"rate_limit":        true,
 	"unit":              true,
 	"requests_per_unit": true,
+	"shadowmode":        true,
 }
 
 // Create new rate limit stats for a config entry.
@@ -73,9 +75,9 @@ func newRateLimitStats(statsScope stats.Scope, key string) RateLimitStats {
 // @param scope supplies the owning scope.
 // @return the new config entry.
 func NewRateLimit(
-	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, key string, scope stats.Scope) *RateLimit {
+	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, key string, shadowMode bool, scope stats.Scope) *RateLimit {
 
-	return &RateLimit{FullKey: key, Stats: newRateLimitStats(scope, key), Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
+	return &RateLimit{FullKey: key, Stats: newRateLimitStats(scope, key), Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}, ShadowMode: shadowMode}
 }
 
 // Dump an individual descriptor for debugging purposes.
@@ -137,7 +139,7 @@ func (this *rateLimitDescriptor) loadDescriptors(
 			}
 
 			rateLimit = NewRateLimit(
-				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), newParentKey,
+				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), newParentKey, descriptorConfig.ShadowMode,
 				statsScope)
 			rateLimitDebugString = fmt.Sprintf(
 				" ratelimit={requests_per_unit=%d, unit=%s}", rateLimit.Limit.RequestsPerUnit,
@@ -183,6 +185,8 @@ func validateYamlKeys(config RateLimitConfigToLoad, config_map map[interface{}]i
 			validateYamlKeys(config, v)
 		// string is a leaf type in ratelimit config. No need to keep validating.
 		case string:
+		// bool is a leaf type in ratelimit config. No need to keep validating.
+		case bool:
 		// int is a leaf type in ratelimit config. No need to keep validating.
 		case int:
 		// nil case is an incorrectly formed yaml. However, because this function's purpose is to validate
@@ -267,12 +271,14 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
+		// This should only be called when envoy provides a rate limit override. Shadow mode will default to false in this case
 		rateLimitKey := domain + "." + this.descriptorToKey(descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		rateLimit = NewRateLimit(
 			descriptor.GetLimit().GetRequestsPerUnit(),
 			rateLimitOverrideUnit,
 			rateLimitKey,
+			false,
 			this.statsScope)
 		return rateLimit
 	}
