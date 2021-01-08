@@ -271,7 +271,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
-		logger.Info("get limit called without context. Shadow mode is disabled for this rate limit")
+		// This should only be called when envoy provides a rate limit override. Shadow mode will default to false in this case
 		rateLimitKey := domain + "." + this.descriptorToKey(descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		rateLimit = NewRateLimit(
