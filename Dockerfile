@@ -16,4 +16,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /go/bin/ratelimit -ldflags="-w -s" -v g
 FROM alpine:3.11 AS final
 RUN apk --no-cache add ca-certificates
 COPY --from=build /go/bin/ratelimit /bin/ratelimit
+COPY --from=build /go/bin/ratelimit_config_check /bin/ratelimit_config_check
 ENTRYPOINT [ "/bin/ratelimit" ]
