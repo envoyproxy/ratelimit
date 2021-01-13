@@ -8,12 +8,12 @@ import (
 )
 
 type FixedWindowImpl struct {
-	now               int64
+	now               limiter.TimeSource
 	cacheKeyGenerator limiter.CacheKeyGenerator
 }
 
 func (this *FixedWindowImpl) GenerateCacheKey(domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit) limiter.CacheKey {
-	return this.cacheKeyGenerator.GenerateCacheKey(domain, descriptor, limit, this.now)
+	return this.cacheKeyGenerator.GenerateCacheKey(domain, descriptor, limit, this.now.UnixNow())
 }
 
 func (this *FixedWindowImpl) AppendPipeline(client redis_driver.Client, pipeline redis_driver.Pipeline, key string, hitsAddend uint32, result interface{}, expirationSeconds int64) redis_driver.Pipeline {
@@ -24,7 +24,7 @@ func (this *FixedWindowImpl) AppendPipeline(client redis_driver.Client, pipeline
 
 func NewFixedWindowAlgorithm(timeSource limiter.TimeSource) *FixedWindowImpl {
 	return &FixedWindowImpl{
-		now:               timeSource.UnixNanoNow(),
+		now:               timeSource,
 		cacheKeyGenerator: limiter.NewCacheKeyGenerator(),
 	}
 }
