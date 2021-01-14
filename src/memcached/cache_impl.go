@@ -40,5 +40,16 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 			s.NearLimitRatio,
 		), nil
 	}
+	if s.RateLimitAlgorithm == settings.WindowedRateLimit {
+		return NewWindowedRateLimitCacheImpl(
+			memcache.New(s.MemcacheHostPort),
+			timeSource,
+			jitterRand,
+			s.ExpirationJitterMaxSeconds,
+			localCache,
+			scope,
+			s.NearLimitRatio,
+		), nil
+	}
 	return nil, fmt.Errorf("Unknown rate limit algorithm. %s\n", s.RateLimitAlgorithm)
 }
