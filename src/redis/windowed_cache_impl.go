@@ -79,7 +79,6 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 		}
 	}
 
-	// Get existing tat value for each cache keys
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	tats := make([]int64, len(request.Descriptors))
 	var pipeline, perSecondPipeline driver.Pipeline
@@ -237,6 +236,8 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	}
 	return responseDescriptorStatuses
 }
+
+func (this *windowedRateLimitCacheImpl) Flush() {}
 
 func NewWindowedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
 	return &windowedRateLimitCacheImpl{

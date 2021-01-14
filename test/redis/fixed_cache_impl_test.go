@@ -1,8 +1,6 @@
 package redis_test
 
 import (
-	"testing"
-
 	"github.com/coocood/freecache"
 	"github.com/golang/mock/gomock"
 	stats "github.com/lyft/gostats"
@@ -13,17 +11,18 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
-<<<<<<< HEAD
+	redis_driver "github.com/envoyproxy/ratelimit/src/redis/driver"
 	"github.com/envoyproxy/ratelimit/src/utils"
-	stats "github.com/lyft/gostats"
+	"github.com/envoyproxy/ratelimit/test/common"
+	mock_algorithm "github.com/envoyproxy/ratelimit/test/mocks/algorithm"
 	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
 	mock_driver "github.com/envoyproxy/ratelimit/test/mocks/redis/driver"
 
 	"math/rand"
 	"testing"
->>>>>>> move pipeline and cache key method from cache implementation
 )
 
+func TestRedis(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testRedis(false))
 	t.Run("WithPerSecondRedis", testRedis(true))
 }

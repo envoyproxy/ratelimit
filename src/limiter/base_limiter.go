@@ -1,14 +1,15 @@
 package limiter
 
 import (
+	"math"
+	"math/rand"
+
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	logger "github.com/sirupsen/logrus"
-	"math"
-	"math/rand"
 )
 
 type BaseRateLimiter struct {
@@ -140,7 +141,7 @@ func checkOverLimitThreshold(limitInfo *LimitInfo, hitsAddend uint32) {
 		// If the limit before increase was below the over limit value, then some of the hits were
 		// in the near limit range.
 		limitInfo.limit.Stats.NearLimit.Add(uint64(limitInfo.overLimitThreshold -
-			utils.Max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease)))
+			utils.MaxUint32(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease)))
 	}
 }
 

@@ -40,6 +40,14 @@ func (m *MockTimeSource) UnixNow() int64 {
 	return ret0
 }
 
+// UnixNow mocks base method
+func (m *MockTimeSource) UnixNanoNow() int64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnixNanoNow")
+	ret0, _ := ret[0].(int64)
+	return ret0
+}
+
 // UnixNow indicates an expected call of UnixNow
 func (mr *MockTimeSourceMockRecorder) UnixNow() *gomock.Call {
 	mr.mock.ctrl.T.Helper()

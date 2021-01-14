@@ -1,15 +1,13 @@
 package utils
 
 import (
+	"time"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/golang/protobuf/ptypes/duration"
 )
 
-// Interface for a time source.
-type TimeSource interface {
-	// @return the current unix time in seconds.
-	UnixNow() int64
-}
+const secondToNanosecondRate = 1e9
 
 // Convert a rate limit into a time divider.
 // @param unit supplies the unit to convert.
@@ -48,4 +46,26 @@ func MaxUint32(a uint32, b uint32) uint32 {
 		return a
 	}
 	return b
+}
+
+func NanosecondsToSeconds(nanoseconds int64) int64 {
+	return nanoseconds / secondToNanosecondRate
+}
+
+func NanosecondsToDuration(nanoseconds int64) *duration.Duration {
+	nanos := nanoseconds
+	secs := nanos / secondToNanosecondRate
+	nanos -= secs * secondToNanosecondRate
+	return &duration.Duration{Seconds: secs, Nanos: int32(nanos)}
+}
+
+func SecondsToNanoseconds(second int64) int64 {
+	time.Now()
+	return second * secondToNanosecondRate
+}
+
+func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit, timeSource TimeSource) *duration.Duration {
+	sec := UnitToDivider(currentLimit.Unit)
+	now := timeSource.UnixNow()
+	return &duration.Duration{Seconds: sec - now%sec}
 }

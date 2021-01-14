@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"math"
 	"math/rand"
 
 	"github.com/coocood/freecache"
@@ -71,18 +72,20 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			continue
 		}
 
-		// Check if key is over the limit in local cache.
-		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
-			isOverLimitWithLocalCache[i] = true
-			logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
-			continue
+		// not sure about this code
+		if this.localCache != nil {
+			// Get returns the value or not found error.
+			_, err := this.localCache.Get([]byte(cacheKey.Key))
+			if err == nil {
+				isOverLimitWithLocalCache[i] = true
+				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
+				continue
+			}
 		}
 
-		logger.Debugf("looking up cache key: %s", cacheKey.Key)
-
 		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
-		if this.baseRateLimiter.ExpirationJitterMaxSeconds > 0 {
-			expirationSeconds += this.baseRateLimiter.JitterRand.Int63n(this.baseRateLimiter.ExpirationJitterMaxSeconds)
+		if this.expirationJitterMaxSeconds > 0 {
+			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 		}
 
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
@@ -112,6 +115,28 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
 		len(request.Descriptors))
 	for i, cacheKey := range cacheKeys {
+		if cacheKey.Key == "" {
+			responseDescriptorStatuses[i] =
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:           pb.RateLimitResponse_OK,
+					CurrentLimit:   nil,
+					LimitRemaining: 0,
+				}
+			continue
+		}
+
+		if isOverLimitWithLocalCache[i] {
+			responseDescriptorStatuses[i] =
+				&pb.RateLimitResponse_DescriptorStatus{
+					Code:               pb.RateLimitResponse_OVER_LIMIT,
+					CurrentLimit:       limits[i].Limit,
+					LimitRemaining:     0,
+					DurationUntilReset: utils.CalculateReset(limits[i].Limit, this.timeSource),
+				}
+			limits[i].Stats.OverLimit.Add(uint64(hitsAddend))
+			limits[i].Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
+			continue
+		}
 
 		limitAfterIncrease := results[i]
 		limitBeforeIncrease := limitAfterIncrease - hitsAddend
@@ -127,7 +152,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 					Code:               pb.RateLimitResponse_OVER_LIMIT,
 					CurrentLimit:       limits[i].Limit,
 					LimitRemaining:     0,
-					DurationUntilReset: CalculateReset(limits[i].Limit, this.timeSource),
+					DurationUntilReset: utils.CalculateReset(limits[i].Limit, this.timeSource),
 				}
 
 			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
@@ -163,7 +188,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 					Code:               pb.RateLimitResponse_OK,
 					CurrentLimit:       limits[i].Limit,
 					LimitRemaining:     overLimitThreshold - limitAfterIncrease,
-					DurationUntilReset: CalculateReset(limits[i].Limit, this.timeSource),
+					DurationUntilReset: utils.CalculateReset(limits[i].Limit, this.timeSource),
 				}
 
 			// The limit is OK but we additionally want to know if we are near the limit.
@@ -173,8 +198,10 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 				// only the difference between the current limit value and the near limit threshold were near
 				// limit hits.
 				if limitBeforeIncrease >= nearLimitThreshold {
+					// if before increasing the limit number in redis, the data count recorded in redis its already more than the threshold, we can add nearlimit metrics by number of hits
 					limits[i].Stats.NearLimit.Add(uint64(hitsAddend))
 				} else {
+					// if not, subtracting limit after increase with the threshold.
 					limits[i].Stats.NearLimit.Add(uint64(limitAfterIncrease - nearLimitThreshold))
 				}
 			}
@@ -184,7 +211,6 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-// Flush() is a no-op with redis since quota reads and updates happen synchronously.
 func (this *fixedRateLimitCacheImpl) Flush() {}
 
 func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {

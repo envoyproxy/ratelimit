@@ -12,9 +12,11 @@ import (
 
 	"github.com/envoyproxy/ratelimit/src/algorithm"
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/redis/driver"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/utils"
 	"github.com/envoyproxy/ratelimit/test/common"
 )
 
@@ -46,13 +48,13 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 			defer client.Close()
 
 			var cache limiter.RateLimitCache
-			timeSource := limiter.NewTimeSourceImpl()
+			timeSource := utils.NewTimeSourceImpl()
 			if rateLimitAlgorithm == settings.FixedRateLimit {
 				algorithmImpl := algorithm.NewFixedWindowAlgorithm(timeSource)
-				cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(limiter.NewLockedSource(time.Now().Unix())), 10, nil, 0.8, algorithmImpl)
+				cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(utils.NewLockedSource(time.Now().Unix())), 10, nil, 0.8, algorithmImpl)
 			} else if rateLimitAlgorithm == settings.WindowedRateLimit {
 				algorithmImpl := algorithm.NewRollingWindowAlgorithm()
-				cache = redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(limiter.NewLockedSource(time.Now().Unix())), 10, nil, 0.8, algorithmImpl)
+				cache = redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(utils.NewLockedSource(time.Now().Unix())), 10, nil, 0.8, algorithmImpl)
 			} else {
 				b.Fatalf("unknown rate limit type %s", rateLimitAlgorithm)
 			}

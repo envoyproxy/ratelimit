@@ -40,20 +40,28 @@ func (runner *Runner) GetStatsStore() stats.Store {
 func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache) limiter.RateLimitCache {
 	switch s.BackendType {
 	case "redis", "":
-		return redis.NewRateLimiterCacheImplFromSettings(
+		cacheImpl, err := redis.NewRateLimiterCacheImplFromSettings(
 			s,
 			localCache,
 			srv,
 			utils.NewTimeSourceImpl(),
 			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			s.ExpirationJitterMaxSeconds)
+		if err != nil {
+			logger.Fatalf("Could not setup redis ratelimit cache. %v\n", err)
+		}
+		return cacheImpl
 	case "memcache":
-		return memcached.NewRateLimitCacheImplFromSettings(
+		cacheImpl, err := memcached.NewRateLimitCacheImplFromSettings(
 			s,
 			utils.NewTimeSourceImpl(),
 			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			localCache,
 			srv.Scope())
+		if err != nil {
+			logger.Fatalf("Could not setup redis ratelimit cache. %v\n", err)
+		}
+		return cacheImpl
 	default:
 		logger.Fatalf("Invalid setting for BackendType: %s", s.BackendType)
 		panic("This line should not be reachable")
@@ -85,20 +93,10 @@ func (runner *Runner) Run() {
 	}
 
 	srv := server.NewServer("ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
-	rateLimitCache, err := redis.NewRateLimiterCacheImplFromSettings(
-		s,
-		localCache,
-		srv,
-		limiter.NewTimeSourceImpl(),
-		rand.New(limiter.NewLockedSource(time.Now().Unix())),
-		s.ExpirationJitterMaxSeconds)
-	if err != nil {
-		logger.Fatalf("Could not setup ratelimit cache. %v\n", err)
-	}
 
 	service := ratelimit.NewService(
 		srv.Runtime(),
-		rateLimitCache,
+		createLimiter(srv, s, localCache),
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"),
 		s.RuntimeWatchRoot,
