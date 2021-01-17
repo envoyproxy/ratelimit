@@ -47,20 +47,6 @@ func (mr *MockClientMockRecorder) Add(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockClient)(nil).Add), arg0)
 }
 
-// Set mocks base method
-func (m *MockClient) Set(arg0 *memcache.Item) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Add", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Add indicates an expected call of Set
-func (mr *MockClientMockRecorder) set(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockClient)(nil).Add), arg0)
-}
-
 // GetMulti mocks base method
 func (m *MockClient) GetMulti(arg0 []string) (map[string]*memcache.Item, error) {
 	m.ctrl.T.Helper()
@@ -89,4 +75,18 @@ func (m *MockClient) Increment(arg0 string, arg1 uint64) (uint64, error) {
 func (mr *MockClientMockRecorder) Increment(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Increment", reflect.TypeOf((*MockClient)(nil).Increment), arg0, arg1)
+}
+
+// Set mocks base method
+func (m *MockClient) Set(arg0 *memcache.Item) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Set", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Set indicates an expected call of Set
+func (mr *MockClientMockRecorder) Set(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockClient)(nil).Set), arg0)
 }
