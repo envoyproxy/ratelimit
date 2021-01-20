@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"encoding/json"
 	"math/rand"
 
 	"github.com/coocood/freecache"
@@ -44,13 +45,22 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	request *pb.RateLimitRequest,
 	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
 
+	limitsJSON, _ := json.Marshal(limits)
+	logger.Debugf("[redis] limits: %s", limitsJSON)
+	requestJSON, _ := json.Marshal(request)
+	logger.Debugf("[redis] request: %s", requestJSON)
+
 	logger.Debugf("starting windowed cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
-	hitsAddend := utils.MinInt64(1, int64(request.HitsAddend))
+	hitsAddend := utils.MaxInt64(1, int64(request.HitsAddend))
 
 	// First build a list of all cache keys that we are actually going to hit.
 	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend)
+
+	logger.Debugf("[redis] hitsAddend: %d", hitsAddend)
+	cacheKeysJSON, _ := json.Marshal(cacheKeys)
+	logger.Debugf("[redis] cacheKeys: %s", cacheKeysJSON)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	tats := make([]int64, len(request.Descriptors))
@@ -99,10 +109,21 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
 
 	for i, cacheKey := range cacheKeys {
+		cacheKeyJSON, _ := json.Marshal(cacheKey)
+		logger.Debugf("[redis] cacheKey: %s", cacheKeyJSON)
+		limitiJSON, _ := json.Marshal(limits[i])
+		logger.Debugf("[redis] limits[i]: %s", limitiJSON)
+		logger.Debugf("[redis] tats[i]: %d", tats[i])
+		logger.Debugf("[redis] isOverLimitWithLocalCache[i]: %t", isOverLimitWithLocalCache[i])
+		logger.Debugf("[redis] int64(hitsAddend): %t", int64(hitsAddend))
+
 		responseDescriptorStatuses[i] = this.algorithm.GetResponseDescriptorStatus(cacheKey.Key, limits[i], int64(tats[i]), isOverLimitWithLocalCache[i], int64(hitsAddend))
 
 		arrivedAt := this.algorithm.GetArrivedAt()
 		newTat := this.algorithm.GetNewTat()
+
+		logger.Debugf("[redis] arrivedAt: %d", arrivedAt)
+		logger.Debugf("[redis] newTat: %d", newTat)
 
 		// Store new tat for initial tat of next requests
 		expirationSeconds := utils.NanosecondsToSeconds(newTat-arrivedAt) + 1

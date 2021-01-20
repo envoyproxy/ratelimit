@@ -1,6 +1,7 @@
 package algorithm
 
 import (
+	"encoding/json"
 	"math"
 
 	"github.com/coocood/freecache"
@@ -8,7 +9,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	logger "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 type FixedWindowImpl struct {
@@ -19,6 +19,14 @@ type FixedWindowImpl struct {
 }
 
 func (fw *FixedWindowImpl) GetResponseDescriptorStatus(key string, limit *config.RateLimit, results int64, isOverLimitWithLocalCache bool, hitsAddend int64) *pb.RateLimitResponse_DescriptorStatus {
+
+	logger.Debugf("[fixed] key: %s", key)
+	logger.Debugf("[fixed] results: %d", results)
+	logger.Debugf("[fixed] hitsAddend: %d", hitsAddend)
+	logger.Debugf("[fixed] isOverLimitWithLocalCache: %t", isOverLimitWithLocalCache)
+	limitJSON, _ := json.Marshal(limit)
+	logger.Debugf("[fixed] key: %s", limitJSON)
+
 	if key == "" {
 		return &pb.RateLimitResponse_DescriptorStatus{
 			Code:           pb.RateLimitResponse_OK,
@@ -37,16 +45,23 @@ func (fw *FixedWindowImpl) GetResponseDescriptorStatus(key string, limit *config
 	}
 
 	isOverLimit, limitRemaining, durationUntilReset := fw.IsOverLimit(limit, int64(results), hitsAddend)
+
+	logger.Debugf("[fixed] limitRemaining: %d", limitRemaining)
+	logger.Debugf("[fixed] isOverLimit: %t", isOverLimit)
+	logger.Debugf("[fixed] durationUntilReset: %d", durationUntilReset)
+
 	if !isOverLimit {
 		return &pb.RateLimitResponse_DescriptorStatus{
 			Code:               pb.RateLimitResponse_OK,
 			CurrentLimit:       limit.Limit,
 			LimitRemaining:     uint32(limitRemaining),
-			DurationUntilReset: durationUntilReset,
+			DurationUntilReset: utils.CalculateFixedReset(limit.Limit, fw.timeSource),
 		}
 	} else {
 		if fw.localCache != nil {
-			err := fw.localCache.Set([]byte(key), []byte{}, int(utils.UnitToDivider(limit.Limit.Unit)))
+			durationUntilReset = utils.MaxInt(1, durationUntilReset)
+			logger.Debugf("[fixed] duration until reset in local cache: %d", durationUntilReset)
+			err := fw.localCache.Set([]byte(key), []byte{}, durationUntilReset)
 			if err != nil {
 				logger.Errorf("Failing to set local cache key: %s", key)
 			}
@@ -56,16 +71,21 @@ func (fw *FixedWindowImpl) GetResponseDescriptorStatus(key string, limit *config
 			Code:               pb.RateLimitResponse_OVER_LIMIT,
 			CurrentLimit:       limit.Limit,
 			LimitRemaining:     uint32(limitRemaining),
-			DurationUntilReset: durationUntilReset,
+			DurationUntilReset: utils.CalculateFixedReset(limit.Limit, fw.timeSource),
 		}
 	}
 }
 
-func (fw *FixedWindowImpl) IsOverLimit(limit *config.RateLimit, results int64, hitsAddend int64) (bool, int64, *durationpb.Duration) {
+func (fw *FixedWindowImpl) IsOverLimit(limit *config.RateLimit, results int64, hitsAddend int64) (bool, int64, int) {
 	limitAfterIncrease := results
 	limitBeforeIncrease := limitAfterIncrease - int64(hitsAddend)
 	overLimitThreshold := int64(limit.Limit.RequestsPerUnit)
 	nearLimitThreshold := int64(math.Floor(float64(float32(overLimitThreshold) * fw.nearLimitRatio)))
+
+	logger.Debugf("[fixed] limitAfterIncrease: %d", limitAfterIncrease)
+	logger.Debugf("[fixed] limitBeforeIncrease: %d", limitBeforeIncrease)
+	logger.Debugf("[fixed] overLimitThreshold: %d", overLimitThreshold)
+	logger.Debugf("[fixed] nearLimitThreshold: %d", nearLimitThreshold)
 
 	if limitAfterIncrease > overLimitThreshold {
 		if limitBeforeIncrease >= overLimitThreshold {
@@ -74,7 +94,7 @@ func (fw *FixedWindowImpl) IsOverLimit(limit *config.RateLimit, results int64, h
 			fw.PopulateStats(limit, uint64(overLimitThreshold-utils.MaxInt64(nearLimitThreshold, limitBeforeIncrease)), uint64(limitAfterIncrease-overLimitThreshold), 0)
 		}
 
-		return true, 0, utils.CalculateFixedReset(limit.Limit, fw.timeSource)
+		return true, 0, int(utils.UnitToDivider(limit.Limit.Unit))
 	} else {
 		if limitAfterIncrease > nearLimitThreshold {
 			if limitBeforeIncrease >= nearLimitThreshold {
@@ -84,7 +104,7 @@ func (fw *FixedWindowImpl) IsOverLimit(limit *config.RateLimit, results int64, h
 			}
 		}
 
-		return false, overLimitThreshold - limitAfterIncrease, utils.CalculateFixedReset(limit.Limit, fw.timeSource)
+		return false, overLimitThreshold - limitAfterIncrease, int(utils.UnitToDivider(limit.Limit.Unit))
 	}
 }
 
