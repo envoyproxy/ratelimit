@@ -11,9 +11,10 @@ import (
 	"github.com/envoyproxy/ratelimit/src/redis/driver"
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
-func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64) (limiter.RateLimitCache, error) {
+func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64) (limiter.RateLimitCache, error) {
 	var perSecondPool driver.Client
 	if s.RedisPerSecond {
 		perSecondPool = driver.NewClientImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondTls, s.RedisPerSecondAuth,
@@ -26,6 +27,8 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 	if s.RateLimitAlgorithm == settings.FixedRateLimit {
 		ratelimitAlgorithm := algorithm.NewFixedWindowAlgorithm(
 			timeSource,
+			localCache,
+			s.NearLimitRatio,
 		)
 		return NewFixedRateLimitCacheImpl(
 			otherPool,
@@ -38,7 +41,11 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 			ratelimitAlgorithm), nil
 	}
 	if s.RateLimitAlgorithm == settings.WindowedRateLimit {
-		ratelimitAlgorithm := algorithm.NewRollingWindowAlgorithm()
+		ratelimitAlgorithm := algorithm.NewRollingWindowAlgorithm(
+			timeSource,
+			localCache,
+			s.NearLimitRatio,
+		)
 		return NewWindowedRateLimitCacheImpl(
 			otherPool,
 			perSecondPool,

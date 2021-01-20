@@ -18,8 +18,8 @@ import (
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/utils"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/gorilla/mux"
 	reuseport "github.com/kavu/go_reuseport"
@@ -177,7 +177,7 @@ func newServer(name string, store stats.Store, localCache *freecache.Cache, opts
 	ret.scope = ret.store.Scope(name)
 	ret.store.AddStatGenerator(stats.NewRuntimeStats(ret.scope.Scope("go")))
 	if localCache != nil {
-		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
+		ret.store.AddStatGenerator(utils.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
 	}
 
 	// setup runtime

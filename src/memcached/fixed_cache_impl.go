@@ -9,23 +9,25 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/envoyproxy/ratelimit/src/algorithm"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/memcached/driver"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 )
 
 type fixedRateLimitCacheImpl struct {
-	client                     Client
+	client                     driver.Client
 	timeSource                 utils.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
-	cacheKeyGenerator          limiter.CacheKeyGenerator
+	cacheKeyGenerator          utils.CacheKeyGenerator
 	localCache                 *freecache.Cache
 	waitGroup                  sync.WaitGroup
 	nearLimitRatio             float32
-	baseRateLimiter            *limiter.BaseRateLimiter
+	algorithm                  algorithm.RatelimitAlgorithm
 }
 
 var _ limiter.RateLimitCache = (*fixedRateLimitCacheImpl)(nil)
@@ -38,13 +40,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
-	hitsAddend := utils.MaxUint32(1, request.HitsAddend)
+	hitsAddend := utils.MinInt64(1, int64(request.HitsAddend))
 
 	// First build a list of all cache keys that we are actually going to hit.
-	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
+	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
-
 	keysToGet := make([]string, 0, len(request.Descriptors))
 
 	for i, cacheKey := range cacheKeys {
@@ -53,7 +54,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		}
 
 		// Check if key is over the limit in local cache.
-		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
+		if this.algorithm.IsOverLimitWithLocalCache(cacheKey.Key) {
 			isOverLimitWithLocalCache[i] = true
 			logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
 			continue
@@ -78,25 +79,19 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	}
 
 	for i, cacheKey := range cacheKeys {
-
 		rawMemcacheValue, ok := memcacheValues[cacheKey.Key]
-		var limitBeforeIncrease uint32
+		var result int64
 		if ok {
 			decoded, err := strconv.ParseInt(string(rawMemcacheValue.Value), 10, 32)
 			if err != nil {
 				logger.Errorf("Unexpected non-numeric value in memcached: %v", rawMemcacheValue)
 			} else {
-				limitBeforeIncrease = uint32(decoded)
+				result = decoded
 			}
 
 		}
 
-		limitAfterIncrease := limitBeforeIncrease + hitsAddend
-
-		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
-
-		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
+		responseDescriptorStatuses[i] = this.algorithm.GetResponseDescriptorStatus(cacheKey.Key, limits[i], result, isOverLimitWithLocalCache[i], int64(hitsAddend))
 	}
 
 	this.waitGroup.Add(1)
@@ -105,7 +100,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func (this *fixedRateLimitCacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, isOverLimitWithLocalCache []bool,
+func (this *fixedRateLimitCacheImpl) increaseAsync(cacheKeys []utils.CacheKey, isOverLimitWithLocalCache []bool,
 	limits []*config.RateLimit, hitsAddend uint64) {
 	defer this.waitGroup.Done()
 	for i, cacheKey := range cacheKeys {
@@ -126,6 +121,7 @@ func (this *fixedRateLimitCacheImpl) increaseAsync(cacheKeys []limiter.CacheKey,
 				Value:      []byte(strconv.FormatUint(hitsAddend, 10)),
 				Expiration: int32(expirationSeconds),
 			})
+
 			if err == memcache.ErrNotStored {
 				// There was a race condition to do this add. We should be able to increment
 				// now instead.
@@ -149,16 +145,16 @@ func (this *fixedRateLimitCacheImpl) Flush() {
 	this.waitGroup.Wait()
 }
 
-func NewFixedRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32) limiter.RateLimitCache {
+func NewFixedRateLimitCacheImpl(client driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
+	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
-		cacheKeyGenerator:          limiter.NewCacheKeyGenerator(),
+		cacheKeyGenerator:          utils.NewCacheKeyGenerator(),
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio),
+		algorithm:                  algorithm,
 	}
 }

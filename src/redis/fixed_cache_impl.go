@@ -1,13 +1,11 @@
 package redis
 
 import (
-	"math"
 	"math/rand"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/algorithm"
-	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis/driver"
@@ -23,18 +21,13 @@ type fixedRateLimitCacheImpl struct {
 	// limits regardless of unit. If this client is not nil, then it
 	// is used for limits that have a SECOND unit.
 	perSecondClient            driver.Client
-	timeSource                 limiter.TimeSource
+	timeSource                 utils.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
-	cacheKeyGenerator          limiter.CacheKeyGenerator
+	cacheKeyGenerator          utils.CacheKeyGenerator
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
 	algorithm                  algorithm.RatelimitAlgorithm
-}
-
-func pipelineAppend(client driver.Client, pipeline *driver.Pipeline, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) {
-	*pipeline = client.PipeAppend(*pipeline, result, "INCRBY", key, hitsAddend)
-	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
 func (this *fixedRateLimitCacheImpl) DoLimit(
@@ -45,25 +38,13 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
-	hitsAddend := utils.MaxUint32(1, request.HitsAddend)
+	hitsAddend := utils.MinInt64(1, int64(request.HitsAddend))
 
-	// First build a list of all cache keys that we are actually going to hit. GenerateCacheKey()
-	// returns an empty string in the key if there is no limit so that we can keep the arrays
-	// all the same size.
-	assert.Assert(len(request.Descriptors) == len(limits))
-	cacheKeys := make([]limiter.CacheKey, len(request.Descriptors))
-	for i := 0; i < len(request.Descriptors); i++ {
-		cacheKeys[i] = this.algorithm.GenerateCacheKey(
-			request.Domain, request.Descriptors[i], limits[i])
-
-		// Increase statistics for limits hit by their respective requests.
-		if limits[i] != nil {
-			limits[i].Stats.TotalHits.Add(uint64(hitsAddend))
-		}
-	}
+	// First build a list of all cache keys that we are actually going to hit.
+	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
-	results := make([]uint32, len(request.Descriptors))
+	results := make([]int64, len(request.Descriptors))
 	var pipeline, perSecondPipeline driver.Pipeline
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
@@ -72,15 +53,11 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			continue
 		}
 
-		// not sure about this code
-		if this.localCache != nil {
-			// Get returns the value or not found error.
-			_, err := this.localCache.Get([]byte(cacheKey.Key))
-			if err == nil {
-				isOverLimitWithLocalCache[i] = true
-				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
-				continue
-			}
+		// Check if key is over the limit in local cache.
+		if this.algorithm.IsOverLimitWithLocalCache(cacheKey.Key) {
+			isOverLimitWithLocalCache[i] = true
+			logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
+			continue
 		}
 
 		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
@@ -93,14 +70,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			if perSecondPipeline == nil {
 				perSecondPipeline = driver.Pipeline{}
 			}
-			perSecondPipeline = this.algorithm.AppendPipeline(this.perSecondClient, perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
-			//pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			fixedPipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 		} else {
 			if pipeline == nil {
 				pipeline = driver.Pipeline{}
 			}
-			pipeline = this.algorithm.AppendPipeline(this.client, pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
-			//pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			fixedPipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 		}
 	}
 
@@ -114,98 +89,9 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	// Now fetch the pipeline.
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
 		len(request.Descriptors))
+
 	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" {
-			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{
-					Code:           pb.RateLimitResponse_OK,
-					CurrentLimit:   nil,
-					LimitRemaining: 0,
-				}
-			continue
-		}
-
-		if isOverLimitWithLocalCache[i] {
-			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{
-					Code:               pb.RateLimitResponse_OVER_LIMIT,
-					CurrentLimit:       limits[i].Limit,
-					LimitRemaining:     0,
-					DurationUntilReset: utils.CalculateReset(limits[i].Limit, this.timeSource),
-				}
-			limits[i].Stats.OverLimit.Add(uint64(hitsAddend))
-			limits[i].Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
-			continue
-		}
-
-		limitAfterIncrease := results[i]
-		limitBeforeIncrease := limitAfterIncrease - hitsAddend
-		overLimitThreshold := limits[i].Limit.RequestsPerUnit
-		// The nearLimitThreshold is the number of requests that can be made before hitting the NearLimitRatio.
-		// We need to know it in both the OK and OVER_LIMIT scenarios.
-		nearLimitThreshold := uint32(math.Floor(float64(float32(overLimitThreshold) * this.nearLimitRatio)))
-
-		logger.Debugf("cache key: %s current: %d", cacheKey.Key, limitAfterIncrease)
-		if limitAfterIncrease > overLimitThreshold {
-			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{
-					Code:               pb.RateLimitResponse_OVER_LIMIT,
-					CurrentLimit:       limits[i].Limit,
-					LimitRemaining:     0,
-					DurationUntilReset: utils.CalculateReset(limits[i].Limit, this.timeSource),
-				}
-
-			// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
-			// assess if the entire hitsAddend were over the limit. That is, if the limit's value before adding the
-			// N hits was over the limit, then all the N hits were over limit.
-			// Otherwise, only the difference between the current limit value and the over limit threshold
-			// were over limit hits.
-			if limitBeforeIncrease >= overLimitThreshold {
-				limits[i].Stats.OverLimit.Add(uint64(hitsAddend))
-			} else {
-				limits[i].Stats.OverLimit.Add(uint64(limitAfterIncrease - overLimitThreshold))
-
-				// If the limit before increase was below the over limit value, then some of the hits were
-				// in the near limit range.
-				limits[i].Stats.NearLimit.Add(uint64(overLimitThreshold - utils.MaxUint32(nearLimitThreshold, limitBeforeIncrease)))
-			}
-			if this.localCache != nil {
-				// Set the TTL of the local_cache to be the entire duration.
-				// Since the cache_key gets changed once the time crosses over current time slot, the over-the-limit
-				// cache keys in local_cache lose effectiveness.
-				// For example, if we have an hour limit on all mongo connections, the cache key would be
-				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
-				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
-				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
-				err := this.localCache.Set([]byte(cacheKey.Key), []byte{}, int(utils.UnitToDivider(limits[i].Limit.Unit)))
-				if err != nil {
-					logger.Errorf("Failing to set local cache key: %s", cacheKey.Key)
-				}
-			}
-		} else {
-			responseDescriptorStatuses[i] =
-				&pb.RateLimitResponse_DescriptorStatus{
-					Code:               pb.RateLimitResponse_OK,
-					CurrentLimit:       limits[i].Limit,
-					LimitRemaining:     overLimitThreshold - limitAfterIncrease,
-					DurationUntilReset: utils.CalculateReset(limits[i].Limit, this.timeSource),
-				}
-
-			// The limit is OK but we additionally want to know if we are near the limit.
-			if limitAfterIncrease > nearLimitThreshold {
-				// Here we also need to assess which portion of the hitsAddend were in the near limit range.
-				// If all the hits were over the nearLimitThreshold, then all hits are near limit. Otherwise,
-				// only the difference between the current limit value and the near limit threshold were near
-				// limit hits.
-				if limitBeforeIncrease >= nearLimitThreshold {
-					// if before increasing the limit number in redis, the data count recorded in redis its already more than the threshold, we can add nearlimit metrics by number of hits
-					limits[i].Stats.NearLimit.Add(uint64(hitsAddend))
-				} else {
-					// if not, subtracting limit after increase with the threshold.
-					limits[i].Stats.NearLimit.Add(uint64(limitAfterIncrease - nearLimitThreshold))
-				}
-			}
-		}
+		responseDescriptorStatuses[i] = this.algorithm.GetResponseDescriptorStatus(cacheKey.Key, limits[i], int64(results[i]), isOverLimitWithLocalCache[i], int64(hitsAddend))
 	}
 
 	return responseDescriptorStatuses
@@ -213,14 +99,19 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 func (this *fixedRateLimitCacheImpl) Flush() {}
 
-func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource limiter.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
+func fixedPipelineAppend(client driver.Client, pipeline *driver.Pipeline, key string, hitsAddend int64, result *int64, expirationSeconds int64) {
+	*pipeline = client.PipeAppend(*pipeline, result, "INCRBY", key, hitsAddend)
+	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
+}
+
+func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                     client,
 		perSecondClient:            perSecondClient,
 		timeSource:                 timeSource,
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
-		cacheKeyGenerator:          limiter.NewCacheKeyGenerator(),
+		cacheKeyGenerator:          utils.NewCacheKeyGenerator(),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 		algorithm:                  algorithm,

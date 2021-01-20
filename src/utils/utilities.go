@@ -64,7 +64,7 @@ func SecondsToNanoseconds(second int64) int64 {
 	return second * secondToNanosecondRate
 }
 
-func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit, timeSource TimeSource) *duration.Duration {
+func CalculateFixedReset(currentLimit *pb.RateLimitResponse_RateLimit, timeSource TimeSource) *duration.Duration {
 	sec := UnitToDivider(currentLimit.Unit)
 	now := timeSource.UnixNow()
 	return &duration.Duration{Seconds: sec - now%sec}

@@ -2,7 +2,6 @@ package memcached
 
 import (
 	"context"
-	"math"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -10,24 +9,25 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/assert"
+	"github.com/envoyproxy/ratelimit/src/algorithm"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/memcached/driver"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 )
 
 type windowedRateLimitCacheImpl struct {
-	client                     Client
+	client                     driver.Client
 	timeSource                 utils.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
-	cacheKeyGenerator          limiter.CacheKeyGenerator
+	cacheKeyGenerator          utils.CacheKeyGenerator
 	localCache                 *freecache.Cache
 	waitGroup                  sync.WaitGroup
 	nearLimitRatio             float32
-	baseRateLimiter            *limiter.BaseRateLimiter
+	algorithm                  algorithm.RatelimitAlgorithm
 }
 
 var _ limiter.RateLimitCache = (*windowedRateLimitCacheImpl)(nil)
@@ -40,20 +40,10 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
-	hitsAddend := utils.MaxUint32(1, request.HitsAddend)
+	hitsAddend := utils.MinInt64(1, int64(request.HitsAddend))
 
 	// First build a list of all cache keys that we are actually going to hit.
-	assert.Assert(len(request.Descriptors) == len(limits))
-	cacheKeys := make([]limiter.CacheKey, len(request.Descriptors))
-	for i := 0; i < len(request.Descriptors); i++ {
-		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(
-			request.Domain, request.Descriptors[i], limits[i], 0)
-
-		// Increase statistics for limits hit by their respective requests.
-		if limits[i] != nil {
-			limits[i].Stats.TotalHits.Add(uint64(hitsAddend))
-		}
-	}
+	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	keysToGet := make([]string, 0, len(request.Descriptors))
@@ -64,7 +54,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 		}
 
 		// Check if key is over the limit in local cache.
-		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
+		if this.algorithm.IsOverLimitWithLocalCache(cacheKey.Key) {
 			isOverLimitWithLocalCache[i] = true
 			logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
 			continue
@@ -74,7 +64,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 		keysToGet = append(keysToGet, cacheKey.Key)
 	}
 
-	// Now fetch from memcache.
+	// Now fetch from memcached.
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
 		len(request.Descriptors))
 
@@ -89,12 +79,10 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	}
 
 	newTats := make([]int64, len(cacheKeys))
-	expirationSeconds := make([]int64, len(cacheKeys))
 	isOverLimit := make([]bool, len(cacheKeys))
-	now := this.timeSource.UnixNanoNow()
+	expirationSeconds := make([]int64, len(cacheKeys))
 
 	for i, cacheKey := range cacheKeys {
-
 		rawMemcacheValue, ok := memcacheValues[cacheKey.Key]
 		var tat int64
 		if ok {
@@ -102,64 +90,22 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 			if err != nil {
 				logger.Errorf("Unexpected non-numeric value in memcached: %v", rawMemcacheValue)
 			}
-		} else {
-			tat = now
 		}
 
-		limit := int64(limits[i].Limit.RequestsPerUnit)
-		period := utils.SecondsToNanoseconds(utils.UnitToDivider(limits[i].Limit.Unit))
-		quantity := int64(hitsAddend)
-		arrivedAt := now
+		responseDescriptorStatuses[i] = this.algorithm.GetResponseDescriptorStatus(cacheKey.Key, limits[i], tat, isOverLimitWithLocalCache[i], int64(hitsAddend))
 
-		emissionInterval := period / limit
-		tat = utils.MaxInt64(tat, arrivedAt)
-		newTats[i] = tat + emissionInterval*quantity
-		allowAt := newTats[i] - period
-		diff := arrivedAt - allowAt
+		if responseDescriptorStatuses[i].Code == pb.RateLimitResponse_OVER_LIMIT {
+			isOverLimit[i] = true
+		} else {
+			isOverLimit[i] = false
+		}
 
-		previousAllowAt := tat - period
-		previousLimitRemaining := int64(math.Ceil(float64((arrivedAt - previousAllowAt) / emissionInterval)))
-		previousLimitRemaining = utils.MaxInt64(previousLimitRemaining, 0)
-		nearLimitWindow := int64(math.Ceil(float64(float32(limits[i].Limit.RequestsPerUnit) * (1.0 - this.nearLimitRatio))))
-		limitRemaining := int64(math.Ceil(float64(diff / emissionInterval)))
+		arrivedAt := this.algorithm.GetArrivedAt()
+		newTats[i] = this.algorithm.GetNewTat()
 
 		expirationSeconds[i] = utils.NanosecondsToSeconds(newTats[i]-arrivedAt) + 1
 		if this.expirationJitterMaxSeconds > 0 {
 			expirationSeconds[i] += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
-		}
-
-		if diff < 0 {
-			isOverLimit[i] = true
-			responseDescriptorStatuses[i] = &pb.RateLimitResponse_DescriptorStatus{
-				Code:               pb.RateLimitResponse_OVER_LIMIT,
-				CurrentLimit:       limits[i].Limit,
-				LimitRemaining:     0,
-				DurationUntilReset: utils.NanosecondsToDuration(int64(math.Ceil(float64(tat - arrivedAt)))),
-			}
-
-			limits[i].Stats.OverLimit.Add(uint64(quantity - previousLimitRemaining))
-			limits[i].Stats.NearLimit.Add(uint64(utils.MinInt64(previousLimitRemaining, nearLimitWindow)))
-
-			if this.localCache != nil {
-				err := this.localCache.Set([]byte(cacheKey.Key), []byte{}, int(utils.NanosecondsToSeconds(-diff)))
-				if err != nil {
-					logger.Errorf("Failing to set local cache key: %s", cacheKey.Key)
-				}
-			}
-			continue
-		} else {
-			isOverLimit[i] = false
-			responseDescriptorStatuses[i] = &pb.RateLimitResponse_DescriptorStatus{
-				Code:               pb.RateLimitResponse_OK,
-				CurrentLimit:       limits[i].Limit,
-				LimitRemaining:     uint32(limitRemaining),
-				DurationUntilReset: utils.NanosecondsToDuration(newTats[i] - arrivedAt),
-			}
-
-			hitNearLimit := quantity - (utils.MaxInt64(previousLimitRemaining, nearLimitWindow) - nearLimitWindow)
-			if hitNearLimit > 0 {
-				limits[i].Stats.NearLimit.Add(uint64(hitNearLimit))
-			}
 		}
 	}
 
@@ -169,7 +115,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func (this *windowedRateLimitCacheImpl) increaseAsync(isOverLimitWithLocalCache []bool, isOverLimit []bool, cacheKeys []limiter.CacheKey, expirationSeconds []int64, newTats []int64) {
+func (this *windowedRateLimitCacheImpl) increaseAsync(isOverLimitWithLocalCache []bool, isOverLimit []bool, cacheKeys []utils.CacheKey, expirationSeconds []int64, newTats []int64) {
 	defer this.waitGroup.Done()
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] || isOverLimit[i] {
@@ -193,16 +139,16 @@ func (this *windowedRateLimitCacheImpl) Flush() {
 	this.waitGroup.Wait()
 }
 
-func NewWindowedRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32) limiter.RateLimitCache {
+func NewWindowedRateLimitCacheImpl(client driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
+	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
 	return &windowedRateLimitCacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
-		cacheKeyGenerator:          limiter.NewCacheKeyGenerator(),
+		cacheKeyGenerator:          utils.NewCacheKeyGenerator(),
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio),
+		algorithm:                  algorithm,
 	}
 }

@@ -63,3 +63,39 @@ func (mr *MockRatelimitAlgorithmMockRecorder) AppendPipeline(client, pipeline, k
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendPipeline", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).AppendPipeline), client, pipeline, key, hitsAddend, result, expirationSeconds)
 }
+
+// PopulateStats mocks base method
+func (m *MockRatelimitAlgorithm) PopulateStats() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "PopulateStats")
+}
+
+// PopulateStats indicates an expected call of PopulateStats
+func (mr *MockRatelimitAlgorithmMockRecorder) PopulateStats() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateStats", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).PopulateStats))
+}
+
+// CalculateResetDuration mocks base method
+func (m *MockRatelimitAlgorithm) CalculateResetDuration() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CalculateResetDuration")
+}
+
+// CalculateResetDuration indicates an expected call of CalculateResetDuration
+func (mr *MockRatelimitAlgorithmMockRecorder) CalculateResetDuration() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalculateResetDuration", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).CalculateResetDuration))
+}
+
+// IsUnderLimit mocks base method
+func (m *MockRatelimitAlgorithm) IsUnderLimit() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "IsUnderLimit")
+}
+
+// IsUnderLimit indicates an expected call of IsUnderLimit
+func (mr *MockRatelimitAlgorithmMockRecorder) IsUnderLimit() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsUnderLimit", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).IsUnderLimit))
+}

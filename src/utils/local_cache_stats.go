@@ -1,4 +1,4 @@
-package limiter
+package utils
 
 import (
 	"github.com/coocood/freecache"
@@ -17,6 +17,17 @@ type localCacheStats struct {
 	overwriteCount    stats.Gauge
 }
 
+func (stats localCacheStats) GenerateStats() {
+	stats.evacuateCount.Set(uint64(stats.cache.EvacuateCount()))
+	stats.expiredCount.Set(uint64(stats.cache.ExpiredCount()))
+	stats.entryCount.Set(uint64(stats.cache.EntryCount()))
+	stats.averageAccessTime.Set(uint64(stats.cache.AverageAccessTime()))
+	stats.hitCount.Set(uint64(stats.cache.HitCount()))
+	stats.missCount.Set(uint64(stats.cache.MissCount()))
+	stats.lookupCount.Set(uint64(stats.cache.LookupCount()))
+	stats.overwriteCount.Set(uint64(stats.cache.OverwriteCount()))
+}
+
 func NewLocalCacheStats(localCache *freecache.Cache, scope stats.Scope) stats.StatGenerator {
 	return localCacheStats{
 		cache:             localCache,
@@ -29,15 +40,4 @@ func NewLocalCacheStats(localCache *freecache.Cache, scope stats.Scope) stats.St
 		lookupCount:       scope.NewGauge("lookupCount"),
 		overwriteCount:    scope.NewGauge("overwriteCount"),
 	}
-}
-
-func (stats localCacheStats) GenerateStats() {
-	stats.evacuateCount.Set(uint64(stats.cache.EvacuateCount()))
-	stats.expiredCount.Set(uint64(stats.cache.ExpiredCount()))
-	stats.entryCount.Set(uint64(stats.cache.EntryCount()))
-	stats.averageAccessTime.Set(uint64(stats.cache.AverageAccessTime()))
-	stats.hitCount.Set(uint64(stats.cache.HitCount()))
-	stats.missCount.Set(uint64(stats.cache.MissCount()))
-	stats.lookupCount.Set(uint64(stats.cache.LookupCount()))
-	stats.overwriteCount.Set(uint64(stats.cache.OverwriteCount()))
 }
