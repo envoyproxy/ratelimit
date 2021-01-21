@@ -6,7 +6,6 @@ import (
 
 	"github.com/coocood/freecache"
 
-	"github.com/envoyproxy/ratelimit/src/algorithm"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis/driver"
 	"github.com/envoyproxy/ratelimit/src/server"
@@ -25,11 +24,6 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 		s.RedisPipelineWindow, s.RedisPipelineLimit)
 
 	if s.RateLimitAlgorithm == settings.FixedRateLimit {
-		ratelimitAlgorithm := algorithm.NewFixedWindowAlgorithm(
-			timeSource,
-			localCache,
-			s.NearLimitRatio,
-		)
 		return NewFixedRateLimitCacheImpl(
 			otherPool,
 			perSecondPool,
@@ -37,15 +31,9 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 			jitterRand,
 			expirationJitterMaxSeconds,
 			localCache,
-			s.NearLimitRatio,
-			ratelimitAlgorithm), nil
+			s.NearLimitRatio), nil
 	}
 	if s.RateLimitAlgorithm == settings.WindowedRateLimit {
-		ratelimitAlgorithm := algorithm.NewRollingWindowAlgorithm(
-			timeSource,
-			localCache,
-			s.NearLimitRatio,
-		)
 		return NewWindowedRateLimitCacheImpl(
 			otherPool,
 			perSecondPool,
@@ -53,8 +41,7 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 			jitterRand,
 			expirationJitterMaxSeconds,
 			localCache,
-			s.NearLimitRatio,
-			ratelimitAlgorithm), nil
+			s.NearLimitRatio), nil
 	}
 	return nil, fmt.Errorf("Unknown rate limit algorithm. %s\n", s.RateLimitAlgorithm)
 }

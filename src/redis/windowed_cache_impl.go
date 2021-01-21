@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"encoding/json"
 	"math/rand"
 
 	"github.com/coocood/freecache"
@@ -45,11 +44,6 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	request *pb.RateLimitRequest,
 	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
 
-	limitsJSON, _ := json.Marshal(limits)
-	logger.Debugf("[redis] limits: %s", limitsJSON)
-	requestJSON, _ := json.Marshal(request)
-	logger.Debugf("[redis] request: %s", requestJSON)
-
 	logger.Debugf("starting windowed cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
@@ -57,10 +51,6 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 
 	// First build a list of all cache keys that we are actually going to hit.
 	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend)
-
-	logger.Debugf("[redis] hitsAddend: %d", hitsAddend)
-	cacheKeysJSON, _ := json.Marshal(cacheKeys)
-	logger.Debugf("[redis] cacheKeys: %s", cacheKeysJSON)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	tats := make([]int64, len(request.Descriptors))
@@ -109,21 +99,14 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
 
 	for i, cacheKey := range cacheKeys {
-		cacheKeyJSON, _ := json.Marshal(cacheKey)
-		logger.Debugf("[redis] cacheKey: %s", cacheKeyJSON)
-		limitiJSON, _ := json.Marshal(limits[i])
-		logger.Debugf("[redis] limits[i]: %s", limitiJSON)
-		logger.Debugf("[redis] tats[i]: %d", tats[i])
-		logger.Debugf("[redis] isOverLimitWithLocalCache[i]: %t", isOverLimitWithLocalCache[i])
-		logger.Debugf("[redis] int64(hitsAddend): %t", int64(hitsAddend))
-
 		responseDescriptorStatuses[i] = this.algorithm.GetResponseDescriptorStatus(cacheKey.Key, limits[i], int64(tats[i]), isOverLimitWithLocalCache[i], int64(hitsAddend))
+
+		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] {
+			continue
+		}
 
 		arrivedAt := this.algorithm.GetArrivedAt()
 		newTat := this.algorithm.GetNewTat()
-
-		logger.Debugf("[redis] arrivedAt: %d", arrivedAt)
-		logger.Debugf("[redis] newTat: %d", newTat)
 
 		// Store new tat for initial tat of next requests
 		expirationSeconds := utils.NanosecondsToSeconds(newTat-arrivedAt) + 1
@@ -166,7 +149,7 @@ func windowedSetNewTatPipelineAppend(client driver.Client, pipeline *driver.Pipe
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
-func NewWindowedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
+func NewWindowedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32) limiter.RateLimitCache {
 	return &windowedRateLimitCacheImpl{
 		client:                     client,
 		perSecondClient:            perSecondClient,
@@ -176,6 +159,10 @@ func NewWindowedRateLimitCacheImpl(client driver.Client, perSecondClient driver.
 		cacheKeyGenerator:          utils.NewCacheKeyGenerator(),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		algorithm:                  algorithm,
+		algorithm: algorithm.NewRollingWindowAlgorithm(
+			timeSource,
+			localCache,
+			nearLimitRatio,
+		),
 	}
 }

@@ -5,10 +5,9 @@
 package mock_algorithm
 
 import (
-	envoy_extensions_common_ratelimit_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
+	envoy_service_ratelimit_v3 "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	config "github.com/envoyproxy/ratelimit/src/config"
-	limiter "github.com/envoyproxy/ratelimit/src/limiter"
-	driver "github.com/envoyproxy/ratelimit/src/redis/driver"
+	utils "github.com/envoyproxy/ratelimit/src/utils"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )
@@ -36,66 +35,100 @@ func (m *MockRatelimitAlgorithm) EXPECT() *MockRatelimitAlgorithmMockRecorder {
 	return m.recorder
 }
 
-// GenerateCacheKey mocks base method
-func (m *MockRatelimitAlgorithm) GenerateCacheKey(domain string, descriptor *envoy_extensions_common_ratelimit_v3.RateLimitDescriptor, limit *config.RateLimit) limiter.CacheKey {
+// IsOverLimit mocks base method
+func (m *MockRatelimitAlgorithm) IsOverLimit(limit *config.RateLimit, results, hitsAddend int64) (bool, int64, int) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateCacheKey", domain, descriptor, limit)
-	ret0, _ := ret[0].(limiter.CacheKey)
+	ret := m.ctrl.Call(m, "IsOverLimit", limit, results, hitsAddend)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(int)
+	return ret0, ret1, ret2
+}
+
+// IsOverLimit indicates an expected call of IsOverLimit
+func (mr *MockRatelimitAlgorithmMockRecorder) IsOverLimit(limit, results, hitsAddend interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOverLimit", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).IsOverLimit), limit, results, hitsAddend)
+}
+
+// IsOverLimitWithLocalCache mocks base method
+func (m *MockRatelimitAlgorithm) IsOverLimitWithLocalCache(key string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsOverLimitWithLocalCache", key)
+	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// GenerateCacheKey indicates an expected call of GenerateCacheKey
-func (mr *MockRatelimitAlgorithmMockRecorder) GenerateCacheKey(domain, descriptor, limit interface{}) *gomock.Call {
+// IsOverLimitWithLocalCache indicates an expected call of IsOverLimitWithLocalCache
+func (mr *MockRatelimitAlgorithmMockRecorder) IsOverLimitWithLocalCache(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateCacheKey", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).GenerateCacheKey), domain, descriptor, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOverLimitWithLocalCache", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).IsOverLimitWithLocalCache), key)
 }
 
-// AppendPipeline mocks base method
-func (m *MockRatelimitAlgorithm) AppendPipeline(client driver.Client, pipeline driver.Pipeline, key string, hitsAddend uint32, result interface{}, expirationSeconds int64) driver.Pipeline {
+// GetResponseDescriptorStatus mocks base method
+func (m *MockRatelimitAlgorithm) GetResponseDescriptorStatus(key string, limit *config.RateLimit, results int64, isOverLimitWithLocalCache bool, hitsAddend int64) *envoy_service_ratelimit_v3.RateLimitResponse_DescriptorStatus {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AppendPipeline", client, pipeline, key, hitsAddend, result, expirationSeconds)
-	ret0, _ := ret[0].(driver.Pipeline)
+	ret := m.ctrl.Call(m, "GetResponseDescriptorStatus", key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+	ret0, _ := ret[0].(*envoy_service_ratelimit_v3.RateLimitResponse_DescriptorStatus)
 	return ret0
 }
 
-// AppendPipeline indicates an expected call of AppendPipeline
-func (mr *MockRatelimitAlgorithmMockRecorder) AppendPipeline(client, pipeline, key, hitsAddend, result, expirationSeconds interface{}) *gomock.Call {
+// GetResponseDescriptorStatus indicates an expected call of GetResponseDescriptorStatus
+func (mr *MockRatelimitAlgorithmMockRecorder) GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendPipeline", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).AppendPipeline), client, pipeline, key, hitsAddend, result, expirationSeconds)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResponseDescriptorStatus", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).GetResponseDescriptorStatus), key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+}
+
+// GetNewTat mocks base method
+func (m *MockRatelimitAlgorithm) GetNewTat() int64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNewTat")
+	ret0, _ := ret[0].(int64)
+	return ret0
+}
+
+// GetNewTat indicates an expected call of GetNewTat
+func (mr *MockRatelimitAlgorithmMockRecorder) GetNewTat() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNewTat", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).GetNewTat))
+}
+
+// GetArrivedAt mocks base method
+func (m *MockRatelimitAlgorithm) GetArrivedAt() int64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetArrivedAt")
+	ret0, _ := ret[0].(int64)
+	return ret0
+}
+
+// GetArrivedAt indicates an expected call of GetArrivedAt
+func (mr *MockRatelimitAlgorithmMockRecorder) GetArrivedAt() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArrivedAt", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).GetArrivedAt))
+}
+
+// GenerateCacheKeys mocks base method
+func (m *MockRatelimitAlgorithm) GenerateCacheKeys(request *envoy_service_ratelimit_v3.RateLimitRequest, limits []*config.RateLimit, hitsAddend int64) []utils.CacheKey {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenerateCacheKeys", request, limits, hitsAddend)
+	ret0, _ := ret[0].([]utils.CacheKey)
+	return ret0
+}
+
+// GenerateCacheKeys indicates an expected call of GenerateCacheKeys
+func (mr *MockRatelimitAlgorithmMockRecorder) GenerateCacheKeys(request, limits, hitsAddend interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateCacheKeys", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).GenerateCacheKeys), request, limits, hitsAddend)
 }
 
 // PopulateStats mocks base method
-func (m *MockRatelimitAlgorithm) PopulateStats() {
+func (m *MockRatelimitAlgorithm) PopulateStats(limit *config.RateLimit, nearLimit, overLimit, overLimitWithLocalCache uint64) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "PopulateStats")
+	m.ctrl.Call(m, "PopulateStats", limit, nearLimit, overLimit, overLimitWithLocalCache)
 }
 
 // PopulateStats indicates an expected call of PopulateStats
-func (mr *MockRatelimitAlgorithmMockRecorder) PopulateStats() *gomock.Call {
+func (mr *MockRatelimitAlgorithmMockRecorder) PopulateStats(limit, nearLimit, overLimit, overLimitWithLocalCache interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateStats", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).PopulateStats))
-}
-
-// CalculateResetDuration mocks base method
-func (m *MockRatelimitAlgorithm) CalculateResetDuration() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "CalculateResetDuration")
-}
-
-// CalculateResetDuration indicates an expected call of CalculateResetDuration
-func (mr *MockRatelimitAlgorithmMockRecorder) CalculateResetDuration() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalculateResetDuration", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).CalculateResetDuration))
-}
-
-// IsUnderLimit mocks base method
-func (m *MockRatelimitAlgorithm) IsUnderLimit() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "IsUnderLimit")
-}
-
-// IsUnderLimit indicates an expected call of IsUnderLimit
-func (mr *MockRatelimitAlgorithmMockRecorder) IsUnderLimit() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsUnderLimit", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).IsUnderLimit))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateStats", reflect.TypeOf((*MockRatelimitAlgorithm)(nil).PopulateStats), limit, nearLimit, overLimit, overLimitWithLocalCache)
 }

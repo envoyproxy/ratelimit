@@ -2,7 +2,6 @@ package memcached
 
 import (
 	"context"
-	"encoding/json"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -38,11 +37,6 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	request *pb.RateLimitRequest,
 	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
 
-	limitsJSON, _ := json.Marshal(limits)
-	logger.Debugf("[memcached] limits: %s", limitsJSON)
-	requestJSON, _ := json.Marshal(request)
-	logger.Debugf("[memcached] request: %s", requestJSON)
-
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
@@ -50,10 +44,6 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 
 	// First build a list of all cache keys that we are actually going to hit.
 	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend)
-
-	logger.Debugf("[memcached] hitsAddend: %d", hitsAddend)
-	cacheKeysJSON, _ := json.Marshal(cacheKeys)
-	logger.Debugf("[memcached] cacheKeys: %s", cacheKeysJSON)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	keysToGet := make([]string, 0, len(request.Descriptors))
@@ -102,14 +92,6 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 			}
 		}
 
-		cacheKeyJSON, _ := json.Marshal(cacheKey)
-		logger.Debugf("[memcached] cacheKey: %s", cacheKeyJSON)
-		limitiJSON, _ := json.Marshal(limits[i])
-		logger.Debugf("[memcached] limits[i]: %s", limitiJSON)
-		logger.Debugf("[memcached] tat: %d", tat)
-		logger.Debugf("[memcached] isOverLimitWithLocalCache[i]: %t", isOverLimitWithLocalCache[i])
-		logger.Debugf("[memcached] int64(hitsAddend): %t", int64(hitsAddend))
-
 		responseDescriptorStatuses[i] = this.algorithm.GetResponseDescriptorStatus(cacheKey.Key, limits[i], tat, isOverLimitWithLocalCache[i], int64(hitsAddend))
 
 		if responseDescriptorStatuses[i].Code == pb.RateLimitResponse_OVER_LIMIT {
@@ -120,9 +102,6 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 
 		arrivedAt := this.algorithm.GetArrivedAt()
 		newTats[i] = this.algorithm.GetNewTat()
-
-		logger.Debugf("[memcached] arrivedAt: %d", arrivedAt)
-		logger.Debugf("[memcached] newTat: %d", newTats[i])
 
 		expirationSeconds[i] = utils.NanosecondsToSeconds(newTats[i]-arrivedAt) + 1
 		if this.expirationJitterMaxSeconds > 0 {

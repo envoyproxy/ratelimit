@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"encoding/json"
 	"math/rand"
 
 	"github.com/coocood/freecache"
@@ -36,11 +35,6 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	request *pb.RateLimitRequest,
 	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
 
-	limitsJSON, _ := json.Marshal(limits)
-	logger.Debugf("[redis] limits: %s", limitsJSON)
-	requestJSON, _ := json.Marshal(request)
-	logger.Debugf("[redis] request: %s", requestJSON)
-
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
@@ -48,10 +42,6 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 	// First build a list of all cache keys that we are actually going to hit.
 	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend)
-
-	logger.Debugf("[redis] hitsAddend: %d", hitsAddend)
-	cacheKeysJSON, _ := json.Marshal(cacheKeys)
-	logger.Debugf("[redis] cacheKeys: %s", cacheKeysJSON)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	results := make([]int64, len(request.Descriptors))
@@ -101,19 +91,8 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		len(request.Descriptors))
 
 	for i, cacheKey := range cacheKeys {
-		cacheKeyJSON, _ := json.Marshal(cacheKey)
-		logger.Debugf("[redis] cacheKey: %s", cacheKeyJSON)
-		limitiJSON, _ := json.Marshal(limits[i])
-		logger.Debugf("[redis] limits[i]: %s", limitiJSON)
-		logger.Debugf("[redis] results[i]: %d", results[i])
-		logger.Debugf("[redis] isOverLimitWithLocalCache[i]: %t", isOverLimitWithLocalCache[i])
-		logger.Debugf("[redis] int64(hitsAddend): %t", int64(hitsAddend))
-
 		responseDescriptorStatuses[i] = this.algorithm.GetResponseDescriptorStatus(cacheKey.Key, limits[i], results[i], isOverLimitWithLocalCache[i], int64(hitsAddend))
 	}
-
-	responseDescriptorStatusesJSON, _ := json.Marshal(responseDescriptorStatuses)
-	logger.Debugf("[redis] responseDescriptorStatuses: %s", responseDescriptorStatusesJSON)
 
 	return responseDescriptorStatuses
 }
@@ -125,7 +104,7 @@ func fixedPipelineAppend(client driver.Client, pipeline *driver.Pipeline, key st
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
-func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
+func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                     client,
 		perSecondClient:            perSecondClient,
@@ -135,6 +114,10 @@ func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Cli
 		cacheKeyGenerator:          utils.NewCacheKeyGenerator(),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		algorithm:                  algorithm,
+		algorithm: algorithm.NewFixedWindowAlgorithm(
+			timeSource,
+			localCache,
+			nearLimitRatio,
+		),
 	}
 }

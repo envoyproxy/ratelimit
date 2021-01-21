@@ -1,6 +1,6 @@
 export GO111MODULE=on
 PROJECT = ratelimit
-REGISTRY ?= zufardhiyaulhaq
+REGISTRY ?= envoyproxy
 IMAGE := $(REGISTRY)/$(PROJECT)
 INTEGRATION_IMAGE := $(REGISTRY)/$(PROJECT)_integration
 MODULE = github.com/envoyproxy/ratelimit
@@ -112,8 +112,7 @@ docker_tests:
 	docker run $$(tty -s && echo "-it" || echo) $(INTEGRATION_IMAGE):$(VERSION)
 
 .PHONY: docker_image
-# docker_image: docker_tests
-docker_image:
+docker_image: docker_tests
 	docker build . -t $(IMAGE):$(VERSION)
 
 .PHONY: docker_push
