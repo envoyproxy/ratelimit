@@ -8,26 +8,6 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - data
-    volumes:
-      - redis-data:/data
-
-  ratelimit:
-    build:
-      context: ./
-      dockerfile: Dockerfile
-    ports:
-      - 8080:8080
-    depends_on:
-      - redis
-    networks:
-      - data
-    links:
-      - redis
-    volumes:
-      - ./examples:/data/
-      - 6379:6379
-    networks:
       - ratelimit-network
 
   memcached:
@@ -89,8 +69,3 @@ volumes:
   ratelimit-data:
       - MEMCACHE_HOST_PORT=memcached:11211
 
-networks:
-  ratelimit-network:
-
-volumes:
-  binary:
