@@ -13,6 +13,8 @@ import (
 
 const DummyCacheKeyTime = 0
 
+var _ RatelimitAlgorithm = (*RollingWindowImpl)(nil)
+
 type RollingWindowImpl struct {
 	timeSource        utils.TimeSource
 	cacheKeyGenerator utils.CacheKeyGenerator

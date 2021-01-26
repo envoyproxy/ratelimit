@@ -10,6 +10,8 @@ import (
 	logger "github.com/sirupsen/logrus"
 )
 
+var _ RatelimitAlgorithm = (*FixedWindowImpl)(nil)
+
 type FixedWindowImpl struct {
 	timeSource        utils.TimeSource
 	cacheKeyGenerator utils.CacheKeyGenerator
