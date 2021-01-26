@@ -1,7 +1,6 @@
 package util
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -30,7 +29,7 @@ func ConvertToMetricsDescriptor(descriptorStatus *pb.RateLimitResponse_Descripto
 			descriptorValue.WriteString("_")
 		}
 		descriptorKey.WriteString(entry.Key)
-		descriptorValue.WriteString(fmt.Sprintf("%.*s", 40, entry.Value))
+		descriptorValue.WriteString(entry.Value)
 	}
 	if descriptorStatus.CurrentLimit != nil {
 		limit = strconv.FormatUint(uint64(descriptorStatus.CurrentLimit.RequestsPerUnit), 10)
