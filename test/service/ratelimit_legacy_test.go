@@ -79,8 +79,8 @@ func TestServiceLegacy(test *testing.T) {
 	// Force a config reload.
 	barrier := newBarrier()
 	t.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) { barrier.signal() }).Return(t.config)
+		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
+		func([]config.RateLimitConfigToLoad, stats.Scope, bool) { barrier.signal() }).Return(t.config)
 	t.runtimeUpdateCallback <- 1
 	barrier.wait()
 
@@ -119,8 +119,8 @@ func TestServiceLegacy(test *testing.T) {
 
 	// Config load failure.
 	t.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) {
+		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
+		func([]config.RateLimitConfigToLoad, stats.Scope, bool) {
 			barrier.signal()
 			panic(config.RateLimitConfigError("load error"))
 		})
@@ -217,11 +217,11 @@ func TestInitialLoadErrorLegacy(test *testing.T) {
 	t.snapshot.EXPECT().Keys().Return([]string{"foo", "config.basic_config"}).MinTimes(1)
 	t.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
 	t.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) {
+		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
+		func([]config.RateLimitConfigToLoad, stats.Scope, bool) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore, true)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore, true, false)
 
 	request := common.NewRateLimitRequestLegacy("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)

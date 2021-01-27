@@ -92,6 +92,7 @@ func (runner *Runner) Run() {
 		config.NewRateLimitConfigLoaderImpl(),
 		srv.Scope().Scope("service"),
 		s.RuntimeWatchRoot,
+		s.UpsertDescriptors,
 	)
 
 	srv.AddDebugHttpEndpoint(

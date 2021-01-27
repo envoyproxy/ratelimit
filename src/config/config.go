@@ -55,5 +55,5 @@ type RateLimitConfigLoader interface {
 	// @param statsScope supplies the stats scope to use for limit stats during runtime.
 	// @return a new configuration.
 	// @throws RateLimitConfigError if the configuration could not be created.
-	Load(configs []RateLimitConfigToLoad, statsScope stats.Scope) RateLimitConfig
+	Load(configs []RateLimitConfigToLoad, statsScope stats.Scope, upsertDescriptors bool) RateLimitConfig
 }

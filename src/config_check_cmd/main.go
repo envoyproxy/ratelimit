@@ -21,7 +21,7 @@ func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {
 	}()
 
 	dummyStats := stats.NewStore(stats.NewNullSink(), false)
-	config.NewRateLimitConfigImpl(allConfigs, dummyStats)
+	config.NewRateLimitConfigImpl(allConfigs, dummyStats, false)
 }
 
 func main() {

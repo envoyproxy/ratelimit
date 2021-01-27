@@ -39,8 +39,9 @@ type rateLimitDomain struct {
 }
 
 type rateLimitConfigImpl struct {
-	domains    map[string]*rateLimitDomain
-	statsScope stats.Scope
+	domains           map[string]*rateLimitDomain
+	statsScope        stats.Scope
+	upsertDescriptors bool
 }
 
 var validKeys = map[string]bool{
@@ -221,15 +222,20 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 		panic(newRateLimitConfigError(config, "config file cannot have empty domain"))
 	}
 
-	if _, present := this.domains[root.Domain]; present {
-		panic(newRateLimitConfigError(
-			config, fmt.Sprintf("duplicate domain '%s' in config file", root.Domain)))
-	}
-
 	logger.Debugf("loading domain: %s", root.Domain)
-	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil}}
-	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsScope)
-	this.domains[root.Domain] = newDomain
+	if _, present := this.domains[root.Domain]; present {
+		if this.upsertDescriptors {
+			logger.Infof("Duplicate domain '%s' ,updating", root.Domain)
+			this.domains[root.Domain].loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsScope)
+		} else {
+			panic(newRateLimitConfigError(
+				config, fmt.Sprintf("duplicate domain '%s' in config file", root.Domain)))
+		}
+	} else {
+		newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil}}
+		newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsScope)
+		this.domains[root.Domain] = newDomain
+	}
 }
 
 func (this *rateLimitConfigImpl) descriptorToKey(descriptor *pb_struct.RateLimitDescriptor) string {
@@ -315,9 +321,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 // @param stats supplies the stats scope to use for limit stats during runtime.
 // @return a new config.
 func NewRateLimitConfigImpl(
-	configs []RateLimitConfigToLoad, statsScope stats.Scope) RateLimitConfig {
+	configs []RateLimitConfigToLoad, statsScope stats.Scope, upsertDescriptors bool) RateLimitConfig {
 
-	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsScope}
+	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsScope, upsertDescriptors}
 	for _, config := range configs {
 		ret.loadConfig(config)
 	}
@@ -328,9 +334,9 @@ func NewRateLimitConfigImpl(
 type rateLimitConfigLoaderImpl struct{}
 
 func (this *rateLimitConfigLoaderImpl) Load(
-	configs []RateLimitConfigToLoad, statsScope stats.Scope) RateLimitConfig {
+	configs []RateLimitConfigToLoad, statsScope stats.Scope, upsertDescriptors bool) RateLimitConfig {
 
-	return NewRateLimitConfigImpl(configs, statsScope)
+	return NewRateLimitConfigImpl(configs, statsScope, upsertDescriptors)
 }
 
 // @return a new default config loader implementation.

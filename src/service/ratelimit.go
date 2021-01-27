@@ -59,6 +59,7 @@ type service struct {
 	rlStatsScope       stats.Scope
 	legacy             *legacyService
 	runtimeWatchRoot   bool
+	upsertDescriptors  bool
 }
 
 func (this *service) reloadConfig() {
@@ -84,7 +85,7 @@ func (this *service) reloadConfig() {
 		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
 	}
 
-	newConfig := this.configLoader.Load(files, this.rlStatsScope)
+	newConfig := this.configLoader.Load(files, this.rlStatsScope, this.upsertDescriptors)
 	this.stats.configLoadSuccess.Inc()
 	this.configLock.Lock()
 	this.config = newConfig
@@ -199,7 +200,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, stats stats.Scope, runtimeWatchRoot bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, stats stats.Scope, runtimeWatchRoot bool, upsertDescriptors bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -211,6 +212,7 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		stats:              newServiceStats(stats),
 		rlStatsScope:       stats.Scope("rate_limit"),
 		runtimeWatchRoot:   runtimeWatchRoot,
+		upsertDescriptors:  upsertDescriptors,
 	}
 	newService.legacy = &legacyService{
 		s:                          newService,

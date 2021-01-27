@@ -1,15 +1,16 @@
 package config_test
 
 import (
-	"github.com/envoyproxy/ratelimit/test/common"
 	"io/ioutil"
 	"testing"
+
+	"github.com/envoyproxy/ratelimit/test/common"
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	pb_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,7 +25,7 @@ func loadFile(path string) []config.RateLimitConfigToLoad {
 func TestBasicConfig(t *testing.T) {
 	assert := assert.New(t)
 	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), stats)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), stats, false)
 	rlConfig.Dump()
 	assert.Nil(rlConfig.GetLimit(nil, "foo_domain", &pb_struct.RateLimitDescriptor{}))
 	assert.Nil(rlConfig.GetLimit(nil, "test-domain", &pb_struct.RateLimitDescriptor{}))
@@ -155,7 +156,7 @@ func TestBasicConfig(t *testing.T) {
 func TestConfigLimitOverride(t *testing.T) {
 	assert := assert.New(t)
 	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), stats)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), stats, false)
 	rlConfig.Dump()
 	// No matching domain
 	assert.Nil(rlConfig.GetLimit(nil, "foo_domain", &pb_struct.RateLimitDescriptor{
@@ -242,7 +243,7 @@ func TestEmptyDomain(t *testing.T) {
 		t,
 		func() {
 			config.NewRateLimitConfigImpl(
-				loadFile("empty_domain.yaml"), stats.NewStore(stats.NewNullSink(), false))
+				loadFile("empty_domain.yaml"), stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"empty_domain.yaml: config file cannot have empty domain")
 }
@@ -253,7 +254,7 @@ func TestDuplicateDomain(t *testing.T) {
 		func() {
 			files := loadFile("basic_config.yaml")
 			files = append(files, loadFile("duplicate_domain.yaml")...)
-			config.NewRateLimitConfigImpl(files, stats.NewStore(stats.NewNullSink(), false))
+			config.NewRateLimitConfigImpl(files, stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"duplicate_domain.yaml: duplicate domain 'test-domain' in config file")
 }
@@ -264,7 +265,7 @@ func TestEmptyKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("empty_key.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"empty_key.yaml: descriptor has empty key")
 }
@@ -275,7 +276,7 @@ func TestDuplicateKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("duplicate_key.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"duplicate_key.yaml: duplicate descriptor composite key 'test-domain.key1_value1'")
 }
@@ -286,7 +287,7 @@ func TestBadLimitUnit(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("bad_limit_unit.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"bad_limit_unit.yaml: invalid rate limit unit 'foo'")
 }
@@ -297,7 +298,7 @@ func TestBadYaml(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("bad_yaml.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"bad_yaml.yaml: error loading config file: yaml: line 2: found unexpected end of stream")
 }
@@ -308,7 +309,7 @@ func TestMisspelledKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("misspelled_key.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"misspelled_key.yaml: config error, unknown key 'ratelimit'")
 
@@ -317,7 +318,7 @@ func TestMisspelledKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("misspelled_key2.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"misspelled_key2.yaml: config error, unknown key 'requestsperunit'")
 }
@@ -328,7 +329,7 @@ func TestNonStringKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("non_string_key.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"non_string_key.yaml: config error, key is not of type string: 0.25")
 }
@@ -339,7 +340,7 @@ func TestNonMapList(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("non_map_list.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				stats.NewStore(stats.NewNullSink(), false), false)
 		},
 		"non_map_list.yaml: config error, yaml file contains list of type other than map: a")
 }
