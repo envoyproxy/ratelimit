@@ -115,12 +115,12 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 }
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
-	localCache *freecache.Cache, nearLimitRatio float32) *BaseRateLimiter {
+	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) *BaseRateLimiter {
 	return &BaseRateLimiter{
 		timeSource:                 timeSource,
 		JitterRand:                 jitterRand,
 		ExpirationJitterMaxSeconds: expirationJitterMaxSeconds,
-		cacheKeyGenerator:          NewCacheKeyGenerator(),
+		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 	}
