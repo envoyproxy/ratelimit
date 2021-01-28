@@ -19,14 +19,14 @@ type CacheKeyGenerator struct {
 
 func NewCacheKeyGenerator(prefix string) CacheKeyGenerator {
 	return CacheKeyGenerator{
-	  prefix: prefix,
-	  bufferPool: sync.Pool{
-		New: func() interface{} {
-		  return new(bytes.Buffer)
+		prefix: prefix,
+		bufferPool: sync.Pool{
+			New: func() interface{} {
+				return new(bytes.Buffer)
+			},
 		},
-	  },
 	}
-  }
+}
 
 type CacheKey struct {
 	Key string
