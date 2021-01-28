@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"io/ioutil"
+	"log"
 	"testing"
 
 	"github.com/envoyproxy/ratelimit/test/common"
@@ -259,6 +260,14 @@ func TestDuplicateDomain(t *testing.T) {
 		"duplicate_domain.yaml: duplicate domain 'test-domain' in config file")
 }
 
+func TestUpdateExistingDomain(t *testing.T) {
+	func() {
+		files := loadFile("basic_config.yaml")
+		files = append(files, loadFile("duplicate_domain.yaml")...)
+		config.NewRateLimitConfigImpl(files, stats.NewStore(stats.NewNullSink(), false), true)
+	}()
+	log.Print("duplicate_domain.yaml: duplicate domain 'test-domain' ,Updating ...")
+}
 func TestEmptyKey(t *testing.T) {
 	expectConfigPanic(
 		t,
