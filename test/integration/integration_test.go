@@ -84,12 +84,15 @@ func TestBasicAuthConfigWithRedisSentinel(t *testing.T) {
 func TestBasicReloadConfig(t *testing.T) {
 	t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRoot("8095", "false", "0"))
 	t.Run("ReloadWithoutWatchRoot", testBasicConfigReload("8097", "false", "0", "false"))
-	t.Run("ReloadWithoutWatchRootExistingDomain", testExistingDomainBasicConfigReload("8099", "false", "0", "false", "true"))
 }
 
 func TestBasicConfigMemcache(t *testing.T) {
 	t.Run("Memcache", testBasicConfig("8098", "false", "0", "memcache"))
 	t.Run("MemcacheWithLocalCache", testBasicConfig("18099", "false", "1000", "memcache"))
+}
+
+func TestExistingDomainBasicConfigReload(t *testing.T) {
+	t.Run("ReloadWithoutWatchRootExistingDomain", testExistingDomainBasicConfigReload("8099", "false", "0", "false", "true"))
 }
 
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
@@ -166,7 +169,7 @@ func testBasicConfigWithoutWatchRoot(grpcPort, perSecond string, local_cache_siz
 	os.Setenv("REDIS_PERSECOND_AUTH", "")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("RUNTIME_WATCH_ROOT", "false")
-	os.Setenv("UPSERT_DESCRIPTORS", "false")
+	os.Setenv("UPSERT_DESCRIPTORS", "true")
 	os.Setenv("REDIS_TYPE", "single")
 	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size, "")
@@ -182,7 +185,7 @@ func testBasicConfigWithoutWatchRootWithRedisCluster(grpcPort, perSecond string,
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("RUNTIME_WATCH_ROOT", "false")
-	os.Setenv("UPSERT_DESCRIPTORS", "false")
+	os.Setenv("UPSERT_DESCRIPTORS", "true")
 	os.Setenv("REDIS_PERSECOND_PIPELINE_LIMIT", "8")
 	os.Setenv("REDIS_PIPELINE_LIMIT", "8")
 
@@ -197,7 +200,7 @@ func testBasicConfigWithoutWatchRootWithRedisSentinel(grpcPort, perSecond string
 	os.Setenv("REDIS_TLS", "false")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("RUNTIME_WATCH_ROOT", "false")
-	os.Setenv("UPSERT_DESCRIPTORS", "false")
+	os.Setenv("UPSERT_DESCRIPTORS", "true")
 
 	return testBasicBaseConfig(grpcPort, perSecond, local_cache_size, "")
 }
@@ -210,11 +213,11 @@ func testBasicConfigReload(grpcPort, perSecond string, local_cache_size, runtime
 	os.Setenv("REDIS_PERSECOND_AUTH", "")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("RUNTIME_WATCH_ROOT", runtimeWatchRoot)
-	os.Setenv("UPSERT_DESCRIPTORS", "false")
+	os.Setenv("UPSERT_DESCRIPTORS", "true")
 	os.Setenv("REDIS_TYPE", "single")
 	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 
-	return testConfigReload(grpcPort, perSecond, local_cache_size, "runtime/current/ratelimit/reload.yaml")
+	return testConfigReload(grpcPort, perSecond, local_cache_size, "runtime/current/ratelimit/reload.yaml", false)
 }
 
 func testExistingDomainBasicConfigReload(grpcPort, perSecond string, local_cache_size, runtimeWatchRoot string, upsertDescriptors string) func(*testing.T) {
@@ -229,7 +232,7 @@ func testExistingDomainBasicConfigReload(grpcPort, perSecond string, local_cache
 	os.Setenv("REDIS_TYPE", "single")
 	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 
-	return testConfigReload(grpcPort, perSecond, local_cache_size, "runtime/current/ratelimit/existingDomainreload.yaml")
+	return testConfigReload(grpcPort, perSecond, local_cache_size, "runtime/current/ratelimit/existingDomainreload.yaml", true)
 }
 
 func testBasicConfigReloadWithRedisCluster(grpcPort, perSecond string, local_cache_size, runtimeWatchRoot string) func(*testing.T) {
@@ -244,9 +247,9 @@ func testBasicConfigReloadWithRedisCluster(grpcPort, perSecond string, local_cac
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("REDIS_PERSECOND_AUTH", "password123")
 	os.Setenv("RUNTIME_WATCH_ROOT", runtimeWatchRoot)
-	os.Setenv("UPSERT_DESCRIPTORS", "false")
+	os.Setenv("UPSERT_DESCRIPTORS", "true")
 
-	return testConfigReload(grpcPort, perSecond, local_cache_size, "runtime/current/ratelimit/reload.yaml")
+	return testConfigReload(grpcPort, perSecond, local_cache_size, "runtime/current/ratelimit/reload.yaml", false)
 }
 
 func testBasicConfigReloadWithRedisSentinel(grpcPort, perSecond string, local_cache_size, runtimeWatchRoot string) func(*testing.T) {
@@ -257,9 +260,9 @@ func testBasicConfigReloadWithRedisSentinel(grpcPort, perSecond string, local_ca
 	os.Setenv("REDIS_TLS", "false")
 	os.Setenv("REDIS_PERSECOND_TLS", "false")
 	os.Setenv("RUNTIME_WATCH_ROOT", runtimeWatchRoot)
-	os.Setenv("UPSERT_DESCRIPTORS", "false")
+	os.Setenv("UPSERT_DESCRIPTORS", "true")
 
-	return testConfigReload(grpcPort, perSecond, local_cache_size, "runtime/current/ratelimit/reload.yaml")
+	return testConfigReload(grpcPort, perSecond, local_cache_size, "runtime/current/ratelimit/reload.yaml", false)
 }
 
 func getCacheKey(cacheKey string, enableLocalCache bool) string {
@@ -622,7 +625,7 @@ func TestBasicConfigLegacy(t *testing.T) {
 	}
 }
 
-func testConfigReload(grpcPort, perSecond string, local_cache_size string, filepath string) func(*testing.T) {
+func testConfigReload(grpcPort, perSecond string, local_cache_size string, filepath string, testExistingDomain bool) func(*testing.T) {
 	return func(t *testing.T) {
 		os.Setenv("REDIS_PERSECOND", perSecond)
 		os.Setenv("PORT", "8082")
@@ -655,14 +658,15 @@ func testConfigReload(grpcPort, perSecond string, local_cache_size string, filep
 		response, err := c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequest("reload", [][][2]string{{{getCacheKey("block", enable_local_cache), "foo"}}}, 1))
-		common.AssertProtoEqual(
-			assert,
-			&pb.RateLimitResponse{
-				OverallCode: pb.RateLimitResponse_OK,
-				Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK}}},
-			response)
-		assert.NoError(err)
-
+		if testExistingDomain != true {
+			common.AssertProtoEqual(
+				assert,
+				&pb.RateLimitResponse{
+					OverallCode: pb.RateLimitResponse_OK,
+					Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK}}},
+				response)
+			assert.NoError(err)
+		}
 		runner.GetStatsStore().Flush()
 		loadCount1 := runner.GetStatsStore().NewCounter("ratelimit.service.config_load_success").Value()
 
@@ -712,15 +716,16 @@ func testConfigReload(grpcPort, perSecond string, local_cache_size string, filep
 			common.NewRateLimitRequest("reload", [][][2]string{{{getCacheKey("key1", enable_local_cache), "foo"}}}, 1))
 
 		durRemaining := response.GetStatuses()[0].DurationUntilReset
-		common.AssertProtoEqual(
-			assert,
-			&pb.RateLimitResponse{
-				OverallCode: pb.RateLimitResponse_OK,
-				Statuses: []*pb.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49, durRemaining)}},
-			response)
-		assert.NoError(err)
-
+		if testExistingDomain != true {
+			common.AssertProtoEqual(
+				assert,
+				&pb.RateLimitResponse{
+					OverallCode: pb.RateLimitResponse_OK,
+					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+						newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49, durRemaining)}},
+				response)
+			assert.NoError(err)
+		}
 		err = os.Remove("runtime/current/ratelimit/config/reload.yaml")
 		if err != nil {
 			panic(err)
