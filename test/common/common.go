@@ -116,8 +116,9 @@ func startCacheProcess(ctx context.Context, command string, args []string, port 
 	// Wait up to 1s for the redis instance to start accepting connections.
 	for {
 		var d net.Dialer
-		_, err := d.DialContext(ctx, "tcp", "localhost:"+strconv.Itoa(port))
+		conn, err := d.DialContext(ctx, "tcp", "localhost:"+strconv.Itoa(port))
 		if err == nil {
+			conn.Close()
 			// TCP connections are working. All is well.
 			break
 		}
