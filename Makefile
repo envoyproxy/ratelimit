@@ -73,12 +73,8 @@ tests: compile
 
 .PHONY: tests_with_redis
 tests_with_redis: bootstrap_redis_tls tests_unit
-	redis-server --port 6379 &
-	redis-server --port 6380 &
 	redis-server --port 6381 --requirepass password123 &
 	redis-server --port 6382 --requirepass password123 &
-	redis-server --port 6384 --requirepass password123 &
-	redis-server --port 6385 --requirepass password123 &
 
 	redis-server --port 6392 --requirepass password123 &
 	redis-server --port 6393 --requirepass password123 --slaveof 127.0.0.1 6392 --masterauth password123 &
@@ -97,7 +93,6 @@ tests_with_redis: bootstrap_redis_tls tests_unit
 	mkdir 6389 && cd 6389 && redis-server --port 6389 --cluster-enabled yes --requirepass password123 &
 	mkdir 6390 && cd 6390 && redis-server --port 6390 --cluster-enabled yes --requirepass password123 &
 	mkdir 6391 && cd 6391 && redis-server --port 6391 --cluster-enabled yes --requirepass password123 &
-	memcached -u root --port 6394 -m 64 &
 	sleep 2
 	echo "yes" | redis-cli --cluster create -a password123 127.0.0.1:6386 127.0.0.1:6387 127.0.0.1:6388 --cluster-replicas 0
 	echo "yes" | redis-cli --cluster create -a password123 127.0.0.1:6389 127.0.0.1:6390 127.0.0.1:6391 --cluster-replicas 0
