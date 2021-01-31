@@ -48,6 +48,8 @@ type rateLimitMemcacheImpl struct {
 	baseRateLimiter            *limiter.BaseRateLimiter
 }
 
+var AutoFlushForIntegrationTests bool = false
+
 var _ limiter.RateLimitCache = (*rateLimitMemcacheImpl)(nil)
 
 func (this *rateLimitMemcacheImpl) DoLimit(
@@ -121,6 +123,9 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 
 	this.waitGroup.Add(1)
 	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
+	if AutoFlushForIntegrationTests {
+		this.Flush()
+	}
 
 	return responseDescriptorStatuses
 }
