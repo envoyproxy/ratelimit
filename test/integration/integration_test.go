@@ -123,7 +123,11 @@ func TestBasicConfigMemcache(t *testing.T) {
 }
 
 func TestBasicConfigMemcacheCachePrefix(t *testing.T) {
-	t.Run("Memcache", testBasicConfigPrefix("8098", "false", "0", "memcache", "prefix:"))
+	common.WithMultiMemcache(t, []common.MemcacheConfig{
+		{Port: 6394},
+	}, func() {
+		t.Run("Memcache", testBasicConfigPrefix("8098", "false", "0", "memcache", "prefix:"))
+	})
 }
 
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
