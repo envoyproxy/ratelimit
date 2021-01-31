@@ -60,7 +60,11 @@ func TestBasicConfig(t *testing.T) {
 }
 
 func TestBasicConfigCachePrefix(t *testing.T) {
-	t.Run("WithoutPerSecondRedis", testBasicConfigPrefix("8083", "false", "0", "", "prefix:"))
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6379},
+	}, func() {
+		t.Run("WithoutPerSecondRedis", testBasicConfigPrefix("8083", "false", "0", "", "prefix:"))
+	})
 }
 
 func TestBasicTLSConfig(t *testing.T) {
