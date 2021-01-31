@@ -42,9 +42,9 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		timeSource := mock_utils.NewMockTimeSource(controller)
 		var cache limiter.RateLimitCache
 		if usePerSecondRedis {
-			cache = redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+			cache = redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "")
 		} else {
-			cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+			cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "")
 		}
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
@@ -171,7 +171,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "")
 	sink := &common.TestStatSink{}
 	statsStore := stats.NewStore(sink, true)
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
@@ -263,7 +263,7 @@ func TestNearLimit(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "")
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	// Test Near Limit Stats. Under Near Limit Ratio
@@ -423,7 +423,7 @@ func TestRedisWithJitter(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	jitterSource := mock_utils.NewMockJitterRandSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8, "")
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)

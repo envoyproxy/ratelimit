@@ -45,6 +45,7 @@ type Settings struct {
 	NearLimitRatio               float32       `envconfig:"NEAR_LIMIT_RATIO" default:"0.8"`
 	MemcacheHostPort             string        `envconfig:"MEMCACHE_HOST_PORT" default:""`
 	BackendType                  string        `envconfig:"BACKEND_TYPE" default:"redis"`
+	CacheKeyPrefix               string        `envconfig:"CACHE_KEY_PREFIX" default:""`
 }
 
 type Option func(*Settings)

@@ -502,6 +502,7 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 
 1. `REDIS_TLS` & `REDIS_PERSECOND_TLS`: set to `"true"` to enable a TLS connection for the specific connection type.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable authentication to the redis host.
+1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
 ## Redis type
 
@@ -563,6 +564,7 @@ To configure a Memcache instance use the following environment variables instead
 
 1. `MEMCACHE_HOST_PORT=<host:port>`
 1. `BACKEND_TYPE=memcache`
+1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
 With memcache mode increments will happen asynchronously, so it's technically possible for
 a client to exceed quota briefly if multiple requests happen at exactly the same time.

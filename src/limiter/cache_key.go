@@ -12,16 +12,20 @@ import (
 )
 
 type CacheKeyGenerator struct {
+	prefix string
 	// bytes.Buffer pool used to efficiently generate cache keys.
 	bufferPool sync.Pool
 }
 
-func NewCacheKeyGenerator() CacheKeyGenerator {
-	return CacheKeyGenerator{bufferPool: sync.Pool{
-		New: func() interface{} {
-			return new(bytes.Buffer)
+func NewCacheKeyGenerator(prefix string) CacheKeyGenerator {
+	return CacheKeyGenerator{
+		prefix: prefix,
+		bufferPool: sync.Pool{
+			New: func() interface{} {
+				return new(bytes.Buffer)
+			},
 		},
-	}}
+	}
 }
 
 type CacheKey struct {
@@ -54,6 +58,7 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 	defer this.bufferPool.Put(b)
 	b.Reset()
 
+	b.WriteString(this.prefix)
 	b.WriteString(domain)
 	b.WriteByte('_')
 
