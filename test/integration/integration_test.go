@@ -13,6 +13,7 @@ import (
 
 	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
 	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/golang/protobuf/ptypes/duration"
@@ -47,10 +48,15 @@ func newDescriptorStatusLegacy(
 // TODO: Once adding the ability of stopping the server in the runner (https://github.com/envoyproxy/ratelimit/issues/119),
 //  stop the server at the end of each test, thus we can reuse the grpc port among these integration tests.
 func TestBasicConfig(t *testing.T) {
-	t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0", ""))
-	t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0", "redis"))
-	t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("18083", "false", "1000", ""))
-	t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000", "redis"))
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6379},
+		{Port: 6380},
+	}, func() {
+		t.Run("WithoutPerSecondRedis", testBasicConfig("8083", "false", "0", ""))
+		t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0", "redis"))
+		t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("18083", "false", "1000", ""))
+		t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000", "redis"))
+	})
 }
 
 func TestBasicTLSConfig(t *testing.T) {
@@ -61,10 +67,15 @@ func TestBasicTLSConfig(t *testing.T) {
 }
 
 func TestBasicAuthConfig(t *testing.T) {
-	t.Run("WithoutPerSecondRedisAuth", testBasicConfigAuth("8091", "false", "0"))
-	t.Run("WithPerSecondRedisAuth", testBasicConfigAuth("8093", "true", "0"))
-	t.Run("WithoutPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18091", "false", "1000"))
-	t.Run("WithPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18093", "true", "1000"))
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6384, Password: "password123"},
+		{Port: 6385, Password: "password123"},
+	}, func() {
+		t.Run("WithoutPerSecondRedisAuth", testBasicConfigAuth("8091", "false", "0"))
+		t.Run("WithPerSecondRedisAuth", testBasicConfigAuth("8093", "true", "0"))
+		t.Run("WithoutPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18091", "false", "1000"))
+		t.Run("WithPerSecondRedisAuthWithLocalCache", testBasicConfigAuth("18093", "true", "1000"))
+	})
 }
 
 func TestBasicAuthConfigWithRedisCluster(t *testing.T) {
@@ -82,13 +93,25 @@ func TestBasicAuthConfigWithRedisSentinel(t *testing.T) {
 }
 
 func TestBasicReloadConfig(t *testing.T) {
-	t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRoot("8095", "false", "0"))
-	t.Run("ReloadWithoutWatchRoot", testBasicConfigReload("8097", "false", "0", "false"))
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6379},
+	}, func() {
+		t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRoot("8095", "false", "0"))
+		t.Run("ReloadWithoutWatchRoot", testBasicConfigReload("8097", "false", "0", "false"))
+	})
 }
 
 func TestBasicConfigMemcache(t *testing.T) {
-	t.Run("Memcache", testBasicConfig("8098", "false", "0", "memcache"))
-	t.Run("MemcacheWithLocalCache", testBasicConfig("18099", "false", "1000", "memcache"))
+	// Memcache does async increments, which can cause race conditions during
+	// testing. Force sync increments so the quotas are predictable during testing.
+	memcached.AutoFlushForIntegrationTests = true
+
+	common.WithMultiMemcache(t, []common.MemcacheConfig{
+		{Port: 6394},
+	}, func() {
+		t.Run("Memcache", testBasicConfig("8098", "false", "0", "memcache"))
+		t.Run("MemcacheWithLocalCache", testBasicConfig("18099", "false", "1000", "memcache"))
+	})
 }
 
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
@@ -267,6 +290,14 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string, ba
 		runner := runner.NewRunner()
 
 		go func() {
+			// Catch a panic() to ensure that test name is printed.
+			// Otherwise go doesn't know what test this goroutine is
+			// associated with.
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("Uncaught panic(): %v", r)
+				}
+			}()
 			runner.Run()
 		}()
 
@@ -489,6 +520,14 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string, ba
 }
 
 func TestBasicConfigLegacy(t *testing.T) {
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6379},
+	}, func() {
+		testBasicConfigLegacy(t)
+	})
+}
+
+func testBasicConfigLegacy(t *testing.T) {
 	os.Setenv("PORT", "8082")
 	os.Setenv("GRPC_PORT", "8083")
 	os.Setenv("DEBUG_PORT", "8084")
@@ -507,6 +546,14 @@ func TestBasicConfigLegacy(t *testing.T) {
 
 	runner := runner.NewRunner()
 	go func() {
+		// Catch a panic() to ensure that test name is printed.
+		// Otherwise go doesn't know what test this goroutine is
+		// associated with.
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("Uncaught panic(): %v", r)
+			}
+		}()
 		runner.Run()
 	}()
 
@@ -619,6 +666,14 @@ func testConfigReload(grpcPort, perSecond string, local_cache_size string) func(
 		runner := runner.NewRunner()
 
 		go func() {
+			// Catch a panic() to ensure that test name is printed.
+			// Otherwise go doesn't know what test this goroutine is
+			// associated with.
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("Uncaught panic(): %v", r)
+				}
+			}()
 			runner.Run()
 		}()
 
