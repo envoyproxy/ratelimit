@@ -33,15 +33,15 @@ func (this *descriptorsValue) Set(arg string) error {
 }
 
 func (this *descriptorsValue) String() string {
-	res := ""
+	ret := ""
 	for _, descriptor := range this.descriptors {
 		tmp := ""
 		for _, entry := range descriptor.Entries {
 			tmp += fmt.Sprintf(" <key=%s, value=%s> ", entry.Key, entry.Value)
 		}
-		res += fmt.Sprintf("[%s] ", tmp)
+		ret += fmt.Sprintf("[%s] ", tmp)
 	}
-	return res
+	return ret
 }
 
 func main() {
@@ -82,5 +82,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("response:\n %s\n", response.String())
+	fmt.Printf("response: %s\n", response.String())
 }
