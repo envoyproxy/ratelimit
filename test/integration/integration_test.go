@@ -56,14 +56,7 @@ func TestBasicConfig(t *testing.T) {
 		t.Run("WithPerSecondRedis", testBasicConfig("8085", "true", "0", "redis"))
 		t.Run("WithoutPerSecondRedisWithLocalCache", testBasicConfig("18083", "false", "1000", ""))
 		t.Run("WithPerSecondRedisWithLocalCache", testBasicConfig("18085", "true", "1000", "redis"))
-	})
-}
-
-func TestBasicConfigCachePrefix(t *testing.T) {
-	common.WithMultiRedis(t, []common.RedisConfig{
-		{Port: 6379},
-	}, func() {
-		t.Run("WithoutPerSecondRedis", testBasicConfigPrefix("8083", "false", "0", "", "prefix:"))
+		t.Run("WithoutPerSecondRedisWithCachePrefix", testBasicConfigPrefix("8101", "false", "0", "", "prefix:"))
 	})
 }
 
@@ -119,15 +112,9 @@ func TestBasicConfigMemcache(t *testing.T) {
 	}, func() {
 		t.Run("Memcache", testBasicConfig("8098", "false", "0", "memcache"))
 		t.Run("MemcacheWithLocalCache", testBasicConfig("18099", "false", "1000", "memcache"))
+		t.Run("MemcacheWithPrefix", testBasicConfigPrefix("8099", "false", "0", "memcache", "prefix:"))
 	})
-}
 
-func TestBasicConfigMemcacheCachePrefix(t *testing.T) {
-	common.WithMultiMemcache(t, []common.MemcacheConfig{
-		{Port: 6394},
-	}, func() {
-		t.Run("Memcache", testBasicConfigPrefix("8098", "false", "0", "memcache", "prefix:"))
-	})
 }
 
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
@@ -319,6 +306,7 @@ func testBasicBaseConfig(grpcPort, perSecond string, local_cache_size string, ba
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
 		runner := runner.NewRunner()
+		defer runner.Stop()
 
 		go func() {
 			// Catch a panic() to ensure that test name is printed.
@@ -577,6 +565,7 @@ func testBasicConfigLegacy(t *testing.T) {
 	os.Setenv("REDIS_PERSECOND_TYPE", "single")
 
 	runner := runner.NewRunner()
+	defer runner.Stop()
 	go func() {
 		// Catch a panic() to ensure that test name is printed.
 		// Otherwise go doesn't know what test this goroutine is
@@ -697,6 +686,7 @@ func testConfigReload(grpcPort, perSecond string, local_cache_size string) func(
 		local_cache_size_val, _ := strconv.Atoi(local_cache_size)
 		enable_local_cache := local_cache_size_val > 0
 		runner := runner.NewRunner()
+		defer runner.Stop()
 
 		go func() {
 			// Catch a panic() to ensure that test name is printed.
