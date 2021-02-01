@@ -27,5 +27,7 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 		jitterRand,
 		expirationJitterMaxSeconds,
 		localCache,
-		s.NearLimitRatio)
+		s.NearLimitRatio,
+		s.CacheKeyPrefix,
+	)
 }
