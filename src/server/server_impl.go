@@ -126,7 +126,7 @@ func (server *server) Start() {
 			return
 		}
 		err = http.Serve(server.debugListener.listener, server.debugListener.debugMux)
-		logger.Infof("Failed to start debug server '%+v'", err)
+		logger.Errorf("Failed to start debug server '%+v'", err)
 	}()
 
 	go server.startGrpc()
