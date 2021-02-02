@@ -345,9 +345,10 @@ RUNTIME_IGNOREDOTFILES default:"false"
 There are two methods for triggering a configuration reload:
 1. Symlink RUNTIME_ROOT to a different directory.
 2. Update the contents inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` directly.
-3. Add/Update the existing domain descriptors `UPSERT_DESCRIPTORS` default `false`
 
 The former is the default behavior. To use the latter method, set the `RUNTIME_WATCH_ROOT` environment variable to `false`.
+
+To Add/Update the  descriptors of existing ratelimit domain , Set the `UPSERT_DESCRIPTORS` environment variable to `true` default `false`
 
 For more information on how runtime works you can read its [README](https://github.com/lyft/goruntime).
 

@@ -102,6 +102,7 @@ func TestBasicReloadConfig(t *testing.T) {
 	}, func() {
 		t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRoot("8095", "false", "0"))
 		t.Run("ReloadWithoutWatchRoot", testBasicConfigReload("8097", "false", "0", "false"))
+		t.Run("ReloadWithoutWatchRootExistingDomain", testExistingDomainBasicConfigReload("8099", "false", "0", "false", "true"))
 	})
 }
 
@@ -120,10 +121,6 @@ func TestBasicConfigMemcache(t *testing.T) {
 
 func TestBasicConfigMemcacheCachePrefix(t *testing.T) {
 	t.Run("Memcache", testBasicConfigPrefix("8098", "false", "0", "memcache", "prefix:"))
-}
-
-func TestExistingDomainBasicConfigReload(t *testing.T) {
-	t.Run("ReloadWithoutWatchRootExistingDomain", testExistingDomainBasicConfigReload("8099", "false", "0", "false", "true"))
 }
 
 func testBasicConfigAuthTLS(grpcPort, perSecond string, local_cache_size string) func(*testing.T) {
