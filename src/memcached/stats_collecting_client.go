@@ -20,7 +20,7 @@ type statsCollectingClient struct {
 	keysFound        stats.Counter
 }
 
-func collectStats(c Client, scope stats.Scope) Client {
+func CollectStats(c Client, scope stats.Scope) Client {
 	return statsCollectingClient{
 		c:                c,
 		multiGetSuccess:  scope.NewCounterWithTags("multiget", map[string]string{"code": "success"}),
