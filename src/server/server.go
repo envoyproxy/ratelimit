@@ -39,5 +39,8 @@ type Server interface {
 	 */
 	Runtime() loader.IFace
 
+	/**
+	 *  Stops serving the grpc port (for integration testing).
+	 */
 	Stop()
 }

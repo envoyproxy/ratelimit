@@ -48,8 +48,8 @@ type server struct {
 	scope           stats.Scope
 	runtime         loader.IFace
 	debugListener   serverDebugListener
-	health          *HealthChecker
 	debugListenerMu sync.Mutex
+	health          *HealthChecker
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
