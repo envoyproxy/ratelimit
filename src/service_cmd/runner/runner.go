@@ -88,6 +88,7 @@ func (runner *Runner) Run() {
 
 	var localCache *freecache.Cache
 	if s.LocalCacheSizeInBytes != 0 {
+		logger.Warnf("initializing local cache with %d bytes", s.LocalCacheSizeInBytes)
 		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
 	}
 
