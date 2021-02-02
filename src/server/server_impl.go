@@ -9,6 +9,7 @@ import (
 	"net/http/pprof"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	"os"
 	"os/signal"
@@ -38,19 +39,22 @@ type serverDebugListener struct {
 }
 
 type server struct {
-	port          int
-	grpcPort      int
-	debugPort     int
-	router        *mux.Router
-	grpcServer    *grpc.Server
-	store         stats.Store
-	scope         stats.Scope
-	runtime       loader.IFace
-	debugListener serverDebugListener
-	health        *HealthChecker
+	port            int
+	grpcPort        int
+	debugPort       int
+	router          *mux.Router
+	grpcServer      *grpc.Server
+	store           stats.Store
+	scope           stats.Scope
+	runtime         loader.IFace
+	debugListener   serverDebugListener
+	debugListenerMu sync.Mutex
+	health          *HealthChecker
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
+	server.debugListenerMu.Lock()
+	defer server.debugListenerMu.Unlock()
 	server.debugListener.debugMux.HandleFunc(path, handler)
 	server.debugListener.endpoints[path] = help
 }
@@ -112,7 +116,9 @@ func (server *server) Start() {
 		addr := fmt.Sprintf(":%d", server.debugPort)
 		logger.Warnf("Listening for debug on '%s'", addr)
 		var err error
+		server.debugListenerMu.Lock()
 		server.debugListener.listener, err = reuseport.Listen("tcp", addr)
+		server.debugListenerMu.Unlock()
 
 		if err != nil {
 			logger.Errorf("Failed to open debug HTTP listener: '%+v'", err)
@@ -252,6 +258,15 @@ func newServer(name string, store stats.Store, localCache *freecache.Cache, opts
 	return ret
 }
 
+func (server *server) Stop() {
+	server.grpcServer.GracefulStop()
+	server.debugListenerMu.Lock()
+	if server.debugListener.listener != nil {
+		server.debugListener.listener.Close()
+	}
+	server.debugListenerMu.Unlock()
+}
+
 func (server *server) handleGracefulShutdown() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
@@ -261,9 +276,11 @@ func (server *server) handleGracefulShutdown() {
 
 		logger.Infof("Ratelimit server received %v, shutting down gracefully", sig)
 		server.grpcServer.GracefulStop()
+		server.debugListenerMu.Lock()
 		if server.debugListener.listener != nil {
 			server.debugListener.listener.Close()
 		}
+		server.debugListenerMu.Unlock()
 		os.Exit(0)
 	}()
 }

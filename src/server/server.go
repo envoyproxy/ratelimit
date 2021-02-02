@@ -1,11 +1,12 @@
 package server
 
 import (
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"net/http"
 
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+
 	"github.com/lyft/goruntime/loader"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	"google.golang.org/grpc"
 )
 
@@ -37,4 +38,9 @@ type Server interface {
 	 * Returns the runtime configuration for the server.
 	 */
 	Runtime() loader.IFace
+
+	/**
+	 *  Stops serving the grpc port (for integration testing).
+	 */
+	Stop()
 }
