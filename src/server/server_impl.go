@@ -125,7 +125,7 @@ func (server *server) Start() {
 		server.debugListener.listener = lis
 		server.listenerMu.Unlock()
 
-		if err := http.Serve(server.debugListener.listener, server.debugListener.debugMux); err != nil {
+		if err := http.Serve(server.debugListener.listener, server.debugListener.debugMux); err != http.ErrServerClosed {
 			logger.Fatalf("Failed to start debug server: '%+v'", err)
 		}
 	}()
@@ -136,7 +136,7 @@ func (server *server) Start() {
 
 	addr := fmt.Sprintf(":%d", server.port)
 	logger.Warnf("Listening for HTTP on '%s'", addr)
-	list, err := reuseport.Listen("tcp", addr)
+	lis, err := reuseport.Listen("tcp", addr)
 	if err != nil {
 		logger.Fatalf("Failed to open HTTP listener: '%+v'", err)
 	}
@@ -144,10 +144,9 @@ func (server *server) Start() {
 	server.listenerMu.Lock()
 	server.httpServer = srv
 	server.listenerMu.Unlock()
-	err = srv.Serve(list)
 
-	if err != http.ErrServerClosed {
-		logger.Fatal(err)
+	if err := srv.Serve(lis); err != http.ErrServerClosed {
+		logger.Fatalf("Failed to start HTTP server: '%+v'", err)
 	}
 }
 
