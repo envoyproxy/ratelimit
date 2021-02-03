@@ -62,6 +62,20 @@ func TestStats_MultiGet(t *testing.T) {
 	}, fakeSink.values)
 
 	fakeSink.Reset()
+	returnValue = map[string]*memcache.Item{"foo": nil, "bar": nil}
+	client.EXPECT().GetMulti(arg).Return(returnValue, nil)
+	actualReturnValue, err = sc.GetMulti(arg)
+	statsStore.Flush()
+
+	assert.Equal(returnValue, actualReturnValue)
+	assert.Nil(err)
+	assert.Equal(map[string]uint64{
+		"keys_found":              2,
+		"keys_requested":          1,
+		"multiget.__code=success": 1,
+	}, fakeSink.values)
+
+	fakeSink.Reset()
 	returnValue = map[string]*memcache.Item{}
 	arg = []string{"foo", "bar"}
 
