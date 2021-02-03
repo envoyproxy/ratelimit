@@ -21,7 +21,7 @@ type Settings struct {
 	RuntimeSubdirectory          string        `envconfig:"RUNTIME_SUBDIRECTORY"`
 	RuntimeIgnoreDotFiles        bool          `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
 	RuntimeWatchRoot             bool          `envconfig:"RUNTIME_WATCH_ROOT" default:"true"`
-	LogLevel                     string        `envconfig:"LOG_LEVEL" default:"WARN"`
+	LogLevel                     string        `envconfig:"LOG_LEVEL" default:"INFO"`
 	LogFormat                    string        `envconfig:"LOG_FORMAT" default:"text"`
 	RedisSocketType              string        `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisType                    string        `envconfig:"REDIS_TYPE" default:"SINGLE"`

@@ -115,7 +115,7 @@ func (server *server) GrpcServer() *grpc.Server {
 func (server *server) Start() {
 	go func() {
 		addr := fmt.Sprintf(":%d", server.debugPort)
-		logger.Warnf("Listening for debug on '%s'", addr)
+		logger.Infof("Listening for debug on '%s'", addr)
 		lis, err := reuseport.Listen("tcp", addr)
 		if err != nil {
 			logger.Errorf("Failed to open debug HTTP listener: '%+v'", err)
@@ -135,7 +135,7 @@ func (server *server) Start() {
 	server.handleGracefulShutdown()
 
 	addr := fmt.Sprintf(":%d", server.port)
-	logger.Warnf("Listening for HTTP on '%s'", addr)
+	logger.Infof("Listening for HTTP on '%s'", addr)
 	lis, err := reuseport.Listen("tcp", addr)
 	if err != nil {
 		logger.Fatalf("Failed to open HTTP listener: '%+v'", err)
@@ -152,7 +152,7 @@ func (server *server) Start() {
 
 func (server *server) startGrpc() {
 	addr := fmt.Sprintf(":%d", server.grpcPort)
-	logger.Warnf("Listening for gRPC on '%s'", addr)
+	logger.Infof("Listening for gRPC on '%s'", addr)
 	lis, err := reuseport.Listen("tcp", addr)
 	if err != nil {
 		logger.Fatalf("Failed to listen for gRPC: %v", err)
