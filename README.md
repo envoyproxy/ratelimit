@@ -426,7 +426,7 @@ ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.total_hi
 
 ## Statistics options
 
-1. `EXTRA_TAGS==<k1:v1>,<k2:v2>` tags all emitted stats with the provided tags. You might want to tag build commit or release version, for example.
+1. `EXTRA_TAGS`: set to `"<k1:v1>,<k2:v2>"` to tag all emitted stats with the provided tags. You might want to tag build commit or release version, for example.
 
 # HTTP Port
 
