@@ -116,17 +116,18 @@ func (server *server) Start() {
 	go func() {
 		addr := fmt.Sprintf(":%d", server.debugPort)
 		logger.Warnf("Listening for debug on '%s'", addr)
-		var err error
-		server.listenerMu.Lock()
-		server.debugListener.listener, err = reuseport.Listen("tcp", addr)
-		server.listenerMu.Unlock()
-
+		lis, err := reuseport.Listen("tcp", addr)
 		if err != nil {
 			logger.Errorf("Failed to open debug HTTP listener: '%+v'", err)
 			return
 		}
-		err = http.Serve(server.debugListener.listener, server.debugListener.debugMux)
-		logger.Errorf("Failed to start debug server '%+v'", err)
+		server.listenerMu.Lock()
+		server.debugListener.listener = lis
+		server.listenerMu.Unlock()
+
+		if err := http.Serve(server.debugListener.listener, server.debugListener.debugMux); err != nil {
+			logger.Fatalf("Failed to start debug server: '%+v'", err)
+		}
 	}()
 
 	go server.startGrpc()
