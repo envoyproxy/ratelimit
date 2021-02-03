@@ -51,7 +51,6 @@ type server struct {
 	httpListener  net.Listener
 	listenerMu    sync.Mutex
 	health        *HealthChecker
-	stopped       bool
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
@@ -145,14 +144,8 @@ func (server *server) Start() {
 	server.listenerMu.Unlock()
 	err = http.Serve(list, server.router)
 
-	server.listenerMu.Lock()
-	explicitlyStopped := server.stopped
-	server.listenerMu.Unlock()
-
-	if !explicitlyStopped {
+	if err != http.ErrServerClosed {
 		logger.Fatal(err)
-	} else {
-		logger.Info(err)
 	}
 }
 
@@ -274,7 +267,6 @@ func newServer(s settings.Settings, name string, store stats.Store, localCache *
 func (server *server) Stop() {
 	server.grpcServer.GracefulStop()
 	server.listenerMu.Lock()
-	server.stopped = true
 	if server.debugListener.listener != nil {
 		server.debugListener.listener.Close()
 	}

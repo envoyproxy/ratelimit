@@ -100,6 +100,7 @@ func TestBasicConfig(t *testing.T) {
 		t.Run("WithoutPerSecondRedisWithCachePrefix", testBasicConfig(cacheSettings))
 	})
 }
+
 func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS(false, 0))
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS(true, 0))
