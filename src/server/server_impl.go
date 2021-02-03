@@ -39,22 +39,24 @@ type serverDebugListener struct {
 }
 
 type server struct {
-	port            int
-	grpcPort        int
-	debugPort       int
-	router          *mux.Router
-	grpcServer      *grpc.Server
-	store           stats.Store
-	scope           stats.Scope
-	runtime         loader.IFace
-	debugListener   serverDebugListener
-	debugListenerMu sync.Mutex
-	health          *HealthChecker
+	port          int
+	grpcPort      int
+	debugPort     int
+	router        *mux.Router
+	grpcServer    *grpc.Server
+	store         stats.Store
+	scope         stats.Scope
+	runtime       loader.IFace
+	debugListener serverDebugListener
+	httpListener  net.Listener
+	listenerMu    sync.Mutex
+	health        *HealthChecker
+	stopped       bool
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
-	server.debugListenerMu.Lock()
-	defer server.debugListenerMu.Unlock()
+	server.listenerMu.Lock()
+	defer server.listenerMu.Unlock()
 	server.debugListener.debugMux.HandleFunc(path, handler)
 	server.debugListener.endpoints[path] = help
 }
@@ -116,9 +118,9 @@ func (server *server) Start() {
 		addr := fmt.Sprintf(":%d", server.debugPort)
 		logger.Warnf("Listening for debug on '%s'", addr)
 		var err error
-		server.debugListenerMu.Lock()
+		server.listenerMu.Lock()
 		server.debugListener.listener, err = reuseport.Listen("tcp", addr)
-		server.debugListenerMu.Unlock()
+		server.listenerMu.Unlock()
 
 		if err != nil {
 			logger.Errorf("Failed to open debug HTTP listener: '%+v'", err)
@@ -138,7 +140,20 @@ func (server *server) Start() {
 	if err != nil {
 		logger.Fatalf("Failed to open HTTP listener: '%+v'", err)
 	}
-	logger.Fatal(http.Serve(list, server.router))
+	server.listenerMu.Lock()
+	server.httpListener = list
+	server.listenerMu.Unlock()
+	err = http.Serve(list, server.router)
+
+	server.listenerMu.Lock()
+	explicitlyStopped := server.stopped
+	server.listenerMu.Unlock()
+
+	if !explicitlyStopped {
+		logger.Fatal(err)
+	} else {
+		logger.Info(err)
+	}
 }
 
 func (server *server) startGrpc() {
@@ -159,13 +174,11 @@ func (server *server) Runtime() loader.IFace {
 	return server.runtime
 }
 
-func NewServer(name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) Server {
-	return newServer(name, store, localCache, opts...)
+func NewServer(s settings.Settings, name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) Server {
+	return newServer(s, name, store, localCache, opts...)
 }
 
-func newServer(name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) *server {
-	s := settings.NewSettings()
-
+func newServer(s settings.Settings, name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) *server {
 	for _, opt := range opts {
 		opt(&s)
 	}
@@ -260,11 +273,15 @@ func newServer(name string, store stats.Store, localCache *freecache.Cache, opts
 
 func (server *server) Stop() {
 	server.grpcServer.GracefulStop()
-	server.debugListenerMu.Lock()
+	server.listenerMu.Lock()
+	server.stopped = true
 	if server.debugListener.listener != nil {
 		server.debugListener.listener.Close()
 	}
-	server.debugListenerMu.Unlock()
+	if server.httpListener != nil {
+		server.httpListener.Close()
+	}
+	server.listenerMu.Unlock()
 }
 
 func (server *server) handleGracefulShutdown() {
@@ -276,11 +293,14 @@ func (server *server) handleGracefulShutdown() {
 
 		logger.Infof("Ratelimit server received %v, shutting down gracefully", sig)
 		server.grpcServer.GracefulStop()
-		server.debugListenerMu.Lock()
+		server.listenerMu.Lock()
 		if server.debugListener.listener != nil {
 			server.debugListener.listener.Close()
 		}
-		server.debugListenerMu.Unlock()
+		if server.httpListener != nil {
+			server.httpListener.Close()
+		}
+		server.listenerMu.Unlock()
 		os.Exit(0)
 	}()
 }
