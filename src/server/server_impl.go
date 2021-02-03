@@ -48,7 +48,7 @@ type server struct {
 	scope         stats.Scope
 	runtime       loader.IFace
 	debugListener serverDebugListener
-	httpListener  net.Listener
+	httpServer    *http.Server
 	listenerMu    sync.Mutex
 	health        *HealthChecker
 }
@@ -139,10 +139,11 @@ func (server *server) Start() {
 	if err != nil {
 		logger.Fatalf("Failed to open HTTP listener: '%+v'", err)
 	}
+	srv := &http.Server{Handler: server.router}
 	server.listenerMu.Lock()
-	server.httpListener = list
+	server.httpServer = srv
 	server.listenerMu.Unlock()
-	err = http.Serve(list, server.router)
+	err = srv.Serve(list)
 
 	if err != http.ErrServerClosed {
 		logger.Fatal(err)
@@ -270,8 +271,8 @@ func (server *server) Stop() {
 	if server.debugListener.listener != nil {
 		server.debugListener.listener.Close()
 	}
-	if server.httpListener != nil {
-		server.httpListener.Close()
+	if server.httpServer != nil {
+		server.httpServer.Close()
 	}
 	server.listenerMu.Unlock()
 }
@@ -289,8 +290,8 @@ func (server *server) handleGracefulShutdown() {
 		if server.debugListener.listener != nil {
 			server.debugListener.listener.Close()
 		}
-		if server.httpListener != nil {
-			server.httpListener.Close()
+		if server.httpServer != nil {
+			server.httpServer.Close()
 		}
 		server.listenerMu.Unlock()
 		os.Exit(0)
