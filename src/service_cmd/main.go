@@ -1,8 +1,11 @@
 package main
 
-import "github.com/envoyproxy/ratelimit/src/service_cmd/runner"
+import (
+	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
+	"github.com/envoyproxy/ratelimit/src/settings"
+)
 
 func main() {
-	runner := runner.NewRunner()
+	runner := runner.NewRunner(settings.NewSettings())
 	runner.Run()
 }
