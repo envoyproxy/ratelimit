@@ -104,11 +104,10 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 			continue
 		}
 
-		arrivedAt := this.algorithm.GetArrivedAt()
-		newTat := this.algorithm.GetNewTat()
-
 		// Store new tat for initial tat of next requests
-		expirationSeconds := utils.NanosecondsToSeconds(newTat-arrivedAt) + 1
+		newTat := this.algorithm.GetResultsAfterIncrease()
+		expirationSeconds := this.algorithm.GetExpirationSeconds()
+
 		if this.expirationJitterMaxSeconds > 0 {
 			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 		}

@@ -113,10 +113,11 @@ func (fw *FixedWindowImpl) PopulateStats(limit *config.RateLimit, nearLimit uint
 	limit.Stats.OverLimitWithLocalCache.Add(overLimitWithLocalCache)
 }
 
-func (fw *FixedWindowImpl) GetNewTat() int64 {
+func (fw *FixedWindowImpl) GetExpirationSeconds() int64 {
 	return 0
 }
-func (fw *FixedWindowImpl) GetArrivedAt() int64 {
+
+func (fw *FixedWindowImpl) GetResultsAfterIncrease() int64 {
 	return 0
 }
 

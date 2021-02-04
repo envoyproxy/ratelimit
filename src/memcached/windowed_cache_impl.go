@@ -99,10 +99,8 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 			isOverLimit[i] = false
 		}
 
-		arrivedAt := this.algorithm.GetArrivedAt()
-		newTats[i] = this.algorithm.GetNewTat()
-
-		expirationSeconds[i] = utils.NanosecondsToSeconds(newTats[i]-arrivedAt) + 1
+		newTats[i] = this.algorithm.GetResultsAfterIncrease()
+		expirationSeconds[i] = this.algorithm.GetExpirationSeconds()
 		if this.expirationJitterMaxSeconds > 0 {
 			expirationSeconds[i] += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 		}

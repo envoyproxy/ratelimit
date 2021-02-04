@@ -126,15 +126,18 @@ func (rw *RollingWindowImpl) IsOverLimitWithLocalCache(key string) bool {
 	return false
 }
 
-func (rw *RollingWindowImpl) GetNewTat() int64 {
+func (rw *RollingWindowImpl) GetExpirationSeconds() int64 {
+	if rw.diff < 0 {
+		return utils.NanosecondsToSeconds(rw.tat-rw.arrivedAt) + 1
+	}
+	return utils.NanosecondsToSeconds(rw.newTat-rw.arrivedAt) + 1
+}
+
+func (rw *RollingWindowImpl) GetResultsAfterIncrease() int64 {
 	if rw.diff < 0 {
 		return rw.tat
 	}
 	return rw.newTat
-}
-
-func (rw *RollingWindowImpl) GetArrivedAt() int64 {
-	return rw.arrivedAt
 }
 
 func (rw *RollingWindowImpl) GenerateCacheKeys(request *pb.RateLimitRequest,

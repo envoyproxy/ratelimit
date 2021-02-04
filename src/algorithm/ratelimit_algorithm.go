@@ -11,8 +11,8 @@ type RatelimitAlgorithm interface {
 	IsOverLimitWithLocalCache(key string) bool
 
 	GetResponseDescriptorStatus(key string, limit *config.RateLimit, results int64, isOverLimitWithLocalCache bool, hitsAddend int64) *pb.RateLimitResponse_DescriptorStatus
-	GetNewTat() int64
-	GetArrivedAt() int64
+	GetExpirationSeconds() int64
+	GetResultsAfterIncrease() int64
 
 	GenerateCacheKeys(request *pb.RateLimitRequest,
 		limits []*config.RateLimit, hitsAddend int64) []utils.CacheKey
