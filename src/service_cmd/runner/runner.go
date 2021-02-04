@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	stats "github.com/lyft/gostats"
@@ -27,10 +28,12 @@ import (
 
 type Runner struct {
 	statsStore stats.Store
+	srv        server.Server
+	mu         sync.Mutex
 }
 
 func NewRunner() Runner {
-	return Runner{stats.NewDefaultStore()}
+	return Runner{statsStore: stats.NewDefaultStore()}
 }
 
 func (runner *Runner) GetStatsStore() stats.Store {
@@ -93,6 +96,9 @@ func (runner *Runner) Run() {
 	}
 
 	srv := server.NewServer("ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
+	runner.mu.Lock()
+	runner.srv = srv
+	runner.mu.Unlock()
 
 	service := ratelimit.NewService(
 		srv.Runtime(),
@@ -119,4 +125,13 @@ func (runner *Runner) Run() {
 	// (1) is the current definition, and (2) is the legacy definition.
 
 	srv.Start()
+}
+
+func (runner *Runner) Stop() {
+	runner.mu.Lock()
+	srv := runner.srv
+	runner.mu.Unlock()
+	if srv != nil {
+		srv.Stop()
+	}
 }

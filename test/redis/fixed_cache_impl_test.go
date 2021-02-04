@@ -49,9 +49,9 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 
 		var cache limiter.RateLimitCache
 		if usePerSecondRedis {
-			cache = redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+			cache = redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "")
 		} else {
-			cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+			cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "")
 		}
 
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
@@ -178,7 +178,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	client := mock_driver.NewMockClient(controller)
 	timeSource := mock_limiter.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "")
 	sink := &common.TestStatSink{}
 	statsStore := stats.NewStore(sink, true)
 	localCacheStats := utils.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
@@ -268,7 +268,7 @@ func TestNearLimit(t *testing.T) {
 
 	client := mock_driver.NewMockClient(controller)
 	timeSource := mock_limiter.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "")
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	domain := "domain"
 
@@ -434,7 +434,7 @@ func TestRedisWithJitter(t *testing.T) {
 	client := mock_driver.NewMockClient(controller)
 	timeSource := mock_limiter.NewMockTimeSource(controller)
 	jitterSource := mock_limiter.NewMockJitterRandSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8, "")
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	domain := "domain"
 

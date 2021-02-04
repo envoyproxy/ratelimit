@@ -148,10 +148,10 @@ func (rw *RollingWindowImpl) PopulateStats(limit *config.RateLimit, nearLimit ui
 	limit.Stats.OverLimitWithLocalCache.Add(overLimitWithLocalCache)
 }
 
-func NewRollingWindowAlgorithm(timeSource utils.TimeSource, localCache *freecache.Cache, nearLimitRatio float32) *RollingWindowImpl {
+func NewRollingWindowAlgorithm(timeSource utils.TimeSource, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) *RollingWindowImpl {
 	return &RollingWindowImpl{
 		timeSource:        timeSource,
-		cacheKeyGenerator: utils.NewCacheKeyGenerator(),
+		cacheKeyGenerator: utils.NewCacheKeyGenerator(cacheKeyPrefix),
 		localCache:        localCache,
 		nearLimitRatio:    nearLimitRatio,
 	}

@@ -24,7 +24,6 @@ type fixedRateLimitCacheImpl struct {
 	timeSource                 utils.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
-	cacheKeyGenerator          utils.CacheKeyGenerator
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
 	algorithm                  algorithm.RatelimitAlgorithm
@@ -104,20 +103,20 @@ func fixedPipelineAppend(client driver.Client, pipeline *driver.Pipeline, key st
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
-func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32) limiter.RateLimitCache {
+func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                     client,
 		perSecondClient:            perSecondClient,
 		timeSource:                 timeSource,
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
-		cacheKeyGenerator:          utils.NewCacheKeyGenerator(),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 		algorithm: algorithm.NewFixedWindowAlgorithm(
 			timeSource,
 			localCache,
 			nearLimitRatio,
+			cacheKeyPrefix,
 		),
 	}
 }

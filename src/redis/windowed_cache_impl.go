@@ -33,7 +33,6 @@ type windowedRateLimitCacheImpl struct {
 	timeSource                 utils.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
-	cacheKeyGenerator          utils.CacheKeyGenerator
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
 	algorithm                  algorithm.RatelimitAlgorithm
@@ -149,20 +148,20 @@ func windowedSetNewTatPipelineAppend(client driver.Client, pipeline *driver.Pipe
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
-func NewWindowedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32) limiter.RateLimitCache {
+func NewWindowedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &windowedRateLimitCacheImpl{
 		client:                     client,
 		perSecondClient:            perSecondClient,
 		timeSource:                 timeSource,
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
-		cacheKeyGenerator:          utils.NewCacheKeyGenerator(),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 		algorithm: algorithm.NewRollingWindowAlgorithm(
 			timeSource,
 			localCache,
 			nearLimitRatio,
+			cacheKeyPrefix,
 		),
 	}
 }

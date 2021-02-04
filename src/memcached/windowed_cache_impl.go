@@ -23,7 +23,6 @@ type windowedRateLimitCacheImpl struct {
 	timeSource                 utils.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
-	cacheKeyGenerator          utils.CacheKeyGenerator
 	localCache                 *freecache.Cache
 	waitGroup                  sync.WaitGroup
 	nearLimitRatio             float32
@@ -112,6 +111,10 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	this.waitGroup.Add(1)
 	go this.increaseAsync(isOverLimitWithLocalCache, isOverLimit, cacheKeys, expirationSeconds, newTats)
 
+	if AutoFlushForIntegrationTests {
+		this.Flush()
+	}
+
 	return responseDescriptorStatuses
 }
 
@@ -140,15 +143,19 @@ func (this *windowedRateLimitCacheImpl) Flush() {
 }
 
 func NewWindowedRateLimitCacheImpl(client driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32, algorithm algorithm.RatelimitAlgorithm) limiter.RateLimitCache {
+	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &windowedRateLimitCacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
-		cacheKeyGenerator:          utils.NewCacheKeyGenerator(),
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		algorithm:                  algorithm,
+		algorithm: algorithm.NewRollingWindowAlgorithm(
+			timeSource,
+			localCache,
+			nearLimitRatio,
+			cacheKeyPrefix,
+		),
 	}
 }

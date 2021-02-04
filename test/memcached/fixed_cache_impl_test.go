@@ -33,7 +33,7 @@ func TestMemcached(t *testing.T) {
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, nil, statsStore, 0.8)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, nil, statsStore, 0.8, "")
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
@@ -119,7 +119,7 @@ func TestMemcachedGetError(t *testing.T) {
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, nil, statsStore, 0.8)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, nil, statsStore, 0.8, "")
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	client.EXPECT().GetMulti([]string{"domain_key_value_1234"}).Return(
@@ -203,7 +203,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	localCache := freecache.NewCache(100)
 	sink := &common.TestStatSink{}
 	statsStore := stats.NewStore(sink, true)
-	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, localCache, statsStore, 0.8)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, localCache, statsStore, 0.8, "")
 	localCacheStats := utils.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
@@ -295,7 +295,7 @@ func TestNearLimit(t *testing.T) {
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, nil, statsStore, 0.8)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, nil, statsStore, 0.8, "")
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 	limits := []*config.RateLimit{
@@ -462,7 +462,7 @@ func TestMemcacheWithJitter(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	jitterSource := mock_utils.NewMockJitterRandSource(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, rand.New(jitterSource), 3600, nil, statsStore, 0.8)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, rand.New(jitterSource), 3600, nil, statsStore, 0.8, "")
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
@@ -503,7 +503,7 @@ func TestMemcacheAdd(t *testing.T) {
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, nil, statsStore, 0.8)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, nil, 0, nil, statsStore, 0.8, "")
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}

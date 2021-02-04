@@ -31,7 +31,8 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 			jitterRand,
 			expirationJitterMaxSeconds,
 			localCache,
-			s.NearLimitRatio), nil
+			s.NearLimitRatio,
+			s.CacheKeyPrefix), nil
 	}
 	if s.RateLimitAlgorithm == settings.WindowedRateLimit {
 		return NewWindowedRateLimitCacheImpl(
@@ -41,7 +42,8 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 			jitterRand,
 			expirationJitterMaxSeconds,
 			localCache,
-			s.NearLimitRatio), nil
+			s.NearLimitRatio,
+			s.CacheKeyPrefix), nil
 	}
 	return nil, fmt.Errorf("Unknown rate limit algorithm. %s\n", s.RateLimitAlgorithm)
 }

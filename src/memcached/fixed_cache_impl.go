@@ -23,7 +23,6 @@ type fixedRateLimitCacheImpl struct {
 	timeSource                 utils.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
-	cacheKeyGenerator          utils.CacheKeyGenerator
 	localCache                 *freecache.Cache
 	waitGroup                  sync.WaitGroup
 	nearLimitRatio             float32
@@ -97,6 +96,10 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	this.waitGroup.Add(1)
 	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
 
+	if AutoFlushForIntegrationTests {
+		this.Flush()
+	}
+
 	return responseDescriptorStatuses
 }
 
@@ -146,11 +149,10 @@ func (this *fixedRateLimitCacheImpl) Flush() {
 }
 
 func NewFixedRateLimitCacheImpl(client driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32) limiter.RateLimitCache {
+	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
-		cacheKeyGenerator:          utils.NewCacheKeyGenerator(),
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
@@ -159,6 +161,7 @@ func NewFixedRateLimitCacheImpl(client driver.Client, timeSource utils.TimeSourc
 			timeSource,
 			localCache,
 			nearLimitRatio,
+			cacheKeyPrefix,
 		),
 	}
 }

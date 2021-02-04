@@ -120,10 +120,10 @@ func (fw *FixedWindowImpl) GetArrivedAt() int64 {
 	return 0
 }
 
-func NewFixedWindowAlgorithm(timeSource utils.TimeSource, localCache *freecache.Cache, nearLimitRatio float32) *FixedWindowImpl {
+func NewFixedWindowAlgorithm(timeSource utils.TimeSource, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) *FixedWindowImpl {
 	return &FixedWindowImpl{
 		timeSource:        timeSource,
-		cacheKeyGenerator: utils.NewCacheKeyGenerator(),
+		cacheKeyGenerator: utils.NewCacheKeyGenerator(cacheKeyPrefix),
 		localCache:        localCache,
 		nearLimitRatio:    nearLimitRatio,
 	}

@@ -45,9 +45,9 @@ func testRedisWindowed(usePerSecondRedis bool) func(*testing.T) {
 
 		var cache limiter.RateLimitCache
 		if usePerSecondRedis {
-			cache = redis.NewWindowedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+			cache = redis.NewWindowedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "")
 		} else {
-			cache = redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+			cache = redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "")
 		}
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
@@ -156,7 +156,7 @@ func TestNearLimitWindowed(t *testing.T) {
 
 	client := redis_driver_mock.NewMockClient(controller)
 	timeSource := mock_limiter.NewMockTimeSource(controller)
-	cache := redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8)
+	cache := redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "")
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	domain := "domain"
 	request := common.NewRateLimitRequest(domain, [][][2]string{{{"key4", "value4"}}}, 1)
@@ -269,7 +269,7 @@ func TestWindowedOverLimitWithLocalCache(t *testing.T) {
 	client := redis_driver_mock.NewMockClient(controller)
 	timeSource := mock_limiter.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	cache := redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8)
+	cache := redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "")
 	sink := &common.TestStatSink{}
 	statsStore := stats.NewStore(sink, true)
 	domain := "domain"
@@ -423,7 +423,7 @@ func TestRedisWindowedWithJitter(t *testing.T) {
 	client := redis_driver_mock.NewMockClient(controller)
 	timeSource := mock_limiter.NewMockTimeSource(controller)
 	jitterSource := mock_limiter.NewMockJitterRandSource(controller)
-	cache := redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8)
+	cache := redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8, "")
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)

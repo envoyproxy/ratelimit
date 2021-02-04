@@ -21,12 +21,13 @@ import (
 
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/coocood/freecache"
-	"github.com/envoyproxy/ratelimit/src/algorithm"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	stats "github.com/lyft/gostats"
 )
+
+var AutoFlushForIntegrationTests bool = false
 
 func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
 	localCache *freecache.Cache, scope stats.Scope) (limiter.RateLimitCache, error) {
@@ -39,14 +40,10 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 			localCache,
 			scope,
 			s.NearLimitRatio,
-		), nil
+			s.CacheKeyPrefix), nil
 	}
 	if s.RateLimitAlgorithm == settings.WindowedRateLimit {
-		ratelimitAlgorithm := algorithm.NewRollingWindowAlgorithm(
-			timeSource,
-			localCache,
-			s.NearLimitRatio,
-		)
+
 		return NewWindowedRateLimitCacheImpl(
 			memcache.New(s.MemcacheHostPort),
 			timeSource,
@@ -55,8 +52,7 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 			localCache,
 			scope,
 			s.NearLimitRatio,
-			ratelimitAlgorithm,
-		), nil
+			s.CacheKeyPrefix), nil
 	}
 	return nil, fmt.Errorf("Unknown rate limit algorithm. %s\n", s.RateLimitAlgorithm)
 }

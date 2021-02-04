@@ -49,9 +49,9 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 			var cache limiter.RateLimitCache
 			timeSource := utils.NewTimeSourceImpl()
 			if rateLimitAlgorithm == settings.FixedRateLimit {
-				cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(utils.NewLockedSource(time.Now().Unix())), 10, nil, 0.8)
+				cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(utils.NewLockedSource(time.Now().Unix())), 10, nil, 0.8, "")
 			} else if rateLimitAlgorithm == settings.WindowedRateLimit {
-				cache = redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(utils.NewLockedSource(time.Now().Unix())), 10, nil, 0.8)
+				cache = redis.NewWindowedRateLimitCacheImpl(client, nil, timeSource, rand.New(utils.NewLockedSource(time.Now().Unix())), 10, nil, 0.8, "")
 			} else {
 				b.Fatalf("unknown rate limit type %s", rateLimitAlgorithm)
 			}
