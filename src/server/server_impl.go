@@ -239,7 +239,7 @@ func newServer(s settings.Settings, name string, store stats.Store, localCache *
 	// setup cpu profiling endpoint
 	ret.AddDebugHttpEndpoint(
 		"/debug/pprof/profile",
-		"root of various pprof endpoints. hit for help.",
+		"CPU profiling endpoint",
 		func(writer http.ResponseWriter, request *http.Request) {
 			pprof.Profile(writer, request)
 		})
