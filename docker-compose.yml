@@ -69,3 +69,8 @@ volumes:
   ratelimit-data:
       - MEMCACHE_HOST_PORT=memcached:11211
 
+networks:
+  ratelimit-network:
+
+volumes:
+  binary:
