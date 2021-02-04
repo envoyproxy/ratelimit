@@ -33,7 +33,7 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 	localCache *freecache.Cache, scope stats.Scope) (limiter.RateLimitCache, error) {
 	if s.RateLimitAlgorithm == settings.FixedRateLimit {
 		return NewFixedRateLimitCacheImpl(
-			memcache.New(s.MemcacheHostPort),
+			CollectStats(memcache.New(s.MemcacheHostPort), scope.Scope("memcache")),
 			timeSource,
 			jitterRand,
 			s.ExpirationJitterMaxSeconds,
@@ -45,7 +45,7 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 	if s.RateLimitAlgorithm == settings.WindowedRateLimit {
 
 		return NewWindowedRateLimitCacheImpl(
-			memcache.New(s.MemcacheHostPort),
+			CollectStats(memcache.New(s.MemcacheHostPort), scope.Scope("memcache")),
 			timeSource,
 			jitterRand,
 			s.ExpirationJitterMaxSeconds,

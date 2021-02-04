@@ -28,12 +28,16 @@ import (
 
 type Runner struct {
 	statsStore stats.Store
+	settings   settings.Settings
 	srv        server.Server
 	mu         sync.Mutex
 }
 
-func NewRunner() Runner {
-	return Runner{statsStore: stats.NewDefaultStore()}
+func NewRunner(s settings.Settings) Runner {
+	return Runner{
+		statsStore: stats.NewDefaultStore(),
+		settings:   s,
+	}
 }
 
 func (runner *Runner) GetStatsStore() stats.Store {
@@ -72,7 +76,7 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 }
 
 func (runner *Runner) Run() {
-	s := settings.NewSettings()
+	s := runner.settings
 
 	logLevel, err := logger.ParseLevel(s.LogLevel)
 	if err != nil {
@@ -95,7 +99,7 @@ func (runner *Runner) Run() {
 		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
 	}
 
-	srv := server.NewServer("ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
+	srv := server.NewServer(s, "ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
 	runner.mu.Lock()
 	runner.srv = srv
 	runner.mu.Unlock()
