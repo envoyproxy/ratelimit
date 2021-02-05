@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -123,8 +124,24 @@ func startCacheProcess(ctx context.Context, command string, args []string, port 
 	ctx, cancel := context.WithCancel(ctx)
 	cmd := exec.CommandContext(ctx, command, args...)
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	errPipe, err1 := cmd.StderrPipe()
+	outPipe, err2 := cmd.StdoutPipe()
+
+	if err1 != nil || err2 != nil {
+		cancel()
+		return nil, fmt.Errorf("Problem starting %s subprocess: %v / %v", command, err1, err2)
+	}
+
+	// You'd think cmd.Stdout = os.Stdout would make more sense here, but
+	// then the test process hangs if anything within it has a panic().
+	// So instead, we pipe the output manually.
+	go func() {
+		io.Copy(os.Stderr, errPipe)
+	}()
+	go func() {
+		io.Copy(os.Stdout, outPipe)
+	}()
+
 	err := cmd.Start()
 
 	if err != nil {
