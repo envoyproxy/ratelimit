@@ -389,6 +389,17 @@ Output example:
 For information on the fields of a Ratelimit gRPC request please read the information
 on the RateLimitRequest message type in the Ratelimit [proto file.](https://github.com/envoyproxy/envoy/blob/master/api/envoy/service/ratelimit/v3/rls.proto)
 
+# GRPC Client
+The [gRPC client](https://github.com/envoyproxy/ratelimit/blob/master/src/client_cmd/main.go) will interact with ratelimit server and tell you if the requests are over limit.
+## Commandline flags
+* `-dial_string`: used to specify the address of ratelimit server. It defaults to `localhost:8081`.
+* `-domain`: used to specify the domain.
+* `-descriptors`: used to specify one descriptor. You can pass multiple descriptors like following:
+```
+go run main.go -domain test \
+-descriptors name=foo,age=14 -descriptors name=bar,age=18
+```
+
 # Statistics
 
 The rate limit service generates various statistics for each configured rate limit rule that will be useful for end
