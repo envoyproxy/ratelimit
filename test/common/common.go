@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -96,21 +97,8 @@ type MemcacheConfig struct {
 	Port int
 }
 
-// startCacheProcess starts memcache or redis as a subprocess and waits until the TCP port is open.
-func startCacheProcess(ctx context.Context, command string, args []string, port int) (context.CancelFunc, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	cmd := exec.CommandContext(ctx, command, args...)
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Start()
-
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("Problem starting %s subprocess: %v", command, err)
-	}
-
-	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 1*time.Second)
+func WaitForTcpPort(ctx context.Context, port int, timeout time.Duration) error {
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, timeout)
 	defer timeoutCancel()
 
 	// Wait up to 1s for the redis instance to start accepting connections.
@@ -120,15 +108,51 @@ func startCacheProcess(ctx context.Context, command string, args []string, port 
 		if err == nil {
 			conn.Close()
 			// TCP connections are working. All is well.
-			break
+			return nil
 		}
 		// Unable to connect to the TCP port. Wait and try again.
 		select {
 		case <-time.After(100 * time.Millisecond):
 		case <-timeoutCtx.Done():
-			cancel()
-			return nil, fmt.Errorf("Timed out waiting for %s to start up and accept connections: %v", command, err)
+			return timeoutCtx.Err()
 		}
+	}
+}
+
+// startCacheProcess starts memcache or redis as a subprocess and waits until the TCP port is open.
+func startCacheProcess(ctx context.Context, command string, args []string, port int) (context.CancelFunc, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	cmd := exec.CommandContext(ctx, command, args...)
+
+	errPipe, err1 := cmd.StderrPipe()
+	outPipe, err2 := cmd.StdoutPipe()
+
+	if err1 != nil || err2 != nil {
+		cancel()
+		return nil, fmt.Errorf("Problem starting %s subprocess: %v / %v", command, err1, err2)
+	}
+
+	// You'd think cmd.Stdout = os.Stdout would make more sense here, but
+	// then the test process hangs if anything within it has a panic().
+	// So instead, we pipe the output manually.
+	go func() {
+		io.Copy(os.Stderr, errPipe)
+	}()
+	go func() {
+		io.Copy(os.Stdout, outPipe)
+	}()
+
+	err := cmd.Start()
+
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("Problem starting %s subprocess: %v", command, err)
+	}
+
+	err = WaitForTcpPort(ctx, port, 1*time.Second)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("Timed out waiting for %s to start up and accept connections: %v", command, err)
 	}
 
 	return func() {

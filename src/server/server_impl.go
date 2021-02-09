@@ -187,7 +187,7 @@ func newServer(s settings.Settings, name string, store stats.Store, localCache *
 
 	// setup stats
 	ret.store = store
-	ret.scope = ret.store.Scope(name)
+	ret.scope = ret.store.ScopeWithTags(name, s.ExtraTags)
 	ret.store.AddStatGenerator(stats.NewRuntimeStats(ret.scope.Scope("go")))
 	if localCache != nil {
 		ret.store.AddStatGenerator(utils.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
@@ -205,7 +205,7 @@ func newServer(s settings.Settings, name string, store stats.Store, localCache *
 		ret.runtime = loader.New(
 			s.RuntimePath,
 			s.RuntimeSubdirectory,
-			ret.store.Scope("runtime"),
+			ret.store.ScopeWithTags("runtime", s.ExtraTags),
 			&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
 			loaderOpts...)
 
@@ -213,7 +213,7 @@ func newServer(s settings.Settings, name string, store stats.Store, localCache *
 		ret.runtime = loader.New(
 			filepath.Join(s.RuntimePath, s.RuntimeSubdirectory),
 			"config",
-			ret.store.Scope("runtime"),
+			ret.store.ScopeWithTags("runtime", s.ExtraTags),
 			&loader.DirectoryRefresher{},
 			loaderOpts...)
 	}
@@ -234,6 +234,14 @@ func newServer(s settings.Settings, name string, store stats.Store, localCache *
 		"root of various pprof endpoints. hit for help.",
 		func(writer http.ResponseWriter, request *http.Request) {
 			pprof.Index(writer, request)
+		})
+
+	// setup cpu profiling endpoint
+	ret.AddDebugHttpEndpoint(
+		"/debug/pprof/profile",
+		"CPU profiling endpoint",
+		func(writer http.ResponseWriter, request *http.Request) {
+			pprof.Profile(writer, request)
 		})
 
 	// setup stats endpoint

@@ -403,6 +403,17 @@ Output example:
 For information on the fields of a Ratelimit gRPC request please read the information
 on the RateLimitRequest message type in the Ratelimit [proto file.](https://github.com/envoyproxy/envoy/blob/master/api/envoy/service/ratelimit/v3/rls.proto)
 
+# GRPC Client
+The [gRPC client](https://github.com/envoyproxy/ratelimit/blob/master/src/client_cmd/main.go) will interact with ratelimit server and tell you if the requests are over limit.
+## Commandline flags
+* `-dial_string`: used to specify the address of ratelimit server. It defaults to `localhost:8081`.
+* `-domain`: used to specify the domain.
+* `-descriptors`: used to specify one descriptor. You can pass multiple descriptors like following:
+```
+go run main.go -domain test \
+-descriptors name=foo,age=14 -descriptors name=bar,age=18
+```
+
 # Statistics
 
 The rate limit service generates various statistics for each configured rate limit rule that will be useful for end
@@ -437,6 +448,10 @@ ratelimit.service.rate_limit.mongo_cps.database_users.total_hits: 2939
 ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.over_limit: 0
 ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.total_hits: 0
 ```
+
+## Statistics options
+
+1. `EXTRA_TAGS`: set to `"<k1:v1>,<k2:v2>"` to tag all emitted stats with the provided tags. You might want to tag build commit or release version, for example.
 
 # HTTP Port
 
