@@ -9,7 +9,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/test/common"
-	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached"
+	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached/driver"
 	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/ptypes/duration"
@@ -27,7 +27,9 @@ func TestMemcachedWindowed(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	cache := memcached.NewWindowedRateLimitCacheImpl(client, timeSource, nil, 0, nil, statsStore, 0.8, "")
 
-	// Test 1
+	// test 1
+	// test initial rate limit process
+
 	// periode = 1 second
 	// limit = 10 request/second
 	// emissionInterval = 0.1 second
@@ -39,6 +41,8 @@ func TestMemcachedWindowed(t *testing.T) {
 
 	// newTat should be max(arriveAt,tat)+increment = 1.1 second
 	// DurationUntilReset should be newTat-arriveat = 0.1 minute
+	// expiration should be second(newTat-arriveat)+1 = 0.1 minute
+
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
 
@@ -59,4 +63,52 @@ func TestMemcachedWindowed(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+
+	// test 2
+	// test rate limit with multiple description
+
+	// periode = 1 minute = 60 second
+	// limit = 10 request/minute
+	// emissionInterval = 6 second
+	// request = 1
+	// increment = emissionInterval*request = 6 second
+
+	// arriveAt = 1 second
+	// tat = 1 second
+
+	// newTat should be max(arriveAt,tat)+increment = 7 second
+	// DurationUntilReset should be newTat-arriveat = 6 second
+	// expiration should be second(newTat-arriveat)+1 = 7 second
+
+	request = common.NewRateLimitRequest(
+		"domain",
+		[][][2]string{
+			{{"key2", "value2"}},
+			{{"key2", "value2"}, {"subkey2", "subvalue2"}},
+		}, 1)
+	limits = []*config.RateLimit{
+		nil,
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key2_value2_subkey2_subvalue2", statsStore)}
+
+	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
+
+	client.EXPECT().GetMulti([]string{"domain_key2_value2_subkey2_subvalue2_0"}).Return(
+		getMultiResult(map[string]int{"domain_key2_value2_subkey2_subvalue2_0": 1e9}), nil,
+	)
+	client.EXPECT().Set(&memcache.Item{
+		Key:        "domain_key2_value2_subkey2_subvalue2_0",
+		Value:      []byte(strconv.FormatInt(int64(1e9+6e9), 10)),
+		Expiration: int32(7),
+	})
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 9, DurationUntilReset: &duration.Duration{Seconds: 6}}},
+		cache.DoLimit(nil, request, limits))
+
+	assert.Equal(uint64(1), limits[1].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[1].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[1].Stats.NearLimit.Value())
+
+	cache.Flush()
 }

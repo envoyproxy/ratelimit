@@ -19,7 +19,7 @@ import (
 	stats "github.com/lyft/gostats"
 
 	"github.com/envoyproxy/ratelimit/test/common"
-	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached"
+	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached/driver"
 	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"

@@ -7,7 +7,7 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/envoyproxy/ratelimit/src/memcached"
 
-	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached"
+	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached/driver"
 	"github.com/golang/mock/gomock"
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"

@@ -119,7 +119,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 func (this *windowedRateLimitCacheImpl) increaseAsync(isOverLimitWithLocalCache []bool, isOverLimit []bool, cacheKeys []utils.CacheKey, expirationSeconds []int64, newTats []int64) {
 	defer this.waitGroup.Done()
 	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] || isOverLimit[i] {
+		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] {
 			continue
 		}
 
