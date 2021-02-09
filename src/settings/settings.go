@@ -64,7 +64,7 @@ type Settings struct {
 	MemcacheHostPort string `envconfig:"MEMCACHE_HOST_PORT" default:""`
 
 	// Algorithm settings
-	RateLimitAlgorithm           string        `envconfig:"RATE_LIMIT_ALGORITHM" default:"FIXED_WINDOW"`
+	RateLimitAlgorithm string `envconfig:"RATE_LIMIT_ALGORITHM" default:"FIXED_WINDOW"`
 }
 
 type Option func(*Settings)
