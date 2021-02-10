@@ -40,6 +40,7 @@ func (rw *RollingWindowImpl) GetResponseDescriptorStatus(key string, limit *conf
 
 		secondsToReset := utils.UnitToDivider(limit.Limit.Unit)
 		secondsToReset -= utils.NanosecondsToSeconds(rw.timeSource.UnixNanoNow()) % secondsToReset
+
 		return &pb.RateLimitResponse_DescriptorStatus{
 			Code:               pb.RateLimitResponse_OVER_LIMIT,
 			CurrentLimit:       limit.Limit,

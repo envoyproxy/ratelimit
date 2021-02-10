@@ -38,7 +38,6 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 			jitterRand,
 			s.ExpirationJitterMaxSeconds,
 			localCache,
-			scope,
 			s.NearLimitRatio,
 			s.CacheKeyPrefix), nil
 	}
@@ -50,7 +49,6 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 			jitterRand,
 			s.ExpirationJitterMaxSeconds,
 			localCache,
-			scope,
 			s.NearLimitRatio,
 			s.CacheKeyPrefix), nil
 	}

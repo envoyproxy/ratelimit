@@ -239,8 +239,8 @@ func TestNearLimitWindowed(t *testing.T) {
 	// tat = 60 second
 
 	// newTat should be max(arriveAt,tat)+increment = 66 second
-	// expire should be (newtat-arriveat)+1 = 7 second
-	// DurationUntilReset should be newtat-arriveat = 6 second
+	// expire should be (tat-arriveat)+1 = 57 second
+	// DurationUntilReset should be tat-arriveat = 56 second
 	timeSource.EXPECT().UnixNanoNow().Return(int64(4e9)).MaxTimes(1)
 
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "SETNX", "domain_key4_value4_0", int64(0)).DoAndReturn(pipeAppend)

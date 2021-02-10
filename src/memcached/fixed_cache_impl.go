@@ -14,7 +14,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/memcached/driver"
 	"github.com/envoyproxy/ratelimit/src/utils"
-	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 )
 
@@ -149,7 +148,7 @@ func (this *fixedRateLimitCacheImpl) Flush() {
 }
 
 func NewFixedRateLimitCacheImpl(client driver.Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
+	expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
