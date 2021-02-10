@@ -18,7 +18,7 @@ jobs:
       - REDIS_SOCKET_TYPE=tcp
       - REDIS_URL=localhost:6379
     docker:
-      - image: circleci/golang:1.9
+      - image: circleci/golang:1.14-alpine
       - image: redis:alpine
     steps:
       - checkout
@@ -26,12 +26,8 @@ jobs:
       - run:
           name: Compile
           command: |
-            make bootstrap
-            make compile
-      - run:
-          name: Build Docker Image and Run Tests
-          command: |
-            make docker
+            go build -o /usr/local/bin/ratelimit ./src/service_cmd/main.go
+
   release-image-quay:
     machine:
       docker_layer_caching: true
