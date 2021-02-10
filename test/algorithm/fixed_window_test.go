@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIsOverLimit(t *testing.T) {
+func TestFixedIsOverLimit(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
 	defer controller.Finish()
@@ -55,7 +55,7 @@ func TestIsOverLimit(t *testing.T) {
 	assert.Equal(1, actualDurationUntilReset)
 }
 
-func TestIsOverLimitWithLocalCache(t *testing.T) {
+func TestFixedIsOverLimitWithLocalCache(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
 	defer controller.Finish()
@@ -72,7 +72,7 @@ func TestIsOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(true, algorithm.IsOverLimitWithLocalCache(key))
 }
 
-func TestGenerateCacheKeys(t *testing.T) {
+func TestFixedGenerateCacheKeys(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
 	defer controller.Finish()
@@ -92,7 +92,7 @@ func TestGenerateCacheKeys(t *testing.T) {
 	assert.Equal(expectedResult, actualResult)
 }
 
-func TestPopulateStats(t *testing.T) {
+func TestFixedPopulateStats(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
 	defer controller.Finish()
@@ -121,7 +121,7 @@ func TestPopulateStats(t *testing.T) {
 	assert.Equal(uint64(1), limit.Stats.OverLimitWithLocalCache.Value())
 }
 
-func TestGetResponseDescriptorStatus(t *testing.T) {
+func TestFixedGetResponseDescriptorStatus(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
 	defer controller.Finish()
