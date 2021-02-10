@@ -18,7 +18,7 @@ jobs:
       - REDIS_SOCKET_TYPE=tcp
       - REDIS_URL=localhost:6379
     docker:
-      - image: circleci/golang:1.14-alpine
+      - image: circleci/golang:1.14
       - image: redis:alpine
     steps:
       - checkout
