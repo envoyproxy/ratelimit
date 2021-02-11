@@ -9,6 +9,10 @@ job-defaults: &job-defaults
     - AWS_ACCOUNT_ID: "883127560329"
     - AWS_PROFILE: dev/vault
 
+attach-workspace: &attach-workspace
+  attach_workspace:
+    at: *working_directory
+
 jobs:
   build:
     <<: *job-defaults
@@ -33,6 +37,7 @@ jobs:
       docker_layer_caching: true
     <<: *job-defaults
     steps:
+      - <<: *attach-workspace
       - run:
           name: push to Quay
           command: |
