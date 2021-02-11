@@ -2,7 +2,7 @@ version: 2
 
 job-defaults: &job-defaults
   working_directory: &working_directory
-    /go/src/github.com/lyft/ratelimit/
+    ~/app
   environment:
     - AWS_DEFAULT_REGION: us-west-2
     - AWS_REGION: us-west-2
