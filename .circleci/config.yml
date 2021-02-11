@@ -54,3 +54,18 @@ workflows:
   test_and_build:
     jobs:
       - build
+          context: circleci
+          filters:
+            tags:
+              only: /^\d+\.\d+\.\d+(?:-\w+){0,1}$/
+            branches:
+              only: /.*/      
+      - release-image-quay:
+          context: circleci
+          requires:
+            - build
+          filters:
+            tags:
+              only: /^\d+\.\d+\.\d+(?:-\w+){0,1}$/
+            branches:
+              ignore: /.*/
