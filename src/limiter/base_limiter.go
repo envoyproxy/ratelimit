@@ -47,7 +47,7 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
-			limits[i].Stats.TotalHits.Add(uint64(hitsAddend))
+			limits[i].Stats.AddTotalHits(uint64(hitsAddend))
 		}
 	}
 	return cacheKeys
@@ -74,8 +74,8 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 			nil, 0)
 	}
 	if isOverLimitWithLocalCache {
-		limitInfo.limit.Stats.OverLimit.Add(uint64(hitsAddend))
-		limitInfo.limit.Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
+		limitInfo.limit.Stats.AddOverLimit(uint64(hitsAddend))
+		limitInfo.limit.Stats.AddOverLimitWithLocalCache(uint64(hitsAddend))
 		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT,
 			limitInfo.limit.Limit, 0)
 	}
@@ -133,13 +133,13 @@ func checkOverLimitThreshold(limitInfo *LimitInfo, hitsAddend uint32) {
 	// Otherwise, only the difference between the current limit value and the over limit threshold
 	// were over limit hits.
 	if limitInfo.limitBeforeIncrease >= limitInfo.overLimitThreshold {
-		limitInfo.limit.Stats.OverLimit.Add(uint64(hitsAddend))
+		limitInfo.limit.Stats.AddOverLimit(uint64(hitsAddend))
 	} else {
-		limitInfo.limit.Stats.OverLimit.Add(uint64(limitInfo.limitAfterIncrease - limitInfo.overLimitThreshold))
+		limitInfo.limit.Stats.AddOverLimit(uint64(limitInfo.limitAfterIncrease - limitInfo.overLimitThreshold))
 
 		// If the limit before increase was below the over limit value, then some of the hits were
 		// in the near limit range.
-		limitInfo.limit.Stats.NearLimit.Add(uint64(limitInfo.overLimitThreshold -
+		limitInfo.limit.Stats.AddNearLimit(uint64(limitInfo.overLimitThreshold -
 			utils.Max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease)))
 	}
 }
@@ -151,9 +151,9 @@ func checkNearLimitThreshold(limitInfo *LimitInfo, hitsAddend uint32) {
 		// only the difference between the current limit value and the near limit threshold were near
 		// limit hits.
 		if limitInfo.limitBeforeIncrease >= limitInfo.nearLimitThreshold {
-			limitInfo.limit.Stats.NearLimit.Add(uint64(hitsAddend))
+			limitInfo.limit.Stats.AddNearLimit(uint64(hitsAddend))
 		} else {
-			limitInfo.limit.Stats.NearLimit.Add(uint64(limitInfo.limitAfterIncrease - limitInfo.nearLimitThreshold))
+			limitInfo.limit.Stats.AddNearLimit(uint64(limitInfo.limitAfterIncrease - limitInfo.nearLimitThreshold))
 		}
 	}
 }

@@ -6,10 +6,10 @@ import (
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"gopkg.in/yaml.v2"
+	stat "github.com/envoyproxy/ratelimit/src/stats"
 )
 
 type yamlRateLimit struct {
@@ -40,7 +40,7 @@ type rateLimitDomain struct {
 
 type rateLimitConfigImpl struct {
 	domains    map[string]*rateLimitDomain
-	statsScope stats.Scope
+	manager    stat.Manager
 }
 
 var validKeys = map[string]bool{
@@ -53,19 +53,6 @@ var validKeys = map[string]bool{
 	"requests_per_unit": true,
 }
 
-// Create new rate limit stats for a config entry.
-// @param statsScope supplies the owning scope.
-// @param key supplies the fully resolved key name of the entry.
-// @return new stats.
-func newRateLimitStats(statsScope stats.Scope, key string) RateLimitStats {
-	ret := RateLimitStats{}
-	ret.TotalHits = statsScope.NewCounter(key + ".total_hits")
-	ret.OverLimit = statsScope.NewCounter(key + ".over_limit")
-	ret.NearLimit = statsScope.NewCounter(key + ".near_limit")
-	ret.OverLimitWithLocalCache = statsScope.NewCounter(key + ".over_limit_with_local_cache")
-	return ret
-}
-
 // Create a new rate limit config entry.
 // @param requestsPerUnit supplies the requests per unit of time for the entry.
 // @param unit supplies the unit of time for the entry.
@@ -73,9 +60,9 @@ func newRateLimitStats(statsScope stats.Scope, key string) RateLimitStats {
 // @param scope supplies the owning scope.
 // @return the new config entry.
 func NewRateLimit(
-	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, key string, scope stats.Scope) *RateLimit {
+	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats RateLimitStats) *RateLimit {
 
-	return &RateLimit{FullKey: key, Stats: newRateLimitStats(scope, key), Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
+	return &RateLimit{FullKey: rlStats.String(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
 }
 
 // Dump an individual descriptor for debugging purposes.
@@ -104,9 +91,7 @@ func newRateLimitConfigError(config RateLimitConfigToLoad, err string) RateLimit
 // @param parentKey supplies the fully resolved key name that owns this config level.
 // @param descriptors supplies the YAML descriptors to load.
 // @param statsScope supplies the owning scope.
-func (this *rateLimitDescriptor) loadDescriptors(
-	config RateLimitConfigToLoad, parentKey string, descriptors []yamlDescriptor,
-	statsScope stats.Scope) {
+func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, parentKey string, descriptors []yamlDescriptor, manager stat.Manager) {
 
 	for _, descriptorConfig := range descriptors {
 		if descriptorConfig.Key == "" {
@@ -137,8 +122,7 @@ func (this *rateLimitDescriptor) loadDescriptors(
 			}
 
 			rateLimit = NewRateLimit(
-				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), newParentKey,
-				statsScope)
+				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), manager.NewStats(newParentKey))
 			rateLimitDebugString = fmt.Sprintf(
 				" ratelimit={requests_per_unit=%d, unit=%s}", rateLimit.Limit.RequestsPerUnit,
 				rateLimit.Limit.Unit.String())
@@ -147,8 +131,7 @@ func (this *rateLimitDescriptor) loadDescriptors(
 		logger.Debugf(
 			"loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
 		newDescriptor := &rateLimitDescriptor{map[string]*rateLimitDescriptor{}, rateLimit}
-		newDescriptor.loadDescriptors(
-			config, newParentKey+".", descriptorConfig.Descriptors, statsScope)
+		newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, manager)
 		this.descriptors[finalKey] = newDescriptor
 	}
 }
@@ -228,22 +211,8 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 
 	logger.Debugf("loading domain: %s", root.Domain)
 	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil}}
-	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsScope)
+	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.manager)
 	this.domains[root.Domain] = newDomain
-}
-
-func (this *rateLimitConfigImpl) descriptorToKey(descriptor *pb_struct.RateLimitDescriptor) string {
-	rateLimitKey := ""
-	for _, entry := range descriptor.Entries {
-		if rateLimitKey != "" {
-			rateLimitKey += "."
-		}
-		rateLimitKey += entry.Key
-		if entry.Value != "" {
-			rateLimitKey += "_" + entry.Value
-		}
-	}
-	return rateLimitKey
 }
 
 func (this *rateLimitConfigImpl) Dump() string {
@@ -267,13 +236,12 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
-		rateLimitKey := domain + "." + this.descriptorToKey(descriptor)
+		rateLimitKey := stat.DescriptorKey(domain, descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		rateLimit = NewRateLimit(
 			descriptor.GetLimit().GetRequestsPerUnit(),
 			rateLimitOverrideUnit,
-			rateLimitKey,
-			this.statsScope)
+			this.manager.NewStats(rateLimitKey))
 		return rateLimit
 	}
 
@@ -315,9 +283,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 // @param stats supplies the stats scope to use for limit stats during runtime.
 // @return a new config.
 func NewRateLimitConfigImpl(
-	configs []RateLimitConfigToLoad, statsScope stats.Scope) RateLimitConfig {
+	configs []RateLimitConfigToLoad, manager stat.Manager) RateLimitConfig {
 
-	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsScope}
+	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, manager}
 	for _, config := range configs {
 		ret.loadConfig(config)
 	}
@@ -328,9 +296,9 @@ func NewRateLimitConfigImpl(
 type rateLimitConfigLoaderImpl struct{}
 
 func (this *rateLimitConfigLoaderImpl) Load(
-	configs []RateLimitConfigToLoad, statsScope stats.Scope) RateLimitConfig {
+	configs []RateLimitConfigToLoad, manager stat.Manager) RateLimitConfig {
 
-	return NewRateLimitConfigImpl(configs, statsScope)
+	return NewRateLimitConfigImpl(configs, manager)
 }
 
 // @return a new default config loader implementation.

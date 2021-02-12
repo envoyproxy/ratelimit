@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	stat "github.com/envoyproxy/ratelimit/src/stats"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -21,7 +22,8 @@ func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {
 	}()
 
 	dummyStats := stats.NewStore(stats.NewNullSink(), false)
-	config.NewRateLimitConfigImpl(allConfigs, dummyStats)
+	manager := stat.NewStatManager(dummyStats, false)
+	config.NewRateLimitConfigImpl(allConfigs, manager)
 }
 
 func main() {
