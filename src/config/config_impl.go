@@ -60,7 +60,7 @@ var validKeys = map[string]bool{
 // @param scope supplies the owning scope.
 // @return the new config entry.
 func NewRateLimit(
-	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats RateLimitStats) *RateLimit {
+	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stat.RateLimitStats) *RateLimit {
 
 	return &RateLimit{FullKey: rlStats.String(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
 }

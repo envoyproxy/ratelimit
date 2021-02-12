@@ -5,6 +5,7 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	logger "github.com/sirupsen/logrus"
 	"math"
@@ -18,6 +19,7 @@ type BaseRateLimiter struct {
 	cacheKeyGenerator          CacheKeyGenerator
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
+	Manager                    stats.Manager
 }
 
 type LimitInfo struct {
@@ -47,7 +49,7 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
-			limits[i].Stats.AddTotalHits(uint64(hitsAddend))
+			this.Manager.AddTotalHits(uint64(hitsAddend),limits[i].Stats, cacheKeys[i].Key)
 		}
 	}
 	return cacheKeys
@@ -74,8 +76,8 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 			nil, 0)
 	}
 	if isOverLimitWithLocalCache {
-		limitInfo.limit.Stats.AddOverLimit(uint64(hitsAddend))
-		limitInfo.limit.Stats.AddOverLimitWithLocalCache(uint64(hitsAddend))
+		this.Manager.AddOverLimit(uint64(hitsAddend),limitInfo.limit.Stats,key)
+		this.Manager.AddOverLimitWithLocalCache(uint64(hitsAddend),limitInfo.limit.Stats,key)
 		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT,
 			limitInfo.limit.Limit, 0)
 	}
@@ -89,7 +91,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 		responseDescriptorStatus = this.generateResponseDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT,
 			limitInfo.limit.Limit, 0)
 
-		checkOverLimitThreshold(limitInfo, hitsAddend)
+		this.checkOverLimitThreshold(limitInfo, hitsAddend, key)
 
 		if this.localCache != nil {
 			// Set the TTL of the local_cache to be the entire duration.
@@ -109,13 +111,13 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 			limitInfo.limit.Limit, limitInfo.overLimitThreshold-limitInfo.limitAfterIncrease)
 
 		// The limit is OK but we additionally want to know if we are near the limit.
-		checkNearLimitThreshold(limitInfo, hitsAddend)
+		this.checkNearLimitThreshold(limitInfo, hitsAddend, key)
 	}
 	return responseDescriptorStatus
 }
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
-	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) *BaseRateLimiter {
+	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, manager stats.Manager) *BaseRateLimiter {
 	return &BaseRateLimiter{
 		timeSource:                 timeSource,
 		JitterRand:                 jitterRand,
@@ -123,37 +125,41 @@ func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expira
 		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
+		Manager:					manager,
 	}
 }
 
-func checkOverLimitThreshold(limitInfo *LimitInfo, hitsAddend uint32) {
+func (this *BaseRateLimiter) checkOverLimitThreshold(limitInfo *LimitInfo, hitsAddend uint32, key string) {
 	// Increase over limit statistics. Because we support += behavior for increasing the limit, we need to
 	// assess if the entire hitsAddend were over the limit. That is, if the limit's value before adding the
 	// N hits was over the limit, then all the N hits were over limit.
 	// Otherwise, only the difference between the current limit value and the over limit threshold
 	// were over limit hits.
 	if limitInfo.limitBeforeIncrease >= limitInfo.overLimitThreshold {
-		limitInfo.limit.Stats.AddOverLimit(uint64(hitsAddend))
+		this.Manager.AddOverLimitWithLocalCache(uint64(hitsAddend), limitInfo.limit.Stats, key)
 	} else {
-		limitInfo.limit.Stats.AddOverLimit(uint64(limitInfo.limitAfterIncrease - limitInfo.overLimitThreshold))
+		this.Manager.AddOverLimit(uint64(limitInfo.limitAfterIncrease - limitInfo.overLimitThreshold), limitInfo.limit.Stats, key)
 
 		// If the limit before increase was below the over limit value, then some of the hits were
 		// in the near limit range.
-		limitInfo.limit.Stats.AddNearLimit(uint64(limitInfo.overLimitThreshold -
-			utils.Max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease)))
+		this.Manager.AddNearLimit(
+			uint64(limitInfo.overLimitThreshold - utils.Max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease)),
+			limitInfo.limit.Stats,
+			key,
+		)
 	}
 }
 
-func checkNearLimitThreshold(limitInfo *LimitInfo, hitsAddend uint32) {
+func (this *BaseRateLimiter) checkNearLimitThreshold(limitInfo *LimitInfo, hitsAddend uint32, key string) {
 	if limitInfo.limitAfterIncrease > limitInfo.nearLimitThreshold {
 		// Here we also need to assess which portion of the hitsAddend were in the near limit range.
 		// If all the hits were over the nearLimitThreshold, then all hits are near limit. Otherwise,
 		// only the difference between the current limit value and the near limit threshold were near
 		// limit hits.
 		if limitInfo.limitBeforeIncrease >= limitInfo.nearLimitThreshold {
-			limitInfo.limit.Stats.AddNearLimit(uint64(hitsAddend))
+			this.Manager.AddNearLimit(uint64(hitsAddend), limitInfo.limit.Stats, key)
 		} else {
-			limitInfo.limit.Stats.AddNearLimit(uint64(limitInfo.limitAfterIncrease - limitInfo.nearLimitThreshold))
+			this.Manager.AddNearLimit(uint64(limitInfo.limitAfterIncrease - limitInfo.nearLimitThreshold), limitInfo.limit.Stats, key)
 		}
 	}
 }

@@ -18,42 +18,41 @@ type ManagerImpl struct {
 	detailed bool
 }
 
-func (this *ManagerImpl) AddTotalHits(u uint64, rlStats RateLimitStats, domain string, descriptor *pb_struct.RateLimitDescriptor) {
+func (this *ManagerImpl) AddTotalHits(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.TotalHits.Add(u)
 	if this.detailed {
-		stat := this.getDescriptorStat(domain, descriptor)
-		stat.OverLimit.Add(u)
+		stat := this.getDescriptorStat(key)
+		stat.TotalHits.Add(u)
 	}
 }
 
-func (this *ManagerImpl) AddOverLimit(u uint64, rlStats RateLimitStats, domain string, descriptor *pb_struct.RateLimitDescriptor) {
+func (this *ManagerImpl) AddOverLimit(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.OverLimit.Add(u)
 	if this.detailed {
-		stat := this.getDescriptorStat(domain, descriptor)
+		stat := this.getDescriptorStat(key)
 		stat.OverLimit.Add(u)
 	}
 }
 
-func (this *ManagerImpl) AddNearLimit(u uint64, rlStats RateLimitStats, domain string, descriptor *pb_struct.RateLimitDescriptor) {
+func (this *ManagerImpl) AddNearLimit(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.NearLimit.Add(u)
 	if this.detailed {
-		stat := this.getDescriptorStat(domain, descriptor)
-		stat.OverLimit.Add(u)
+		stat := this.getDescriptorStat(key)
+		stat.NearLimit.Add(u)
 	}
 }
 
-func (this *ManagerImpl) AddOverLimitWithLocalCache(u uint64, rlStats RateLimitStats, domain string, descriptor *pb_struct.RateLimitDescriptor) {
+func (this *ManagerImpl) AddOverLimitWithLocalCache(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.OverLimitWithLocalCache.Add(u)
 	if this.detailed {
-		stat := this.getDescriptorStat(domain, descriptor)
-		stat.OverLimit.Add(u)
+		stat := this.getDescriptorStat(key)
+		stat.OverLimitWithLocalCache.Add(u)
 	}
 }
 
 //todo: consider adding a ratelimitstats cache
 //todo: add descriptor fields parameter to allow configuration of descriptor entries for which metrics will be emited.
-func (this *ManagerImpl) getDescriptorStat(domain string, descriptor *pb_struct.RateLimitDescriptor) RateLimitStats {
-	key := DescriptorKey(domain, descriptor)
+func (this *ManagerImpl) getDescriptorStat(key string) RateLimitStats {
 	ret := this.NewStats(key)
 	return ret
 }
