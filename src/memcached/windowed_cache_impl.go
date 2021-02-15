@@ -25,10 +25,12 @@ type windowedRateLimitCacheImpl struct {
 	localCache                 *freecache.Cache
 	waitGroup                  sync.WaitGroup
 	nearLimitRatio             float32
-	algorithm                  algorithm.RatelimitAlgorithm
+	algorithm                  *algorithm.WindowImpl
 }
 
 var _ limiter.RateLimitCache = (*windowedRateLimitCacheImpl)(nil)
+
+const DummyCacheKeyTime = 0
 
 func (this *windowedRateLimitCacheImpl) DoLimit(
 	ctx context.Context,
@@ -41,7 +43,7 @@ func (this *windowedRateLimitCacheImpl) DoLimit(
 	hitsAddend := utils.MaxInt64(1, int64(request.HitsAddend))
 
 	// First build a list of all cache keys that we are actually going to hit.
-	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend)
+	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend, DummyCacheKeyTime)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	keysToGet := make([]string, 0, len(request.Descriptors))
@@ -148,11 +150,11 @@ func NewWindowedRateLimitCacheImpl(client driver.Client, timeSource utils.TimeSo
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		algorithm: algorithm.NewRollingWindowAlgorithm(
-			timeSource,
-			localCache,
-			nearLimitRatio,
+		algorithm: algorithm.NewWindow(
+			algorithm.NewRollingWindowAlgorithm(timeSource, localCache, nearLimitRatio, cacheKeyPrefix),
 			cacheKeyPrefix,
+			localCache,
+			timeSource,
 		),
 	}
 }

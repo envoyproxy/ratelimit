@@ -26,7 +26,7 @@ type fixedRateLimitCacheImpl struct {
 	expirationJitterMaxSeconds int64
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
-	algorithm                  algorithm.RatelimitAlgorithm
+	algorithm                  *algorithm.WindowImpl
 }
 
 func (this *fixedRateLimitCacheImpl) DoLimit(
@@ -40,7 +40,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	hitsAddend := utils.MaxInt64(1, int64(request.HitsAddend))
 
 	// First build a list of all cache keys that we are actually going to hit.
-	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend)
+	cacheKeys := this.algorithm.GenerateCacheKeys(request, limits, hitsAddend, this.timeSource.UnixNow())
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	results := make([]int64, len(request.Descriptors))
@@ -112,11 +112,11 @@ func NewFixedRateLimitCacheImpl(client driver.Client, perSecondClient driver.Cli
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		algorithm: algorithm.NewFixedWindowAlgorithm(
-			timeSource,
-			localCache,
-			nearLimitRatio,
+		algorithm: algorithm.NewWindow(
+			algorithm.NewFixedWindowAlgorithm(timeSource, localCache, nearLimitRatio, cacheKeyPrefix),
 			cacheKeyPrefix,
+			localCache,
+			timeSource,
 		),
 	}
 }
