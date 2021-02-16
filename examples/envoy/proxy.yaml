@@ -59,6 +59,7 @@ static_resources:
                         grpc_service:
                           envoy_grpc:
                             cluster_name: ratelimit
+                        transport_api_version: V3
                   - name: envoy.filters.http.router
                     typed_config: {}
                 route_config:
