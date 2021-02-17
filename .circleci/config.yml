@@ -50,6 +50,7 @@ jobs:
             docker-compose push
 
             if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              docker tag quay.io/verygoodsecurity/ratelimit:${VERSION} quay.io/verygoodsecurity/ratelimit:latest
               VERSION=latest docker-compose push
             fi
 
