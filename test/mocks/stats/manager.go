@@ -3,10 +3,11 @@ package stats
 import (
 	stat "github.com/envoyproxy/ratelimit/src/stats"
 	stats "github.com/lyft/gostats"
+	logger "github.com/sirupsen/logrus"
 )
 
 type MockStatManager struct {
-	store stats.Store
+	scope stats.Scope
 }
 
 func (m *MockStatManager) NewShouldRateLimitStats() stat.ShouldRateLimitStats {
@@ -22,7 +23,13 @@ func (m *MockStatManager) NewShouldRateLimitLegacyStats() stat.ShouldRateLimitLe
 }
 
 func (m *MockStatManager) NewStats(key string) stat.RateLimitStats {
-	ret := m.NewStats(key)
+	ret := stat.RateLimitStats{}
+	logger.Debugf("outputing test stats %s", key)
+	ret.Key = key
+	ret.TotalHits = m.scope.NewCounter(key + ".detailed_total_hits")
+	ret.OverLimit = m.scope.NewCounter(key + ".detailed_over_limit")
+	ret.NearLimit = m.scope.NewCounter(key + ".detailed_near_limit")
+	ret.OverLimitWithLocalCache = m.scope.NewCounter(key + ".detailed_over_limit_with_local_cache")
 	return ret
 }
 
@@ -42,6 +49,6 @@ func (this *MockStatManager) AddOverLimitWithLocalCache(u uint64, rlStats stat.R
 	rlStats.OverLimitWithLocalCache.Add(u)
 }
 
-func NewMockStatManager(store stats.Store) stat.Manager {
-	return &MockStatManager{store: store}
+func NewMockStatManager(store stats.Scope) stat.Manager {
+	return &MockStatManager{scope: store}
 }

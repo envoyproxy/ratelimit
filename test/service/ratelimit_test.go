@@ -71,7 +71,7 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret.configLoader = mock_config.NewMockRateLimitConfigLoader(ret.controller)
 	ret.config = mock_config.NewMockRateLimitConfig(ret.controller)
 	ret.store = stats.NewStore(stats.NewNullSink(), false)
-	ret.sm = stats3.NewMockStatManager(ret.store.Store())
+	ret.sm = stats3.NewMockStatManager(ret.store)
 	return ret
 }
 
