@@ -9,6 +9,7 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	pb_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
+	mockstats "github.com/envoyproxy/ratelimit/test/mocks/stats"
 	"github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 )
@@ -23,8 +24,8 @@ func loadFile(path string) []config.RateLimitConfigToLoad {
 
 func TestBasicConfig(t *testing.T) {
 	assert := assert.New(t)
-	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), stats)
+	newStore := stats.NewStore(stats.NewNullSink(), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), mockstats.NewMockStatManager(newStore))
 	rlConfig.Dump()
 	assert.Nil(rlConfig.GetLimit(nil, "foo_domain", &pb_struct.RateLimitDescriptor{}))
 	assert.Nil(rlConfig.GetLimit(nil, "test-domain", &pb_struct.RateLimitDescriptor{}))
@@ -67,9 +68,9 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.NearLimit.Inc()
 	assert.EqualValues(5, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_SECOND, rl.Limit.Unit)
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.total_hits").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.over_limit").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1.total_hits").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1.over_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1.near_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -82,11 +83,11 @@ func TestBasicConfig(t *testing.T) {
 	assert.EqualValues(10, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_SECOND, rl.Limit.Unit)
 	assert.EqualValues(
-		1, stats.NewCounter("test-domain.key1_value1.subkey1_subvalue1.total_hits").Value())
+		1, newStore.NewCounter("test-domain.key1_value1.subkey1_subvalue1.total_hits").Value())
 	assert.EqualValues(
-		1, stats.NewCounter("test-domain.key1_value1.subkey1_subvalue1.over_limit").Value())
+		1, newStore.NewCounter("test-domain.key1_value1.subkey1_subvalue1.over_limit").Value())
 	assert.EqualValues(
-		1, stats.NewCounter("test-domain.key1_value1.subkey1_subvalue1.near_limit").Value())
+		1, newStore.NewCounter("test-domain.key1_value1.subkey1_subvalue1.near_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -98,9 +99,9 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.NearLimit.Inc()
 	assert.EqualValues(20, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
-	assert.EqualValues(1, stats.NewCounter("test-domain.key2.total_hits").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key2.over_limit").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key2.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key2.total_hits").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key2.over_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key2.near_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -112,9 +113,9 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.NearLimit.Inc()
 	assert.EqualValues(30, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
-	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.total_hits").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.over_limit").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key2_value2.total_hits").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key2_value2.over_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key2_value2.near_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -133,9 +134,9 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.NearLimit.Inc()
 	assert.EqualValues(1, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_HOUR, rl.Limit.Unit)
-	assert.EqualValues(1, stats.NewCounter("test-domain.key3.total_hits").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key3.over_limit").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key3.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key3.total_hits").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key3.over_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key3.near_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -147,15 +148,15 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.NearLimit.Inc()
 	assert.EqualValues(1, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_DAY, rl.Limit.Unit)
-	assert.EqualValues(1, stats.NewCounter("test-domain.key4.total_hits").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key4.over_limit").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key4.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key4.total_hits").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key4.over_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key4.near_limit").Value())
 }
 
 func TestConfigLimitOverride(t *testing.T) {
 	assert := assert.New(t)
-	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), stats)
+	newStore := stats.NewStore(stats.NewNullSink(), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), mockstats.NewMockStatManager(newStore))
 	rlConfig.Dump()
 	// No matching domain
 	assert.Nil(rlConfig.GetLimit(nil, "foo_domain", &pb_struct.RateLimitDescriptor{
@@ -179,11 +180,11 @@ func TestConfigLimitOverride(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
 
-	// Change in override value doesn't erase stats
+	// Change in override value doesn't erase newStore
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
 		&pb_struct.RateLimitDescriptor{
@@ -200,9 +201,9 @@ func TestConfigLimitOverride(t *testing.T) {
 		RequestsPerUnit: 42,
 		Unit:            pb.RateLimitResponse_RateLimit_HOUR,
 	}, rl.Limit)
-	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
-	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
-	assert.EqualValues(2, stats.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
+	assert.EqualValues(2, newStore.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
+	assert.EqualValues(2, newStore.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
+	assert.EqualValues(2, newStore.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
 
 	// Different value creates a different counter
 	rl = rlConfig.GetLimit(
@@ -221,9 +222,9 @@ func TestConfigLimitOverride(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.total_hits").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.over_limit").Value())
-	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something_else.total_hits").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something_else.over_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something_else.near_limit").Value())
 }
 
 func expectConfigPanic(t *testing.T, call func(), expectedError string) {
@@ -242,7 +243,7 @@ func TestEmptyDomain(t *testing.T) {
 		t,
 		func() {
 			config.NewRateLimitConfigImpl(
-				loadFile("empty_domain.yaml"), stats.NewStore(stats.NewNullSink(), false))
+				loadFile("empty_domain.yaml"), mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"empty_domain.yaml: config file cannot have empty domain")
 }
@@ -253,7 +254,7 @@ func TestDuplicateDomain(t *testing.T) {
 		func() {
 			files := loadFile("basic_config.yaml")
 			files = append(files, loadFile("duplicate_domain.yaml")...)
-			config.NewRateLimitConfigImpl(files, stats.NewStore(stats.NewNullSink(), false))
+			config.NewRateLimitConfigImpl(files, mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"duplicate_domain.yaml: duplicate domain 'test-domain' in config file")
 }
@@ -264,7 +265,7 @@ func TestEmptyKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("empty_key.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"empty_key.yaml: descriptor has empty key")
 }
@@ -275,7 +276,7 @@ func TestDuplicateKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("duplicate_key.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"duplicate_key.yaml: duplicate descriptor composite key 'test-domain.key1_value1'")
 }
@@ -286,7 +287,7 @@ func TestBadLimitUnit(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("bad_limit_unit.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"bad_limit_unit.yaml: invalid rate limit unit 'foo'")
 }
@@ -297,7 +298,7 @@ func TestBadYaml(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("bad_yaml.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"bad_yaml.yaml: error loading config file: yaml: line 2: found unexpected end of stream")
 }
@@ -308,7 +309,7 @@ func TestMisspelledKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("misspelled_key.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"misspelled_key.yaml: config error, unknown key 'ratelimit'")
 
@@ -317,7 +318,8 @@ func TestMisspelledKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("misspelled_key2.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
+
 		},
 		"misspelled_key2.yaml: config error, unknown key 'requestsperunit'")
 }
@@ -328,7 +330,7 @@ func TestNonStringKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("non_string_key.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"non_string_key.yaml: config error, key is not of type string: 0.25")
 }
@@ -339,7 +341,7 @@ func TestNonMapList(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("non_map_list.yaml"),
-				stats.NewStore(stats.NewNullSink(), false))
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"non_map_list.yaml: config error, yaml file contains list of type other than map: a")
 }
