@@ -17,6 +17,7 @@ package memcached
 
 import (
 	"context"
+	stat "github.com/envoyproxy/ratelimit/src/stats"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -174,7 +175,7 @@ func (this *rateLimitMemcacheImpl) Flush() {
 }
 
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
+	expirationJitterMaxSeconds int64, localCache *freecache.Cache, manager stat.Manager, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
@@ -182,19 +183,19 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix),
+		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, manager),
 	}
 }
 
 func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	localCache *freecache.Cache, scope stats.Scope) limiter.RateLimitCache {
+	localCache *freecache.Cache, scope stats.Scope, manager stat.Manager) limiter.RateLimitCache {
 	return NewRateLimitCacheImpl(
 		CollectStats(memcache.New(s.MemcacheHostPort), scope.Scope("memcache")),
 		timeSource,
 		jitterRand,
 		s.ExpirationJitterMaxSeconds,
 		localCache,
-		scope,
+		manager,
 		s.NearLimitRatio,
 		s.CacheKeyPrefix,
 	)

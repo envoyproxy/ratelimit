@@ -1,6 +1,7 @@
 package runner
 
 import (
+	stats2 "github.com/envoyproxy/ratelimit/src/stats"
 	"io"
 	"math/rand"
 	"net/http"
@@ -45,6 +46,7 @@ func (runner *Runner) GetStatsStore() stats.Store {
 }
 
 func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache) limiter.RateLimitCache {
+	manager := stats2.NewStatManager(srv.Scope(), s.DetailedMetrics)
 	switch s.BackendType {
 	case "redis", "":
 		return redis.NewRateLimiterCacheImplFromSettings(
@@ -53,14 +55,16 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 			srv,
 			utils.NewTimeSourceImpl(),
 			rand.New(utils.NewLockedSource(time.Now().Unix())),
-			s.ExpirationJitterMaxSeconds)
+			s.ExpirationJitterMaxSeconds,
+			manager)
 	case "memcache":
 		return memcached.NewRateLimitCacheImplFromSettings(
 			s,
 			utils.NewTimeSourceImpl(),
 			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			localCache,
-			srv.Scope())
+			srv.Scope(),
+			manager)
 	default:
 		logger.Fatalf("Invalid setting for BackendType: %s", s.BackendType)
 		panic("This line should not be reachable")

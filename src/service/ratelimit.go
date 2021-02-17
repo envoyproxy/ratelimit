@@ -84,7 +84,7 @@ func (this *service) reloadConfig() {
 		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
 	}
 
-	newConfig := this.configLoader.Load(files, this.rlStatsScope)
+	newConfig := this.configLoader.Load(files, )
 	this.stats.configLoadSuccess.Inc()
 	this.configLock.Lock()
 	this.config = newConfig
