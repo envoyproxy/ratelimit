@@ -2,11 +2,11 @@ package stats
 
 import (
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
-	st "github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 )
 
-func NewStatManager(scope st.Scope, detailedMetrics bool) *ManagerImpl {
+func NewStatManager(scope gostats.Scope, detailedMetrics bool) *ManagerImpl {
 	return &ManagerImpl{
 		scope:    scope,
 		detailed: detailedMetrics,
@@ -14,7 +14,7 @@ func NewStatManager(scope st.Scope, detailedMetrics bool) *ManagerImpl {
 }
 
 type ManagerImpl struct {
-	scope    st.Scope
+	scope    gostats.Scope
 	detailed bool
 }
 
@@ -72,6 +72,50 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	return ret
 }
 
+
+type ShouldRateLimitLegacyStats struct {
+	ReqConversionError   gostats.Counter
+	RespConversionError  gostats.Counter
+	ShouldRateLimitError gostats.Counter
+}
+
+
+func (this *ManagerImpl) NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats {
+	s := this.scope.Scope("call.should_rate_limit_legacy")
+	return ShouldRateLimitLegacyStats{
+		ReqConversionError:   s.NewCounter("req_conversion_error"),
+		RespConversionError:  s.NewCounter("resp_conversion_error"),
+		ShouldRateLimitError: s.NewCounter("should_rate_limit_error"),
+	}
+}
+
+type ShouldRateLimitStats struct {
+	RedisError   gostats.Counter
+	ServiceError gostats.Counter
+}
+
+func (this *ManagerImpl) NewShouldRateLimitStats() ShouldRateLimitStats {
+	s := this.scope.Scope("call.should_rate_limit")
+	ret := ShouldRateLimitStats{}
+	ret.RedisError = s.NewCounter("redis_error")
+	ret.ServiceError = s.NewCounter("service_error")
+	return ret
+}
+
+type ServiceStats struct {
+	ConfigLoadSuccess gostats.Counter
+	ConfigLoadError   gostats.Counter
+	ShouldRateLimit   ShouldRateLimitStats
+}
+
+func (this *ManagerImpl)  NewServiceStats() ServiceStats {
+	ret := ServiceStats{}
+	ret.ConfigLoadSuccess = this.scope.NewCounter("config_load_success")
+	ret.ConfigLoadError = this.scope.NewCounter("config_load_error")
+	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
+	return ret
+}
+
 func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
 	rateLimitKey := ""
 	for _, entry := range descriptor.Entries {
@@ -90,11 +134,11 @@ func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) str
 // Stats for an individual rate limit config entry.
 //todo: unexport fields
 type RateLimitStats struct {
-	Key						string
-	TotalHits               st.Counter
-	OverLimit               st.Counter
-	NearLimit               st.Counter
-	OverLimitWithLocalCache st.Counter
+	Key                     string
+	TotalHits               gostats.Counter
+	OverLimit               gostats.Counter
+	NearLimit               gostats.Counter
+	OverLimitWithLocalCache gostats.Counter
 }
 func (this RateLimitStats) String() string {
 	return this.Key

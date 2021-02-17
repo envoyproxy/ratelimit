@@ -6,4 +6,7 @@ type Manager interface {
 	AddNearLimit(u uint64, rlStats RateLimitStats, key string)
 	AddOverLimitWithLocalCache(u uint64, rlStats RateLimitStats, key string)
 	NewStats(key string) RateLimitStats
+	NewShouldRateLimitStats() ShouldRateLimitStats
+	NewServiceStats() ServiceStats
+	NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats
 }

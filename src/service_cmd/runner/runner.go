@@ -100,11 +100,14 @@ func (runner *Runner) Run() {
 	runner.srv = srv
 	runner.mu.Unlock()
 
+
+	manager := stats2.NewStatManager(srv.Scope().Scope("service"), s.DetailedMetrics)
+
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		createLimiter(srv, s, localCache),
 		config.NewRateLimitConfigLoaderImpl(),
-		srv.Scope().Scope("service"),
+		manager,
 		s.RuntimeWatchRoot,
 	)
 
