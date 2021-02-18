@@ -136,7 +136,7 @@ func (this *BaseRateLimiter) checkOverLimitThreshold(limitInfo *LimitInfo, hitsA
 	// Otherwise, only the difference between the current limit value and the over limit threshold
 	// were over limit hits.
 	if limitInfo.limitBeforeIncrease >= limitInfo.overLimitThreshold {
-		this.Manager.AddOverLimitWithLocalCache(uint64(hitsAddend), limitInfo.limit.Stats, key)
+		this.Manager.AddOverLimit(uint64(hitsAddend), limitInfo.limit.Stats, key)
 	} else {
 		this.Manager.AddOverLimit(uint64(limitInfo.limitAfterIncrease - limitInfo.overLimitThreshold), limitInfo.limit.Stats, key)
 

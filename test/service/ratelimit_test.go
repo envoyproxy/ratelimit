@@ -113,7 +113,7 @@ func TestService(test *testing.T) {
 	barrier := newBarrier()
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) { barrier.signal() }).Return(t.config)
+		func([]config.RateLimitConfigToLoad, stats2.Manager) { barrier.signal() }).Return(t.config)
 	t.runtimeUpdateCallback <- 1
 	barrier.wait()
 
@@ -143,7 +143,7 @@ func TestService(test *testing.T) {
 	// Config load failure.
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) {
+		func([]config.RateLimitConfigToLoad, stats2.Manager) {
 			barrier.signal()
 			panic(config.RateLimitConfigError("load error"))
 		})
@@ -229,7 +229,7 @@ func TestInitialLoadError(test *testing.T) {
 	t.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) {
+		func([]config.RateLimitConfigToLoad, stats2.Manager) {
 			panic(config.RateLimitConfigError("load error"))
 		})
 	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.sm, true)

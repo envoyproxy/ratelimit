@@ -1,6 +1,7 @@
 package ratelimit_test
 
 import (
+	stats2 "github.com/envoyproxy/ratelimit/src/stats"
 	"testing"
 
 	core_legacy "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -14,7 +15,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/golang/mock/gomock"
-	"github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
@@ -80,7 +80,7 @@ func TestServiceLegacy(test *testing.T) {
 	barrier := newBarrier()
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) { barrier.signal() }).Return(t.config)
+		func([]config.RateLimitConfigToLoad, stats2.Manager) { barrier.signal() }).Return(t.config)
 	t.runtimeUpdateCallback <- 1
 	barrier.wait()
 
@@ -120,7 +120,7 @@ func TestServiceLegacy(test *testing.T) {
 	// Config load failure.
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) {
+		func([]config.RateLimitConfigToLoad, stats2.Manager) {
 			barrier.signal()
 			panic(config.RateLimitConfigError("load error"))
 		})
@@ -218,7 +218,7 @@ func TestInitialLoadErrorLegacy(test *testing.T) {
 	t.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) {
+		func([]config.RateLimitConfigToLoad, stats2.Manager) {
 			panic(config.RateLimitConfigError("load error"))
 		})
 	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.sm, true)

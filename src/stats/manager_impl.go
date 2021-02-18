@@ -65,10 +65,10 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret := RateLimitStats{}
 	logger.Debugf("outputing test stats %s", key)
 	ret.Key = key
-	ret.TotalHits = this.scope.NewCounter(key + ".detailed_total_hits")
-	ret.OverLimit = this.scope.NewCounter(key + ".detailed_over_limit")
-	ret.NearLimit = this.scope.NewCounter(key + ".detailed_near_limit")
-	ret.OverLimitWithLocalCache = this.scope.NewCounter(key + ".detailed_over_limit_with_local_cache")
+	ret.TotalHits = this.scope.NewCounter(key + ".total_hits")
+	ret.OverLimit = this.scope.NewCounter(key + ".over_limit")
+	ret.NearLimit = this.scope.NewCounter(key + ".near_limit")
+	ret.OverLimitWithLocalCache = this.scope.NewCounter(key + ".over_limit_with_local_cache")
 	return ret
 }
 
