@@ -1,5 +1,7 @@
 package stats
 
+import stats "github.com/lyft/gostats"
+
 type Manager interface {
 	AddTotalHits(u uint64, rlStats RateLimitStats, key string)
 	AddOverLimit(u uint64, rlStats RateLimitStats, key string)
@@ -9,4 +11,5 @@ type Manager interface {
 	NewShouldRateLimitStats() ShouldRateLimitStats
 	NewServiceStats() ServiceStats
 	NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats
+	GetStatsStore() stats.Store
 }

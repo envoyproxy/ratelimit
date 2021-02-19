@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"expvar"
 	"fmt"
+	stats2 "github.com/envoyproxy/ratelimit/src/stats"
 	"io"
 	"net/http"
 	"net/http/pprof"
@@ -168,11 +169,11 @@ func (server *server) Runtime() loader.IFace {
 	return server.runtime
 }
 
-func NewServer(s settings.Settings, name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) Server {
-	return newServer(s, name, store, localCache, opts...)
+func NewServer(s settings.Settings, name string, manager stats2.Manager, localCache *freecache.Cache, opts ...settings.Option) Server {
+	return newServer(s, name, manager, localCache, opts...)
 }
 
-func newServer(s settings.Settings, name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) *server {
+func newServer(s settings.Settings, name string, manager stats2.Manager, localCache *freecache.Cache, opts ...settings.Option) *server {
 	for _, opt := range opts {
 		opt(&s)
 	}
@@ -186,7 +187,7 @@ func newServer(s settings.Settings, name string, store stats.Store, localCache *
 	ret.debugPort = s.DebugPort
 
 	// setup stats
-	ret.store = store
+	ret.store = manager.GetStatsStore()
 	ret.scope = ret.store.ScopeWithTags(name, s.ExtraTags)
 	ret.store.AddStatGenerator(stats.NewRuntimeStats(ret.scope.Scope("go")))
 	if localCache != nil {

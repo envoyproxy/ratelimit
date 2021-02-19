@@ -6,16 +6,20 @@ import (
 	logger "github.com/sirupsen/logrus"
 )
 
-func NewStatManager(scope gostats.Scope, detailedMetrics bool) *ManagerImpl {
+func NewStatManager(store gostats.Store, detailedMetrics bool) *ManagerImpl {
 	return &ManagerImpl{
-		scope:    scope,
+		store:    store,
 		detailed: detailedMetrics,
 	}
 }
 
 type ManagerImpl struct {
-	scope    gostats.Scope
+	store    gostats.Store
 	detailed bool
+}
+
+func (this *ManagerImpl) GetStatsStore() gostats.Store {
+	return this.store
 }
 
 func (this *ManagerImpl) AddTotalHits(u uint64, rlStats RateLimitStats, key string) {
@@ -58,17 +62,17 @@ func (this *ManagerImpl) getDescriptorStat(key string) RateLimitStats {
 }
 
 // Create new rate descriptor stats for a descriptor tuple.
-// @param statsScope supplies the owning scope.
+// @param statsScope supplies the owning store.
 // @param key supplies the fully resolved descriptor tuple.
 // @return new stats.
 func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret := RateLimitStats{}
 	logger.Debugf("outputing test stats %s", key)
 	ret.Key = key
-	ret.TotalHits = this.scope.NewCounter(key + ".total_hits")
-	ret.OverLimit = this.scope.NewCounter(key + ".over_limit")
-	ret.NearLimit = this.scope.NewCounter(key + ".near_limit")
-	ret.OverLimitWithLocalCache = this.scope.NewCounter(key + ".over_limit_with_local_cache")
+	ret.TotalHits = this.store.NewCounter(key + ".total_hits")
+	ret.OverLimit = this.store.NewCounter(key + ".over_limit")
+	ret.NearLimit = this.store.NewCounter(key + ".near_limit")
+	ret.OverLimitWithLocalCache = this.store.NewCounter(key + ".over_limit_with_local_cache")
 	return ret
 }
 
@@ -81,7 +85,7 @@ type ShouldRateLimitLegacyStats struct {
 
 
 func (this *ManagerImpl) NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats {
-	s := this.scope.Scope("call.should_rate_limit_legacy")
+	s := this.store.Scope("call.should_rate_limit_legacy")
 	return ShouldRateLimitLegacyStats{
 		ReqConversionError:   s.NewCounter("req_conversion_error"),
 		RespConversionError:  s.NewCounter("resp_conversion_error"),
@@ -95,7 +99,7 @@ type ShouldRateLimitStats struct {
 }
 
 func (this *ManagerImpl) NewShouldRateLimitStats() ShouldRateLimitStats {
-	s := this.scope.Scope("call.should_rate_limit")
+	s := this.store.Scope("call.should_rate_limit")
 	ret := ShouldRateLimitStats{}
 	ret.RedisError = s.NewCounter("redis_error")
 	ret.ServiceError = s.NewCounter("service_error")
@@ -110,8 +114,8 @@ type ServiceStats struct {
 
 func (this *ManagerImpl)  NewServiceStats() ServiceStats {
 	ret := ServiceStats{}
-	ret.ConfigLoadSuccess = this.scope.NewCounter("config_load_success")
-	ret.ConfigLoadError = this.scope.NewCounter("config_load_error")
+	ret.ConfigLoadSuccess = this.store.NewCounter("config_load_success")
+	ret.ConfigLoadError = this.store.NewCounter("config_load_error")
 	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
 	return ret
 }

@@ -7,11 +7,15 @@ import (
 )
 
 type MockStatManager struct {
-	scope stats.Scope
+	store stats.Store
+}
+
+func (m *MockStatManager) GetStatsStore() stats.Store {
+	return m.store
 }
 
 func (m *MockStatManager) NewShouldRateLimitStats() stat.ShouldRateLimitStats {
-	s := m.scope.Scope("call.should_rate_limit")
+	s := m.store.Scope("call.should_rate_limit")
 	ret := stat.ShouldRateLimitStats{}
 	ret.RedisError = s.NewCounter("redis_error")
 	ret.ServiceError = s.NewCounter("service_error")
@@ -20,14 +24,14 @@ func (m *MockStatManager) NewShouldRateLimitStats() stat.ShouldRateLimitStats {
 
 func (m *MockStatManager) NewServiceStats() stat.ServiceStats {
 	ret := stat.ServiceStats{}
-	ret.ConfigLoadSuccess = m.scope.NewCounter("config_load_success")
-	ret.ConfigLoadError = m.scope.NewCounter("config_load_error")
+	ret.ConfigLoadSuccess = m.store.NewCounter("config_load_success")
+	ret.ConfigLoadError = m.store.NewCounter("config_load_error")
 	ret.ShouldRateLimit = m.NewShouldRateLimitStats()
 	return ret
 }
 
 func (m *MockStatManager) NewShouldRateLimitLegacyStats() stat.ShouldRateLimitLegacyStats {
-	s := m.scope.Scope("call.should_rate_limit_legacy")
+	s := m.store.Scope("call.should_rate_limit_legacy")
 	return stat.ShouldRateLimitLegacyStats{
 		ReqConversionError:   s.NewCounter("req_conversion_error"),
 		RespConversionError:  s.NewCounter("resp_conversion_error"),
@@ -39,10 +43,10 @@ func (m *MockStatManager) NewStats(key string) stat.RateLimitStats {
 	ret := stat.RateLimitStats{}
 	logger.Debugf("outputing test stats %s", key)
 	ret.Key = key
-	ret.TotalHits = m.scope.NewCounter(key + ".total_hits")
-	ret.OverLimit = m.scope.NewCounter(key + ".over_limit")
-	ret.NearLimit = m.scope.NewCounter(key + ".near_limit")
-	ret.OverLimitWithLocalCache = m.scope.NewCounter(key + ".over_limit_with_local_cache")
+	ret.TotalHits = m.store.NewCounter(key + ".total_hits")
+	ret.OverLimit = m.store.NewCounter(key + ".over_limit")
+	ret.NearLimit = m.store.NewCounter(key + ".near_limit")
+	ret.OverLimitWithLocalCache = m.store.NewCounter(key + ".over_limit_with_local_cache")
 	return ret
 }
 
@@ -62,6 +66,6 @@ func (this *MockStatManager) AddOverLimitWithLocalCache(u uint64, rlStats stat.R
 	rlStats.OverLimitWithLocalCache.Add(u)
 }
 
-func NewMockStatManager(store stats.Scope) stat.Manager {
-	return &MockStatManager{scope: store}
+func NewMockStatManager(store stats.Store) stat.Manager {
+	return &MockStatManager{store: store}
 }

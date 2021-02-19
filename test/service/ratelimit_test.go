@@ -58,7 +58,7 @@ type rateLimitServiceTestSuite struct {
 	config                *mock_config.MockRateLimitConfig
 	runtimeUpdateCallback chan<- int
 	sm                    stats2.Manager
-	store                 stats.Scope
+	store                 stats.Store
 }
 
 func commonSetup(t *testing.T) rateLimitServiceTestSuite {

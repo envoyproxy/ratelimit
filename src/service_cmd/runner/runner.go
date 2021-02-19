@@ -28,7 +28,7 @@ import (
 )
 
 type Runner struct {
-	statsStore stats.Store
+	manager stats2.Manager
 	settings   settings.Settings
 	srv        server.Server
 	mu         sync.Mutex
@@ -36,17 +36,16 @@ type Runner struct {
 
 func NewRunner(s settings.Settings) Runner {
 	return Runner{
-		statsStore: stats.NewDefaultStore(),
+		manager: stats2.NewStatManager(stats.NewDefaultStore(), s.DetailedMetrics),
 		settings:   s,
 	}
 }
 
 func (runner *Runner) GetStatsStore() stats.Store {
-	return runner.statsStore
+	return runner.manager.GetStatsStore()
 }
 
-func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache) limiter.RateLimitCache {
-	manager := stats2.NewStatManager(srv.Scope(), s.DetailedMetrics)
+func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache, manager stats2.Manager) limiter.RateLimitCache {
 	switch s.BackendType {
 	case "redis", "":
 		return redis.NewRateLimiterCacheImplFromSettings(
@@ -95,19 +94,16 @@ func (runner *Runner) Run() {
 		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
 	}
 
-	srv := server.NewServer(s, "ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
+	srv := server.NewServer(s, "ratelimit", runner.manager, localCache, settings.GrpcUnaryInterceptor(nil))
 	runner.mu.Lock()
 	runner.srv = srv
 	runner.mu.Unlock()
 
-
-	manager := stats2.NewStatManager(srv.Scope().Scope("service"), s.DetailedMetrics)
-
 	service := ratelimit.NewService(
 		srv.Runtime(),
-		createLimiter(srv, s, localCache),
+		createLimiter(srv, s, localCache, runner.manager),
 		config.NewRateLimitConfigLoaderImpl(),
-		manager,
+		runner.manager,
 		s.RuntimeWatchRoot,
 	)
 
