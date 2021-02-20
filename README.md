@@ -190,7 +190,7 @@ For a limit of 60 requests per hour, there can only 60 requests in a single time
 Fixed window algorithm does not care when did the request arrive, all 60 can arrive at 01:01 or 01:50 and the limit will still reset at 02:00.
 
 2. Rolling window
-For a limit of 60 requests per hour. Initially it is able to take a burst of 60 requests at once, then the limit is restored by 1 each minute. Requests are allowed as long as there's still some available limit.
+For a limit of 60 requests per hour. Initially rate limiter can take a burst of 60 requests at once, then the limit is restored by 1 each minute. Requests are allowed as long as there's still some available limit.
 
 Configure rate limit algorithm with `RATE_LIMIT_ALGORITHM` environment variable.
 Use `FIXED_WINDOW` and `ROLLING_WINDOW` respectively.

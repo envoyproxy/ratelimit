@@ -76,15 +76,6 @@ func (rw *RollingWindowImpl) GetResultsAfterIncrease() int64 {
 	return rw.newTat
 }
 
-func NewRollingWindowAlgorithm(timeSource utils.TimeSource, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) *RollingWindowImpl {
-	return &RollingWindowImpl{
-		timeSource:        timeSource,
-		cacheKeyGenerator: utils.NewCacheKeyGenerator(cacheKeyPrefix),
-		localCache:        localCache,
-		nearLimitRatio:    nearLimitRatio,
-	}
-}
-
 func (rw *RollingWindowImpl) CalculateSimpleReset(limit *config.RateLimit, timeSource utils.TimeSource) *duration.Duration {
 	secondsToReset := utils.UnitToDivider(limit.Limit.Unit)
 	secondsToReset -= utils.NanosecondsToSeconds(timeSource.UnixNanoNow()) % secondsToReset
@@ -92,9 +83,18 @@ func (rw *RollingWindowImpl) CalculateSimpleReset(limit *config.RateLimit, timeS
 }
 
 func (rw *RollingWindowImpl) CalculateReset(isOverLimit bool, limit *config.RateLimit, timeSource utils.TimeSource) *duration.Duration {
-	if isOverLimit {
+	if !isOverLimit {
 		return utils.NanosecondsToDuration(rw.newTat - rw.arrivedAt)
 	} else {
 		return utils.NanosecondsToDuration(int64(math.Ceil(float64(rw.tat - rw.arrivedAt))))
+	}
+}
+
+func NewRollingWindowAlgorithm(timeSource utils.TimeSource, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) *RollingWindowImpl {
+	return &RollingWindowImpl{
+		timeSource:        timeSource,
+		cacheKeyGenerator: utils.NewCacheKeyGenerator(cacheKeyPrefix),
+		localCache:        localCache,
+		nearLimitRatio:    nearLimitRatio,
 	}
 }

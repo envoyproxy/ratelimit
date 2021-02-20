@@ -39,7 +39,7 @@ func (w *WindowImpl) GetResponseDescriptorStatus(key string, limit *config.RateL
 	isOverLimit, limitRemaining, durationUntilReset := w.algorithm.IsOverLimit(limit, int64(results), hitsAddend)
 
 	if !isOverLimit {
-		duration := w.algorithm.CalculateReset(true, limit, w.timeSource)
+		duration := w.algorithm.CalculateReset(isOverLimit, limit, w.timeSource)
 		return &pb.RateLimitResponse_DescriptorStatus{
 			Code:               pb.RateLimitResponse_OK,
 			CurrentLimit:       limit.Limit,
@@ -55,7 +55,7 @@ func (w *WindowImpl) GetResponseDescriptorStatus(key string, limit *config.RateL
 				logger.Errorf("Failing to set local cache key: %s", key)
 			}
 		}
-		duration := w.algorithm.CalculateReset(false, limit, w.timeSource)
+		duration := w.algorithm.CalculateReset(isOverLimit, limit, w.timeSource)
 		return &pb.RateLimitResponse_DescriptorStatus{
 			Code:               pb.RateLimitResponse_OVER_LIMIT,
 			CurrentLimit:       limit.Limit,
@@ -80,18 +80,18 @@ func (w *WindowImpl) GenerateCacheKeys(request *pb.RateLimitRequest,
 	return w.cacheKeyGenerator.GenerateCacheKeys(request, limits, uint32(hitsAddend), timestamp)
 }
 
-func PopulateStats(limit *config.RateLimit, nearLimit uint64, overLimit uint64, overLimitWithLocalCache uint64) {
-	limit.Stats.NearLimit.Add(nearLimit)
-	limit.Stats.OverLimit.Add(overLimit)
-	limit.Stats.OverLimitWithLocalCache.Add(overLimitWithLocalCache)
-}
-
 func (w *WindowImpl) GetExpirationSeconds() int64 {
 	return w.algorithm.GetExpirationSeconds()
 }
 
 func (w *WindowImpl) GetResultsAfterIncrease() int64 {
 	return w.algorithm.GetResultsAfterIncrease()
+}
+
+func PopulateStats(limit *config.RateLimit, nearLimit uint64, overLimit uint64, overLimitWithLocalCache uint64) {
+	limit.Stats.NearLimit.Add(nearLimit)
+	limit.Stats.OverLimit.Add(overLimit)
+	limit.Stats.OverLimitWithLocalCache.Add(overLimitWithLocalCache)
 }
 
 func NewWindow(algorithm RatelimitAlgorithm, cacheKeyPrefix string, localCache *freecache.Cache, timeSource utils.TimeSource) *WindowImpl {

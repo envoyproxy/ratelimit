@@ -3,12 +3,9 @@ package algorithm
 import (
 	"testing"
 
-	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/algorithm"
 	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/utils"
-	"github.com/envoyproxy/ratelimit/test/common"
 	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/ptypes/duration"
@@ -59,24 +56,7 @@ func TestRollingIsOverLimit(t *testing.T) {
 	assert.Equal(359, actualDurationUntilReset)
 }
 
-func TestRollingIsOverLimitWithLocalCache(t *testing.T) {
-	assert := assert.New(t)
-	controller := gomock.NewController(t)
-	defer controller.Finish()
-
-	key := "key_value"
-
-	timeSource := mock_utils.NewMockTimeSource(controller)
-	localCache := freecache.NewCache(100)
-
-	algorithm := algorithm.NewRollingWindowAlgorithm(timeSource, localCache, 0.8, "")
-	assert.Equal(false, algorithm.IsOverLimitWithLocalCache(key))
-
-	localCache.Set([]byte(key), []byte{}, 1)
-	assert.Equal(true, algorithm.IsOverLimitWithLocalCache(key))
-}
-
-func TestRollingGenerateCacheKeys(t *testing.T) {
+func TestRollingCalculateSimpleReset(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
 	defer controller.Finish()
@@ -85,71 +65,92 @@ func TestRollingGenerateCacheKeys(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	algorithm := algorithm.NewRollingWindowAlgorithm(timeSource, nil, 0.8, "")
 
-	var hitsAddend int64 = 1
-	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
-	limit := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
+	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
+	limit := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)
+
+	actualResetDuration := algorithm.CalculateSimpleReset(limit, timeSource)
+	expectedResetDuration := &duration.Duration{Seconds: 1}
+	assert.Equal(expectedResetDuration, actualResetDuration)
+
+	timeSource.EXPECT().UnixNanoNow().Return(int64(30 * 1e9)).MaxTimes(1)
+	limit = config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key_value", statsStore)
+
+	actualResetDuration = algorithm.CalculateSimpleReset(limit, timeSource)
+	expectedResetDuration = &duration.Duration{Seconds: 30}
+	assert.Equal(expectedResetDuration, actualResetDuration)
+
+	timeSource.EXPECT().UnixNanoNow().Return(int64(60 * 1e9)).MaxTimes(1)
+	limit = config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_HOUR, "key_value", statsStore)
+
+	actualResetDuration = algorithm.CalculateSimpleReset(limit, timeSource)
+	expectedResetDuration = &duration.Duration{Seconds: 59 * 60}
+	assert.Equal(expectedResetDuration, actualResetDuration)
+}
+
+func TestRollingCalculateReset(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	algorithm := algorithm.NewRollingWindowAlgorithm(timeSource, nil, 0.8, "")
 
 	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
 
-	expectedResult := []utils.CacheKey([]utils.CacheKey{{Key: "domain_key_value_0", PerSecond: true}})
-	actualResult := algorithm.GenerateCacheKeys(request, limit, hitsAddend)
-	assert.Equal(expectedResult, actualResult)
-}
-
-func TestRollingPopulateStats(t *testing.T) {
-	assert := assert.New(t)
-	controller := gomock.NewController(t)
-	defer controller.Finish()
-
-	timeSource := mock_utils.NewMockTimeSource(controller)
-	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	algorithm := algorithm.NewRollingWindowAlgorithm(timeSource, nil, 0.8, "")
-
-	limit := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)
-
-	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
-
-	algorithm.PopulateStats(limit, 1, 0, 0)
-	assert.Equal(uint64(1), limit.Stats.NearLimit.Value())
-	assert.Equal(uint64(0), limit.Stats.OverLimit.Value())
-	assert.Equal(uint64(0), limit.Stats.OverLimitWithLocalCache.Value())
-
-	algorithm.PopulateStats(limit, 0, 1, 0)
-	assert.Equal(uint64(1), limit.Stats.NearLimit.Value())
-	assert.Equal(uint64(1), limit.Stats.OverLimit.Value())
-	assert.Equal(uint64(0), limit.Stats.OverLimitWithLocalCache.Value())
-
-	algorithm.PopulateStats(limit, 0, 0, 1)
-	assert.Equal(uint64(1), limit.Stats.NearLimit.Value())
-	assert.Equal(uint64(1), limit.Stats.OverLimit.Value())
-	assert.Equal(uint64(1), limit.Stats.OverLimitWithLocalCache.Value())
-}
-
-func TestRollingGetResponseDescriptorStatus(t *testing.T) {
-	assert := assert.New(t)
-	controller := gomock.NewController(t)
-	defer controller.Finish()
-
-	timeSource := mock_utils.NewMockTimeSource(controller)
-	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	algorithm := algorithm.NewRollingWindowAlgorithm(timeSource, nil, 0.8, "")
-
-	key := "key_value"
-	limit := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)
 	var results int64 = 0
 	var hitsAddend int64 = 1
-	isOverLimitWithLocalCache := false
+	limit := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key_value", statsStore)
 
-	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
+	// populating tat, newTat, arriveAt
+	// that is required to execute CalculateAt
 
-	expectedResult := &pb.RateLimitResponse_DescriptorStatus{
-		Code:               pb.RateLimitResponse_OK,
-		CurrentLimit:       limit.Limit,
-		LimitRemaining:     9,
-		DurationUntilReset: &duration.Duration{Nanos: 1e8}}
+	// periode = 1 minute = 60 second
+	// limit = 10 request/minute
+	// emissionInterval = 6 second
+	// request = 1
+	// increment = emissionInterval*request = 6 second
 
-	actualResult := algorithm.GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend)
-	assert.Equal(expectedResult, actualResult)
+	// arriveAt = 1 second
+	// tat = 0 second
+
+	// newTat should be max(arriveAt,tat)+increment = 7 second
+	// DurationUntilReset should be newtat-arriveat = 6 second
+
+	algorithm.IsOverLimit(limit, results, hitsAddend)
+	isOverLimit := false
+
+	actualResetDuration := algorithm.CalculateReset(isOverLimit, limit, timeSource)
+	expectedResetDuration := &duration.Duration{Seconds: 6}
+	assert.Equal(expectedResetDuration, actualResetDuration)
+
+	timeSource.EXPECT().UnixNanoNow().Return(int64(3 * 60 * 1e9)).MaxTimes(1)
+
+	results = 72 * 60 * 1e9
+	hitsAddend = 1
+	limit = config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_HOUR, "key_value", statsStore)
+
+	// populating tat, newTat, arriveAt
+	// that is required to execute CalculateAt
+
+	// periode = 1 hour = 3600 second
+	// limit = 10 request/hour
+	// emissionInterval = 6 minute = 360 second
+	// request = 1
+	// increment = emissionInterval*request = 6 minute = 360 second
+
+	// arriveAt = 3 minute
+	// tat =  72 minute
+
+	// newTat should be max(arriveAt,tat)+increment = 78 minute (not used)
+	// DurationUntilReset should be tat-arriveat = 6 second
+
+	algorithm.IsOverLimit(limit, results, hitsAddend)
+	isOverLimit = true
+
+	actualResetDuration = algorithm.CalculateReset(isOverLimit, limit, timeSource)
+	expectedResetDuration = &duration.Duration{Seconds: 69 * 60}
+	assert.Equal(expectedResetDuration, actualResetDuration)
 }
 
 func TestRollingGetExpirationSeconds(t *testing.T) {
@@ -161,53 +162,45 @@ func TestRollingGetExpirationSeconds(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	algorithm := algorithm.NewRollingWindowAlgorithm(timeSource, nil, 0.8, "")
 
-	key := "key_value"
 	limit := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)
 	var results int64 = 0
 	var hitsAddend int64 = 1
-	isOverLimitWithLocalCache := false
 
 	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
-	algorithm.GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+	algorithm.IsOverLimit(limit, results, hitsAddend)
 
 	expectedResult := int64(1)
 	actualResult := algorithm.GetExpirationSeconds()
 	assert.Equal(expectedResult, actualResult)
 
-	key = "key_value"
 	limit = config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)
 	results = 2e9
 	hitsAddend = 1
-	isOverLimitWithLocalCache = false
 
 	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9 + 4e6)).MaxTimes(1)
-	algorithm.GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+	algorithm.IsOverLimit(limit, results, hitsAddend)
 
 	expectedResult = int64(1)
 	actualResult = algorithm.GetExpirationSeconds()
 	assert.Equal(expectedResult, actualResult)
 
-	key = "key_value"
 	limit = config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key_value", statsStore)
 	results = 0
 	hitsAddend = 1
-	isOverLimitWithLocalCache = false
 
 	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
-	algorithm.GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+	algorithm.IsOverLimit(limit, results, hitsAddend)
 
 	expectedResult = int64(7)
 	actualResult = algorithm.GetExpirationSeconds()
 	assert.Equal(expectedResult, actualResult)
 
-	key = "key_value"
 	limit = config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key_value", statsStore)
 	results = 60e9
 	hitsAddend = 1
-	isOverLimitWithLocalCache = false
 
 	timeSource.EXPECT().UnixNanoNow().Return(int64(4e9)).MaxTimes(1)
-	algorithm.GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+	algorithm.IsOverLimit(limit, results, hitsAddend)
 
 	expectedResult = int64(57)
 	actualResult = algorithm.GetExpirationSeconds()
@@ -223,53 +216,45 @@ func TestRollingGetResultsAfterIncrease(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	algorithm := algorithm.NewRollingWindowAlgorithm(timeSource, nil, 0.8, "")
 
-	key := "key_value"
 	limit := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)
 	var results int64 = 0
 	var hitsAddend int64 = 1
-	isOverLimitWithLocalCache := false
 
 	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
-	algorithm.GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+	algorithm.IsOverLimit(limit, results, hitsAddend)
 
 	expectedResult := int64(1e9 + 1e8)
 	actualResult := algorithm.GetResultsAfterIncrease()
 	assert.Equal(expectedResult, actualResult)
 
-	key = "key_value"
 	limit = config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)
 	results = 2e9
 	hitsAddend = 1
-	isOverLimitWithLocalCache = false
 
 	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9 + 4e6)).MaxTimes(1)
-	algorithm.GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+	algorithm.IsOverLimit(limit, results, hitsAddend)
 
 	expectedResult = int64(2e9)
 	actualResult = algorithm.GetResultsAfterIncrease()
 	assert.Equal(expectedResult, actualResult)
 
-	key = "key_value"
 	limit = config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key_value", statsStore)
 	results = 0
 	hitsAddend = 1
-	isOverLimitWithLocalCache = false
 
 	timeSource.EXPECT().UnixNanoNow().Return(int64(1e9)).MaxTimes(1)
-	algorithm.GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+	algorithm.IsOverLimit(limit, results, hitsAddend)
 
 	expectedResult = int64(7e9)
 	actualResult = algorithm.GetResultsAfterIncrease()
 	assert.Equal(expectedResult, actualResult)
 
-	key = "key_value"
 	limit = config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key_value", statsStore)
 	results = 60e9
 	hitsAddend = 1
-	isOverLimitWithLocalCache = false
 
 	timeSource.EXPECT().UnixNanoNow().Return(int64(4e9)).MaxTimes(1)
-	algorithm.GetResponseDescriptorStatus(key, limit, results, isOverLimitWithLocalCache, hitsAddend)
+	algorithm.IsOverLimit(limit, results, hitsAddend)
 
 	expectedResult = int64(60e9)
 	actualResult = algorithm.GetResultsAfterIncrease()

@@ -1,8 +1,9 @@
 package algorithm
 
 import (
-	"github.com/golang/protobuf/ptypes/duration"
 	"math"
+
+	"github.com/golang/protobuf/ptypes/duration"
 
 	"github.com/coocood/freecache"
 	"github.com/envoyproxy/ratelimit/src/config"
@@ -53,6 +54,14 @@ func (fw *FixedWindowImpl) GetResultsAfterIncrease() int64 {
 	return 0
 }
 
+func (fw *FixedWindowImpl) CalculateSimpleReset(limit *config.RateLimit, timeSource utils.TimeSource) *duration.Duration {
+	return utils.CalculateFixedReset(limit.Limit, timeSource)
+}
+
+func (fw *FixedWindowImpl) CalculateReset(isOverLimit bool, limit *config.RateLimit, timeSource utils.TimeSource) *duration.Duration {
+	return fw.CalculateSimpleReset(limit, timeSource)
+}
+
 func NewFixedWindowAlgorithm(timeSource utils.TimeSource, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) *FixedWindowImpl {
 	return &FixedWindowImpl{
 		timeSource:        timeSource,
@@ -60,12 +69,4 @@ func NewFixedWindowAlgorithm(timeSource utils.TimeSource, localCache *freecache.
 		localCache:        localCache,
 		nearLimitRatio:    nearLimitRatio,
 	}
-}
-
-func (c *FixedWindowImpl) CalculateSimpleReset(limit *config.RateLimit, timeSource utils.TimeSource) *duration.Duration {
-	return utils.CalculateFixedReset(limit.Limit, timeSource)
-}
-
-func (c *FixedWindowImpl) CalculateReset(isOverLimit bool, limit *config.RateLimit, timeSource utils.TimeSource) *duration.Duration {
-	return c.CalculateSimpleReset(limit, timeSource)
 }
