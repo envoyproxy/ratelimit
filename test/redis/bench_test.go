@@ -2,7 +2,7 @@ package redis_test
 
 import (
 	"context"
-	stats2 "github.com/envoyproxy/ratelimit/test/mocks/stats"
+	"github.com/envoyproxy/ratelimit/test/mocks/stats"
 	"runtime"
 	"testing"
 	"time"
@@ -11,7 +11,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/utils"
-	stats "github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 
 	"math/rand"
 
@@ -41,8 +41,8 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 
 	mkDoLimitBench := func(pipelineWindow time.Duration, pipelineLimit int) func(*testing.B) {
 		return func(b *testing.B) {
-			statsStore := stats.NewStore(stats.NewNullSink(), false)
-			sm := stats2.NewMockStatManager(statsStore)
+			statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+			sm := stats.NewMockStatManager(statsStore)
 			client := redis.NewClientImpl(statsStore, false, "", "single", "127.0.0.1:6379", poolSize, pipelineWindow, pipelineLimit)
 			defer client.Close()
 

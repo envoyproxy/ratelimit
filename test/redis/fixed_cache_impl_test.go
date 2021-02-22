@@ -1,7 +1,7 @@
 package redis_test
 
 import (
-	stats2 "github.com/envoyproxy/ratelimit/test/mocks/stats"
+	"github.com/envoyproxy/ratelimit/test/mocks/stats"
 	"testing"
 
 	"github.com/coocood/freecache"
@@ -12,7 +12,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/utils"
-	stats "github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 
 	"math/rand"
 
@@ -37,8 +37,8 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		assert := assert.New(t)
 		controller := gomock.NewController(t)
 		defer controller.Finish()
-		statsStore := stats.NewStore(stats.NewNullSink(), false)
-		sm := stats2.NewMockStatManager(statsStore)
+		statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+		sm := stats.NewMockStatManager(statsStore)
 
 		client := mock_redis.NewMockClient(controller)
 		perSecondClient := mock_redis.NewMockClient(controller)
@@ -129,14 +129,14 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 	}
 }
 
-func testLocalCacheStats(localCacheStats stats.StatGenerator, statsStore stats.Store, sink *common.TestStatSink,
+func testLocalCacheStats(localCacheStats gostats.StatGenerator, statsStore gostats.Store, sink *common.TestStatSink,
 	expectedHitCount int, expectedMissCount int, expectedLookUpCount int, expectedExpiredCount int,
 	expectedEntryCount int) func(*testing.T) {
 	return func(t *testing.T) {
 		localCacheStats.GenerateStats()
 		statsStore.Flush()
 
-		// Check whether all local_cache related stats are available.
+		// Check whether all local_cache related gostats are available.
 		_, ok := sink.Record["averageAccessTime"]
 		assert.Equal(t, true, ok)
 		hitCount, ok := sink.Record["hitCount"]
@@ -173,8 +173,8 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	sm := stats2.NewMockStatManager(statsStore)
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm)
 	sink := &common.TestStatSink{}
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
@@ -222,7 +222,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
 
-	// Test Over limit stats
+	// Test Over limit gostats
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(16)).DoAndReturn(pipeAppend)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
@@ -241,7 +241,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
 
-	// Test Over limit stats with local cache
+	// Test Over limit gostats with local cache
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
@@ -266,8 +266,8 @@ func TestNearLimit(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	sm := stats2.NewMockStatManager(statsStore)
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm)
 
 	// Test Near Limit Stats. Under Near Limit Ratio
@@ -427,8 +427,8 @@ func TestRedisWithJitter(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	jitterSource := mock_utils.NewMockJitterRandSource(controller)
-	statsStore := stats.NewStore(stats.NewNullSink(), false)
-	sm := stats2.NewMockStatManager(statsStore)
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
