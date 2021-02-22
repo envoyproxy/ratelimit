@@ -14,11 +14,11 @@ import (
 	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
 	mock_loader "github.com/envoyproxy/ratelimit/test/mocks/runtime/loader"
 	mock_snapshot "github.com/envoyproxy/ratelimit/test/mocks/runtime/snapshot"
+	stats3 "github.com/envoyproxy/ratelimit/test/mocks/stats"
 	"github.com/golang/mock/gomock"
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
-	stats3 "github.com/envoyproxy/ratelimit/test/mocks/stats"
 )
 
 type barrier struct {

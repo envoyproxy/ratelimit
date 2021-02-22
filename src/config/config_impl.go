@@ -6,10 +6,10 @@ import (
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	stat "github.com/envoyproxy/ratelimit/src/stats"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"gopkg.in/yaml.v2"
-	stat "github.com/envoyproxy/ratelimit/src/stats"
 )
 
 type yamlRateLimit struct {
@@ -39,8 +39,8 @@ type rateLimitDomain struct {
 }
 
 type rateLimitConfigImpl struct {
-	domains    map[string]*rateLimitDomain
-	manager    stat.Manager
+	domains map[string]*rateLimitDomain
+	manager stat.Manager
 }
 
 var validKeys = map[string]bool{

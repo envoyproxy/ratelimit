@@ -49,7 +49,7 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
-			this.Manager.AddTotalHits(uint64(hitsAddend),limits[i].Stats, cacheKeys[i].Key)
+			this.Manager.AddTotalHits(uint64(hitsAddend), limits[i].Stats, cacheKeys[i].Key)
 		}
 	}
 	return cacheKeys
@@ -76,8 +76,8 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 			nil, 0)
 	}
 	if isOverLimitWithLocalCache {
-		this.Manager.AddOverLimit(uint64(hitsAddend),limitInfo.limit.Stats,key)
-		this.Manager.AddOverLimitWithLocalCache(uint64(hitsAddend),limitInfo.limit.Stats,key)
+		this.Manager.AddOverLimit(uint64(hitsAddend), limitInfo.limit.Stats, key)
+		this.Manager.AddOverLimitWithLocalCache(uint64(hitsAddend), limitInfo.limit.Stats, key)
 		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT,
 			limitInfo.limit.Limit, 0)
 	}
@@ -125,7 +125,7 @@ func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expira
 		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		Manager:					manager,
+		Manager:                    manager,
 	}
 }
 
@@ -138,12 +138,12 @@ func (this *BaseRateLimiter) checkOverLimitThreshold(limitInfo *LimitInfo, hitsA
 	if limitInfo.limitBeforeIncrease >= limitInfo.overLimitThreshold {
 		this.Manager.AddOverLimit(uint64(hitsAddend), limitInfo.limit.Stats, key)
 	} else {
-		this.Manager.AddOverLimit(uint64(limitInfo.limitAfterIncrease - limitInfo.overLimitThreshold), limitInfo.limit.Stats, key)
+		this.Manager.AddOverLimit(uint64(limitInfo.limitAfterIncrease-limitInfo.overLimitThreshold), limitInfo.limit.Stats, key)
 
 		// If the limit before increase was below the over limit value, then some of the hits were
 		// in the near limit range.
 		this.Manager.AddNearLimit(
-			uint64(limitInfo.overLimitThreshold - utils.Max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease)),
+			uint64(limitInfo.overLimitThreshold-utils.Max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease)),
 			limitInfo.limit.Stats,
 			key,
 		)
@@ -159,7 +159,7 @@ func (this *BaseRateLimiter) checkNearLimitThreshold(limitInfo *LimitInfo, hitsA
 		if limitInfo.limitBeforeIncrease >= limitInfo.nearLimitThreshold {
 			this.Manager.AddNearLimit(uint64(hitsAddend), limitInfo.limit.Stats, key)
 		} else {
-			this.Manager.AddNearLimit(uint64(limitInfo.limitAfterIncrease - limitInfo.nearLimitThreshold), limitInfo.limit.Stats, key)
+			this.Manager.AddNearLimit(uint64(limitInfo.limitAfterIncrease-limitInfo.nearLimitThreshold), limitInfo.limit.Stats, key)
 		}
 	}
 }

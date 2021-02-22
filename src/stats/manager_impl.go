@@ -19,11 +19,11 @@ func NewStatManager(store gostats.Store, s settings.Settings) *ManagerImpl {
 }
 
 type ManagerImpl struct {
-	store    gostats.Store
-	rlStatsScope    gostats.Scope
-	legacyStatsScope    gostats.Scope
-	serviceStatsScope	gostats.Scope
-	detailed bool
+	store             gostats.Store
+	rlStatsScope      gostats.Scope
+	legacyStatsScope  gostats.Scope
+	serviceStatsScope gostats.Scope
+	detailed          bool
 }
 
 func (this *ManagerImpl) GetStatsStore() gostats.Store {
@@ -84,13 +84,11 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	return ret
 }
 
-
 type ShouldRateLimitLegacyStats struct {
 	ReqConversionError   gostats.Counter
 	RespConversionError  gostats.Counter
 	ShouldRateLimitError gostats.Counter
 }
-
 
 func (this *ManagerImpl) NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats {
 	return ShouldRateLimitLegacyStats{
@@ -119,7 +117,7 @@ type ServiceStats struct {
 	ShouldRateLimit   ShouldRateLimitStats
 }
 
-func (this *ManagerImpl)  NewServiceStats() ServiceStats {
+func (this *ManagerImpl) NewServiceStats() ServiceStats {
 	ret := ServiceStats{}
 	ret.ConfigLoadSuccess = this.serviceStatsScope.NewCounter("config_load_success")
 	ret.ConfigLoadError = this.serviceStatsScope.NewCounter("config_load_error")
@@ -141,7 +139,6 @@ func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) str
 	return domain + "." + rateLimitKey
 }
 
-
 // Stats for an individual rate limit config entry.
 //todo: unexport fields
 type RateLimitStats struct {
@@ -151,6 +148,7 @@ type RateLimitStats struct {
 	NearLimit               gostats.Counter
 	OverLimitWithLocalCache gostats.Counter
 }
+
 func (this RateLimitStats) String() string {
 	return this.Key
 }

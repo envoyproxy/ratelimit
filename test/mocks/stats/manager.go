@@ -38,6 +38,7 @@ func (m *MockStatManager) NewShouldRateLimitLegacyStats() stat.ShouldRateLimitLe
 		ShouldRateLimitError: s.NewCounter("should_rate_limit_error"),
 	}
 }
+
 //todo: consider not using mock since pretty much all logic is repeated.
 func (m *MockStatManager) NewStats(key string) stat.RateLimitStats {
 	ret := stat.RateLimitStats{}

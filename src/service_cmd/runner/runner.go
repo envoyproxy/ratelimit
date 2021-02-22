@@ -28,16 +28,16 @@ import (
 )
 
 type Runner struct {
-	manager stats2.Manager
-	settings   settings.Settings
-	srv        server.Server
-	mu         sync.Mutex
+	manager  stats2.Manager
+	settings settings.Settings
+	srv      server.Server
+	mu       sync.Mutex
 }
 
 func NewRunner(s settings.Settings) Runner {
 	return Runner{
-		manager: stats2.NewStatManager(stats.NewDefaultStore(), s),
-		settings:   s,
+		manager:  stats2.NewStatManager(stats.NewDefaultStore(), s),
+		settings: s,
 	}
 }
 

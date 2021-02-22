@@ -170,6 +170,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 	defer this.configLock.RUnlock()
 	return this.config
 }
+
 //todo: add methods to interface
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 	configLoader config.RateLimitConfigLoader, manager stats2.Manager, runtimeWatchRoot bool) RateLimitServiceServer {
