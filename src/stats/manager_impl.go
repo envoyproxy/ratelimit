@@ -2,18 +2,19 @@ package stats
 
 import (
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
+	"github.com/envoyproxy/ratelimit/src/settings"
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 )
 
-func NewStatManager(store gostats.Store, detailedMetrics bool) *ManagerImpl {
-	serviceScope := store.Scope("service")
+func NewStatManager(store gostats.Store, s settings.Settings) *ManagerImpl {
+	serviceScope := store.ScopeWithTags("ratelimit", s.ExtraTags).Scope("service")
 	return &ManagerImpl{
 		store:             store,
 		rlStatsScope:      serviceScope.Scope("rate_limit"),
 		legacyStatsScope:  serviceScope.Scope("call.should_rate_limit_legacy"),
 		serviceStatsScope: serviceScope,
-		detailed:          detailedMetrics,
+		detailed:          s.DetailedMetrics,
 	}
 }
 

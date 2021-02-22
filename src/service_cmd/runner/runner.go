@@ -36,7 +36,7 @@ type Runner struct {
 
 func NewRunner(s settings.Settings) Runner {
 	return Runner{
-		manager: stats2.NewStatManager(stats.NewDefaultStore(), s.DetailedMetrics),
+		manager: stats2.NewStatManager(stats.NewDefaultStore(), s),
 		settings:   s,
 	}
 }
