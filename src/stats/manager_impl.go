@@ -7,14 +7,21 @@ import (
 )
 
 func NewStatManager(store gostats.Store, detailedMetrics bool) *ManagerImpl {
+	serviceScope := store.Scope("service")
 	return &ManagerImpl{
-		store:    store,
-		detailed: detailedMetrics,
+		store:             store,
+		rlStatsScope:      serviceScope.Scope("rate_limit"),
+		legacyStatsScope:  serviceScope.Scope("call.should_rate_limit_legacy"),
+		serviceStatsScope: serviceScope,
+		detailed:          detailedMetrics,
 	}
 }
 
 type ManagerImpl struct {
 	store    gostats.Store
+	rlStatsScope    gostats.Scope
+	legacyStatsScope    gostats.Scope
+	serviceStatsScope	gostats.Scope
 	detailed bool
 }
 
@@ -69,10 +76,10 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret := RateLimitStats{}
 	logger.Debugf("outputing test stats %s", key)
 	ret.Key = key
-	ret.TotalHits = this.store.NewCounter(key + ".total_hits")
-	ret.OverLimit = this.store.NewCounter(key + ".over_limit")
-	ret.NearLimit = this.store.NewCounter(key + ".near_limit")
-	ret.OverLimitWithLocalCache = this.store.NewCounter(key + ".over_limit_with_local_cache")
+	ret.TotalHits = this.rlStatsScope.NewCounter(key + ".total_hits")
+	ret.OverLimit = this.rlStatsScope.NewCounter(key + ".over_limit")
+	ret.NearLimit = this.rlStatsScope.NewCounter(key + ".near_limit")
+	ret.OverLimitWithLocalCache = this.rlStatsScope.NewCounter(key + ".over_limit_with_local_cache")
 	return ret
 }
 
@@ -85,11 +92,10 @@ type ShouldRateLimitLegacyStats struct {
 
 
 func (this *ManagerImpl) NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats {
-	s := this.store.Scope("call.should_rate_limit_legacy")
 	return ShouldRateLimitLegacyStats{
-		ReqConversionError:   s.NewCounter("req_conversion_error"),
-		RespConversionError:  s.NewCounter("resp_conversion_error"),
-		ShouldRateLimitError: s.NewCounter("should_rate_limit_error"),
+		ReqConversionError:   this.legacyStatsScope.NewCounter("req_conversion_error"),
+		RespConversionError:  this.legacyStatsScope.NewCounter("resp_conversion_error"),
+		ShouldRateLimitError: this.legacyStatsScope.NewCounter("should_rate_limit_error"),
 	}
 }
 
@@ -99,7 +105,7 @@ type ShouldRateLimitStats struct {
 }
 
 func (this *ManagerImpl) NewShouldRateLimitStats() ShouldRateLimitStats {
-	s := this.store.Scope("call.should_rate_limit")
+	s := this.serviceStatsScope.Scope("call.should_rate_limit")
 	ret := ShouldRateLimitStats{}
 	ret.RedisError = s.NewCounter("redis_error")
 	ret.ServiceError = s.NewCounter("service_error")
@@ -114,8 +120,8 @@ type ServiceStats struct {
 
 func (this *ManagerImpl)  NewServiceStats() ServiceStats {
 	ret := ServiceStats{}
-	ret.ConfigLoadSuccess = this.store.NewCounter("config_load_success")
-	ret.ConfigLoadError = this.store.NewCounter("config_load_error")
+	ret.ConfigLoadSuccess = this.serviceStatsScope.NewCounter("config_load_success")
+	ret.ConfigLoadError = this.serviceStatsScope.NewCounter("config_load_error")
 	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
 	return ret
 }
