@@ -2,7 +2,7 @@ package ratelimit
 
 import (
 	"fmt"
-	stats2 "github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"strings"
 	"sync"
 
@@ -29,12 +29,12 @@ type service struct {
 	config             config.RateLimitConfig
 	runtimeUpdateEvent chan int
 	cache              limiter.RateLimitCache
-	stats              stats2.ServiceStats
+	stats              stats.ServiceStats
 	legacy             *legacyService
 	runtimeWatchRoot   bool
 }
 
-func (this *service) reloadConfig(manager stats2.Manager) {
+func (this *service) reloadConfig(manager stats.Manager) {
 	defer func() {
 		if e := recover(); e != nil {
 			configError, ok := e.(config.RateLimitConfigError)
@@ -173,7 +173,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 
 //todo: add methods to interface
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, manager stats2.Manager, runtimeWatchRoot bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, manager stats.Manager, runtimeWatchRoot bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,

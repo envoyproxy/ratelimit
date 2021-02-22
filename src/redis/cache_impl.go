@@ -1,7 +1,7 @@
 package redis
 
 import (
-	stat "github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"math/rand"
 
 	"github.com/coocood/freecache"
@@ -11,7 +11,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
-func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, manager stat.Manager) limiter.RateLimitCache {
+func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, manager stats.Manager) limiter.RateLimitCache {
 	var perSecondPool Client
 	if s.RedisPerSecond {
 		perSecondPool = NewClientImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondTls, s.RedisPerSecondAuth,

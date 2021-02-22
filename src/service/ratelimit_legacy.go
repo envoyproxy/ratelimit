@@ -5,7 +5,7 @@ import (
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	stats2 "github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"golang.org/x/net/context"
 )
 
@@ -17,7 +17,7 @@ type RateLimitLegacyServiceServer interface {
 // the legacyService receives RateLimitRequests, converts the request, and calls the service's ShouldRateLimit method.
 type legacyService struct {
 	s                          *service
-	shouldRateLimitLegacyStats stats2.ShouldRateLimitLegacyStats
+	shouldRateLimitLegacyStats stats.ShouldRateLimitLegacyStats
 }
 
 func (this *legacyService) ShouldRateLimit(

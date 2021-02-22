@@ -4,13 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"github.com/envoyproxy/ratelimit/src/settings"
-	stat "github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 )
 
 func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {
@@ -22,8 +22,7 @@ func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {
 		}
 	}()
 	settingStruct := settings.NewSettings()
-	dummyStats := stats.NewStore(stats.NewNullSink(), false)
-	manager := stat.NewStatManager(dummyStats, settingStruct)
+	manager := stats.NewStatManager(gostats.NewStore(gostats.NewNullSink(), false), settingStruct)
 	config.NewRateLimitConfigImpl(allConfigs, manager)
 }
 
