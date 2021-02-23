@@ -66,7 +66,6 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
-	descriptorKeys := make([]string, len(request.Descriptors))
 
 	keysToGet := make([]string, 0, len(request.Descriptors))
 
@@ -74,7 +73,6 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		if cacheKey.Key == "" {
 			continue
 		}
-		descriptorKeys[i] = stats.DescriptorKey(request.Domain, request.Descriptors[i])
 
 		// Check if key is over the limit in local cache.
 		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
@@ -120,7 +118,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-			limitInfo, isOverLimitWithLocalCache[i], hitsAddend, descriptorKeys[i])
+			limitInfo, isOverLimitWithLocalCache[i], hitsAddend, stats.DescriptorKey(request.Domain, request.Descriptors[i]))
 	}
 
 	this.waitGroup.Add(1)

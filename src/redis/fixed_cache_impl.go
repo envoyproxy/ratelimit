@@ -97,7 +97,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
+			limitInfo, isOverLimitWithLocalCache[i], hitsAddend, stats.DescriptorKey(request.Domain, request.Descriptors[i]))
 
 	}
 
