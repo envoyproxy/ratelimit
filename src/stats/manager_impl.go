@@ -8,7 +8,7 @@ import (
 )
 
 func NewStatManager(store gostats.Store, s settings.Settings) *ManagerImpl {
-	logger.Warnf("Initializing Stat Manager with detailed metrics %t", s.DetailedMetrics)
+	logger.Infof("Initializing Stat Manager with detailed metrics %t", s.DetailedMetrics)
 	serviceScope := store.ScopeWithTags("ratelimit", s.ExtraTags).Scope("service")
 	return &ManagerImpl{
 		store:             store,
