@@ -141,7 +141,7 @@ func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) str
 }
 
 // Stats for an individual rate limit config entry.
-//todo: Ideally the gostats package fields should be unexported and iteracted with via getters and setters.
+//todo: Ideally the gostats package fields should be unexported and interacted with via getters and setters.
 type RateLimitStats struct {
 	Key                     string
 	TotalHits               gostats.Counter

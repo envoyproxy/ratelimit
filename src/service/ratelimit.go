@@ -171,7 +171,6 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 	return this.config
 }
 
-//todo: add methods to interface
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 	configLoader config.RateLimitConfigLoader, manager stats.Manager, runtimeWatchRoot bool) RateLimitServiceServer {
 
