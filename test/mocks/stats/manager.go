@@ -39,7 +39,7 @@ func (m *MockStatManager) NewShouldRateLimitLegacyStats() stat.ShouldRateLimitLe
 	}
 }
 
-//todo: consider not using mock since pretty much all logic is repeated.
+//todo: review mock implementation
 func (m *MockStatManager) NewStats(key string) stat.RateLimitStats {
 	ret := stat.RateLimitStats{}
 	logger.Debugf("outputing test stats %s", key)

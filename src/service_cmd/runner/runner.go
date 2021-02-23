@@ -1,7 +1,7 @@
 package runner
 
 import (
-	stats2 "github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"io"
 	"math/rand"
 	"net/http"
@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	stats "github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 
 	"github.com/coocood/freecache"
 
@@ -28,7 +28,7 @@ import (
 )
 
 type Runner struct {
-	manager  stats2.Manager
+	manager  stats.Manager
 	settings settings.Settings
 	srv      server.Server
 	mu       sync.Mutex
@@ -36,16 +36,16 @@ type Runner struct {
 
 func NewRunner(s settings.Settings) Runner {
 	return Runner{
-		manager:  stats2.NewStatManager(stats.NewDefaultStore(), s),
+		manager:  stats.NewStatManager(gostats.NewDefaultStore(), s),
 		settings: s,
 	}
 }
 
-func (runner *Runner) GetStatsStore() stats.Store {
+func (runner *Runner) GetStatsStore() gostats.Store {
 	return runner.manager.GetStatsStore()
 }
 
-func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache, manager stats2.Manager) limiter.RateLimitCache {
+func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache, manager stats.Manager) limiter.RateLimitCache {
 	switch s.BackendType {
 	case "redis", "":
 		return redis.NewRateLimiterCacheImplFromSettings(

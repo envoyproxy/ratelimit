@@ -63,8 +63,8 @@ func (this *ManagerImpl) AddOverLimitWithLocalCache(u uint64, rlStats RateLimitS
 	}
 }
 
-//todo: consider adding a ratelimitstats cache
-//todo: add descriptor fields parameter to allow configuration of descriptor entries for which metrics will be emited.
+//todo: consider adding a RateLimitStats cache
+//todo: consider adding descriptor fields parameter to allow configuration of descriptor entries for which metrics will be emited.
 func (this *ManagerImpl) getDescriptorStat(key string) RateLimitStats {
 	ret := this.NewStats(key)
 	return ret
@@ -141,7 +141,7 @@ func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) str
 }
 
 // Stats for an individual rate limit config entry.
-//todo: unexport fields
+//todo: Ideally the gostats package fields should be unexported and iteracted with via getters and setters.
 type RateLimitStats struct {
 	Key                     string
 	TotalHits               gostats.Counter

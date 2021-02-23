@@ -186,7 +186,7 @@ func newServer(s settings.Settings, name string, manager stats.Manager, localCac
 	ret.grpcPort = s.GrpcPort
 	ret.debugPort = s.DebugPort
 
-	// setup gostats
+	// setup stats
 	ret.store = manager.GetStatsStore()
 	ret.scope = ret.store.ScopeWithTags(name, s.ExtraTags)
 	ret.store.AddStatGenerator(gostats.NewRuntimeStats(ret.scope.Scope("go")))
@@ -245,10 +245,10 @@ func newServer(s settings.Settings, name string, manager stats.Manager, localCac
 			pprof.Profile(writer, request)
 		})
 
-	// setup gostats endpoint
+	// setup stats endpoint
 	ret.AddDebugHttpEndpoint(
-		"/gostats",
-		"print out gostats",
+		"/stats",
+		"print out stats",
 		func(writer http.ResponseWriter, request *http.Request) {
 			expvar.Do(func(kv expvar.KeyValue) {
 				io.WriteString(writer, fmt.Sprintf("%s: %s\n", kv.Key, kv.Value))

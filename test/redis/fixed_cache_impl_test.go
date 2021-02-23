@@ -136,7 +136,7 @@ func testLocalCacheStats(localCacheStats gostats.StatGenerator, statsStore gosta
 		localCacheStats.GenerateStats()
 		statsStore.Flush()
 
-		// Check whether all local_cache related gostats are available.
+		// Check whether all local_cache related stats are available.
 		_, ok := sink.Record["averageAccessTime"]
 		assert.Equal(t, true, ok)
 		hitCount, ok := sink.Record["hitCount"]
@@ -222,7 +222,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
 
-	// Test Over limit gostats
+	// Test Over limit stats
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(16)).DoAndReturn(pipeAppend)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
@@ -241,7 +241,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
 
-	// Test Over limit gostats with local cache
+	// Test Over limit stats with local cache
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
