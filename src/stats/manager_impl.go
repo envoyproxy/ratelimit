@@ -33,7 +33,7 @@ func (this *ManagerImpl) GetStatsStore() gostats.Store {
 
 func (this *ManagerImpl) AddTotalHits(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.TotalHits.Add(u)
-	if this.detailed {
+	if this.detailed && key != rlStats.Key {
 		stat := this.getDescriptorStat(key)
 		stat.TotalHits.Add(u)
 	}
@@ -41,7 +41,7 @@ func (this *ManagerImpl) AddTotalHits(u uint64, rlStats RateLimitStats, key stri
 
 func (this *ManagerImpl) AddOverLimit(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.OverLimit.Add(u)
-	if this.detailed {
+	if this.detailed && key != rlStats.Key {
 		stat := this.getDescriptorStat(key)
 		stat.OverLimit.Add(u)
 	}
@@ -49,7 +49,7 @@ func (this *ManagerImpl) AddOverLimit(u uint64, rlStats RateLimitStats, key stri
 
 func (this *ManagerImpl) AddNearLimit(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.NearLimit.Add(u)
-	if this.detailed {
+	if this.detailed && key != rlStats.Key {
 		stat := this.getDescriptorStat(key)
 		stat.NearLimit.Add(u)
 	}
@@ -57,7 +57,7 @@ func (this *ManagerImpl) AddNearLimit(u uint64, rlStats RateLimitStats, key stri
 
 func (this *ManagerImpl) AddOverLimitWithLocalCache(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.OverLimitWithLocalCache.Add(u)
-	if this.detailed {
+	if this.detailed && key != rlStats.Key {
 		stat := this.getDescriptorStat(key)
 		stat.OverLimitWithLocalCache.Add(u)
 	}
@@ -141,7 +141,9 @@ func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) str
 }
 
 // Stats for an individual rate limit config entry.
-//todo: Ideally the gostats package fields should be unexported and interacted with via getters and setters.
+//todo: Ideally the gostats package fields should be unexported
+//	the inner value could be interacted with via getters such as rlStats.TotalHits() uint64
+//	This ensures that setters such as Inc() and Add() can only be managed by ManagerImpl.
 type RateLimitStats struct {
 	Key                     string
 	TotalHits               gostats.Counter
