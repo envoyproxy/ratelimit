@@ -56,8 +56,7 @@ var validKeys = map[string]bool{
 // Create a new rate limit config entry.
 // @param requestsPerUnit supplies the requests per unit of time for the entry.
 // @param unit supplies the unit of time for the entry.
-// @param key supplies the fully resolved key name of the entry.
-// @param scope supplies the owning scope.
+// @param rlStats supplies the stats structure associated with the RateLimit
 // @return the new config entry.
 func NewRateLimit(
 	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats) *RateLimit {
@@ -90,7 +89,7 @@ func newRateLimitConfigError(config RateLimitConfigToLoad, err string) RateLimit
 // @param config supplies the config file that owns the descriptor.
 // @param parentKey supplies the fully resolved key name that owns this config level.
 // @param descriptors supplies the YAML descriptors to load.
-// @param statsScope supplies the owning scope.
+// @param manager that owns the stats.Scope.
 func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, parentKey string, descriptors []yamlDescriptor, manager stats.Manager) {
 
 	for _, descriptorConfig := range descriptors {

@@ -71,7 +71,6 @@ func (this *ManagerImpl) getDescriptorStat(key string) RateLimitStats {
 }
 
 // Create new rate descriptor stats for a descriptor tuple.
-// @param statsScope supplies the owning store.
 // @param key supplies the fully resolved descriptor tuple.
 // @return new stats.
 func (this *ManagerImpl) NewStats(key string) RateLimitStats {
