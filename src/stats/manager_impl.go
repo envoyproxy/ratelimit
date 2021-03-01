@@ -35,7 +35,7 @@ func (this *ManagerImpl) GetStatsStore() gostats.Store {
 
 func (this *ManagerImpl) AddTotalHits(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.TotalHits.Add(u)
-	if this.detailed && key != rlStats.Key {
+	if this.detailed {
 		stat := this.getDescriptorStat(key)
 		stat.TotalHits.Add(u)
 	}
@@ -43,7 +43,7 @@ func (this *ManagerImpl) AddTotalHits(u uint64, rlStats RateLimitStats, key stri
 
 func (this *ManagerImpl) AddOverLimit(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.OverLimit.Add(u)
-	if this.detailed && key != rlStats.Key {
+	if this.detailed {
 		stat := this.getDescriptorStat(key)
 		stat.OverLimit.Add(u)
 	}
@@ -51,7 +51,7 @@ func (this *ManagerImpl) AddOverLimit(u uint64, rlStats RateLimitStats, key stri
 
 func (this *ManagerImpl) AddNearLimit(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.NearLimit.Add(u)
-	if this.detailed && key != rlStats.Key {
+	if this.detailed {
 		stat := this.getDescriptorStat(key)
 		stat.NearLimit.Add(u)
 	}
@@ -59,7 +59,7 @@ func (this *ManagerImpl) AddNearLimit(u uint64, rlStats RateLimitStats, key stri
 
 func (this *ManagerImpl) AddOverLimitWithLocalCache(u uint64, rlStats RateLimitStats, key string) {
 	rlStats.OverLimitWithLocalCache.Add(u)
-	if this.detailed && key != rlStats.Key {
+	if this.detailed {
 		stat := this.getDescriptorStat(key)
 		stat.OverLimitWithLocalCache.Add(u)
 	}
