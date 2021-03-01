@@ -15,8 +15,8 @@ RUN apk --no-cache add ca-certificates
 
 FROM ubuntu:latest
 RUN apt-get update && apt-get install -y supervisor
-RUN mkdir -p /var/log/supervisor
 COPY --from=build /go/bin/ratelimit /bin/ratelimit
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+RUN mkdir -p /var/log/supervisor
 
 ENTRYPOINT ["/usr/bin/supervisord"]
