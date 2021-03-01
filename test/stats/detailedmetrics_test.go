@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-func commonSetup(t *testing.T) rateLimitServiceTestSuite {
+func commonSetup(t *testing.T, detailedMetrics bool) rateLimitServiceTestSuite {
 	ret := rateLimitServiceTestSuite{}
 	ret.assert = assert.New(t)
 	ret.controller = gomock.NewController(t)
@@ -26,7 +26,7 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret.config = mock_config.NewMockRateLimitConfig(ret.controller)
 	ret.store = gostats.NewStore(gostats.NewNullSink(), false)
 	sett := settings.NewSettings()
-	sett.DetailedMetrics = true
+	sett.DetailedMetrics = detailedMetrics
 	ret.sm = stats.NewStatManager(ret.store, sett)
 	return ret
 }
@@ -59,7 +59,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 }
 
 func TestDetailedMetricsTotalHits(test *testing.T) {
-	t := commonSetup(test)
+	t := commonSetup(test, true)
 	defer t.controller.Finish()
 
 	key := "hello_world"
@@ -74,7 +74,7 @@ func TestDetailedMetricsTotalHits(test *testing.T) {
 	assert.Equal(test, uint64(22), t.sm.NewDetailedStats(detailedKey2).TotalHits.Value())
 }
 func TestDetailedMetricsNearLimit(test *testing.T) {
-	t := commonSetup(test)
+	t := commonSetup(test, true)
 	defer t.controller.Finish()
 
 	key := "hello_world"
@@ -89,7 +89,7 @@ func TestDetailedMetricsNearLimit(test *testing.T) {
 	assert.Equal(test, uint64(22), t.sm.NewDetailedStats(detailedKey2).NearLimit.Value())
 }
 func TestDetailedMetricsOverLimit(test *testing.T) {
-	t := commonSetup(test)
+	t := commonSetup(test, true)
 	defer t.controller.Finish()
 
 	key := "hello_world"
@@ -104,7 +104,7 @@ func TestDetailedMetricsOverLimit(test *testing.T) {
 	assert.Equal(test, uint64(22), t.sm.NewDetailedStats(detailedKey2).OverLimit.Value())
 }
 func TestDetailedMetricsOverLimitWithLocalCache(test *testing.T) {
-	t := commonSetup(test)
+	t := commonSetup(test, true)
 	defer t.controller.Finish()
 
 	key := "hello_world"
@@ -117,4 +117,19 @@ func TestDetailedMetricsOverLimitWithLocalCache(test *testing.T) {
 	assert.Equal(test, uint64(33), t.sm.NewStats(key).OverLimitWithLocalCache.Value())
 	assert.Equal(test, uint64(11), t.sm.NewDetailedStats(detailedKey1).OverLimitWithLocalCache.Value())
 	assert.Equal(test, uint64(22), t.sm.NewDetailedStats(detailedKey2).OverLimitWithLocalCache.Value())
+}
+func TestDetailedMetricsTurnedOff(test *testing.T) {
+	t := commonSetup(test, false)
+	defer t.controller.Finish()
+
+	key := "hello_world"
+	detailedKey1 := "hello_world_detailed1"
+	detailedKey2 := "hello_world_detailed2"
+	rlStats := t.sm.NewStats(key)
+	t.sm.AddOverLimitWithLocalCache(11, rlStats, detailedKey1)
+	t.sm.AddOverLimitWithLocalCache(22, rlStats, detailedKey2)
+
+	assert.Equal(test, uint64(33), t.sm.NewStats(key).OverLimitWithLocalCache.Value())
+	assert.Equal(test, uint64(0), t.sm.NewDetailedStats(detailedKey1).OverLimitWithLocalCache.Value())
+	assert.Equal(test, uint64(0), t.sm.NewDetailedStats(detailedKey2).OverLimitWithLocalCache.Value())
 }
