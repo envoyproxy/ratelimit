@@ -11,22 +11,22 @@ func NewStatManager(store gostats.Store, s settings.Settings) *ManagerImpl {
 	logger.Infof("Initializing Stat Manager with detailed metrics %t", s.DetailedMetrics)
 	serviceScope := store.ScopeWithTags("ratelimit", s.ExtraTags).Scope("service")
 	return &ManagerImpl{
-		store:             store,
-		rlStatsScope:      serviceScope.Scope("rate_limit"),
-		legacyStatsScope:  serviceScope.Scope("call.should_rate_limit_legacy"),
-		serviceStatsScope: serviceScope,
+		store:                store,
+		rlStatsScope:         serviceScope.Scope("rate_limit"),
+		legacyStatsScope:     serviceScope.Scope("call.should_rate_limit_legacy"),
+		serviceStatsScope:    serviceScope,
 		detailedMetricsScope: serviceScope.Scope("rate_limit").Scope("detailed"),
-		detailed:          s.DetailedMetrics,
+		detailed:             s.DetailedMetrics,
 	}
 }
 
 type ManagerImpl struct {
-	store             gostats.Store
-	rlStatsScope      gostats.Scope
-	legacyStatsScope  gostats.Scope
-	serviceStatsScope gostats.Scope
+	store                gostats.Store
+	rlStatsScope         gostats.Scope
+	legacyStatsScope     gostats.Scope
+	serviceStatsScope    gostats.Scope
 	detailedMetricsScope gostats.Scope
-	detailed          bool
+	detailed             bool
 }
 
 func (this *ManagerImpl) GetStatsStore() gostats.Store {
@@ -138,7 +138,6 @@ func (this *ManagerImpl) NewServiceStats() ServiceStats {
 	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
 	return ret
 }
-
 
 func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
 	rateLimitKey := ""
