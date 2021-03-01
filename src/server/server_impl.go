@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"expvar"
 	"fmt"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"io"
 	"net/http"
 	"net/http/pprof"
@@ -25,7 +26,7 @@ import (
 	"github.com/gorilla/mux"
 	reuseport "github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
-	stats "github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -44,8 +45,8 @@ type server struct {
 	debugPort     int
 	router        *mux.Router
 	grpcServer    *grpc.Server
-	store         stats.Store
-	scope         stats.Scope
+	store         gostats.Store
+	scope         gostats.Scope
 	runtime       loader.IFace
 	debugListener serverDebugListener
 	httpServer    *http.Server
@@ -160,7 +161,7 @@ func (server *server) startGrpc() {
 	server.grpcServer.Serve(lis)
 }
 
-func (server *server) Scope() stats.Scope {
+func (server *server) Scope() gostats.Scope {
 	return server.scope
 }
 
@@ -168,11 +169,11 @@ func (server *server) Runtime() loader.IFace {
 	return server.runtime
 }
 
-func NewServer(s settings.Settings, name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) Server {
-	return newServer(s, name, store, localCache, opts...)
+func NewServer(s settings.Settings, name string, manager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) Server {
+	return newServer(s, name, manager, localCache, opts...)
 }
 
-func newServer(s settings.Settings, name string, store stats.Store, localCache *freecache.Cache, opts ...settings.Option) *server {
+func newServer(s settings.Settings, name string, manager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) *server {
 	for _, opt := range opts {
 		opt(&s)
 	}
@@ -186,9 +187,9 @@ func newServer(s settings.Settings, name string, store stats.Store, localCache *
 	ret.debugPort = s.DebugPort
 
 	// setup stats
-	ret.store = store
+	ret.store = manager.GetStatsStore()
 	ret.scope = ret.store.ScopeWithTags(name, s.ExtraTags)
-	ret.store.AddStatGenerator(stats.NewRuntimeStats(ret.scope.Scope("go")))
+	ret.store.AddStatGenerator(gostats.NewRuntimeStats(ret.scope.Scope("go")))
 	if localCache != nil {
 		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
 	}

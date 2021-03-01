@@ -59,6 +59,9 @@ type Settings struct {
 
 	// Memcache settings
 	MemcacheHostPort string `envconfig:"MEMCACHE_HOST_PORT" default:""`
+
+	//Detailed Metrics Mode
+	DetailedMetrics bool `envconfig:"DETAILED_METRICS_MODE" default:"false"`
 }
 
 type Option func(*Settings)
