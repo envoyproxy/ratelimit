@@ -12,4 +12,5 @@ type Manager interface {
 	NewServiceStats() ServiceStats
 	NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats
 	GetStatsStore() stats.Store
+	NewDetailedStats(key string) RateLimitStats
 }

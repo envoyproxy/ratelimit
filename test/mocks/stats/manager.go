@@ -67,6 +67,10 @@ func (this *MockStatManager) AddOverLimitWithLocalCache(u uint64, rlStats stat.R
 	rlStats.OverLimitWithLocalCache.Add(u)
 }
 
+func (this *MockStatManager) NewDetailedStats(key string) stat.RateLimitStats {
+	return this.NewStats(key)
+}
+
 func NewMockStatManager(store stats.Store) stat.Manager {
 	return &MockStatManager{store: store}
 }

@@ -70,8 +70,8 @@ func TestDetailedMetricsTotalHits(test *testing.T) {
 	t.sm.AddTotalHits(22, rlStats, detailedKey2)
 
 	assert.Equal(test, uint64(33), t.sm.NewStats(key).TotalHits.Value())
-	assert.Equal(test, uint64(11), t.sm.NewStats(detailedKey1).TotalHits.Value())
-	assert.Equal(test, uint64(22), t.sm.NewStats(detailedKey2).TotalHits.Value())
+	assert.Equal(test, uint64(11), t.sm.NewDetailedStats(detailedKey1).TotalHits.Value())
+	assert.Equal(test, uint64(22), t.sm.NewDetailedStats(detailedKey2).TotalHits.Value())
 }
 func TestDetailedMetricsNearLimit(test *testing.T) {
 	t := commonSetup(test)
@@ -85,8 +85,8 @@ func TestDetailedMetricsNearLimit(test *testing.T) {
 	t.sm.AddNearLimit(22, rlStats, detailedKey2)
 
 	assert.Equal(test, uint64(33), t.sm.NewStats(key).NearLimit.Value())
-	assert.Equal(test, uint64(11), t.sm.NewStats(detailedKey1).NearLimit.Value())
-	assert.Equal(test, uint64(22), t.sm.NewStats(detailedKey2).NearLimit.Value())
+	assert.Equal(test, uint64(11), t.sm.NewDetailedStats(detailedKey1).NearLimit.Value())
+	assert.Equal(test, uint64(22), t.sm.NewDetailedStats(detailedKey2).NearLimit.Value())
 }
 func TestDetailedMetricsOverLimit(test *testing.T) {
 	t := commonSetup(test)
@@ -100,8 +100,8 @@ func TestDetailedMetricsOverLimit(test *testing.T) {
 	t.sm.AddOverLimit(22, rlStats, detailedKey2)
 
 	assert.Equal(test, uint64(33), t.sm.NewStats(key).OverLimit.Value())
-	assert.Equal(test, uint64(11), t.sm.NewStats(detailedKey1).OverLimit.Value())
-	assert.Equal(test, uint64(22), t.sm.NewStats(detailedKey2).OverLimit.Value())
+	assert.Equal(test, uint64(11), t.sm.NewDetailedStats(detailedKey1).OverLimit.Value())
+	assert.Equal(test, uint64(22), t.sm.NewDetailedStats(detailedKey2).OverLimit.Value())
 }
 func TestDetailedMetricsOverLimitWithLocalCache(test *testing.T) {
 	t := commonSetup(test)
@@ -115,6 +115,6 @@ func TestDetailedMetricsOverLimitWithLocalCache(test *testing.T) {
 	t.sm.AddOverLimitWithLocalCache(22, rlStats, detailedKey2)
 
 	assert.Equal(test, uint64(33), t.sm.NewStats(key).OverLimitWithLocalCache.Value())
-	assert.Equal(test, uint64(11), t.sm.NewStats(detailedKey1).OverLimitWithLocalCache.Value())
-	assert.Equal(test, uint64(22), t.sm.NewStats(detailedKey2).OverLimitWithLocalCache.Value())
+	assert.Equal(test, uint64(11), t.sm.NewDetailedStats(detailedKey1).OverLimitWithLocalCache.Value())
+	assert.Equal(test, uint64(22), t.sm.NewDetailedStats(detailedKey2).OverLimitWithLocalCache.Value())
 }

@@ -15,6 +15,7 @@ func NewStatManager(store gostats.Store, s settings.Settings) *ManagerImpl {
 		rlStatsScope:      serviceScope.Scope("rate_limit"),
 		legacyStatsScope:  serviceScope.Scope("call.should_rate_limit_legacy"),
 		serviceStatsScope: serviceScope,
+		detailedMetricsScope: serviceScope.Scope("rate_limit").Scope("detailed"),
 		detailed:          s.DetailedMetrics,
 	}
 }
@@ -24,6 +25,7 @@ type ManagerImpl struct {
 	rlStatsScope      gostats.Scope
 	legacyStatsScope  gostats.Scope
 	serviceStatsScope gostats.Scope
+	detailedMetricsScope gostats.Scope
 	detailed          bool
 }
 
@@ -66,7 +68,7 @@ func (this *ManagerImpl) AddOverLimitWithLocalCache(u uint64, rlStats RateLimitS
 //todo: consider adding a RateLimitStats cache
 //todo: consider adding descriptor fields parameter to allow configuration of descriptor entries for which metrics will be emited.
 func (this *ManagerImpl) getDescriptorStat(key string) RateLimitStats {
-	ret := this.NewStats(key)
+	ret := this.NewDetailedStats(key)
 	return ret
 }
 
@@ -75,13 +77,25 @@ func (this *ManagerImpl) getDescriptorStat(key string) RateLimitStats {
 // @return new stats.
 func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret := RateLimitStats{}
-	logger.Debugf("outputing test stats %s", key)
+	logger.Debugf("Creating stats for key: '%s'", key)
 	ret.Key = key
 	ret.TotalHits = this.rlStatsScope.NewCounter(key + ".total_hits")
 	ret.OverLimit = this.rlStatsScope.NewCounter(key + ".over_limit")
 	ret.NearLimit = this.rlStatsScope.NewCounter(key + ".near_limit")
 	ret.OverLimitWithLocalCache = this.rlStatsScope.NewCounter(key + ".over_limit_with_local_cache")
 	return ret
+}
+
+func (this *ManagerImpl) NewDetailedStats(key string) RateLimitStats {
+	ret := RateLimitStats{}
+	logger.Debugf("Creating detailed stats for key: '%s'", key)
+	ret.Key = key
+	ret.TotalHits = this.detailedMetricsScope.NewCounter(key + ".total_hits")
+	ret.OverLimit = this.detailedMetricsScope.NewCounter(key + ".over_limit")
+	ret.NearLimit = this.detailedMetricsScope.NewCounter(key + ".near_limit")
+	ret.OverLimitWithLocalCache = this.detailedMetricsScope.NewCounter(key + ".over_limit_with_local_cache")
+	return ret
+
 }
 
 type ShouldRateLimitLegacyStats struct {
@@ -124,6 +138,7 @@ func (this *ManagerImpl) NewServiceStats() ServiceStats {
 	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
 	return ret
 }
+
 
 func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
 	rateLimitKey := ""
