@@ -63,6 +63,7 @@ func newRateLimitStats(statsScope stats.Scope, key string) RateLimitStats {
 	ret.OverLimit = statsScope.NewCounter(key + ".over_limit")
 	ret.NearLimit = statsScope.NewCounter(key + ".near_limit")
 	ret.OverLimitWithLocalCache = statsScope.NewCounter(key + ".over_limit_with_local_cache")
+	ret.WithinLimit = statsScope.NewCounter(key + ".within_limit")
 	return ret
 }
 
