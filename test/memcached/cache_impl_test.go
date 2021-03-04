@@ -51,6 +51,7 @@ func TestMemcached(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	client.EXPECT().GetMulti([]string{"domain_key2_value2_subkey2_subvalue2_1200"}).Return(
@@ -74,6 +75,7 @@ func TestMemcached(t *testing.T) {
 	assert.Equal(uint64(1), limits[1].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[1].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[1].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[1].Stats.WithinLimit.Value())
 
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
 	client.EXPECT().GetMulti([]string{
@@ -105,9 +107,11 @@ func TestMemcached(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
 
 	cache.Flush()
 }
@@ -137,6 +141,7 @@ func TestMemcachedGetError(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	// No error, but the key is missing
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -154,6 +159,7 @@ func TestMemcachedGetError(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	cache.Flush()
 }
@@ -227,6 +233,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
@@ -246,6 +253,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
@@ -265,6 +273,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
@@ -281,6 +290,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimitWithLocalCache.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 1, 3, 4, 0, 1)
@@ -317,6 +327,7 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -332,6 +343,7 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Test Near Limit Stats. We went OVER_LIMIT, but the near_limit counter only increases
 	// when we are near limit, not after we have passed the limit.
@@ -348,6 +360,7 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Now test hitsAddend that is greater than 1
 	// All of it under limit, under near limit
@@ -366,6 +379,7 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(3), limits[0].Stats.WithinLimit.Value())
 
 	// All of it under limit, some over near limit
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -383,6 +397,7 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// All of it under limit, all of it over near limit
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -400,6 +415,7 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(3), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(3), limits[0].Stats.WithinLimit.Value())
 
 	// Some of it over limit, all of it over near limit
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -417,6 +433,7 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
 
 	// Some of it in all three places
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -434,6 +451,7 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(7), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(4), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
 
 	// all of it over limit
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -451,6 +469,7 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(3), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
 
 	cache.Flush()
 }
@@ -493,6 +512,7 @@ func TestMemcacheWithJitter(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	cache.Flush()
 }
@@ -534,6 +554,7 @@ func TestMemcacheAdd(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	// A rate limit with 1-minute window
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -557,6 +578,7 @@ func TestMemcacheAdd(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	cache.Flush()
 }

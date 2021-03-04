@@ -110,6 +110,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 
 		// The limit is OK but we additionally want to know if we are near the limit.
 		checkNearLimitThreshold(limitInfo, hitsAddend)
+		limitInfo.limit.Stats.WithinLimit.Add(uint64(hitsAddend))
 	}
 	return responseDescriptorStatus
 }
