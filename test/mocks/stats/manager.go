@@ -48,6 +48,7 @@ func (m *MockStatManager) NewStats(key string) stat.RateLimitStats {
 	ret.OverLimit = m.store.NewCounter(key + ".over_limit")
 	ret.NearLimit = m.store.NewCounter(key + ".near_limit")
 	ret.OverLimitWithLocalCache = m.store.NewCounter(key + ".over_limit_with_local_cache")
+	ret.WithinLimit = m.store.NewCounter(key + ".within_limit")
 	return ret
 }
 
@@ -65,6 +66,10 @@ func (this *MockStatManager) AddNearLimit(u uint64, rlStats stat.RateLimitStats,
 
 func (this *MockStatManager) AddOverLimitWithLocalCache(u uint64, rlStats stat.RateLimitStats, key string) {
 	rlStats.OverLimitWithLocalCache.Add(u)
+}
+
+func (this *MockStatManager) AddWithinLimit(u uint64, rlStats stat.RateLimitStats, key string) {
+	rlStats.WithinLimit.Add(u)
 }
 
 func (this *MockStatManager) NewDetailedStats(key string) stat.RateLimitStats {

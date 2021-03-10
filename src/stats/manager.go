@@ -7,6 +7,7 @@ type Manager interface {
 	AddOverLimit(u uint64, rlStats RateLimitStats, key string)
 	AddNearLimit(u uint64, rlStats RateLimitStats, key string)
 	AddOverLimitWithLocalCache(u uint64, rlStats RateLimitStats, key string)
+	AddWithinLimit(u uint64, rlStats RateLimitStats, key string)
 	NewStats(key string) RateLimitStats
 	NewShouldRateLimitStats() ShouldRateLimitStats
 	NewServiceStats() ServiceStats

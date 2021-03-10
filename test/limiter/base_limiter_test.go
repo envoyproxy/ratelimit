@@ -150,4 +150,5 @@ func TestGetResponseStatusBelowLimit(t *testing.T) {
 	assert.Equal(uint32(4), responseStatus.GetLimitRemaining())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 	assert.Equal(limits[0].Limit, responseStatus.GetCurrentLimit())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 }

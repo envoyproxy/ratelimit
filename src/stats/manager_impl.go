@@ -65,6 +65,14 @@ func (this *ManagerImpl) AddOverLimitWithLocalCache(u uint64, rlStats RateLimitS
 	}
 }
 
+func (this *ManagerImpl) AddWithinLimit(u uint64, rlStats RateLimitStats, key string) {
+	rlStats.WithinLimit.Add(u)
+	if this.detailed {
+		stat := this.getDescriptorStat(key)
+		stat.WithinLimit.Add(u)
+	}
+}
+
 //todo: consider adding a RateLimitStats cache
 //todo: consider adding descriptor fields parameter to allow configuration of descriptor entries for which metrics will be emited.
 func (this *ManagerImpl) getDescriptorStat(key string) RateLimitStats {
@@ -83,6 +91,7 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret.OverLimit = this.rlStatsScope.NewCounter(key + ".over_limit")
 	ret.NearLimit = this.rlStatsScope.NewCounter(key + ".near_limit")
 	ret.OverLimitWithLocalCache = this.rlStatsScope.NewCounter(key + ".over_limit_with_local_cache")
+	ret.WithinLimit = this.rlStatsScope.NewCounter(key + ".within_limit")
 	return ret
 }
 
@@ -163,6 +172,7 @@ type RateLimitStats struct {
 	OverLimit               gostats.Counter
 	NearLimit               gostats.Counter
 	OverLimitWithLocalCache gostats.Counter
+	WithinLimit             gostats.Counter
 }
 
 func (this RateLimitStats) String() string {

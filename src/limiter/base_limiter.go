@@ -112,6 +112,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(localCacheKey string, l
 
 		// The limit is OK but we additionally want to know if we are near the limit.
 		this.checkNearLimitThreshold(limitInfo, hitsAddend, descriptorKey)
+		this.Manager.AddWithinLimit(uint64(hitsAddend), limitInfo.limit.Stats, descriptorKey)
 	}
 	return responseDescriptorStatus
 }

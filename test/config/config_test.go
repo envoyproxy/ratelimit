@@ -66,11 +66,13 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
 	assert.EqualValues(5, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_SECOND, rl.Limit.Unit)
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1.total_hits").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1.over_limit").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1.within_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -80,6 +82,7 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
 	assert.EqualValues(10, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_SECOND, rl.Limit.Unit)
 	assert.EqualValues(
@@ -88,6 +91,8 @@ func TestBasicConfig(t *testing.T) {
 		1, newStore.NewCounter("test-domain.key1_value1.subkey1_subvalue1.over_limit").Value())
 	assert.EqualValues(
 		1, newStore.NewCounter("test-domain.key1_value1.subkey1_subvalue1.near_limit").Value())
+	assert.EqualValues(
+		1, newStore.NewCounter("test-domain.key1_value1.subkey1_subvalue1.within_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -97,11 +102,13 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
 	assert.EqualValues(20, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key2.total_hits").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key2.over_limit").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key2.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key2.within_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -111,11 +118,13 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
 	assert.EqualValues(30, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key2_value2.total_hits").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key2_value2.over_limit").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key2_value2.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key2_value2.within_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -132,11 +141,13 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
 	assert.EqualValues(1, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_HOUR, rl.Limit.Unit)
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key3.total_hits").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key3.over_limit").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key3.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key3.within_limit").Value())
 
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
@@ -146,11 +157,13 @@ func TestBasicConfig(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
 	assert.EqualValues(1, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_DAY, rl.Limit.Unit)
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key4.total_hits").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key4.over_limit").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key4.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key4.within_limit").Value())
 }
 
 func TestConfigLimitOverride(t *testing.T) {
@@ -180,11 +193,13 @@ func TestConfigLimitOverride(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something.within_limit").Value())
 
-	// Change in override value doesn't erase newStore
+	// Change in override value doesn't erase stats
 	rl = rlConfig.GetLimit(
 		nil, "test-domain",
 		&pb_struct.RateLimitDescriptor{
@@ -197,6 +212,7 @@ func TestConfigLimitOverride(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
 	common.AssertProtoEqual(assert, &pb.RateLimitResponse_RateLimit{
 		RequestsPerUnit: 42,
 		Unit:            pb.RateLimitResponse_RateLimit_HOUR,
@@ -204,6 +220,7 @@ func TestConfigLimitOverride(t *testing.T) {
 	assert.EqualValues(2, newStore.NewCounter("test-domain.key1_value1.subkey1_something.total_hits").Value())
 	assert.EqualValues(2, newStore.NewCounter("test-domain.key1_value1.subkey1_something.over_limit").Value())
 	assert.EqualValues(2, newStore.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
+	assert.EqualValues(2, newStore.NewCounter("test-domain.key1_value1.subkey1_something.within_limit").Value())
 
 	// Different value creates a different counter
 	rl = rlConfig.GetLimit(
@@ -222,9 +239,11 @@ func TestConfigLimitOverride(t *testing.T) {
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.OverLimit.Inc()
 	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something_else.total_hits").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something_else.over_limit").Value())
 	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something_else.near_limit").Value())
+	assert.EqualValues(1, newStore.NewCounter("test-domain.key1_value1.subkey1_something_else.within_limit").Value())
 }
 
 func expectConfigPanic(t *testing.T, call func(), expectedError string) {
