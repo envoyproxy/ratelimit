@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"github.com/envoyproxy/ratelimit/src/metrics"
 	"io"
 	"math/rand"
 	"net/http"
@@ -91,7 +92,9 @@ func (runner *Runner) Run() {
 		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
 	}
 
-	srv := server.NewServer(s, "ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(nil))
+	serverMetrics := metrics.NewServerMetrics(runner.statsStore.ScopeWithTags("ratelimit_server", s.ExtraTags))
+
+	srv := server.NewServer(s, "ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(serverMetrics.UnaryServerInterceptor()))
 	runner.mu.Lock()
 	runner.srv = srv
 	runner.mu.Unlock()
