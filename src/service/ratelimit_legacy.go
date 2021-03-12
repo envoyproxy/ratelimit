@@ -5,7 +5,7 @@ import (
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/lyft/gostats"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"golang.org/x/net/context"
 )
 
@@ -17,22 +17,7 @@ type RateLimitLegacyServiceServer interface {
 // the legacyService receives RateLimitRequests, converts the request, and calls the service's ShouldRateLimit method.
 type legacyService struct {
 	s                          *service
-	shouldRateLimitLegacyStats shouldRateLimitLegacyStats
-}
-
-type shouldRateLimitLegacyStats struct {
-	reqConversionError   stats.Counter
-	respConversionError  stats.Counter
-	shouldRateLimitError stats.Counter
-}
-
-func newShouldRateLimitLegacyStats(scope stats.Scope) shouldRateLimitLegacyStats {
-	s := scope.Scope("call.should_rate_limit_legacy")
-	return shouldRateLimitLegacyStats{
-		reqConversionError:   s.NewCounter("req_conversion_error"),
-		respConversionError:  s.NewCounter("resp_conversion_error"),
-		shouldRateLimitError: s.NewCounter("should_rate_limit_error"),
-	}
+	shouldRateLimitLegacyStats stats.ShouldRateLimitLegacyStats
 }
 
 func (this *legacyService) ShouldRateLimit(
@@ -41,18 +26,18 @@ func (this *legacyService) ShouldRateLimit(
 
 	request, err := ConvertLegacyRequest(legacyRequest)
 	if err != nil {
-		this.shouldRateLimitLegacyStats.reqConversionError.Inc()
+		this.shouldRateLimitLegacyStats.ReqConversionError.Inc()
 		return nil, err
 	}
 	resp, err := this.s.ShouldRateLimit(ctx, request)
 	if err != nil {
-		this.shouldRateLimitLegacyStats.shouldRateLimitError.Inc()
+		this.shouldRateLimitLegacyStats.ShouldRateLimitError.Inc()
 		return nil, err
 	}
 
 	legacyResponse, err := ConvertResponse(resp)
 	if err != nil {
-		this.shouldRateLimitLegacyStats.respConversionError.Inc()
+		this.shouldRateLimitLegacyStats.RespConversionError.Inc()
 		return nil, err
 	}
 

@@ -8,8 +8,8 @@ import (
 	context "context"
 	envoy_extensions_common_ratelimit_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	config "github.com/envoyproxy/ratelimit/src/config"
+	stats2 "github.com/envoyproxy/ratelimit/src/stats"
 	gomock "github.com/golang/mock/gomock"
-	stats "github.com/lyft/gostats"
 	reflect "reflect"
 )
 
@@ -88,7 +88,7 @@ func (m *MockRateLimitConfigLoader) EXPECT() *MockRateLimitConfigLoaderMockRecor
 }
 
 // Load mocks base method
-func (m *MockRateLimitConfigLoader) Load(arg0 []config.RateLimitConfigToLoad, arg1 stats.Scope) config.RateLimitConfig {
+func (m *MockRateLimitConfigLoader) Load(arg0 []config.RateLimitConfigToLoad, arg1 stats2.Manager) config.RateLimitConfig {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Load", arg0, arg1)
 	ret0, _ := ret[0].(config.RateLimitConfig)

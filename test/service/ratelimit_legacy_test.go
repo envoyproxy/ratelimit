@@ -1,6 +1,7 @@
 package ratelimit_test
 
 import (
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"testing"
 
 	core_legacy "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -14,7 +15,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/golang/mock/gomock"
-	"github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
@@ -80,7 +80,7 @@ func TestServiceLegacy(test *testing.T) {
 	barrier := newBarrier()
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) { barrier.signal() }).Return(t.config)
+		func([]config.RateLimitConfigToLoad, stats.Manager) { barrier.signal() }).Return(t.config)
 	t.runtimeUpdateCallback <- 1
 	barrier.wait()
 
@@ -93,7 +93,7 @@ func TestServiceLegacy(test *testing.T) {
 	}
 
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.sm.NewStats("key")),
 		nil}
 	legacyLimits, err := convertRatelimits(limits)
 	if err != nil {
@@ -120,7 +120,7 @@ func TestServiceLegacy(test *testing.T) {
 	// Config load failure.
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) {
+		func([]config.RateLimitConfigToLoad, stats.Manager) {
 			barrier.signal()
 			panic(config.RateLimitConfigError("load error"))
 		})
@@ -130,7 +130,7 @@ func TestServiceLegacy(test *testing.T) {
 	// Config should still be valid. Also make sure order does not affect results.
 	limits = []*config.RateLimit{
 		nil,
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.sm.NewStats("key"))}
 	legacyLimits, err = convertRatelimits(limits)
 	if err != nil {
 		t.assert.FailNow(err.Error())
@@ -153,8 +153,8 @@ func TestServiceLegacy(test *testing.T) {
 		response)
 	t.assert.Nil(err)
 
-	t.assert.EqualValues(2, t.statStore.NewCounter("config_load_success").Value())
-	t.assert.EqualValues(1, t.statStore.NewCounter("config_load_error").Value())
+	t.assert.EqualValues(2, t.store.NewCounter("config_load_success").Value())
+	t.assert.EqualValues(1, t.store.NewCounter("config_load_error").Value())
 }
 
 func TestEmptyDomainLegacy(test *testing.T) {
@@ -166,8 +166,8 @@ func TestEmptyDomainLegacy(test *testing.T) {
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit domain must not be empty", err.Error())
-	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
-	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
+	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
 }
 
 func TestEmptyDescriptorsLegacy(test *testing.T) {
@@ -179,8 +179,8 @@ func TestEmptyDescriptorsLegacy(test *testing.T) {
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit descriptor list must not be empty", err.Error())
-	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
-	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
+	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
 }
 
 func TestCacheErrorLegacy(test *testing.T) {
@@ -193,7 +193,7 @@ func TestCacheErrorLegacy(test *testing.T) {
 	if err != nil {
 		t.assert.FailNow(err.Error())
 	}
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key", t.statStore)}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.sm.NewStats("key"))}
 	t.config.EXPECT().GetLimit(nil, "different-domain", req.Descriptors[0]).Return(limits[0])
 	t.cache.EXPECT().DoLimit(nil, req, limits).Do(
 		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
@@ -203,8 +203,8 @@ func TestCacheErrorLegacy(test *testing.T) {
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, legacyRequest)
 	t.assert.Nil(response)
 	t.assert.Equal("cache error", err.Error())
-	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.redis_error").Value())
-	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
+	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.redis_error").Value())
+	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
 }
 
 func TestInitialLoadErrorLegacy(test *testing.T) {
@@ -218,17 +218,17 @@ func TestInitialLoadErrorLegacy(test *testing.T) {
 	t.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Scope) {
+		func([]config.RateLimitConfigToLoad, stats.Manager) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statStore, true)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.sm, true)
 
 	request := common.NewRateLimitRequestLegacy("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("no rate limit configuration loaded", err.Error())
-	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
-	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
+	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
 
 }
 

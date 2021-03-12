@@ -17,12 +17,13 @@ package memcached
 
 import (
 	"context"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"math/rand"
 	"strconv"
 	"sync"
 
 	"github.com/coocood/freecache"
-	stats "github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 
 	"github.com/bradfitz/gomemcache/memcache"
 
@@ -117,7 +118,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
+			limitInfo, isOverLimitWithLocalCache[i], hitsAddend, stats.DescriptorKey(request.Domain, request.Descriptors[i]))
 	}
 
 	this.waitGroup.Add(1)
@@ -174,7 +175,7 @@ func (this *rateLimitMemcacheImpl) Flush() {
 }
 
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
+	expirationJitterMaxSeconds int64, localCache *freecache.Cache, manager stats.Manager, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
@@ -182,19 +183,19 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix),
+		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, manager),
 	}
 }
 
 func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	localCache *freecache.Cache, scope stats.Scope) limiter.RateLimitCache {
+	localCache *freecache.Cache, scope gostats.Scope, manager stats.Manager) limiter.RateLimitCache {
 	return NewRateLimitCacheImpl(
 		CollectStats(memcache.New(s.MemcacheHostPort), scope.Scope("memcache")),
 		timeSource,
 		jitterRand,
 		s.ExpirationJitterMaxSeconds,
 		localCache,
-		scope,
+		manager,
 		s.NearLimitRatio,
 		s.CacheKeyPrefix,
 	)
