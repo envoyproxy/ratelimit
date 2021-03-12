@@ -67,12 +67,17 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
     labels:
       err_type: "$1"
 
-  - match: "ratelimit_server.total_requests"
+  - match: "ratelimit_server.*.total_requests"
     name: "ratelimit_service_total_requests"
     match_metric_type: counter
-  - match: "ratelimit_server.response_time"
+    labels:
+      grpc_method: "$1"
+
+  - match: "ratelimit_server.*.response_time"
     name: "ratelimit_service_response_time_seconds"
     timer_type: histogram
+    labels:
+      grpc_method: "$1"
 
   - match: "ratelimit.service.config_load_success"
     name: "ratelimit_service_config_load_success"
