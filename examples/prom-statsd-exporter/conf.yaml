@@ -71,7 +71,7 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
     name: "ratelimit_service_total_requests"
     match_metric_type: counter
   - match: "ratelimit_server.response_time"
-    name: "ratelimit_service_response_time_microseconds"
+    name: "ratelimit_service_response_time_seconds"
     timer_type: histogram
 
   - match: "ratelimit.service.config_load_success"

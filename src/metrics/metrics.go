@@ -27,7 +27,7 @@ func (s *ServerMetrics) UnaryServerInterceptor() func(ctx context.Context, req i
 		s.totalRequests.Inc()
 		start := time.Now()
 		resp, err := handler(ctx, req)
-		s.responseTime.AddValue(float64(time.Since(start).Microseconds()))
+		s.responseTime.AddValue(float64(time.Since(start).Milliseconds()))
 		return resp, err
 	}
 }
