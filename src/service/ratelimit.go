@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"fmt"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"strings"
 	"sync"
 
@@ -11,36 +12,9 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/lyft/goruntime/loader"
-	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
-
-type shouldRateLimitStats struct {
-	redisError   stats.Counter
-	serviceError stats.Counter
-}
-
-func newShouldRateLimitStats(scope stats.Scope) shouldRateLimitStats {
-	ret := shouldRateLimitStats{}
-	ret.redisError = scope.NewCounter("redis_error")
-	ret.serviceError = scope.NewCounter("service_error")
-	return ret
-}
-
-type serviceStats struct {
-	configLoadSuccess stats.Counter
-	configLoadError   stats.Counter
-	shouldRateLimit   shouldRateLimitStats
-}
-
-func newServiceStats(scope stats.Scope) serviceStats {
-	ret := serviceStats{}
-	ret.configLoadSuccess = scope.NewCounter("config_load_success")
-	ret.configLoadError = scope.NewCounter("config_load_error")
-	ret.shouldRateLimit = newShouldRateLimitStats(scope.Scope("call.should_rate_limit"))
-	return ret
-}
 
 type RateLimitServiceServer interface {
 	pb.RateLimitServiceServer
@@ -55,13 +29,12 @@ type service struct {
 	config             config.RateLimitConfig
 	runtimeUpdateEvent chan int
 	cache              limiter.RateLimitCache
-	stats              serviceStats
-	rlStatsScope       stats.Scope
+	stats              stats.ServiceStats
 	legacy             *legacyService
 	runtimeWatchRoot   bool
 }
 
-func (this *service) reloadConfig() {
+func (this *service) reloadConfig(manager stats.Manager) {
 	defer func() {
 		if e := recover(); e != nil {
 			configError, ok := e.(config.RateLimitConfigError)
@@ -69,7 +42,7 @@ func (this *service) reloadConfig() {
 				panic(e)
 			}
 
-			this.stats.configLoadError.Inc()
+			this.stats.ConfigLoadError.Inc()
 			logger.Errorf("error loading new configuration from runtime: %s", configError.Error())
 		}
 	}()
@@ -84,8 +57,8 @@ func (this *service) reloadConfig() {
 		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
 	}
 
-	newConfig := this.configLoader.Load(files, this.rlStatsScope)
-	this.stats.configLoadSuccess.Inc()
+	newConfig := this.configLoader.Load(files, manager)
+	this.stats.ConfigLoadSuccess.Inc()
 	this.configLock.Lock()
 	this.config = newConfig
 	this.configLock.Unlock()
@@ -170,12 +143,12 @@ func (this *service) ShouldRateLimit(
 		switch t := err.(type) {
 		case redis.RedisError:
 			{
-				this.stats.shouldRateLimit.redisError.Inc()
+				this.stats.ShouldRateLimit.RedisError.Inc()
 				finalError = t
 			}
 		case serviceError:
 			{
-				this.stats.shouldRateLimit.serviceError.Inc()
+				this.stats.ShouldRateLimit.ServiceError.Inc()
 				finalError = t
 			}
 		default:
@@ -199,7 +172,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, stats stats.Scope, runtimeWatchRoot bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, manager stats.Manager, runtimeWatchRoot bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -208,25 +181,24 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		config:             nil,
 		runtimeUpdateEvent: make(chan int),
 		cache:              cache,
-		stats:              newServiceStats(stats),
-		rlStatsScope:       stats.Scope("rate_limit"),
+		stats:              manager.NewServiceStats(),
 		runtimeWatchRoot:   runtimeWatchRoot,
 	}
 	newService.legacy = &legacyService{
 		s:                          newService,
-		shouldRateLimitLegacyStats: newShouldRateLimitLegacyStats(stats),
+		shouldRateLimitLegacyStats: manager.NewShouldRateLimitLegacyStats(),
 	}
 
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
 
-	newService.reloadConfig()
+	newService.reloadConfig(manager)
 	go func() {
 		// No exit right now.
 		for {
 			logger.Debugf("waiting for runtime update")
 			<-newService.runtimeUpdateEvent
 			logger.Debugf("got runtime update and reloading config")
-			newService.reloadConfig()
+			newService.reloadConfig(manager)
 		}
 	}()
 

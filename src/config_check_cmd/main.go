@@ -3,12 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 )
 
 func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {
@@ -19,9 +21,9 @@ func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {
 			os.Exit(1)
 		}
 	}()
-
-	dummyStats := stats.NewStore(stats.NewNullSink(), false)
-	config.NewRateLimitConfigImpl(allConfigs, dummyStats)
+	settingStruct := settings.NewSettings()
+	manager := stats.NewStatManager(gostats.NewStore(gostats.NewNullSink(), false), settingStruct)
+	config.NewRateLimitConfigImpl(allConfigs, manager)
 }
 
 func main() {
