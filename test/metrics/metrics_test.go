@@ -36,7 +36,7 @@ func TestMetricsInterceptor(t *testing.T) {
 
 	totalRequestsCounter := statsStore.NewCounter("TestMethod.total_requests")
 	assert.Equal(t, iterations, totalRequestsCounter.Value())
-	assert.True(t, mockSink.Timer("TestMethod.response_time") > float64(iterations*100))
+	assert.True(t, mockSink.Timer("TestMethod.response_time") >= float64(iterations*100))
 }
 
 func TestMetricsInterceptor_Concurrent(t *testing.T) {
