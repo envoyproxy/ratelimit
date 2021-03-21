@@ -577,7 +577,7 @@ Experimental Memcache support has been added as an alternative to Redis in v1.5.
 
 To configure a Memcache instance use the following environment variables instead of the Redis variables:
 
-1. `MEMCACHE_HOST_PORT=<host:port>`
+1. `MEMCACHE_URL=`: a comma separated list of hostname:port pairs for memcache nodes.
 1. `BACKEND_TYPE=memcache`
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
