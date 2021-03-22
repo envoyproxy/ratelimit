@@ -587,6 +587,9 @@ a client to exceed quota briefly if multiple requests happen at exactly the same
 Note that Memcache has a max key length of 250 characters, so operations referencing very long
 descriptors will fail.
 
+When using multiple memcache nodes in `MEMCACHE_URL=`, one should provide the identical list of memcache nodes 
+to all ratelimiter instances to ensure that a particular cache key is always hashed to the same memcache node.
+
 # Contact
 
 * [envoy-announce](https://groups.google.com/forum/#!forum/envoy-announce): Low frequency mailing

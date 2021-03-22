@@ -58,7 +58,7 @@ type Settings struct {
 	RedisPerSecondPipelineLimit  int           `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 
 	// Memcache settings
-	MemcacheUrl string `envconfig:"MEMCACHE_URL" default:""`
+	MemcacheUrl []string `envconfig:"MEMCACHE_URL" default:""`
 }
 
 type Option func(*Settings)

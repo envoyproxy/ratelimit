@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -191,7 +190,7 @@ func makeSimpleMemcacheSettings(memcachePorts []int, localCacheSize int) setting
 	for _, memcachePort := range memcachePorts {
 		memcacheUrl = append(memcacheUrl, "localhost:"+strconv.Itoa(memcachePort))
 	}
-	s.MemcacheUrl = strings.Join(memcacheUrl, ",")
+	s.MemcacheUrl = memcacheUrl
 	s.LocalCacheSizeInBytes = localCacheSize
 	s.BackendType = "memcache"
 	return s

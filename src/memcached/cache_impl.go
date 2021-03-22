@@ -19,7 +19,6 @@ import (
 	"context"
 	"math/rand"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/coocood/freecache"
@@ -189,9 +188,8 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 
 func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
 	localCache *freecache.Cache, scope stats.Scope) limiter.RateLimitCache {
-	memcacheUrls := strings.Split(s.MemcacheUrl, ",")
 	return NewRateLimitCacheImpl(
-		CollectStats(memcache.New(memcacheUrls...), scope.Scope("memcache")),
+		CollectStats(memcache.New(s.MemcacheUrl...), scope.Scope("memcache")),
 		timeSource,
 		jitterRand,
 		s.ExpirationJitterMaxSeconds,
