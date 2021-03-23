@@ -585,7 +585,7 @@ With memcache mode increments will happen asynchronously, so it's technically po
 a client to exceed quota briefly if multiple requests happen at exactly the same time.
 
 Note that Memcache has a max key length of 250 characters, so operations referencing very long
-descriptors will fail.
+descriptors will fail. Descriptors sent to Memcache should not contain whitespaces or control characters. 
 
 # Contact
 
