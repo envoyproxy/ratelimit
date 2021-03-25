@@ -186,11 +186,11 @@ func TestBasicReloadConfig(t *testing.T) {
 
 func makeSimpleMemcacheSettings(memcachePorts []int, localCacheSize int) settings.Settings {
 	s := defaultSettings()
-	var memcacheUrl []string
+	var memcacheHostAndPort []string
 	for _, memcachePort := range memcachePorts {
-		memcacheUrl = append(memcacheUrl, "localhost:"+strconv.Itoa(memcachePort))
+		memcacheHostAndPort = append(memcacheHostAndPort, "localhost:"+strconv.Itoa(memcachePort))
 	}
-	s.MemcacheUrl = memcacheUrl
+	s.MemcacheHostPort = memcacheHostAndPort
 	s.LocalCacheSizeInBytes = localCacheSize
 	s.BackendType = "memcache"
 	return s

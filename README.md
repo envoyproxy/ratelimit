@@ -577,7 +577,7 @@ Experimental Memcache support has been added as an alternative to Redis in v1.5.
 
 To configure a Memcache instance use the following environment variables instead of the Redis variables:
 
-1. `MEMCACHE_URL=`: a comma separated list of hostname:port pairs for memcache nodes.
+1. `MEMCACHE_HOST_PORT=`: a comma separated list of hostname:port pairs for memcache nodes.
 1. `BACKEND_TYPE=memcache`
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
@@ -587,7 +587,7 @@ a client to exceed quota briefly if multiple requests happen at exactly the same
 Note that Memcache has a max key length of 250 characters, so operations referencing very long
 descriptors will fail.
 
-When using multiple memcache nodes in `MEMCACHE_URL=`, one should provide the identical list of memcache nodes 
+When using multiple memcache nodes in `MEMCACHE_HOST_PORT=`, one should provide the identical list of memcache nodes 
 to all ratelimiter instances to ensure that a particular cache key is always hashed to the same memcache node.
 
 # Contact
