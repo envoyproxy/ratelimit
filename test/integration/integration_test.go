@@ -184,24 +184,37 @@ func TestBasicReloadConfig(t *testing.T) {
 	})
 }
 
-func makeSimpleMemcacheSettings(memcachePort int, localCacheSize int) settings.Settings {
+func makeSimpleMemcacheSettings(memcachePorts []int, localCacheSize int) settings.Settings {
 	s := defaultSettings()
-
-	s.MemcacheHostPort = "localhost:" + strconv.Itoa(memcachePort)
+	var memcacheHostAndPort []string
+	for _, memcachePort := range memcachePorts {
+		memcacheHostAndPort = append(memcacheHostAndPort, "localhost:"+strconv.Itoa(memcachePort))
+	}
+	s.MemcacheHostPort = memcacheHostAndPort
 	s.LocalCacheSizeInBytes = localCacheSize
 	s.BackendType = "memcache"
 	return s
 }
 
 func TestBasicConfigMemcache(t *testing.T) {
+	singleNodePort := []int{6394}
 	common.WithMultiMemcache(t, []common.MemcacheConfig{
 		{Port: 6394},
 	}, func() {
-		t.Run("Memcache", testBasicConfig(makeSimpleMemcacheSettings(6394, 0)))
-		t.Run("MemcacheWithLocalCache", testBasicConfig(makeSimpleMemcacheSettings(6394, 1000)))
-		cacheSettings := makeSimpleMemcacheSettings(6394, 0)
+		t.Run("Memcache", testBasicConfig(makeSimpleMemcacheSettings(singleNodePort, 0)))
+		t.Run("MemcacheWithLocalCache", testBasicConfig(makeSimpleMemcacheSettings(singleNodePort, 1000)))
+		cacheSettings := makeSimpleMemcacheSettings(singleNodePort, 0)
 		cacheSettings.CacheKeyPrefix = "prefix:"
 		t.Run("MemcacheWithPrefix", testBasicConfig(cacheSettings))
+	})
+}
+
+func TestMultiNodeMemcache(t *testing.T) {
+	multiNodePorts := []int{6494, 6495}
+	common.WithMultiMemcache(t, []common.MemcacheConfig{
+		{Port: 6494}, {Port: 6495},
+	}, func() {
+		t.Run("MemcacheMultipleNodes", testBasicConfig(makeSimpleMemcacheSettings(multiNodePorts, 0)))
 	})
 }
 
