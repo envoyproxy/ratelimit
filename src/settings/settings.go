@@ -59,12 +59,11 @@ type Settings struct {
 	RedisPerSecondPoolSize   int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	RedisPerSecondAuth       string `envconfig:"REDIS_PERSECOND_AUTH" default:""`
 	RedisPerSecondTls        bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
-	// RedisPipelineWindow sets the duration after which internal pipelines will be flushed for per second redis.
-	// If window is zero then implicit pipelining will be disabled. Radix use 150us for the
-	// default value, see https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L278.
+	// RedisPerSecondPipelineWindow sets the duration after which internal pipelines will be flushed for per second redis.
+	// See comments of RedisPipelineWindow for details.
 	RedisPerSecondPipelineWindow time.Duration `envconfig:"REDIS_PERSECOND_PIPELINE_WINDOW" default:"0"`
-	// RedisPipelineLimit sets maximum number of commands that can be pipelined before flushing for per second redis.
-	// If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
+	// RedisPerSecondPipelineLimit sets maximum number of commands that can be pipelined before flushing for per second redis.
+	// See comments of RedisPipelineLimit for details.
 	RedisPerSecondPipelineLimit int `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 
 	// Memcache settings
