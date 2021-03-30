@@ -21,7 +21,10 @@
   - [Loading Configuration](#loading-configuration)
   - [Log Format](#log-format)
 - [Request Fields](#request-fields)
+- [GRPC Client](#grpc-client)
+  - [Commandline flags](#commandline-flags)
 - [Statistics](#statistics)
+  - [Statistics options](#statistics-options)
 - [HTTP Port](#http-port)
   - [/json endpoint](#json-endpoint)
 - [Debug Port](#debug-port)
@@ -543,6 +546,8 @@ For high throughput scenarios, ratelimit also support [implicit pipelining](http
 If window is zero then implicit pipelining will be disabled.
 1. `REDIS_PIPELINE_LIMIT` & `REDIS_PERSECOND_PIPELINE_LIMIT`: sets maximum number of commands that can be pipelined before flushing.
 If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
+
+`implicit pipelining` is disabled by default. To enable it, you can use default values [used by radix](https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L278) and tune for the optimal value.
 
 ## One Redis Instance
 
