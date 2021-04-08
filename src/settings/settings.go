@@ -39,26 +39,35 @@ type Settings struct {
 	BackendType                string  `envconfig:"BACKEND_TYPE" default:"redis"`
 
 	// Redis settings
-	RedisSocketType              string        `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
-	RedisType                    string        `envconfig:"REDIS_TYPE" default:"SINGLE"`
-	RedisUrl                     string        `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
-	RedisPoolSize                int           `envconfig:"REDIS_POOL_SIZE" default:"10"`
-	RedisAuth                    string        `envconfig:"REDIS_AUTH" default:""`
-	RedisTls                     bool          `envconfig:"REDIS_TLS" default:"false"`
-	RedisPipelineWindow          time.Duration `envconfig:"REDIS_PIPELINE_WINDOW" default:"0"`
-	RedisPipelineLimit           int           `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
-	RedisPerSecond               bool          `envconfig:"REDIS_PERSECOND" default:"false"`
-	RedisPerSecondSocketType     string        `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
-	RedisPerSecondType           string        `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`
-	RedisPerSecondUrl            string        `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
-	RedisPerSecondPoolSize       int           `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
-	RedisPerSecondAuth           string        `envconfig:"REDIS_PERSECOND_AUTH" default:""`
-	RedisPerSecondTls            bool          `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
+	RedisSocketType string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
+	RedisType       string `envconfig:"REDIS_TYPE" default:"SINGLE"`
+	RedisUrl        string `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
+	RedisPoolSize   int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
+	RedisAuth       string `envconfig:"REDIS_AUTH" default:""`
+	RedisTls        bool   `envconfig:"REDIS_TLS" default:"false"`
+	// RedisPipelineWindow sets the duration after which internal pipelines will be flushed.
+	// If window is zero then implicit pipelining will be disabled. Radix use 150us for the
+	// default value, see https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L278.
+	RedisPipelineWindow time.Duration `envconfig:"REDIS_PIPELINE_WINDOW" default:"0"`
+	// RedisPipelineLimit sets maximum number of commands that can be pipelined before flushing.
+	// If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
+	RedisPipelineLimit       int    `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
+	RedisPerSecond           bool   `envconfig:"REDIS_PERSECOND" default:"false"`
+	RedisPerSecondSocketType string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
+	RedisPerSecondType       string `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`
+	RedisPerSecondUrl        string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
+	RedisPerSecondPoolSize   int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
+	RedisPerSecondAuth       string `envconfig:"REDIS_PERSECOND_AUTH" default:""`
+	RedisPerSecondTls        bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
+	// RedisPerSecondPipelineWindow sets the duration after which internal pipelines will be flushed for per second redis.
+	// See comments of RedisPipelineWindow for details.
 	RedisPerSecondPipelineWindow time.Duration `envconfig:"REDIS_PERSECOND_PIPELINE_WINDOW" default:"0"`
-	RedisPerSecondPipelineLimit  int           `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
+	// RedisPerSecondPipelineLimit sets maximum number of commands that can be pipelined before flushing for per second redis.
+	// See comments of RedisPipelineLimit for details.
+	RedisPerSecondPipelineLimit int `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 
 	// Memcache settings
-	MemcacheHostPort string `envconfig:"MEMCACHE_HOST_PORT" default:""`
+	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`
 }
 
 type Option func(*Settings)

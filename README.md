@@ -21,7 +21,10 @@
   - [Loading Configuration](#loading-configuration)
   - [Log Format](#log-format)
 - [Request Fields](#request-fields)
+- [GRPC Client](#grpc-client)
+  - [Commandline flags](#commandline-flags)
 - [Statistics](#statistics)
+  - [Statistics options](#statistics-options)
 - [HTTP Port](#http-port)
   - [/json endpoint](#json-endpoint)
 - [Debug Port](#debug-port)
@@ -544,6 +547,8 @@ If window is zero then implicit pipelining will be disabled.
 1. `REDIS_PIPELINE_LIMIT` & `REDIS_PERSECOND_PIPELINE_LIMIT`: sets maximum number of commands that can be pipelined before flushing.
 If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
 
+`implicit pipelining` is disabled by default. To enable it, you can use default values [used by radix](https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L278) and tune for the optimal value.
+
 ## One Redis Instance
 
 To configure one Redis instance use the following environment variables:
@@ -577,7 +582,7 @@ Experimental Memcache support has been added as an alternative to Redis in v1.5.
 
 To configure a Memcache instance use the following environment variables instead of the Redis variables:
 
-1. `MEMCACHE_HOST_PORT=<host:port>`
+1. `MEMCACHE_HOST_PORT=`: a comma separated list of hostname:port pairs for memcache nodes.
 1. `BACKEND_TYPE=memcache`
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
@@ -585,7 +590,10 @@ With memcache mode increments will happen asynchronously, so it's technically po
 a client to exceed quota briefly if multiple requests happen at exactly the same time.
 
 Note that Memcache has a max key length of 250 characters, so operations referencing very long
-descriptors will fail.
+descriptors will fail. Descriptors sent to Memcache should not contain whitespaces or control characters. 
+
+When using multiple memcache nodes in `MEMCACHE_HOST_PORT=`, one should provide the identical list of memcache nodes 
+to all ratelimiter instances to ensure that a particular cache key is always hashed to the same memcache node.
 
 # Contact
 

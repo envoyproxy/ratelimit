@@ -190,7 +190,7 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
 	localCache *freecache.Cache, scope gostats.Scope, manager stats.Manager) limiter.RateLimitCache {
 	return NewRateLimitCacheImpl(
-		CollectStats(memcache.New(s.MemcacheHostPort), scope.Scope("memcache")),
+		CollectStats(memcache.New(s.MemcacheHostPort...), scope.Scope("memcache")),
 		timeSource,
 		jitterRand,
 		s.ExpirationJitterMaxSeconds,
