@@ -31,26 +31,6 @@ func (this *ManagerImpl) GetStatsStore() gostats.Store {
 	return this.store
 }
 
-func (this *ManagerImpl) AddTotalHits(u uint64, rlStats RateLimitStats) {
-	rlStats.TotalHits.Add(u)
-}
-
-func (this *ManagerImpl) AddOverLimit(u uint64, rlStats RateLimitStats) {
-	rlStats.OverLimit.Add(u)
-}
-
-func (this *ManagerImpl) AddNearLimit(u uint64, rlStats RateLimitStats) {
-	rlStats.NearLimit.Add(u)
-}
-
-func (this *ManagerImpl) AddOverLimitWithLocalCache(u uint64, rlStats RateLimitStats) {
-	rlStats.OverLimitWithLocalCache.Add(u)
-}
-
-func (this *ManagerImpl) AddWithinLimit(u uint64, rlStats RateLimitStats) {
-	rlStats.WithinLimit.Add(u)
-}
-
 // Create new rate descriptor stats for a descriptor tuple.
 // @param key supplies the fully resolved descriptor tuple.
 // @return new stats.
@@ -65,7 +45,6 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret.WithinLimit = this.rlStatsScope.NewCounter(key + ".within_limit")
 	return ret
 }
-
 
 type ShouldRateLimitLegacyStats struct {
 	ReqConversionError   gostats.Counter

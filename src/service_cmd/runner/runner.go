@@ -1,8 +1,8 @@
 package runner
 
 import (
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/metrics"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"io"
 	"math/rand"
 	"net/http"

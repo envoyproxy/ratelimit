@@ -52,26 +52,6 @@ func (m *MockStatManager) NewStats(key string) stat.RateLimitStats {
 	return ret
 }
 
-func (m *MockStatManager) AddTotalHits(u uint64, rlStats stat.RateLimitStats) {
-	rlStats.TotalHits.Add(u)
-}
-
-func (this *MockStatManager) AddOverLimit(u uint64, rlStats stat.RateLimitStats) {
-	rlStats.OverLimit.Add(u)
-}
-
-func (this *MockStatManager) AddNearLimit(u uint64, rlStats stat.RateLimitStats) {
-	rlStats.NearLimit.Add(u)
-}
-
-func (this *MockStatManager) AddOverLimitWithLocalCache(u uint64, rlStats stat.RateLimitStats) {
-	rlStats.OverLimitWithLocalCache.Add(u)
-}
-
-func (this *MockStatManager) AddWithinLimit(u uint64, rlStats stat.RateLimitStats) {
-	rlStats.WithinLimit.Add(u)
-}
-
 func NewMockStatManager(store stats.Store) stat.Manager {
 	return &MockStatManager{store: store}
 }

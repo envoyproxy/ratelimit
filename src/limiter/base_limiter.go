@@ -139,11 +139,11 @@ func (this *BaseRateLimiter) checkOverLimitThreshold(limitInfo *LimitInfo, hitsA
 	if limitInfo.limitBeforeIncrease >= limitInfo.overLimitThreshold {
 		limitInfo.limit.Stats.OverLimit.Add(uint64(hitsAddend))
 	} else {
-		limitInfo.limit.Stats.OverLimit.Add(uint64(limitInfo.limitAfterIncrease-limitInfo.overLimitThreshold))
+		limitInfo.limit.Stats.OverLimit.Add(uint64(limitInfo.limitAfterIncrease - limitInfo.overLimitThreshold))
 
 		// If the limit before increase was below the over limit value, then some of the hits were
 		// in the near limit range.
-		limitInfo.limit.Stats.NearLimit.Add(uint64(limitInfo.overLimitThreshold-utils.Max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease)))
+		limitInfo.limit.Stats.NearLimit.Add(uint64(limitInfo.overLimitThreshold - utils.Max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease)))
 	}
 }
 
@@ -156,7 +156,7 @@ func (this *BaseRateLimiter) checkNearLimitThreshold(limitInfo *LimitInfo, hitsA
 		if limitInfo.limitBeforeIncrease >= limitInfo.nearLimitThreshold {
 			limitInfo.limit.Stats.NearLimit.Add(uint64(hitsAddend))
 		} else {
-			limitInfo.limit.Stats.NearLimit.Add(uint64(limitInfo.limitAfterIncrease-limitInfo.nearLimitThreshold))
+			limitInfo.limit.Stats.NearLimit.Add(uint64(limitInfo.limitAfterIncrease - limitInfo.nearLimitThreshold))
 		}
 	}
 }
