@@ -153,8 +153,8 @@ func TestServiceLegacy(test *testing.T) {
 		response)
 	t.assert.Nil(err)
 
-	t.assert.EqualValues(2, t.store.NewCounter("config_load_success").Value())
-	t.assert.EqualValues(1, t.store.NewCounter("config_load_error").Value())
+	t.assert.EqualValues(2, t.statStore.NewCounter("config_load_success").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("config_load_error").Value())
 }
 
 func TestEmptyDomainLegacy(test *testing.T) {
@@ -166,8 +166,8 @@ func TestEmptyDomainLegacy(test *testing.T) {
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit domain must not be empty", err.Error())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.service_error").Value())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
 }
 
 func TestEmptyDescriptorsLegacy(test *testing.T) {
@@ -179,8 +179,8 @@ func TestEmptyDescriptorsLegacy(test *testing.T) {
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit descriptor list must not be empty", err.Error())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.service_error").Value())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
 }
 
 func TestCacheErrorLegacy(test *testing.T) {
@@ -203,8 +203,8 @@ func TestCacheErrorLegacy(test *testing.T) {
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, legacyRequest)
 	t.assert.Nil(response)
 	t.assert.Equal("cache error", err.Error())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.redis_error").Value())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.redis_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
 }
 
 func TestInitialLoadErrorLegacy(test *testing.T) {
@@ -227,8 +227,8 @@ func TestInitialLoadErrorLegacy(test *testing.T) {
 	response, err := service.GetLegacyService().ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("no rate limit configuration loaded", err.Error())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.service_error").Value())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit_legacy.should_rate_limit_error").Value())
 
 }
 

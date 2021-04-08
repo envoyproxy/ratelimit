@@ -58,7 +58,7 @@ type rateLimitServiceTestSuite struct {
 	config                *mock_config.MockRateLimitConfig
 	runtimeUpdateCallback chan<- int
 	sm                    stats.Manager
-	store                 gostats.Store
+	statStore             gostats.Store
 }
 
 func commonSetup(t *testing.T) rateLimitServiceTestSuite {
@@ -70,8 +70,8 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret.cache = mock_limiter.NewMockRateLimitCache(ret.controller)
 	ret.configLoader = mock_config.NewMockRateLimitConfigLoader(ret.controller)
 	ret.config = mock_config.NewMockRateLimitConfig(ret.controller)
-	ret.store = gostats.NewStore(gostats.NewNullSink(), false)
-	ret.sm = mock_stats.NewMockStatManager(ret.store)
+	ret.statStore = gostats.NewStore(gostats.NewNullSink(), false)
+	ret.sm = mock_stats.NewMockStatManager(ret.statStore)
 	return ret
 }
 
@@ -171,8 +171,8 @@ func TestService(test *testing.T) {
 		response)
 	t.assert.Nil(err)
 
-	t.assert.EqualValues(2, t.store.NewCounter("config_load_success").Value())
-	t.assert.EqualValues(1, t.store.NewCounter("config_load_error").Value())
+	t.assert.EqualValues(2, t.statStore.NewCounter("config_load_success").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("config_load_error").Value())
 }
 
 func TestEmptyDomain(test *testing.T) {
@@ -184,7 +184,7 @@ func TestEmptyDomain(test *testing.T) {
 	response, err := service.ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit domain must not be empty", err.Error())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
 }
 
 func TestEmptyDescriptors(test *testing.T) {
@@ -196,7 +196,7 @@ func TestEmptyDescriptors(test *testing.T) {
 	response, err := service.ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit descriptor list must not be empty", err.Error())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
 }
 
 func TestCacheError(test *testing.T) {
@@ -215,7 +215,7 @@ func TestCacheError(test *testing.T) {
 	response, err := service.ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("cache error", err.Error())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.redis_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.redis_error").Value())
 }
 
 func TestInitialLoadError(test *testing.T) {
@@ -238,5 +238,5 @@ func TestInitialLoadError(test *testing.T) {
 	response, err := service.ShouldRateLimit(nil, request)
 	t.assert.Nil(response)
 	t.assert.Equal("no rate limit configuration loaded", err.Error())
-	t.assert.EqualValues(1, t.store.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
 }
