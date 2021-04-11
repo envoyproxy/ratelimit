@@ -2,29 +2,33 @@ package redis
 
 import (
 	"math/rand"
+	"sync"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	storage_strategy "github.com/envoyproxy/ratelimit/src/storage/strategy"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
+type RedisError string
+
+func (e RedisError) Error() string {
+	return string(e)
+}
+
 type fixedRateLimitCacheImpl struct {
-	client Client
+	client storage_strategy.StorageStrategy
 	// Optional Client for a dedicated cache of per second limits.
 	// If this client is nil, then the Cache will use the client for all
 	// limits regardless of unit. If this client is not nil, then it
 	// is used for limits that have a SECOND unit.
-	perSecondClient Client
+	perSecondClient storage_strategy.StorageStrategy
 	baseRateLimiter *limiter.BaseRateLimiter
-}
-
-func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) {
-	*pipeline = client.PipeAppend(*pipeline, result, "INCRBY", key, hitsAddend)
-	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
+	waitGroup       sync.WaitGroup
 }
 
 func (this *fixedRateLimitCacheImpl) DoLimit(
@@ -41,8 +45,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
-	results := make([]uint32, len(request.Descriptors))
-	var pipeline, perSecondPipeline Pipeline
+	results := make([]uint64, len(request.Descriptors))
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
@@ -66,23 +69,18 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
 		if this.perSecondClient != nil && cacheKey.PerSecond {
-			if perSecondPipeline == nil {
-				perSecondPipeline = Pipeline{}
+			value, err := this.perSecondClient.GetValue(cacheKey.Key)
+			if err != nil {
+				logger.Error(err)
 			}
-			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			results[i] = value
 		} else {
-			if pipeline == nil {
-				pipeline = Pipeline{}
+			value, err := this.client.GetValue(cacheKey.Key)
+			if err != nil {
+				logger.Error(err)
 			}
-			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			results[i] = value
 		}
-	}
-
-	if pipeline != nil {
-		checkError(this.client.PipeDo(pipeline))
-	}
-	if perSecondPipeline != nil {
-		checkError(this.perSecondClient.PipeDo(perSecondPipeline))
 	}
 
 	// Now fetch the pipeline.
@@ -90,23 +88,41 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		len(request.Descriptors))
 	for i, cacheKey := range cacheKeys {
 
-		limitAfterIncrease := results[i]
-		limitBeforeIncrease := limitAfterIncrease - hitsAddend
+		limitBeforeIncrease := uint32(results[i])
+		limitAfterIncrease := limitBeforeIncrease + hitsAddend
 
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
 			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
-
 	}
 
+	this.waitGroup.Add(1)
+	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
+
 	return responseDescriptorStatuses
+}
+
+func (this *fixedRateLimitCacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, isOverLimitWithLocalCache []bool,
+	limits []*config.RateLimit, hitsAddend uint64) {
+	defer this.waitGroup.Done()
+	for i, cacheKey := range cacheKeys {
+		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] {
+			continue
+		}
+
+		if this.perSecondClient != nil && cacheKey.PerSecond {
+			this.perSecondClient.IncrementValue(cacheKey.Key, hitsAddend)
+		} else {
+			this.client.IncrementValue(cacheKey.Key, hitsAddend)
+		}
+	}
 }
 
 // Flush() is a no-op with redis since quota reads and updates happen synchronously.
 func (this *fixedRateLimitCacheImpl) Flush() {}
 
-func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSource utils.TimeSource,
+func NewFixedRateLimitCacheImpl(client storage_strategy.StorageStrategy, perSecondClient storage_strategy.StorageStrategy, timeSource utils.TimeSource,
 	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:          client,
