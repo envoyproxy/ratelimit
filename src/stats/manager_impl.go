@@ -1,7 +1,6 @@
 package stats
 
 import (
-	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/settings"
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
@@ -58,20 +57,6 @@ func (this *ManagerImpl) NewServiceStats() ServiceStats {
 	ret.ConfigLoadError = this.serviceStatsScope.NewCounter("config_load_error")
 	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
 	return ret
-}
-
-func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
-	rateLimitKey := ""
-	for _, entry := range descriptor.Entries {
-		if rateLimitKey != "" {
-			rateLimitKey += "."
-		}
-		rateLimitKey += entry.Key
-		if entry.Value != "" {
-			rateLimitKey += "_" + entry.Value
-		}
-	}
-	return domain + "." + rateLimitKey
 }
 
 func (this RateLimitStats) GetKey() string {

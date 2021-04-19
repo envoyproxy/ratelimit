@@ -235,7 +235,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
-		rateLimitKey := stats.DescriptorKey(domain, descriptor)
+		rateLimitKey := descriptorKey(domain, descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		rateLimit = NewRateLimit(
 			descriptor.GetLimit().GetRequestsPerUnit(),
@@ -275,6 +275,21 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	return rateLimit
+}
+
+
+func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
+	rateLimitKey := ""
+	for _, entry := range descriptor.Entries {
+		if rateLimitKey != "" {
+			rateLimitKey += "."
+		}
+		rateLimitKey += entry.Key
+		if entry.Value != "" {
+			rateLimitKey += "_" + entry.Value
+		}
+	}
+	return domain + "." + rateLimitKey
 }
 
 // Create rate limit config from a list of input YAML files.
