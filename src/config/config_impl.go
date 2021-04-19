@@ -277,7 +277,6 @@ func (this *rateLimitConfigImpl) GetLimit(
 	return rateLimit
 }
 
-
 func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
 	rateLimitKey := ""
 	for _, entry := range descriptor.Entries {
