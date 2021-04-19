@@ -19,16 +19,6 @@ func NewStatManager(store gostats.Store, settings settings.Settings) *ManagerImp
 	}
 }
 
-type ManagerImpl struct {
-	store                gostats.Store
-	rlStatsScope         gostats.Scope
-	legacyStatsScope     gostats.Scope
-	serviceStatsScope    gostats.Scope
-	detailedMetricsScope gostats.Scope
-	detailed             bool
-	shouldRateLimitScope gostats.Scope
-}
-
 func (this *ManagerImpl) GetStatsStore() gostats.Store {
 	return this.store
 }
@@ -48,12 +38,6 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	return ret
 }
 
-type ShouldRateLimitLegacyStats struct {
-	ReqConversionError   gostats.Counter
-	RespConversionError  gostats.Counter
-	ShouldRateLimitError gostats.Counter
-}
-
 func (this *ManagerImpl) NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats {
 	return ShouldRateLimitLegacyStats{
 		ReqConversionError:   this.legacyStatsScope.NewCounter("req_conversion_error"),
@@ -62,22 +46,11 @@ func (this *ManagerImpl) NewShouldRateLimitLegacyStats() ShouldRateLimitLegacySt
 	}
 }
 
-type ShouldRateLimitStats struct {
-	RedisError   gostats.Counter
-	ServiceError gostats.Counter
-}
-
 func (this *ManagerImpl) NewShouldRateLimitStats() ShouldRateLimitStats {
 	ret := ShouldRateLimitStats{}
 	ret.RedisError = this.shouldRateLimitScope.NewCounter("redis_error")
 	ret.ServiceError = this.shouldRateLimitScope.NewCounter("service_error")
 	return ret
-}
-
-type ServiceStats struct {
-	ConfigLoadSuccess gostats.Counter
-	ConfigLoadError   gostats.Counter
-	ShouldRateLimit   ShouldRateLimitStats
 }
 
 func (this *ManagerImpl) NewServiceStats() ServiceStats {
@@ -100,19 +73,6 @@ func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) str
 		}
 	}
 	return domain + "." + rateLimitKey
-}
-
-// Stats for an individual rate limit config entry.
-//todo: Ideally the gostats package fields should be unexported
-//	the inner value could be interacted with via getters such as rlStats.TotalHits() uint64
-//	This ensures that setters such as Inc() and Add() can only be managed by ManagerImpl.
-type RateLimitStats struct {
-	Key                     string
-	TotalHits               gostats.Counter
-	OverLimit               gostats.Counter
-	NearLimit               gostats.Counter
-	OverLimitWithLocalCache gostats.Counter
-	WithinLimit             gostats.Counter
 }
 
 func (this RateLimitStats) GetKey() string {
