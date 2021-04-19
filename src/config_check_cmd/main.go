@@ -21,8 +21,7 @@ func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {
 			os.Exit(1)
 		}
 	}()
-	settingStruct := settings.NewSettings()
-	statsManager := stats.NewStatManager(gostats.NewStore(gostats.NewNullSink(), false), settingStruct)
+	statsManager := stats.NewStatManager(gostats.NewStore(gostats.NewNullSink(), false), settings.NewSettings())
 	config.NewRateLimitConfigImpl(allConfigs, statsManager)
 }
 
