@@ -169,11 +169,11 @@ func (server *server) Runtime() loader.IFace {
 	return server.runtime
 }
 
-func NewServer(s settings.Settings, name string, manager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) Server {
-	return newServer(s, name, manager, localCache, opts...)
+func NewServer(s settings.Settings, name string, statsManager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) Server {
+	return newServer(s, name, statsManager, localCache, opts...)
 }
 
-func newServer(s settings.Settings, name string, manager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) *server {
+func newServer(s settings.Settings, name string, statsManager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) *server {
 	for _, opt := range opts {
 		opt(&s)
 	}
@@ -187,7 +187,7 @@ func newServer(s settings.Settings, name string, manager stats.Manager, localCac
 	ret.debugPort = s.DebugPort
 
 	// setup stats
-	ret.store = manager.GetStatsStore()
+	ret.store = statsManager.GetStatsStore()
 	ret.scope = ret.store.ScopeWithTags(name, s.ExtraTags)
 	ret.store.AddStatGenerator(gostats.NewRuntimeStats(ret.scope.Scope("go")))
 	if localCache != nil {

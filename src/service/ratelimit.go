@@ -34,7 +34,7 @@ type service struct {
 	runtimeWatchRoot   bool
 }
 
-func (this *service) reloadConfig(manager stats.Manager) {
+func (this *service) reloadConfig(statsManager stats.Manager) {
 	defer func() {
 		if e := recover(); e != nil {
 			configError, ok := e.(config.RateLimitConfigError)
@@ -57,7 +57,7 @@ func (this *service) reloadConfig(manager stats.Manager) {
 		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
 	}
 
-	newConfig := this.configLoader.Load(files, manager)
+	newConfig := this.configLoader.Load(files, statsManager)
 	this.stats.ConfigLoadSuccess.Inc()
 	this.configLock.Lock()
 	this.config = newConfig
@@ -172,7 +172,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, manager stats.Manager, runtimeWatchRoot bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -181,24 +181,24 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		config:             nil,
 		runtimeUpdateEvent: make(chan int),
 		cache:              cache,
-		stats:              manager.NewServiceStats(),
+		stats:              statsManager.NewServiceStats(),
 		runtimeWatchRoot:   runtimeWatchRoot,
 	}
 	newService.legacy = &legacyService{
 		s:                          newService,
-		shouldRateLimitLegacyStats: manager.NewShouldRateLimitLegacyStats(),
+		shouldRateLimitLegacyStats: statsManager.NewShouldRateLimitLegacyStats(),
 	}
 
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
 
-	newService.reloadConfig(manager)
+	newService.reloadConfig(statsManager)
 	go func() {
 		// No exit right now.
 		for {
 			logger.Debugf("waiting for runtime update")
 			<-newService.runtimeUpdateEvent
 			logger.Debugf("got runtime update and reloading config")
-			newService.reloadConfig(manager)
+			newService.reloadConfig(statsManager)
 		}
 	}()
 

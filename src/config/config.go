@@ -44,8 +44,8 @@ type RateLimitConfigToLoad struct {
 type RateLimitConfigLoader interface {
 	// Load a new configuration from a list of YAML files.
 	// @param configs supplies a list of full YAML files in string form.
-	// @param statsScope supplies the stats scope to use for limit stats during runtime.
+	// @param statsManager supplies the statsManager to initialize stats during runtime.
 	// @return a new configuration.
 	// @throws RateLimitConfigError if the configuration could not be created.
-	Load(configs []RateLimitConfigToLoad, manager stats.Manager) RateLimitConfig
+	Load(configs []RateLimitConfigToLoad, statsManager stats.Manager) RateLimitConfig
 }

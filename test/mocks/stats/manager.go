@@ -1,38 +1,38 @@
 package stats
 
 import (
-	stat "github.com/envoyproxy/ratelimit/src/stats"
-	stats "github.com/lyft/gostats"
+	"github.com/envoyproxy/ratelimit/src/stats"
+	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 )
 
 type MockStatManager struct {
-	store stats.Store
+	store gostats.Store
 }
 
-func (m *MockStatManager) GetStatsStore() stats.Store {
+func (m *MockStatManager) GetStatsStore() gostats.Store {
 	return m.store
 }
 
-func (m *MockStatManager) NewShouldRateLimitStats() stat.ShouldRateLimitStats {
+func (m *MockStatManager) NewShouldRateLimitStats() stats.ShouldRateLimitStats {
 	s := m.store.Scope("call.should_rate_limit")
-	ret := stat.ShouldRateLimitStats{}
+	ret := stats.ShouldRateLimitStats{}
 	ret.RedisError = s.NewCounter("redis_error")
 	ret.ServiceError = s.NewCounter("service_error")
 	return ret
 }
 
-func (m *MockStatManager) NewServiceStats() stat.ServiceStats {
-	ret := stat.ServiceStats{}
+func (m *MockStatManager) NewServiceStats() stats.ServiceStats {
+	ret := stats.ServiceStats{}
 	ret.ConfigLoadSuccess = m.store.NewCounter("config_load_success")
 	ret.ConfigLoadError = m.store.NewCounter("config_load_error")
 	ret.ShouldRateLimit = m.NewShouldRateLimitStats()
 	return ret
 }
 
-func (m *MockStatManager) NewShouldRateLimitLegacyStats() stat.ShouldRateLimitLegacyStats {
+func (m *MockStatManager) NewShouldRateLimitLegacyStats() stats.ShouldRateLimitLegacyStats {
 	s := m.store.Scope("call.should_rate_limit_legacy")
-	return stat.ShouldRateLimitLegacyStats{
+	return stats.ShouldRateLimitLegacyStats{
 		ReqConversionError:   s.NewCounter("req_conversion_error"),
 		RespConversionError:  s.NewCounter("resp_conversion_error"),
 		ShouldRateLimitError: s.NewCounter("should_rate_limit_error"),
@@ -40,9 +40,9 @@ func (m *MockStatManager) NewShouldRateLimitLegacyStats() stat.ShouldRateLimitLe
 }
 
 //todo: review mock implementation
-func (m *MockStatManager) NewStats(key string) stat.RateLimitStats {
-	ret := stat.RateLimitStats{}
-	logger.Debugf("outputing test stats %s", key)
+func (m *MockStatManager) NewStats(key string) stats.RateLimitStats {
+	ret := stats.RateLimitStats{}
+	logger.Debugf("outputing test gostats %s", key)
 	ret.Key = key
 	ret.TotalHits = m.store.NewCounter(key + ".total_hits")
 	ret.OverLimit = m.store.NewCounter(key + ".over_limit")
@@ -52,6 +52,6 @@ func (m *MockStatManager) NewStats(key string) stat.RateLimitStats {
 	return ret
 }
 
-func NewMockStatManager(store stats.Store) stat.Manager {
+func NewMockStatManager(store gostats.Store) stats.Manager {
 	return &MockStatManager{store: store}
 }

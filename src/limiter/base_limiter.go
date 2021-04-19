@@ -19,7 +19,7 @@ type BaseRateLimiter struct {
 	cacheKeyGenerator          CacheKeyGenerator
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
-	Manager                    stats.Manager
+	StatsManager               stats.Manager
 }
 
 type LimitInfo struct {
@@ -118,7 +118,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 }
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
-	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, manager stats.Manager) *BaseRateLimiter {
+	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager) *BaseRateLimiter {
 	return &BaseRateLimiter{
 		timeSource:                 timeSource,
 		JitterRand:                 jitterRand,
@@ -126,7 +126,7 @@ func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expira
 		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		Manager:                    manager,
+		StatsManager:               statsManager,
 	}
 }
 
