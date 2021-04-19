@@ -114,6 +114,6 @@ type RateLimitStats struct {
 	WithinLimit             gostats.Counter
 }
 
-func (this RateLimitStats) String() string {
+func (this RateLimitStats) GetKey() string {
 	return this.Key
 }

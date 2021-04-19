@@ -61,7 +61,7 @@ var validKeys = map[string]bool{
 func NewRateLimit(
 	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats) *RateLimit {
 
-	return &RateLimit{FullKey: rlStats.String(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
+	return &RateLimit{FullKey: rlStats.GetKey(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
 }
 
 // Dump an individual descriptor for debugging purposes.
