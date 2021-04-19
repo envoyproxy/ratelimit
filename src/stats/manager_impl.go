@@ -7,14 +7,15 @@ import (
 	logger "github.com/sirupsen/logrus"
 )
 
-func NewStatManager(store gostats.Store, s settings.Settings) *ManagerImpl {
-	serviceScope := store.ScopeWithTags("ratelimit", s.ExtraTags).Scope("service")
+func NewStatManager(store gostats.Store, settings settings.Settings) *ManagerImpl {
+	serviceScope := store.ScopeWithTags("ratelimit", settings.ExtraTags).Scope("service")
 	return &ManagerImpl{
 		store:                store,
 		rlStatsScope:         serviceScope.Scope("rate_limit"),
 		legacyStatsScope:     serviceScope.Scope("call.should_rate_limit_legacy"),
 		serviceStatsScope:    serviceScope,
 		detailedMetricsScope: serviceScope.Scope("rate_limit").Scope("detailed"),
+		shouldRateLimitScope: serviceScope.Scope("call.should_rate_limit"),
 	}
 }
 
@@ -25,6 +26,7 @@ type ManagerImpl struct {
 	serviceStatsScope    gostats.Scope
 	detailedMetricsScope gostats.Scope
 	detailed             bool
+	shouldRateLimitScope gostats.Scope
 }
 
 func (this *ManagerImpl) GetStatsStore() gostats.Store {
@@ -66,10 +68,9 @@ type ShouldRateLimitStats struct {
 }
 
 func (this *ManagerImpl) NewShouldRateLimitStats() ShouldRateLimitStats {
-	s := this.serviceStatsScope.Scope("call.should_rate_limit")
 	ret := ShouldRateLimitStats{}
-	ret.RedisError = s.NewCounter("redis_error")
-	ret.ServiceError = s.NewCounter("service_error")
+	ret.RedisError = this.shouldRateLimitScope.NewCounter("redis_error")
+	ret.ServiceError = this.shouldRateLimitScope.NewCounter("service_error")
 	return ret
 }
 
