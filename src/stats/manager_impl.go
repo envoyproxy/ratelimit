@@ -14,7 +14,6 @@ func NewStatManager(store gostats.Store, settings settings.Settings) *ManagerImp
 		rlStatsScope:         serviceScope.Scope("rate_limit"),
 		legacyStatsScope:     serviceScope.Scope("call.should_rate_limit_legacy"),
 		serviceStatsScope:    serviceScope,
-		detailedMetricsScope: serviceScope.Scope("rate_limit").Scope("detailed"),
 		shouldRateLimitScope: serviceScope.Scope("call.should_rate_limit"),
 	}
 }
