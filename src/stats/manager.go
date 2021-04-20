@@ -3,21 +3,21 @@ package stats
 import stats "github.com/lyft/gostats"
 import gostats "github.com/lyft/gostats"
 
-// Manager is the interface that wraps initialization of stat structures
+// Manager is the interface that wraps initialization of stat structures.
 type Manager interface {
 	// NewStats provides a RateLimitStats structure associated with a given descriptorKey.
 	// Multiple calls with the same descriptorKey argument are guaranteed to be equivalent.
 	NewStats(descriptorKey string) RateLimitStats
 	// Initializes a ShouldRateLimitStats structure.
-	// Multiple calls to this method are idempotent
+	// Multiple calls to this method are idempotent.
 	NewShouldRateLimitStats() ShouldRateLimitStats
 	// Initializes a ServiceStats structure.
-	// Multiple calls to this method are idempotent
+	// Multiple calls to this method are idempotent.
 	NewServiceStats() ServiceStats
 	// Initializes a ShouldRateLimitLegacyStats structure.
-	// Multiple calls to this method are idempotent
+	// Multiple calls to this method are idempotent.
 	NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats
-	// Returns the stats.Store wrapped by the Manager
+	// Returns the stats.Store wrapped by the Manager.
 	GetStatsStore() stats.Store
 }
 
