@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/coocood/freecache"
 	stats "github.com/lyft/gostats"
@@ -121,7 +122,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	}
 
 	this.waitGroup.Add(1)
-	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
+	runAsync(func() { this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend)) })
 	if AutoFlushForIntegrationTests {
 		this.Flush()
 	}
@@ -171,6 +172,34 @@ func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, i
 
 func (this *rateLimitMemcacheImpl) Flush() {
 	this.waitGroup.Wait()
+}
+
+var taskQueue = make(chan func())
+
+func runAsync(task func()) {
+	select {
+	case taskQueue <- task:
+		// submited, everything is ok
+
+	default:
+		go func() {
+			// do the given task
+			task()
+
+			const tickDuration = 10 * time.Second
+			tick := time.NewTicker(tickDuration)
+
+			for {
+				select {
+				case t := <-taskQueue:
+					t()
+					tick.Reset(tickDuration)
+				case <-tick.C:
+					return
+				}
+			}
+		}()
+	}
 }
 
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
