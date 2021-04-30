@@ -188,6 +188,7 @@ func runAsync(task func()) {
 
 			const tickDuration = 10 * time.Second
 			tick := time.NewTicker(tickDuration)
+			defer tick.Stop()
 
 			for {
 				select {
