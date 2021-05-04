@@ -501,7 +501,7 @@ $ curl 0:6070/
 /stats: print out stats
 ```
 
-You can specify the debug port with the `DEBUG_PORT` environment variable. It defaults to `6070`.
+You can specify the debug server address with the `DEBUG_HOST` and `DEBUG_PORT` environment variables. They currently default to `0.0.0.0` and `6070` respectively.
 
 # Local Cache
 
