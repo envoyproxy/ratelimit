@@ -76,7 +76,9 @@ type Settings struct {
 	// number of connections to memcache kept idle in pool, if a connection is needed but none
 	// are idle a new connection is opened, used and closed and can be left in a time-wait state
 	// which can result in high CPU usage.
-	MemcacheMaxIdleConns int `envconfig:"MEMCACHE_MAX_IDLE_CONNS" default:"2"`
+	MemcacheMaxIdleConns int           `envconfig:"MEMCACHE_MAX_IDLE_CONNS" default:"2"`
+	MemcacheSrv          string        `envconfig:"MEMCACHE_SRV" default:""`
+	MemcacheSrvRefresh   time.Duration `envconfig:"MEMCACHE_SRV_REFRESH" default:"0"`
 }
 
 type Option func(*Settings)

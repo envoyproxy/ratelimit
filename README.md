@@ -582,7 +582,9 @@ Experimental Memcache support has been added as an alternative to Redis in v1.5.
 
 To configure a Memcache instance use the following environment variables instead of the Redis variables:
 
-1. `MEMCACHE_HOST_PORT=`: a comma separated list of hostname:port pairs for memcache nodes.
+1. `MEMCACHE_HOST_PORT=`: a comma separated list of hostname:port pairs for memcache nodes (mutually exclusive with `MEMCACHE_SRV`)
+1. `MEMCACHE_SRV=`: an SRV record to lookup hosts from (mutually exclusive with `MEMCACHE_HOST_PORT`) 
+1. `MEMCACHE_SRV_REFRESH=0`: refresh the list of hosts every n seconds, if 0 no refreshing will happen, supports duration suffixes: "ns", "us" (or "µs"), "ms", "s", "m", "h".
 1. `BACKEND_TYPE=memcache`
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 1. `MEMCACHE_MAX_IDLE_CONNS=2`: the maximum number of idle TCP connections per memcache node, `2` is the default of the underlying library
