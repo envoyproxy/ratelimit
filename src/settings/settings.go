@@ -68,6 +68,12 @@ type Settings struct {
 
 	// Memcache settings
 	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`
+	// MemcacheMaxIdleConns sets the maximum number of idle TCP connections per memcached node.
+	// The default is 2 as that is the default of the underlying library. This is the maximum
+	// number of connections to memcache kept idle in pool, if a connection is needed but none
+	// are idle a new connection is opened, used and closed and can be left in a time-wait state
+	// which can result in high CPU usage.
+	MemcacheMaxIdleConns int `envconfig:"MEMCACHE_MAX_IDLE_CONNS" default:"2"`
 }
 
 type Option func(*Settings)

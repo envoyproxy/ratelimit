@@ -209,6 +209,21 @@ func TestBasicConfigMemcache(t *testing.T) {
 	})
 }
 
+func TestConfigMemcacheWithMaxIdleConns(t *testing.T) {
+	singleNodePort := []int{6394}
+	assert := assert.New(t)
+	common.WithMultiMemcache(t, []common.MemcacheConfig{
+		{Port: 6394},
+	}, func() {
+		withDefaultMaxIdleConns := makeSimpleMemcacheSettings(singleNodePort, 0)
+		assert.Equal(2, withDefaultMaxIdleConns.MemcacheMaxIdleConns)
+		t.Run("MemcacheWithDefaultMaxIdleConns", testBasicConfig(withDefaultMaxIdleConns))
+		withSpecifiedMaxIdleConns := makeSimpleMemcacheSettings(singleNodePort, 0)
+		withSpecifiedMaxIdleConns.MemcacheMaxIdleConns = 100
+		t.Run("MemcacheWithSpecifiedMaxIdleConns", testBasicConfig(withSpecifiedMaxIdleConns))
+	})
+}
+
 func TestMultiNodeMemcache(t *testing.T) {
 	multiNodePorts := []int{6494, 6495}
 	common.WithMultiMemcache(t, []common.MemcacheConfig{

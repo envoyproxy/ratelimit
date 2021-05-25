@@ -585,6 +585,7 @@ To configure a Memcache instance use the following environment variables instead
 1. `MEMCACHE_HOST_PORT=`: a comma separated list of hostname:port pairs for memcache nodes.
 1. `BACKEND_TYPE=memcache`
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
+1. `MEMCACHE_MAX_IDLE_CONNS=2`: the maximum number of idle TCP connections per memcache node, `2` is the default of the underlying library
 
 With memcache mode increments will happen asynchronously, so it's technically possible for
 a client to exceed quota briefly if multiple requests happen at exactly the same time.
