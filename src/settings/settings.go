@@ -10,10 +10,13 @@ import (
 type Settings struct {
 	// runtime options
 	GrpcUnaryInterceptor grpc.ServerOption
-	// env config
-	Port      int `envconfig:"PORT" default:"8080"`
-	GrpcPort  int `envconfig:"GRPC_PORT" default:"8081"`
-	DebugPort int `envconfig:"DEBUG_PORT" default:"6070"`
+	// Server listen address config
+	Host      string `envconfig:"HOST" default:"0.0.0.0"`
+	Port      int    `envconfig:"PORT" default:"8080"`
+	GrpcHost  string `envconfig:"GRPC_HOST" default:"0.0.0.0"`
+	GrpcPort  int    `envconfig:"GRPC_PORT" default:"8081"`
+	DebugHost string `envconfig:"DEBUG_HOST" default:"0.0.0.0"`
+	DebugPort int    `envconfig:"DEBUG_PORT" default:"6070"`
 
 	// Logging settings
 	LogLevel  string `envconfig:"LOG_LEVEL" default:"WARN"`
