@@ -254,6 +254,14 @@ func newServer(s settings.Settings, name string, store stats.Store, localCache *
 			})
 		})
 
+	// setup trace endpoint
+	ret.AddDebugHttpEndpoint(
+		"/debug/pprof/trace",
+		"trace endpoint",
+		func(writer http.ResponseWriter, request *http.Request) {
+			pprof.Trace(writer, request)
+		})
+
 	// setup debug root
 	ret.debugListener.debugMux.HandleFunc(
 		"/",
