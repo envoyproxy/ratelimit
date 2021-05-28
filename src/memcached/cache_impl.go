@@ -179,13 +179,14 @@ var taskQueue = make(chan func())
 func runAsync(task func()) {
 	select {
 	case taskQueue <- task:
-		// submited, everything is ok
+		// submitted, everything is ok
 
 	default:
 		go func() {
 			// do the given task
 			task()
 
+			tasksProcessedWithinOnePeriod := 0
 			const tickDuration = 10 * time.Second
 			tick := time.NewTicker(tickDuration)
 			defer tick.Stop()
@@ -194,9 +195,12 @@ func runAsync(task func()) {
 				select {
 				case t := <-taskQueue:
 					t()
-					tick.Stop()
-					tick = time.NewTicker(tickDuration)
+					tasksProcessedWithinOnePeriod++
 				case <-tick.C:
+					if tasksProcessedWithinOnePeriod > 0 {
+						tasksProcessedWithinOnePeriod = 0
+						continue
+					}
 					return
 				}
 			}
