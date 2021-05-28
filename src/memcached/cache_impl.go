@@ -194,7 +194,8 @@ func runAsync(task func()) {
 				select {
 				case t := <-taskQueue:
 					t()
-					tick.Reset(tickDuration)
+					tick.Stop()
+					tick = time.NewTicker(tickDuration)
 				case <-tick.C:
 					return
 				}

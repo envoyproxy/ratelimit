@@ -1,6 +1,6 @@
 module github.com/envoyproxy/ratelimit
 
-go 1.16
+go 1.14
 
 require (
 	github.com/alicebob/miniredis/v2 v2.11.4
