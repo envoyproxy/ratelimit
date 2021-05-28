@@ -123,7 +123,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	}
 
 	this.waitGroup.Add(1)
-	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
+	runAsync(func() { this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend)) })
 	if AutoFlushForIntegrationTests {
 		this.Flush()
 	}
@@ -237,6 +237,40 @@ func newMemcacheFromSettings(s settings.Settings) Client {
 	client := memcache.New(s.MemcacheHostPort...)
 	client.MaxIdleConns = s.MemcacheMaxIdleConns
 	return client
+}
+
+var taskQueue = make(chan func())
+
+func runAsync(task func()) {
+	select {
+	case taskQueue <- task:
+		// submitted, everything is ok
+
+	default:
+		go func() {
+			// do the given task
+			task()
+
+			tasksProcessedWithinOnePeriod := 0
+			const tickDuration = 10 * time.Second
+			tick := time.NewTicker(tickDuration)
+			defer tick.Stop()
+
+			for {
+				select {
+				case t := <-taskQueue:
+					t()
+					tasksProcessedWithinOnePeriod++
+				case <-tick.C:
+					if tasksProcessedWithinOnePeriod > 0 {
+						tasksProcessedWithinOnePeriod = 0
+						continue
+					}
+					return
+				}
+			}
+		}()
+	}
 }
 
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
