@@ -19,8 +19,7 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 		perSecondPool = storage_factory.NewRedis(s.RedisPerSecondTls, s.RedisPerSecondAuth,
 			s.RedisPerSecondType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize, s.RedisPerSecondPipelineWindow, s.RedisPerSecondPipelineLimit)
 	}
-	var otherPool storage_strategy.StorageStrategy
-	otherPool = storage_factory.NewRedis(s.RedisTls, s.RedisAuth, s.RedisType, s.RedisUrl, s.RedisPoolSize,
+	otherPool := storage_factory.NewRedis(s.RedisTls, s.RedisAuth, s.RedisType, s.RedisUrl, s.RedisPoolSize,
 		s.RedisPipelineWindow, s.RedisPipelineLimit)
 
 	return NewFixedRateLimitCacheImpl(

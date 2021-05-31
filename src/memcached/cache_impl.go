@@ -14,7 +14,7 @@ import (
 
 func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
 	localCache *freecache.Cache, scope stats.Scope) limiter.RateLimitCache {
-	return NewRateLimitCacheImpl(
+	return NewFixedRateLimitCacheImpl(
 		storage_factory.NewMemcached(s.MemcacheHostPort),
 		timeSource,
 		jitterRand,
