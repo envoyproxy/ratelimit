@@ -12,16 +12,43 @@ type MemcachedClientInterface interface {
 
 type MemcachedClient struct {
 	Client *memcache.Client
+	Stats  MemcachedStats
 }
 
 func (m MemcachedClient) Get(key string) (*memcache.Item, error) {
-	return m.Client.Get(key)
+	m.Stats.keysRequested.Inc()
+	items, err := m.Client.Get(key)
+	if err != nil {
+		m.Stats.GetError.Inc()
+	} else {
+		m.Stats.keysFound.Inc()
+		m.Stats.GetSuccess.Inc()
+	}
+
+	return items, err
 }
 
 func (m MemcachedClient) Set(item *memcache.Item) error {
-	return m.Client.Set(item)
+	err := m.Client.Set(item)
+	if err != nil {
+		m.Stats.SetError.Inc()
+	} else {
+		m.Stats.SetSuccess.Inc()
+	}
+
+	return err
 }
 
 func (m MemcachedClient) Increment(key string, delta uint64) (uint64, error) {
-	return m.Client.Increment(key, delta)
+	newValue, err := m.Client.Increment(key, delta)
+	switch err {
+	case memcache.ErrCacheMiss:
+		m.Stats.IncrementMiss.Inc()
+	case nil:
+		m.Stats.IncrementSuccess.Inc()
+	default:
+		m.Stats.IncrementError.Inc()
+	}
+
+	return newValue, err
 }

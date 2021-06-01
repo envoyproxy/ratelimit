@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 
 	"github.com/envoyproxy/ratelimit/src/storage/service"
@@ -14,15 +15,15 @@ import (
 	"github.com/mediocregopher/radix/v3"
 )
 
-func NewRedis(useTls bool, auth string, redisType string, url string, poolSize int,
+func NewRedis(scope stats.Scope, useTls bool, auth string, redisType string, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int) strategy.StorageStrategy {
-	client := newRedisClient(useTls, auth, redisType, url, poolSize, pipelineWindow, pipelineLimit)
+	client := newRedisClient(scope, useTls, auth, redisType, url, poolSize, pipelineWindow, pipelineLimit)
 	return strategy.RedisStrategy{
 		Client: client,
 	}
 }
 
-func newRedisClient(useTls bool, auth string, redisType string, url string, poolSize int, pipelineWindow time.Duration, pipelineLimit int) service.RedisClientInterface {
+func newRedisClient(scope stats.Scope, useTls bool, auth string, redisType string, url string, poolSize int, pipelineWindow time.Duration, pipelineLimit int) service.RedisClientInterface {
 	logger.Warnf("connecting to redis on %s with pool size %d", url, poolSize)
 
 	df := func(network, addr string) (radix.Conn, error) {
@@ -45,7 +46,8 @@ func newRedisClient(useTls bool, auth string, redisType string, url string, pool
 		return radix.Dial(network, addr, dialOpts...)
 	}
 
-	opts := []radix.PoolOpt{radix.PoolConnFunc(df)}
+	stats := service.NewRedisStats(scope)
+	opts := []radix.PoolOpt{radix.PoolConnFunc(df), radix.PoolWithTrace(service.PoolTrace(&stats))}
 
 	implicitPipelining := true
 	if pipelineWindow == 0 && pipelineLimit == 0 {
@@ -92,6 +94,7 @@ func newRedisClient(useTls bool, auth string, redisType string, url string, pool
 
 	return &service.RedisClient{
 		Client:             client,
+		Stats:              stats,
 		ImplicitPipelining: implicitPipelining,
 	}
 }

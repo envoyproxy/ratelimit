@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"github.com/coocood/freecache"
-	stats "github.com/lyft/gostats"
 
 	"github.com/bradfitz/gomemcache/memcache"
 
@@ -157,7 +156,7 @@ func (this *rateLimitMemcacheImpl) Flush() {
 }
 
 func NewFixedRateLimitCacheImpl(client storage_strategy.StorageStrategy, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, scope stats.Scope, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
+	localCache *freecache.Cache, expirationJitterMaxSeconds int64, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,

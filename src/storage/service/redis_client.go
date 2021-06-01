@@ -10,6 +10,7 @@ type RedisClientInterface interface {
 
 type RedisClient struct {
 	Client             radix.Client
+	Stats              RedisStats
 	ImplicitPipelining bool
 }
 

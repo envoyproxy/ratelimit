@@ -7,6 +7,7 @@ import (
 	"github.com/alicebob/miniredis"
 	"github.com/envoyproxy/ratelimit/src/storage/factory"
 	"github.com/envoyproxy/ratelimit/src/storage/strategy"
+	stats "github.com/lyft/gostats"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -39,8 +40,10 @@ func TestNewRedisClient(t *testing.T) {
 func testNewRedisClient(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) func(t *testing.T) {
 	return func(t *testing.T) {
 		redisAuth := "123"
+		statsStore := stats.NewStore(stats.NewNullSink(), false)
+
 		mkRedisClient := func(auth, addr string) strategy.StorageStrategy {
-			return factory.NewRedis(false, auth, "single", addr, 1, pipelineWindow, pipelineLimit)
+			return factory.NewRedis(statsStore, false, auth, "single", addr, 1, pipelineWindow, pipelineLimit)
 		}
 
 		t.Run("connection refused", func(t *testing.T) {

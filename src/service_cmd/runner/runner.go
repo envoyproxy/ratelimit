@@ -1,13 +1,14 @@
 package runner
 
 import (
-	"github.com/envoyproxy/ratelimit/src/metrics"
 	"io"
 	"math/rand"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/envoyproxy/ratelimit/src/metrics"
 
 	stats "github.com/lyft/gostats"
 
@@ -53,15 +54,14 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 			localCache,
 			srv,
 			utils.NewTimeSourceImpl(),
-			rand.New(utils.NewLockedSource(time.Now().Unix())),
-			s.ExpirationJitterMaxSeconds)
+			rand.New(utils.NewLockedSource(time.Now().Unix())))
 	case "memcache":
-		return memcached.NewRateLimitCacheImplFromSettings(
+		return memcached.NewRateLimiterCacheImplFromSettings(
 			s,
-			utils.NewTimeSourceImpl(),
-			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			localCache,
-			srv.Scope())
+			srv,
+			utils.NewTimeSourceImpl(),
+			rand.New(utils.NewLockedSource(time.Now().Unix())))
 	default:
 		logger.Fatalf("Invalid setting for BackendType: %s", s.BackendType)
 		panic("This line should not be reachable")

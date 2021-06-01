@@ -123,7 +123,7 @@ func (this *fixedRateLimitCacheImpl) increaseAsync(cacheKeys []limiter.CacheKey,
 func (this *fixedRateLimitCacheImpl) Flush() {}
 
 func NewFixedRateLimitCacheImpl(client storage_strategy.StorageStrategy, perSecondClient storage_strategy.StorageStrategy, timeSource utils.TimeSource,
-	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
+	jitterRand *rand.Rand, localCache *freecache.Cache, expirationJitterMaxSeconds int64, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:          client,
 		perSecondClient: perSecondClient,

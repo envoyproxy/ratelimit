@@ -5,22 +5,20 @@ import (
 
 	"github.com/coocood/freecache"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/utils"
-	stats "github.com/lyft/gostats"
 
 	storage_factory "github.com/envoyproxy/ratelimit/src/storage/factory"
 )
 
-func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	localCache *freecache.Cache, scope stats.Scope) limiter.RateLimitCache {
+func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand) limiter.RateLimitCache {
 	return NewFixedRateLimitCacheImpl(
-		storage_factory.NewMemcached(s.MemcacheHostPort),
+		storage_factory.NewMemcached(srv.Scope().Scope("memcache"), s.MemcacheHostPort),
 		timeSource,
 		jitterRand,
-		s.ExpirationJitterMaxSeconds,
 		localCache,
-		scope,
+		s.ExpirationJitterMaxSeconds,
 		s.NearLimitRatio,
 		s.CacheKeyPrefix,
 	)
