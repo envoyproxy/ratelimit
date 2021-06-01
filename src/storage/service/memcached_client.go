@@ -4,6 +4,7 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
+// Client interface for memcached
 type MemcachedClientInterface interface {
 	Get(key string) (*memcache.Item, error)
 	Set(item *memcache.Item) error

@@ -5,10 +5,11 @@ import (
 
 	"github.com/alicebob/miniredis"
 	"github.com/envoyproxy/ratelimit/src/storage/strategy"
-	mock_service "github.com/envoyproxy/ratelimit/test/mocks/storage/service"
 	"github.com/golang/mock/gomock"
 	"github.com/mediocregopher/radix/v3"
 	"github.com/stretchr/testify/assert"
+
+	mock_service "github.com/envoyproxy/ratelimit/test/mocks/storage/service"
 )
 
 func mustNewRedisServer() *miniredis.Miniredis {

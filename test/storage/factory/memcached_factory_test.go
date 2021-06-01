@@ -5,8 +5,9 @@ import (
 
 	"github.com/envoyproxy/ratelimit/src/storage/factory"
 	"github.com/envoyproxy/ratelimit/src/storage/strategy"
-	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
+
+	stats "github.com/lyft/gostats"
 )
 
 func TestNewMemcachedClient(t *testing.T) {

@@ -20,19 +20,15 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/coocood/freecache"
-
 	"github.com/bradfitz/gomemcache/memcache"
-
-	logger "github.com/sirupsen/logrus"
-
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-
+	"github.com/coocood/freecache"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/utils"
 
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	storage_strategy "github.com/envoyproxy/ratelimit/src/storage/strategy"
+	logger "github.com/sirupsen/logrus"
 )
 
 type rateLimitMemcacheImpl struct {
@@ -81,11 +77,6 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 
 		logger.Debugf("looking up cache key: %s", cacheKey.Key)
 
-		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
-		if this.baseRateLimiter.ExpirationJitterMaxSeconds > 0 {
-			expirationSeconds += this.baseRateLimiter.JitterRand.Int63n(this.baseRateLimiter.ExpirationJitterMaxSeconds)
-		}
-
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
 		value, err := this.client.GetValue(cacheKey.Key)
 		if err != nil {
@@ -123,18 +114,20 @@ func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, i
 			continue
 		}
 
-		err := this.client.IncrementValue(cacheKey.Key, hitsAddend)
-		if err == memcache.ErrCacheMiss {
-			expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
-			if this.expirationJitterMaxSeconds > 0 {
-				expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
-			}
+		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
+		if this.expirationJitterMaxSeconds > 0 {
+			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
+		}
 
-			// Need to add instead of increment.
+		err := this.client.IncrementValue(cacheKey.Key, hitsAddend)
+		// if key is not found
+		if err == memcache.ErrCacheMiss {
+
+			// create key
 			err = this.client.SetValue(cacheKey.Key, hitsAddend, uint64(expirationSeconds))
 			if err == memcache.ErrNotStored {
-				// There was a race condition to do this add. We should be able to increment
-				// now instead.
+
+				// increment the key
 				err := this.client.IncrementValue(cacheKey.Key, hitsAddend)
 				if err != nil {
 					logger.Errorf("Failed to increment key %s after failing to add: %s", cacheKey.Key, err)

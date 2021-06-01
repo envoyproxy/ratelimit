@@ -39,5 +39,15 @@ func (r RedisStrategy) IncrementValue(key string, delta uint64) error {
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (r RedisStrategy) SetExpire(key string, expirationSeconds uint64) error {
+	err := r.Client.Do(radix.FlatCmd(nil, "EXPIRE", key, expirationSeconds))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

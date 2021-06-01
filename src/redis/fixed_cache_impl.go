@@ -5,13 +5,14 @@ import (
 	"sync"
 
 	"github.com/coocood/freecache"
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
-	storage_strategy "github.com/envoyproxy/ratelimit/src/storage/strategy"
 	"github.com/envoyproxy/ratelimit/src/utils"
-	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	storage_strategy "github.com/envoyproxy/ratelimit/src/storage/strategy"
+	logger "github.com/sirupsen/logrus"
 )
 
 type RedisError string
@@ -26,9 +27,11 @@ type fixedRateLimitCacheImpl struct {
 	// If this client is nil, then the Cache will use the client for all
 	// limits regardless of unit. If this client is not nil, then it
 	// is used for limits that have a SECOND unit.
-	perSecondClient storage_strategy.StorageStrategy
-	baseRateLimiter *limiter.BaseRateLimiter
-	waitGroup       sync.WaitGroup
+	perSecondClient            storage_strategy.StorageStrategy
+	jitterRand                 *rand.Rand
+	expirationJitterMaxSeconds int64
+	baseRateLimiter            *limiter.BaseRateLimiter
+	waitGroup                  sync.WaitGroup
 }
 
 func (this *fixedRateLimitCacheImpl) DoLimit(
@@ -62,23 +65,20 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		logger.Debugf("looking up cache key: %s", cacheKey.Key)
 
-		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
-		if this.baseRateLimiter.ExpirationJitterMaxSeconds > 0 {
-			expirationSeconds += this.baseRateLimiter.JitterRand.Int63n(this.baseRateLimiter.ExpirationJitterMaxSeconds)
-		}
-
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
 		if this.perSecondClient != nil && cacheKey.PerSecond {
 			value, err := this.perSecondClient.GetValue(cacheKey.Key)
 			if err != nil {
 				logger.Error(err)
 			}
+
 			results[i] = value
 		} else {
 			value, err := this.client.GetValue(cacheKey.Key)
 			if err != nil {
 				logger.Error(err)
 			}
+
 			results[i] = value
 		}
 	}
@@ -95,28 +95,40 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
 			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
-	}
 
-	this.waitGroup.Add(1)
-	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
-
-	return responseDescriptorStatuses
-}
-
-func (this *fixedRateLimitCacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, isOverLimitWithLocalCache []bool,
-	limits []*config.RateLimit, hitsAddend uint64) {
-	defer this.waitGroup.Done()
-	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] {
 			continue
 		}
 
+		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
+		if this.expirationJitterMaxSeconds > 0 {
+			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
+		}
+
 		if this.perSecondClient != nil && cacheKey.PerSecond {
-			this.perSecondClient.IncrementValue(cacheKey.Key, hitsAddend)
+			err := this.perSecondClient.IncrementValue(cacheKey.Key, uint64(hitsAddend))
+			if err != nil {
+				logger.Error(err)
+			}
+
+			err = this.perSecondClient.SetExpire(cacheKey.Key, uint64(expirationSeconds))
+			if err != nil {
+				logger.Error(err)
+			}
 		} else {
-			this.client.IncrementValue(cacheKey.Key, hitsAddend)
+			err := this.client.IncrementValue(cacheKey.Key, uint64(hitsAddend))
+			if err != nil {
+				logger.Error(err)
+			}
+
+			err = this.client.SetExpire(cacheKey.Key, uint64(expirationSeconds))
+			if err != nil {
+				logger.Error(err)
+			}
 		}
 	}
+
+	return responseDescriptorStatuses
 }
 
 // Flush() is a no-op with redis since quota reads and updates happen synchronously.
@@ -125,8 +137,10 @@ func (this *fixedRateLimitCacheImpl) Flush() {}
 func NewFixedRateLimitCacheImpl(client storage_strategy.StorageStrategy, perSecondClient storage_strategy.StorageStrategy, timeSource utils.TimeSource,
 	jitterRand *rand.Rand, localCache *freecache.Cache, expirationJitterMaxSeconds int64, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
-		client:          client,
-		perSecondClient: perSecondClient,
-		baseRateLimiter: limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix),
+		client:                     client,
+		perSecondClient:            perSecondClient,
+		jitterRand:                 jitterRand,
+		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
+		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix),
 	}
 }

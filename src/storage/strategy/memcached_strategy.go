@@ -48,3 +48,7 @@ func (m MemcachedStrategy) IncrementValue(key string, delta uint64) error {
 
 	return nil
 }
+
+func (m MemcachedStrategy) SetExpire(key string, expirationSeconds uint64) error {
+	return nil
+}
