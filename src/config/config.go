@@ -3,7 +3,7 @@ package config
 import (
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	stats "github.com/lyft/gostats"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"golang.org/x/net/context"
 )
 
@@ -14,19 +14,10 @@ func (e RateLimitConfigError) Error() string {
 	return string(e)
 }
 
-// Stats for an individual rate limit config entry.
-type RateLimitStats struct {
-	TotalHits               stats.Counter
-	OverLimit               stats.Counter
-	NearLimit               stats.Counter
-	OverLimitWithLocalCache stats.Counter
-	WithinLimit             stats.Counter
-}
-
 // Wrapper for an individual rate limit config entry which includes the defined limit and stats.
 type RateLimit struct {
 	FullKey string
-	Stats   RateLimitStats
+	Stats   stats.RateLimitStats
 	Limit   *pb.RateLimitResponse_RateLimit
 }
 
@@ -53,8 +44,8 @@ type RateLimitConfigToLoad struct {
 type RateLimitConfigLoader interface {
 	// Load a new configuration from a list of YAML files.
 	// @param configs supplies a list of full YAML files in string form.
-	// @param statsScope supplies the stats scope to use for limit stats during runtime.
+	// @param statsManager supplies the statsManager to initialize stats during runtime.
 	// @return a new configuration.
 	// @throws RateLimitConfigError if the configuration could not be created.
-	Load(configs []RateLimitConfigToLoad, statsScope stats.Scope) RateLimitConfig
+	Load(configs []RateLimitConfigToLoad, statsManager stats.Manager) RateLimitConfig
 }
