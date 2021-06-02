@@ -39,7 +39,6 @@ func (m *MockStatManager) NewShouldRateLimitLegacyStats() stats.ShouldRateLimitL
 	}
 }
 
-//todo: review mock implementation
 func (m *MockStatManager) NewStats(key string) stats.RateLimitStats {
 	ret := stats.RateLimitStats{}
 	logger.Debugf("outputing test gostats %s", key)

@@ -52,9 +52,6 @@ type ShouldRateLimitLegacyStats struct {
 }
 
 // Stats for an individual rate limit config entry.
-// todo: Ideally the gostats package fields should be unexported
-//		the inner value could be interacted with via getters such as rlStats.TotalHits() uint64
-//		This ensures that setters such as Inc() and Add() can only be managed by RateLimitStats.
 type RateLimitStats struct {
 	Key                     string
 	TotalHits               gostats.Counter
