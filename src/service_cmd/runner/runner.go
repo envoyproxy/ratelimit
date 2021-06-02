@@ -2,6 +2,7 @@ package runner
 
 import (
 	"github.com/envoyproxy/ratelimit/src/metrics"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"io"
 	"math/rand"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	stats "github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 
 	"github.com/coocood/freecache"
 
@@ -28,24 +29,24 @@ import (
 )
 
 type Runner struct {
-	statsStore stats.Store
-	settings   settings.Settings
-	srv        server.Server
-	mu         sync.Mutex
+	statsManager stats.Manager
+	settings     settings.Settings
+	srv          server.Server
+	mu           sync.Mutex
 }
 
 func NewRunner(s settings.Settings) Runner {
 	return Runner{
-		statsStore: stats.NewDefaultStore(),
-		settings:   s,
+		statsManager: stats.NewStatManager(gostats.NewDefaultStore(), s),
+		settings:     s,
 	}
 }
 
-func (runner *Runner) GetStatsStore() stats.Store {
-	return runner.statsStore
+func (runner *Runner) GetStatsStore() gostats.Store {
+	return runner.statsManager.GetStatsStore()
 }
 
-func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache) limiter.RateLimitCache {
+func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache, statsManager stats.Manager) limiter.RateLimitCache {
 	switch s.BackendType {
 	case "redis", "":
 		return redis.NewRateLimiterCacheImplFromSettings(
@@ -54,14 +55,16 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 			srv,
 			utils.NewTimeSourceImpl(),
 			rand.New(utils.NewLockedSource(time.Now().Unix())),
-			s.ExpirationJitterMaxSeconds)
+			s.ExpirationJitterMaxSeconds,
+			statsManager)
 	case "memcache":
 		return memcached.NewRateLimitCacheImplFromSettings(
 			s,
 			utils.NewTimeSourceImpl(),
 			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			localCache,
-			srv.Scope())
+			srv.Scope(),
+			statsManager)
 	default:
 		logger.Fatalf("Invalid setting for BackendType: %s", s.BackendType)
 		panic("This line should not be reachable")
@@ -92,18 +95,18 @@ func (runner *Runner) Run() {
 		localCache = freecache.NewCache(s.LocalCacheSizeInBytes)
 	}
 
-	serverReporter := metrics.NewServerReporter(runner.statsStore.ScopeWithTags("ratelimit_server", s.ExtraTags))
+	serverReporter := metrics.NewServerReporter(runner.statsManager.GetStatsStore().ScopeWithTags("ratelimit_server", s.ExtraTags))
 
-	srv := server.NewServer(s, "ratelimit", runner.statsStore, localCache, settings.GrpcUnaryInterceptor(serverReporter.UnaryServerInterceptor()))
+	srv := server.NewServer(s, "ratelimit", runner.statsManager, localCache, settings.GrpcUnaryInterceptor(serverReporter.UnaryServerInterceptor()))
 	runner.mu.Lock()
 	runner.srv = srv
 	runner.mu.Unlock()
 
 	service := ratelimit.NewService(
 		srv.Runtime(),
-		createLimiter(srv, s, localCache),
+		createLimiter(srv, s, localCache, runner.statsManager),
 		config.NewRateLimitConfigLoaderImpl(),
-		srv.Scope().Scope("service"),
+		runner.statsManager,
 		s.RuntimeWatchRoot,
 	)
 
