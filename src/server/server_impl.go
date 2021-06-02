@@ -10,6 +10,7 @@ import (
 	"net/http/pprof"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"sync"
 
 	"os"
@@ -40,9 +41,9 @@ type serverDebugListener struct {
 }
 
 type server struct {
-	port          int
-	grpcPort      int
-	debugPort     int
+	httpAddress   string
+	grpcAddress   string
+	debugAddress  string
 	router        *mux.Router
 	grpcServer    *grpc.Server
 	store         gostats.Store
@@ -115,11 +116,10 @@ func (server *server) GrpcServer() *grpc.Server {
 
 func (server *server) Start() {
 	go func() {
-		addr := fmt.Sprintf(":%d", server.debugPort)
-		logger.Warnf("Listening for debug on '%s'", addr)
+		logger.Warnf("Listening for debug on '%s'", server.debugAddress)
 		var err error
 		server.listenerMu.Lock()
-		server.debugListener.listener, err = reuseport.Listen("tcp", addr)
+		server.debugListener.listener, err = reuseport.Listen("tcp", server.debugAddress)
 		server.listenerMu.Unlock()
 
 		if err != nil {
@@ -134,9 +134,8 @@ func (server *server) Start() {
 
 	server.handleGracefulShutdown()
 
-	addr := fmt.Sprintf(":%d", server.port)
-	logger.Warnf("Listening for HTTP on '%s'", addr)
-	list, err := reuseport.Listen("tcp", addr)
+	logger.Warnf("Listening for HTTP on '%s'", server.httpAddress)
+	list, err := reuseport.Listen("tcp", server.httpAddress)
 	if err != nil {
 		logger.Fatalf("Failed to open HTTP listener: '%+v'", err)
 	}
@@ -152,9 +151,8 @@ func (server *server) Start() {
 }
 
 func (server *server) startGrpc() {
-	addr := fmt.Sprintf(":%d", server.grpcPort)
-	logger.Warnf("Listening for gRPC on '%s'", addr)
-	lis, err := reuseport.Listen("tcp", addr)
+	logger.Warnf("Listening for gRPC on '%s'", server.grpcAddress)
+	lis, err := reuseport.Listen("tcp", server.grpcAddress)
 	if err != nil {
 		logger.Fatalf("Failed to listen for gRPC: %v", err)
 	}
@@ -181,10 +179,10 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	ret := new(server)
 	ret.grpcServer = grpc.NewServer(s.GrpcUnaryInterceptor)
 
-	// setup ports
-	ret.port = s.Port
-	ret.grpcPort = s.GrpcPort
-	ret.debugPort = s.DebugPort
+	// setup listen addresses
+	ret.httpAddress = net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
+	ret.grpcAddress = net.JoinHostPort(s.GrpcHost, strconv.Itoa(s.GrpcPort))
+	ret.debugAddress = net.JoinHostPort(s.DebugHost, strconv.Itoa(s.DebugPort))
 
 	// setup stats
 	ret.store = statsManager.GetStatsStore()
@@ -253,6 +251,14 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 			expvar.Do(func(kv expvar.KeyValue) {
 				io.WriteString(writer, fmt.Sprintf("%s: %s\n", kv.Key, kv.Value))
 			})
+		})
+
+	// setup trace endpoint
+	ret.AddDebugHttpEndpoint(
+		"/debug/pprof/trace",
+		"trace endpoint",
+		func(writer http.ResponseWriter, request *http.Request) {
+			pprof.Trace(writer, request)
 		})
 
 	// setup debug root

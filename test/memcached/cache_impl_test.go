@@ -17,6 +17,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/memcached"
+	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	stats "github.com/lyft/gostats"
 
@@ -588,6 +589,41 @@ func TestMemcacheAdd(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	cache.Flush()
+}
+
+func TestNewRateLimitCacheImplFromSettingsWhenSrvCannotBeResolved(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+
+	var s settings.Settings
+	s.NearLimitRatio = 0.8
+	s.CacheKeyPrefix = ""
+	s.ExpirationJitterMaxSeconds = 300
+	s.MemcacheSrv = "_something._tcp.example.invalid"
+
+	assert.Panics(func() { memcached.NewRateLimitCacheImplFromSettings(s, timeSource, nil, nil, statsStore) })
+}
+
+func TestNewRateLimitCacheImplFromSettingsWhenHostAndPortAndSrvAreBothSet(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+
+	var s settings.Settings
+	s.NearLimitRatio = 0.8
+	s.CacheKeyPrefix = ""
+	s.ExpirationJitterMaxSeconds = 300
+	s.MemcacheSrv = "_something._tcp.example.invalid"
+	s.MemcacheHostPort = []string{"example.org:11211"}
+
+	assert.Panics(func() { memcached.NewRateLimitCacheImplFromSettings(s, timeSource, nil, nil, statsStore) })
 }
 
 func getMultiResult(vals map[string]int) map[string]*memcache.Item {

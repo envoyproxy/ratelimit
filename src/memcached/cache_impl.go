@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/coocood/freecache"
 	gostats "github.com/lyft/gostats"
@@ -34,6 +35,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/srv"
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
@@ -122,7 +124,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	}
 
 	this.waitGroup.Add(1)
-	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
+	runAsync(func() { this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend)) })
 	if AutoFlushForIntegrationTests {
 		this.Flush()
 	}
@@ -174,6 +176,104 @@ func (this *rateLimitMemcacheImpl) Flush() {
 	this.waitGroup.Wait()
 }
 
+func refreshServersPeriodically(serverList memcache.ServerList, srv string, d time.Duration, finish <-chan struct{}) {
+	t := time.NewTicker(d)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			err := refreshServers(serverList, srv)
+			if err != nil {
+				logger.Warn("failed to refresh memcahce hosts")
+			} else {
+				logger.Debug("refreshed memcache hosts")
+			}
+		case <-finish:
+			return
+		}
+	}
+}
+
+func refreshServers(serverList memcache.ServerList, srv_ string) error {
+	servers, err := srv.ServerStringsFromSrv(srv_)
+	if err != nil {
+		return err
+	}
+	err = serverList.SetServers(servers...)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func newMemcachedFromSrv(srv_ string, d time.Duration) Client {
+	serverList := new(memcache.ServerList)
+	err := refreshServers(*serverList, srv_)
+	if err != nil {
+		errorText := "Unable to fetch servers from SRV"
+		logger.Errorf(errorText)
+		panic(MemcacheError(errorText))
+	}
+
+	if d > 0 {
+		logger.Infof("refreshing memcache hosts every: %v milliseconds", d.Milliseconds())
+		finish := make(chan struct{})
+		go refreshServersPeriodically(*serverList, srv_, d, finish)
+	} else {
+		logger.Debugf("not periodically refreshing memcached hosts")
+	}
+
+	return memcache.NewFromSelector(serverList)
+}
+
+func newMemcacheFromSettings(s settings.Settings) Client {
+	if s.MemcacheSrv != "" && len(s.MemcacheHostPort) > 0 {
+		panic(MemcacheError("Both MEMCADHE_HOST_PORT and MEMCACHE_SRV are set"))
+	}
+	if s.MemcacheSrv != "" {
+		logger.Debugf("Using MEMCACHE_SRV: %v", s.MemcacheSrv)
+		return newMemcachedFromSrv(s.MemcacheSrv, s.MemcacheSrvRefresh)
+	}
+	logger.Debugf("Usng MEMCACHE_HOST_PORT:: %v", s.MemcacheHostPort)
+	client := memcache.New(s.MemcacheHostPort...)
+	client.MaxIdleConns = s.MemcacheMaxIdleConns
+	return client
+}
+
+var taskQueue = make(chan func())
+
+func runAsync(task func()) {
+	select {
+	case taskQueue <- task:
+		// submitted, everything is ok
+
+	default:
+		go func() {
+			// do the given task
+			task()
+
+			tasksProcessedWithinOnePeriod := 0
+			const tickDuration = 10 * time.Second
+			tick := time.NewTicker(tickDuration)
+			defer tick.Stop()
+
+			for {
+				select {
+				case t := <-taskQueue:
+					t()
+					tasksProcessedWithinOnePeriod++
+				case <-tick.C:
+					if tasksProcessedWithinOnePeriod > 0 {
+						tasksProcessedWithinOnePeriod = 0
+						continue
+					}
+					return
+				}
+			}
+		}()
+	}
+}
+
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
 	expirationJitterMaxSeconds int64, localCache *freecache.Cache, statsManager stats.Manager, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
@@ -190,7 +290,7 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
 	localCache *freecache.Cache, scope gostats.Scope, statsManager stats.Manager) limiter.RateLimitCache {
 	return NewRateLimitCacheImpl(
-		CollectStats(memcache.New(s.MemcacheHostPort...), scope.Scope("memcache")),
+		CollectStats(newMemcacheFromSettings(s), scope.Scope("memcache")),
 		timeSource,
 		jitterRand,
 		s.ExpirationJitterMaxSeconds,

@@ -121,7 +121,7 @@ func TestServiceLegacy(test *testing.T) {
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
 		func([]config.RateLimitConfigToLoad, stats.Manager) {
-			barrier.signal()
+			defer barrier.signal()
 			panic(config.RateLimitConfigError("load error"))
 		})
 	t.runtimeUpdateCallback <- 1

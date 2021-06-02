@@ -4,6 +4,13 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
+// Errors that may be raised during config parsing.
+type MemcacheError string
+
+func (e MemcacheError) Error() string {
+	return string(e)
+}
+
 var _ Client = (*memcache.Client)(nil)
 
 // Interface for memcached, used for mocking.
