@@ -605,7 +605,9 @@ func TestNewRateLimitCacheImplFromSettingsWhenSrvCannotBeResolved(t *testing.T) 
 	s.ExpirationJitterMaxSeconds = 300
 	s.MemcacheSrv = "_something._tcp.example.invalid"
 
-	assert.Panics(func() { memcached.NewRateLimitCacheImplFromSettings(s, timeSource, nil, nil, statsStore, mockstats.NewMockStatManager(statsStore)) })
+	assert.Panics(func() {
+		memcached.NewRateLimitCacheImplFromSettings(s, timeSource, nil, nil, statsStore, mockstats.NewMockStatManager(statsStore))
+	})
 }
 
 func TestNewRateLimitCacheImplFromSettingsWhenHostAndPortAndSrvAreBothSet(t *testing.T) {
@@ -623,7 +625,9 @@ func TestNewRateLimitCacheImplFromSettingsWhenHostAndPortAndSrvAreBothSet(t *tes
 	s.MemcacheSrv = "_something._tcp.example.invalid"
 	s.MemcacheHostPort = []string{"example.org:11211"}
 
-	assert.Panics(func() { memcached.NewRateLimitCacheImplFromSettings(s, timeSource, nil, nil, statsStore, mockstats.NewMockStatManager(statsStore)) })
+	assert.Panics(func() {
+		memcached.NewRateLimitCacheImplFromSettings(s, timeSource, nil, nil, statsStore, mockstats.NewMockStatManager(statsStore))
+	})
 }
 
 func getMultiResult(vals map[string]int) map[string]*memcache.Item {
