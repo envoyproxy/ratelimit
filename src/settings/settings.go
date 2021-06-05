@@ -10,10 +10,13 @@ import (
 type Settings struct {
 	// runtime options
 	GrpcUnaryInterceptor grpc.ServerOption
-	// env config
-	Port      int `envconfig:"PORT" default:"8080"`
-	GrpcPort  int `envconfig:"GRPC_PORT" default:"8081"`
-	DebugPort int `envconfig:"DEBUG_PORT" default:"6070"`
+	// Server listen address config
+	Host      string `envconfig:"HOST" default:"0.0.0.0"`
+	Port      int    `envconfig:"PORT" default:"8080"`
+	GrpcHost  string `envconfig:"GRPC_HOST" default:"0.0.0.0"`
+	GrpcPort  int    `envconfig:"GRPC_PORT" default:"8081"`
+	DebugHost string `envconfig:"DEBUG_HOST" default:"0.0.0.0"`
+	DebugPort int    `envconfig:"DEBUG_PORT" default:"6070"`
 
 	// Logging settings
 	LogLevel  string `envconfig:"LOG_LEVEL" default:"WARN"`
@@ -68,6 +71,14 @@ type Settings struct {
 
 	// Memcache settings
 	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`
+	// MemcacheMaxIdleConns sets the maximum number of idle TCP connections per memcached node.
+	// The default is 2 as that is the default of the underlying library. This is the maximum
+	// number of connections to memcache kept idle in pool, if a connection is needed but none
+	// are idle a new connection is opened, used and closed and can be left in a time-wait state
+	// which can result in high CPU usage.
+	MemcacheMaxIdleConns int           `envconfig:"MEMCACHE_MAX_IDLE_CONNS" default:"2"`
+	MemcacheSrv          string        `envconfig:"MEMCACHE_SRV" default:""`
+	MemcacheSrvRefresh   time.Duration `envconfig:"MEMCACHE_SRV_REFRESH" default:"0"`
 }
 
 type Option func(*Settings)

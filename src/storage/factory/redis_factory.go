@@ -29,14 +29,10 @@ func newRedisClient(scope stats.Scope, useTls bool, auth string, redisType strin
 	df := func(network, addr string) (radix.Conn, error) {
 		var dialOpts []radix.DialOpt
 
-		var err error
 		if useTls {
 			dialOpts = append(dialOpts, radix.DialUseTLS(&tls.Config{}))
 		}
 
-		if err != nil {
-			return nil, err
-		}
 		if auth != "" {
 			logger.Warnf("enabling authentication to redis on %s", url)
 

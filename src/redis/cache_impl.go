@@ -7,13 +7,14 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/utils"
 
 	storage_factory "github.com/envoyproxy/ratelimit/src/storage/factory"
 	storage_strategy "github.com/envoyproxy/ratelimit/src/storage/strategy"
 )
 
-func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand) limiter.RateLimitCache {
+func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand, statsManager stats.Manager) limiter.RateLimitCache {
 	var perSecondPool storage_strategy.StorageStrategy
 	if s.RedisPerSecond {
 		perSecondPool = storage_factory.NewRedis(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondTls, s.RedisPerSecondAuth,
@@ -31,5 +32,6 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 		s.ExpirationJitterMaxSeconds,
 		s.NearLimitRatio,
 		s.CacheKeyPrefix,
+		statsManager,
 	)
 }

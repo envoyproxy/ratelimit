@@ -19,11 +19,13 @@ import (
 	"context"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/coocood/freecache"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/utils"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -101,7 +103,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	}
 
 	this.waitGroup.Add(1)
-	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend))
+	runAsync(func() { this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend)) })
 
 	return responseDescriptorStatuses
 }
@@ -148,8 +150,42 @@ func (this *rateLimitMemcacheImpl) Flush() {
 	this.waitGroup.Wait()
 }
 
+var taskQueue = make(chan func())
+
+func runAsync(task func()) {
+	select {
+	case taskQueue <- task:
+		// submitted, everything is ok
+
+	default:
+		go func() {
+			// do the given task
+			task()
+
+			tasksProcessedWithinOnePeriod := 0
+			const tickDuration = 10 * time.Second
+			tick := time.NewTicker(tickDuration)
+			defer tick.Stop()
+
+			for {
+				select {
+				case t := <-taskQueue:
+					t()
+					tasksProcessedWithinOnePeriod++
+				case <-tick.C:
+					if tasksProcessedWithinOnePeriod > 0 {
+						tasksProcessedWithinOnePeriod = 0
+						continue
+					}
+					return
+				}
+			}
+		}()
+	}
+}
+
 func NewFixedRateLimitCacheImpl(client storage_strategy.StorageStrategy, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	localCache *freecache.Cache, expirationJitterMaxSeconds int64, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
+	localCache *freecache.Cache, expirationJitterMaxSeconds int64, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
@@ -157,6 +193,6 @@ func NewFixedRateLimitCacheImpl(client storage_strategy.StorageStrategy, timeSou
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix),
+		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager),
 	}
 }

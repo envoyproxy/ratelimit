@@ -10,13 +10,14 @@ import (
 	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	"github.com/envoyproxy/ratelimit/test/common"
+	"github.com/envoyproxy/ratelimit/test/mocks/stats"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	mock_strategy "github.com/envoyproxy/ratelimit/test/mocks/storage/strategy"
 	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
-	stats "github.com/lyft/gostats"
+	gostats "github.com/lyft/gostats"
 )
 
 func TestMemcached(t *testing.T) {
@@ -26,9 +27,9 @@ func TestMemcached(t *testing.T) {
 
 	client := mock_strategy.NewMockStorageStrategy(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-
-	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, rand.New(rand.NewSource(1)), nil, 0, 0.8, "")
-	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, rand.New(rand.NewSource(1)), nil, 0, 0.8, "", sm)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	client.EXPECT().GetValue("domain_key_value_1234").Return(uint64(4), nil).MaxTimes(1)
@@ -36,7 +37,7 @@ func TestMemcached(t *testing.T) {
 	client.EXPECT().SetExpire("domain_key_value_1234", uint64(1)).MaxTimes(1)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"))}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
@@ -59,7 +60,7 @@ func TestMemcached(t *testing.T) {
 		}, 1)
 	limits = []*config.RateLimit{
 		nil,
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, "key2_value2_subkey2_subvalue2", statsStore)}
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, sm.NewStats("key2_value2_subkey2_subvalue2"))}
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[1].Limit, timeSource)}},
@@ -84,8 +85,8 @@ func TestMemcached(t *testing.T) {
 			{{"key3", "value3"}, {"subkey3", "subvalue3"}},
 		}, 1)
 	limits = []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_HOUR, "key3_value3", statsStore),
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_DAY, "key3_value3_subkey3_subvalue3", statsStore)}
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key3_value3")),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_DAY, sm.NewStats("key3_value3_subkey3_subvalue3"))}
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)},
@@ -101,7 +102,7 @@ func TestMemcached(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
 }
 
-func testLocalCacheStats(localCacheStats stats.StatGenerator, statsStore stats.Store, sink *common.TestStatSink,
+func testLocalCacheStats(localCacheStats gostats.StatGenerator, statsStore gostats.Store, sink *common.TestStatSink,
 	expectedHitCount int, expectedMissCount int, expectedLookUpCount int, expectedExpiredCount int,
 	expectedEntryCount int) func(*testing.T) {
 	return func(t *testing.T) {
@@ -145,9 +146,10 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	client := mock_strategy.NewMockStorageStrategy(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, rand.New(rand.NewSource(1)), localCache, 0, 0.8, "")
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, rand.New(rand.NewSource(1)), localCache, 0, 0.8, "", sm)
 	sink := &common.TestStatSink{}
-	statsStore := stats.NewStore(sink, true)
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
@@ -158,7 +160,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, "key4_value4", statsStore)}
+		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key4_value4"))}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -230,6 +232,172 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 1, 3, 4, 0, 1)
 }
 
+func TestNearLimit(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	client := mock_strategy.NewMockStorageStrategy(controller)
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, rand.New(rand.NewSource(1)), nil, 0, 0.8, "", sm)
+
+	// Test Near Limit Stats. Under Near Limit Ratio
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
+	client.EXPECT().GetValue("domain_key4_value4_997200").Return(uint64(10), nil).MaxTimes(1)
+	client.EXPECT().IncrementValue("domain_key4_value4_997200", uint64(1)).MaxTimes(1)
+	client.EXPECT().SetExpire("domain_key4_value4_997200", uint64(3600)).MaxTimes(1)
+
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key4_value4"))}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
+
+	// Test Near Limit Stats. At Near Limit Ratio, still OK
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
+	client.EXPECT().GetValue("domain_key4_value4_997200").Return(uint64(12), nil).MaxTimes(1)
+	client.EXPECT().IncrementValue("domain_key4_value4_997200", uint64(1)).MaxTimes(1)
+	client.EXPECT().SetExpire("domain_key4_value4_997200", uint64(3600)).MaxTimes(1)
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
+
+	// Test Near Limit Stats. We went OVER_LIMIT, but the near_limit counter only increases
+	// when we are near limit, not after we have passed the limit.
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
+	client.EXPECT().GetValue("domain_key4_value4_997200").Return(uint64(15), nil).MaxTimes(1)
+	client.EXPECT().IncrementValue("domain_key4_value4_997200", uint64(1)).MaxTimes(1)
+	client.EXPECT().SetExpire("domain_key4_value4_997200", uint64(3600)).MaxTimes(1)
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
+
+	// Now test hitsAddend that is greater than 1
+	// All of it under limit, under near limit
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().GetValue("domain_key5_value5_1234").Return(uint64(2), nil).MaxTimes(1)
+	client.EXPECT().IncrementValue("domain_key5_value5_1234", uint64(3)).MaxTimes(1)
+	client.EXPECT().SetExpire("domain_key5_value5_1234", uint64(1)).MaxTimes(1)
+
+	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key5", "value5"}}}, 3)
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key5_value5"))}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(3), limits[0].Stats.WithinLimit.Value())
+
+	// All of it under limit, some over near limit
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().GetValue("domain_key6_value6_1234").Return(uint64(5), nil).MaxTimes(1)
+	client.EXPECT().IncrementValue("domain_key6_value6_1234", uint64(2)).MaxTimes(1)
+	client.EXPECT().SetExpire("domain_key6_value6_1234", uint64(1)).MaxTimes(1)
+
+	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key6", "value6"}}}, 2)
+	limits = []*config.RateLimit{config.NewRateLimit(8, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key6_value6"))}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
+
+	// All of it under limit, all of it over near limit
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().GetValue("domain_key7_value7_1234").Return(uint64(16), nil).MaxTimes(1)
+	client.EXPECT().IncrementValue("domain_key7_value7_1234", uint64(3)).MaxTimes(1)
+	client.EXPECT().SetExpire("domain_key7_value7_1234", uint64(1)).MaxTimes(1)
+
+	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key7", "value7"}}}, 3)
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key7_value7"))}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(3), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(3), limits[0].Stats.WithinLimit.Value())
+
+	// Some of it over limit, all of it over near limit
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().GetValue("domain_key8_value8_1234").Return(uint64(19), nil).MaxTimes(1)
+	client.EXPECT().IncrementValue("domain_key8_value8_1234", uint64(3)).MaxTimes(1)
+	client.EXPECT().SetExpire("domain_key8_value8_1234", uint64(1)).MaxTimes(1)
+
+	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key8", "value8"}}}, 3)
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key8_value8"))}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
+
+	// Some of it in all three places
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().GetValue("domain_key9_value9_1234").Return(uint64(15), nil).MaxTimes(1)
+	client.EXPECT().IncrementValue("domain_key9_value9_1234", uint64(7)).MaxTimes(1)
+	client.EXPECT().SetExpire("domain_key9_value9_1234", uint64(1)).MaxTimes(1)
+
+	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key9", "value9"}}}, 7)
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key9_value9"))}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(7), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(4), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
+
+	// all of it over limit
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().GetValue("domain_key10_value10_1234").Return(uint64(27), nil).MaxTimes(1)
+	client.EXPECT().IncrementValue("domain_key10_value10_1234", uint64(3)).MaxTimes(1)
+	client.EXPECT().SetExpire("domain_key10_value10_1234", uint64(1)).MaxTimes(1)
+
+	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key10", "value10"}}}, 3)
+	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key10_value10"))}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(3), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
+}
+
 func TestMemcachedWithJitter(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
@@ -238,8 +406,9 @@ func TestMemcachedWithJitter(t *testing.T) {
 	client := mock_strategy.NewMockStorageStrategy(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	jitterSource := mock_utils.NewMockJitterRandSource(controller)
-	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, rand.New(jitterSource), nil, 3600, 0.8, "")
-	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+	cache := memcached.NewFixedRateLimitCacheImpl(client, timeSource, rand.New(jitterSource), nil, 3600, 0.8, "", sm)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	client.EXPECT().GetValue("domain_key_value_1234").Return(uint64(4), nil).MaxTimes(1)
@@ -247,7 +416,7 @@ func TestMemcachedWithJitter(t *testing.T) {
 	client.EXPECT().SetExpire("domain_key_value_1234", uint64(101)).MaxTimes(1)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, "key_value", statsStore)}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"))}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
