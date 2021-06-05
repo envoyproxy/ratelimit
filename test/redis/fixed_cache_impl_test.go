@@ -434,7 +434,7 @@ func TestRedisWithJitter(t *testing.T) {
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), nil, 3600, 0.8, "", sm)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	jitterSource.EXPECT().Int63().Return(int64(100))
+	jitterSource.EXPECT().Int63().Return(int64(100)).MaxTimes(1)
 	client.EXPECT().GetValue("domain_key_value_1234").Return(uint64(4), nil).MaxTimes(1)
 	client.EXPECT().IncrementValue("domain_key_value_1234", uint64(1)).MaxTimes(1)
 	client.EXPECT().SetExpire("domain_key_value_1234", uint64(101)).MaxTimes(1)

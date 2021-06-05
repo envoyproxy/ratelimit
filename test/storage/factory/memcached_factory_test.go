@@ -30,7 +30,6 @@ func TestNewRateLimitCacheImplFromSettingsWhenSrvCannotBeResolved(t *testing.T) 
 	})
 }
 
-
 func TestNewRateLimitCacheImplFromSettingsWhenHostAndPortAndSrvAreBothSet(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	assert.Panics(t, func() {
