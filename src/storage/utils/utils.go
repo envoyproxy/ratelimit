@@ -11,3 +11,9 @@ func CheckError(err error) {
 		panic(RedisError(err.Error()))
 	}
 }
+
+type MemcacheError string
+
+func (e MemcacheError) Error() string {
+	return string(e)
+}

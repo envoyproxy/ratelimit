@@ -10,6 +10,7 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/envoyproxy/ratelimit/src/storage/service"
 	"github.com/envoyproxy/ratelimit/src/storage/strategy"
+	"github.com/envoyproxy/ratelimit/src/storage/utils"
 
 	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
@@ -19,7 +20,7 @@ func NewMemcached(scope stats.Scope, hosts []string, srv string, srvRefresh time
 	var client service.MemcachedClientInterface
 
 	if srv != "" && len(hosts) > 0 {
-		panic(service.MemcacheError("Both MEMCADHE_HOST_PORT and MEMCACHE_SRV are set"))
+		panic(utils.MemcacheError("Both MEMCADHE_HOST_PORT and MEMCACHE_SRV are set"))
 	}
 
 	if srv != "" {
@@ -49,7 +50,7 @@ func newMemcachedClientFromSrv(scope stats.Scope, srv string, srvRefresh time.Du
 	if err != nil {
 		errorText := "Unable to fetch servers from SRV"
 		logger.Errorf(errorText)
-		panic(service.MemcacheError(errorText))
+		panic(utils.MemcacheError(errorText))
 	}
 
 	if srvRefresh > 0 {

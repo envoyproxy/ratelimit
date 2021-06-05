@@ -35,13 +35,10 @@ import (
 
 type rateLimitMemcacheImpl struct {
 	client                     storage_strategy.StorageStrategy
-	timeSource                 utils.TimeSource
 	jitterRand                 *rand.Rand
 	expirationJitterMaxSeconds int64
-	localCache                 *freecache.Cache
-	waitGroup                  sync.WaitGroup
-	nearLimitRatio             float32
 	baseRateLimiter            *limiter.BaseRateLimiter
+	waitGroup                  sync.WaitGroup
 }
 
 var AutoFlushForIntegrationTests bool = false
@@ -188,11 +185,8 @@ func NewFixedRateLimitCacheImpl(client storage_strategy.StorageStrategy, timeSou
 	localCache *freecache.Cache, expirationJitterMaxSeconds int64, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
-		timeSource:                 timeSource,
 		jitterRand:                 jitterRand,
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
-		localCache:                 localCache,
-		nearLimitRatio:             nearLimitRatio,
 		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager),
 	}
 }

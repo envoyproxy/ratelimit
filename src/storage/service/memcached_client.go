@@ -11,13 +11,6 @@ type MemcachedClientInterface interface {
 	Increment(key string, delta uint64) (uint64, error)
 }
 
-// Errors that may be raised during config parsing.
-type MemcacheError string
-
-func (e MemcacheError) Error() string {
-	return string(e)
-}
-
 type MemcachedClient struct {
 	Client *memcache.Client
 	Stats  MemcachedStats
