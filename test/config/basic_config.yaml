@@ -56,3 +56,9 @@ descriptors:
         rate_limit:
           unit: day
           requests_per_unit: 25
+
+  - key: key6
+    rate_limit:
+      unit: day
+      requests_per_unit: 10
+      unlimited: true

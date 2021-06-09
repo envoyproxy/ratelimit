@@ -164,6 +164,19 @@ func TestBasicConfig(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.near_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.within_limit").Value())
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key6", Value: "foo"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.WithinLimit.Inc()
+	assert.EqualValues(10, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_DAY, rl.Limit.Unit)
+	assert.True(rl.Unlimited)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key6.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key6.within_limit").Value())
 }
 
 func TestConfigLimitOverride(t *testing.T) {

@@ -98,6 +98,7 @@ func (this *service) shouldRateLimitWorker(
 			logger.Debugf("got descriptor: %s", strings.Join(descriptorEntryStrings, ","))
 		}
 		limitsToCheck[i] = snappedConfig.GetLimit(ctx, request.Domain, descriptor)
+
 		if logger.IsLevelEnabled(logger.DebugLevel) {
 			if limitsToCheck[i] == nil {
 				logger.Debugf("descriptor does not match any limit, no limits applied")

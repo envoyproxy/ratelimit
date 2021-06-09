@@ -63,7 +63,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		clientUsed.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 		request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
-		limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"))}
+		limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false)}
 
 		assert.Equal(
 			[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
@@ -88,7 +88,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 			}, 1)
 		limits = []*config.RateLimit{
 			nil,
-			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, sm.NewStats("key2_value2_subkey2_subvalue2"))}
+			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, sm.NewStats("key2_value2_subkey2_subvalue2"), false)}
 		assert.Equal(
 			[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[1].Limit, timeSource)}},
@@ -115,8 +115,8 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 				{{"key3", "value3"}, {"subkey3", "subvalue3"}},
 			}, 1)
 		limits = []*config.RateLimit{
-			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key3_value3")),
-			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_DAY, sm.NewStats("key3_value3_subkey3_subvalue3"))}
+			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key3_value3"), false),
+			config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_DAY, sm.NewStats("key3_value3_subkey3_subvalue3"), false)}
 		assert.Equal(
 			[]*pb.RateLimitResponse_DescriptorStatus{
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)},
@@ -193,7 +193,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 
 	limits := []*config.RateLimit{
-		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key4_value4"))}
+		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key4_value4"), false)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -288,7 +288,7 @@ func TestNearLimit(t *testing.T) {
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
 
 	limits := []*config.RateLimit{
-		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key4_value4"))}
+		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key4_value4"), false)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
@@ -340,7 +340,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key5", "value5"}}}, 3)
-	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key5_value5"))}
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key5_value5"), false)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
@@ -357,7 +357,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key6", "value6"}}}, 2)
-	limits = []*config.RateLimit{config.NewRateLimit(8, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key6_value6"))}
+	limits = []*config.RateLimit{config.NewRateLimit(8, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key6_value6"), false)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
@@ -374,7 +374,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key7", "value7"}}}, 3)
-	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key7_value7"))}
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key7_value7"), false)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
@@ -391,7 +391,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key8", "value8"}}}, 3)
-	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key8_value8"))}
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key8_value8"), false)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
@@ -408,7 +408,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key9", "value9"}}}, 7)
-	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key9_value9"))}
+	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key9_value9"), false)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
@@ -425,7 +425,7 @@ func TestNearLimit(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key10", "value10"}}}, 3)
-	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key10_value10"))}
+	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key10_value10"), false)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
@@ -455,7 +455,7 @@ func TestRedisWithJitter(t *testing.T) {
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"))}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false)}
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
@@ -464,4 +464,53 @@ func TestRedisWithJitter(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
+}
+
+func TestUnlimited(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	client := mock_redis.NewMockClient(controller)
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	localCache := freecache.NewCache(100)
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm)
+	sink := &common.TestStatSink{}
+	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
+
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key4_value4"), true)}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
+
+	// Check the local cache stats.
+	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
+
+	// Test hitsAddend
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
+
+	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 10)
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(11), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(11), limits[0].Stats.WithinLimit.Value())
 }

@@ -27,3 +27,13 @@ descriptors:
         rate_limit:
           unit: second
           requests_per_unit: 1
+      - key: bay
+        rate_limit:
+          unit: second
+          requests_per_unit: 5
+          unlimited: true
+  - key: qux
+    rate_limit:
+      unit: minute
+      requests_per_unit: 2
+      unlimited: true
