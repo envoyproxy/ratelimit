@@ -18,6 +18,7 @@
       - [Example 2](#example-2)
       - [Example 3](#example-3)
       - [Example 4](#example-4)
+      - [Example 5](#example-5)
   - [Loading Configuration](#loading-configuration)
   - [Log Format](#log-format)
 - [Request Fields](#request-fields)
@@ -328,6 +329,25 @@ descriptors:
           requests_per_unit: 300
           unit: second
 ```
+
+#### Example 5
+
+We can also define unlimited rate limit descriptors:
+
+```yaml
+domain: internal
+descriptors:
+  - key: ldap
+    rate_limit:
+      unlimited: true
+
+  - key: azure
+    rate_limit:
+      unit: minute
+      requests_per_unit: 100
+```
+
+For an unlimited descriptor, the request will not be sent to the underlying cache (Redis/Memcached), but will be quickly returned locally by the ratelimit instance.
 
 ## Loading Configuration
 

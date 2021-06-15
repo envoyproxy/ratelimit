@@ -35,5 +35,4 @@ descriptors:
   - key: qux
     rate_limit:
       unit: minute
-      requests_per_unit: 2
       unlimited: true
