@@ -30,7 +30,6 @@ descriptors:
       - key: bay
         rate_limit:
           unit: second
-          requests_per_unit: 5
           unlimited: true
   - key: qux
     rate_limit:
