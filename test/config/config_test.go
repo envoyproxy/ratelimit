@@ -172,7 +172,6 @@ func TestBasicConfig(t *testing.T) {
 		})
 	rl.Stats.TotalHits.Inc()
 	rl.Stats.WithinLimit.Inc()
-	assert.Equal(pb.RateLimitResponse_RateLimit_DAY, rl.Limit.Unit)
 	assert.True(rl.Unlimited)
 	assert.EqualValues(1, stats.NewCounter("test-domain.key6.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key6.within_limit").Value())

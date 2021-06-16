@@ -59,5 +59,4 @@ descriptors:
 
   - key: key6
     rate_limit:
-      unit: day
       unlimited: true

@@ -339,7 +339,6 @@ domain: internal
 descriptors:
   - key: ldap
     rate_limit:
-      unit: second
       unlimited: true
 
   - key: azure

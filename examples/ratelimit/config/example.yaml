@@ -29,9 +29,7 @@ descriptors:
           requests_per_unit: 1
       - key: bay
         rate_limit:
-          unit: second
           unlimited: true
   - key: qux
     rate_limit:
-      unit: minute
       unlimited: true
