@@ -256,6 +256,7 @@ func TestUnlimited(test *testing.T) {
 	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[1]).Return(limits[1])
 	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[2]).Return(limits[2])
 
+	// Unlimited descriptors should not hit the cache
 	expectedCacheLimits := []*config.RateLimit{limits[0], nil, nil}
 
 	t.cache.EXPECT().DoLimit(nil, request, expectedCacheLimits).Return([]*pb.RateLimitResponse_DescriptorStatus{
