@@ -48,6 +48,7 @@ func (this *ManagerImpl) NewShouldRateLimitStats() ShouldRateLimitStats {
 	ret := ShouldRateLimitStats{}
 	ret.RedisError = this.shouldRateLimitScope.NewCounter("redis_error")
 	ret.ServiceError = this.shouldRateLimitScope.NewCounter("service_error")
+	ret.MemcachedError = this.shouldRateLimitScope.NewCounter("memcached_error")
 	return ret
 }
 

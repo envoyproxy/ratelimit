@@ -2,14 +2,16 @@ package ratelimit
 
 import (
 	"fmt"
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"strings"
 	"sync"
+
+	"github.com/envoyproxy/ratelimit/src/stats"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/lyft/goruntime/loader"
 	logger "github.com/sirupsen/logrus"
@@ -151,6 +153,12 @@ func (this *service) ShouldRateLimit(
 				this.stats.ShouldRateLimit.ServiceError.Inc()
 				finalError = t
 			}
+		case memcached.MemcacheError:
+			{
+				this.stats.ShouldRateLimit.MemcachedError.Inc()
+				finalError = t
+			}
+
 		default:
 			panic(err)
 		}

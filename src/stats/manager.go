@@ -32,8 +32,9 @@ type ManagerImpl struct {
 // Stats for panic recoveries.
 // Identifies if a recovered panic is a redis.RedisError or a ServiceError.
 type ShouldRateLimitStats struct {
-	RedisError   gostats.Counter
-	ServiceError gostats.Counter
+	RedisError     gostats.Counter
+	ServiceError   gostats.Counter
+	MemcachedError gostats.Counter
 }
 
 // Stats for server errors.

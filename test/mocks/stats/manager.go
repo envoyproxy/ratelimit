@@ -19,6 +19,7 @@ func (m *MockStatManager) NewShouldRateLimitStats() stats.ShouldRateLimitStats {
 	ret := stats.ShouldRateLimitStats{}
 	ret.RedisError = s.NewCounter("redis_error")
 	ret.ServiceError = s.NewCounter("service_error")
+	ret.MemcachedError = s.NewCounter("memcached_error")
 	return ret
 }
 
