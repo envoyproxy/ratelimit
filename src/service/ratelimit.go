@@ -76,16 +76,15 @@ func checkServiceErr(something bool, msg string) {
 	}
 }
 
-func (this *service) shouldRateLimitWorker(
-	ctx context.Context, request *pb.RateLimitRequest) *pb.RateLimitResponse {
 
-	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
-	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
 
+func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx context.Context) ([]*config.RateLimit, []bool) {
 	snappedConfig := this.GetCurrentConfig()
 	checkServiceErr(snappedConfig != nil, "no rate limit configuration loaded")
 
 	limitsToCheck := make([]*config.RateLimit, len(request.Descriptors))
+	isUnlimited := make([]bool, len(request.Descriptors))
+
 	for i, descriptor := range request.Descriptors {
 		if logger.IsLevelEnabled(logger.DebugLevel) {
 			var descriptorEntryStrings []string
@@ -98,18 +97,38 @@ func (this *service) shouldRateLimitWorker(
 			logger.Debugf("got descriptor: %s", strings.Join(descriptorEntryStrings, ","))
 		}
 		limitsToCheck[i] = snappedConfig.GetLimit(ctx, request.Domain, descriptor)
+
 		if logger.IsLevelEnabled(logger.DebugLevel) {
 			if limitsToCheck[i] == nil {
 				logger.Debugf("descriptor does not match any limit, no limits applied")
 			} else {
-				logger.Debugf(
-					"applying limit: %d requests per %s",
-					limitsToCheck[i].Limit.RequestsPerUnit,
-					limitsToCheck[i].Limit.Unit.String(),
-				)
+				if limitsToCheck[i].Unlimited {
+					logger.Debugf("descriptor is unlimited, not passing to the cache")
+ 				} else {
+					logger.Debugf(
+						"applying limit: %d requests per %s",
+						limitsToCheck[i].Limit.RequestsPerUnit,
+						limitsToCheck[i].Limit.Unit.String(),
+					)
+				}
 			}
 		}
+
+		if limitsToCheck[i] != nil && limitsToCheck[i].Unlimited {
+			isUnlimited[i] = true
+			limitsToCheck[i] = nil
+		}
 	}
+	return limitsToCheck, isUnlimited
+}
+
+func (this *service) shouldRateLimitWorker(
+	ctx context.Context, request *pb.RateLimitRequest) *pb.RateLimitResponse {
+
+	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
+	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
+
+	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx)
 
 	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
@@ -118,9 +137,15 @@ func (this *service) shouldRateLimitWorker(
 	response.Statuses = make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
 	finalCode := pb.RateLimitResponse_OK
 	for i, descriptorStatus := range responseDescriptorStatuses {
-		response.Statuses[i] = descriptorStatus
-		if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
-			finalCode = descriptorStatus.Code
+		if isUnlimited[i] {
+			response.Statuses[i] = &pb.RateLimitResponse_DescriptorStatus{
+				Code:               pb.RateLimitResponse_OK,
+			}
+		} else {
+			response.Statuses[i] = descriptorStatus
+			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
+				finalCode = descriptorStatus.Code
+			}
 		}
 	}
 

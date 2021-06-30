@@ -83,12 +83,6 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 			continue
 		}
 
-		// Check if the key is unlimited
-		if limits[i].Unlimited {
-			logger.Debugf("cache key is within the limit: %s", cacheKey.Key)
-			continue
-		}
-
 		logger.Debugf("looking up cache key: %s", cacheKey.Key)
 		keysToGet = append(keysToGet, cacheKey.Key)
 	}
@@ -126,7 +120,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-			limitInfo, isOverLimitWithLocalCache[i], hitsAddend, limits[i] != nil && limits[i].Unlimited)
+			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
 	}
 
 	this.waitGroup.Add(1)
