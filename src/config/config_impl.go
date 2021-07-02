@@ -119,7 +119,15 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 
 			value, present :=
 				pb.RateLimitResponse_RateLimit_Unit_value[strings.ToUpper(descriptorConfig.RateLimit.Unit)]
-			if (!present || value == int32(pb.RateLimitResponse_RateLimit_UNKNOWN)) && !unlimited {
+			validUnit := present && value != int32(pb.RateLimitResponse_RateLimit_UNKNOWN)
+
+			if unlimited {
+				if validUnit {
+					panic(newRateLimitConfigError(
+						config,
+						fmt.Sprintf("should not specify rate limit unit when unlimited")))
+				}
+			} else if !validUnit {
 				panic(newRateLimitConfigError(
 					config,
 					fmt.Sprintf("invalid rate limit unit '%s'", descriptorConfig.RateLimit.Unit)))

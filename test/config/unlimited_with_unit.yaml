@@ -1,0 +1,7 @@
+domain: test-domain
+descriptors:
+  - key: foo
+    rate_limit:
+      unlimited: true
+      unit: day
+      requests_per_unit: 25

@@ -347,7 +347,10 @@ descriptors:
       requests_per_unit: 100
 ```
 
-For an unlimited descriptor, the request will not be sent to the underlying cache (Redis/Memcached), but will be quickly returned locally by the ratelimit instance.
+For an unlimited descriptor, the request will not be sent to the underlying cache (Redis/Memcached), but will be quickly returned locally by the ratelimit instance. 
+This can be useful for collecting statistics, or if one wants to define a descriptor that has no limit but the client wants to distinguish between such descriptor and one that does not exist. 
+
+The return value for unlimited descriptors will be an OK status code with the LimitRemaining field set to MaxUint32 value. 
 
 ## Loading Configuration
 

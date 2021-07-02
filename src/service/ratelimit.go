@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"fmt"
 	"github.com/envoyproxy/ratelimit/src/stats"
+	"math"
 	"strings"
 	"sync"
 
@@ -76,8 +77,6 @@ func checkServiceErr(something bool, msg string) {
 	}
 }
 
-
-
 func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx context.Context) ([]*config.RateLimit, []bool) {
 	snappedConfig := this.GetCurrentConfig()
 	checkServiceErr(snappedConfig != nil, "no rate limit configuration loaded")
@@ -103,7 +102,7 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 			} else {
 				if limitsToCheck[i].Unlimited {
 					logger.Debugf("descriptor is unlimited, not passing to the cache")
- 				} else {
+				} else {
 					logger.Debugf(
 						"applying limit: %d requests per %s",
 						limitsToCheck[i].Limit.RequestsPerUnit,
@@ -138,7 +137,8 @@ func (this *service) shouldRateLimitWorker(
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		if isUnlimited[i] {
 			response.Statuses[i] = &pb.RateLimitResponse_DescriptorStatus{
-				Code:               pb.RateLimitResponse_OK,
+				Code:           pb.RateLimitResponse_OK,
+				LimitRemaining: math.MaxUint32,
 			}
 		} else {
 			response.Statuses[i] = descriptorStatus

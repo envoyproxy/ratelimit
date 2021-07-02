@@ -2,6 +2,7 @@ package ratelimit_test
 
 import (
 	"github.com/envoyproxy/ratelimit/src/stats"
+	"math"
 	"sync"
 	"testing"
 
@@ -273,7 +274,7 @@ func TestUnlimited(test *testing.T) {
 			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
 				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9},
 				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
-				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: math.MaxUint32},
 			}},
 		response)
 	t.assert.Nil(err)

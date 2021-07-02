@@ -375,3 +375,14 @@ func TestNonMapList(t *testing.T) {
 		},
 		"non_map_list.yaml: config error, yaml file contains list of type other than map: a")
 }
+
+func TestUnlimitedWithRateLimitUnit(t *testing.T) {
+	expectConfigPanic(
+		t,
+		func() {
+			config.NewRateLimitConfigImpl(
+				loadFile("unlimited_with_unit.yaml"),
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
+		},
+		"unlimited_with_unit.yaml: should not specify rate limit unit when unlimited")
+}

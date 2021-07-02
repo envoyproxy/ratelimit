@@ -136,7 +136,7 @@ func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, i
 	limits []*config.RateLimit, hitsAddend uint64) {
 	defer this.waitGroup.Done()
 	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] || limits[i].Unlimited {
+		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] {
 			continue
 		}
 
