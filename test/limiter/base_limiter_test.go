@@ -27,7 +27,7 @@ func TestGenerateCacheKeys(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
 	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm)
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"))}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false)}
 	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
 	cacheKeys := baseRateLimit.GenerateCacheKeys(request, limits, 1)
 	assert.Equal(1, len(cacheKeys))
@@ -46,7 +46,7 @@ func TestGenerateCacheKeysPrefix(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
 	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "prefix:", sm)
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"))}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false)}
 	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
 	cacheKeys := baseRateLimit.GenerateCacheKeys(request, limits, 1)
 	assert.Equal(1, len(cacheKeys))
