@@ -2,6 +2,7 @@ package ratelimit_test
 
 import (
 	"github.com/envoyproxy/ratelimit/src/stats"
+	"math"
 	"sync"
 	"testing"
 
@@ -121,7 +122,7 @@ func TestService(test *testing.T) {
 	request = common.NewRateLimitRequest(
 		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key")),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false),
 		nil}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
@@ -153,7 +154,7 @@ func TestService(test *testing.T) {
 	// Config should still be valid. Also make sure order does not affect results.
 	limits = []*config.RateLimit{
 		nil,
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"))}
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
 	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
@@ -205,7 +206,7 @@ func TestCacheError(test *testing.T) {
 	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"))}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.cache.EXPECT().DoLimit(nil, request, limits).Do(
 		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
@@ -239,4 +240,42 @@ func TestInitialLoadError(test *testing.T) {
 	t.assert.Nil(response)
 	t.assert.Equal("no rate limit configuration loaded", err.Error())
 	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
+}
+
+func TestUnlimited(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest(
+		"some-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}, {{"baz", "qux"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("foo_bar"), false),
+		nil,
+		config.NewRateLimit(55, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("baz_qux"), true)}
+	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[2]).Return(limits[2])
+
+	// Unlimited descriptors should not hit the cache
+	expectedCacheLimits := []*config.RateLimit{limits[0], nil, nil}
+
+	t.cache.EXPECT().DoLimit(nil, request, expectedCacheLimits).Return([]*pb.RateLimitResponse_DescriptorStatus{
+		{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9},
+		{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+		{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+	})
+
+	response, err := service.ShouldRateLimit(nil, request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: math.MaxUint32},
+			}},
+		response)
+	t.assert.Nil(err)
 }
