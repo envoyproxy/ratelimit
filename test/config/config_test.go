@@ -164,6 +164,17 @@ func TestBasicConfig(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.near_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key4.within_limit").Value())
+
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key6", Value: "foo"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.WithinLimit.Inc()
+	assert.True(rl.Unlimited)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key6.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key6.within_limit").Value())
 }
 
 func TestConfigLimitOverride(t *testing.T) {
@@ -363,4 +374,15 @@ func TestNonMapList(t *testing.T) {
 				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
 		},
 		"non_map_list.yaml: config error, yaml file contains list of type other than map: a")
+}
+
+func TestUnlimitedWithRateLimitUnit(t *testing.T) {
+	expectConfigPanic(
+		t,
+		func() {
+			config.NewRateLimitConfigImpl(
+				loadFile("unlimited_with_unit.yaml"),
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
+		},
+		"unlimited_with_unit.yaml: should not specify rate limit unit when unlimited")
 }

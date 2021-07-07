@@ -15,6 +15,7 @@ import (
 type yamlRateLimit struct {
 	RequestsPerUnit uint32 `yaml:"requests_per_unit"`
 	Unit            string
+	Unlimited       bool `yaml:"unlimited"`
 }
 
 type yamlDescriptor struct {
@@ -51,17 +52,19 @@ var validKeys = map[string]bool{
 	"rate_limit":        true,
 	"unit":              true,
 	"requests_per_unit": true,
+	"unlimited":         true,
 }
 
 // Create a new rate limit config entry.
 // @param requestsPerUnit supplies the requests per unit of time for the entry.
 // @param unit supplies the unit of time for the entry.
 // @param rlStats supplies the stats structure associated with the RateLimit
+// @param unlimited supplies whether the rate limit is unlimited
 // @return the new config entry.
 func NewRateLimit(
-	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats) *RateLimit {
+	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats, unlimited bool) *RateLimit {
 
-	return &RateLimit{FullKey: rlStats.GetKey(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}}
+	return &RateLimit{FullKey: rlStats.GetKey(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}, Unlimited: unlimited}
 }
 
 // Dump an individual descriptor for debugging purposes.
@@ -112,19 +115,29 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 		var rateLimit *RateLimit = nil
 		var rateLimitDebugString string = ""
 		if descriptorConfig.RateLimit != nil {
+			unlimited := descriptorConfig.RateLimit.Unlimited
+
 			value, present :=
 				pb.RateLimitResponse_RateLimit_Unit_value[strings.ToUpper(descriptorConfig.RateLimit.Unit)]
-			if !present || value == int32(pb.RateLimitResponse_RateLimit_UNKNOWN) {
+			validUnit := present && value != int32(pb.RateLimitResponse_RateLimit_UNKNOWN)
+
+			if unlimited {
+				if validUnit {
+					panic(newRateLimitConfigError(
+						config,
+						fmt.Sprintf("should not specify rate limit unit when unlimited")))
+				}
+			} else if !validUnit {
 				panic(newRateLimitConfigError(
 					config,
 					fmt.Sprintf("invalid rate limit unit '%s'", descriptorConfig.RateLimit.Unit)))
 			}
 
 			rateLimit = NewRateLimit(
-				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), statsManager.NewStats(newParentKey))
+				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), statsManager.NewStats(newParentKey), unlimited)
 			rateLimitDebugString = fmt.Sprintf(
-				" ratelimit={requests_per_unit=%d, unit=%s}", rateLimit.Limit.RequestsPerUnit,
-				rateLimit.Limit.Unit.String())
+				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t}", rateLimit.Limit.RequestsPerUnit,
+				rateLimit.Limit.Unit.String(), rateLimit.Unlimited)
 		}
 
 		logger.Debugf(
@@ -167,6 +180,8 @@ func validateYamlKeys(config RateLimitConfigToLoad, config_map map[interface{}]i
 		case string:
 		// int is a leaf type in ratelimit config. No need to keep validating.
 		case int:
+		// bool is a leaf type in ratelimit config. No need to keep validating.
+		case bool:
 		// nil case is an incorrectly formed yaml. However, because this function's purpose is to validate
 		// the yaml's keys we don't panic here.
 		case nil:
@@ -240,7 +255,8 @@ func (this *rateLimitConfigImpl) GetLimit(
 		rateLimit = NewRateLimit(
 			descriptor.GetLimit().GetRequestsPerUnit(),
 			rateLimitOverrideUnit,
-			this.statsManager.NewStats(rateLimitKey))
+			this.statsManager.NewStats(rateLimitKey),
+			false)
 		return rateLimit
 	}
 
