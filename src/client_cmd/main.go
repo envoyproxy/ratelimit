@@ -54,9 +54,9 @@ func main() {
 		"descriptor list to query in <key>=<value>,<key>=<value>,... form")
 	flag.Parse()
 
-	fmt.Printf("dial string: %s\n", *dialString)
-	fmt.Printf("domain: %s\n", *domain)
-	fmt.Printf("descriptors: %s\n", &descriptorsValue)
+	flag.VisitAll(func(f *flag.Flag) {
+		fmt.Printf("Flag: --%s=%q\n", f.Name, f.Value)
+	})
 
 	conn, err := grpc.Dial(*dialString, grpc.WithInsecure())
 	if err != nil {
