@@ -3,6 +3,7 @@
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Overview](#overview)
+- [Docker Image](#docker-image)
 - [Deprecation of Legacy Ratelimit Proto and v2 Ratelimit proto](#deprecation-of-legacy-ratelimit-proto-and-v2-ratelimit-proto)
   - [Deprecation Schedule](#deprecation-schedule)
 - [Building and Testing](#building-and-testing)
