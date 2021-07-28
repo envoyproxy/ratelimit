@@ -3,6 +3,7 @@
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Overview](#overview)
+- [Docker Image](#docker-image)
 - [Deprecation of Legacy Ratelimit Proto and v2 Ratelimit proto](#deprecation-of-legacy-ratelimit-proto-and-v2-ratelimit-proto)
   - [Deprecation Schedule](#deprecation-schedule)
 - [Building and Testing](#building-and-testing)
@@ -47,27 +48,27 @@ applications. Applications request a rate limit decision based on a domain and a
 reads the configuration from disk via [runtime](https://github.com/lyft/goruntime), composes a cache key, and talks to the Redis cache. A
 decision is then returned to the caller.
 
+# Docker Image
+For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/r/envoyproxy/ratelimit/tags?page=1&ordering=last_updated). There is currently no versioning (post v1.4.0) and tags are based on commit sha.
+
 # Deprecation of Legacy Ratelimit Proto and v2 Ratelimit proto
 
 Envoy's data-plane-api defines a ratelimit service proto v3 [rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto).
 Logically the data-plane-api rls [v3](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
-is equivalent to the rls [v2](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
-However, due to the namespace differences and how gRPC routing works it is not possible to transparently route the
-legacy v2 ratelimit requests to the v3 definitions. Therefore, the ratelimit service will upgrade the requests, process them internally as it would
-process a v3 ratelimit request, and then downgrade the response to send back to the client. This means that,
+is equivalent to the rls [v2](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto).
+However, due to the namespace differences and how gRPC routing works it is not possible to transparently route the legacy v2 ratelimit requests to the v3 definitions.
+Therefore, the ratelimit service will upgrade the requests, process them internally as it would process a v3 ratelimit request, and then downgrade the response to send back to the client. This means that,
 for a slight performance hit for clients using the legacy proto, ratelimit is backwards compatible with the legacy proto.
-Prior to version 2.0.0 ratelimit service contained a protocol definition that used to be supported in a legacy mode,
-but support for it and was removed in 2.0.0.
 
 ## Deprecation Schedule
 
 1. `v1.0.0` tagged on commit `0ded92a2af8261d43096eba4132e45b99a3b8b14`. Ratelimit has been in production use at Lyft for over 2 years.
 2. `v1.1.0` introduces the data-plane-api proto and initiates the deprecation of the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
-3. `v2.0.0` deleted support for the legacy [ratelimit.proto](https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
+3. `e91321b` [commit](https://github.com/envoyproxy/ratelimit/commit/e91321b10f1ad7691d0348e880bd75d0fca05758) deleted support for the legacy [ratelimit.proto](https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
 The current version of ratelimit protocol is changed to [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
 while [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is still supported
 as a legacy protocol.
-4. `v3.0.0` deletes support for legacy [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
+4. `TODO` deletes support for legacy [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
 
 # Building and Testing
 
@@ -347,10 +348,10 @@ descriptors:
       requests_per_unit: 100
 ```
 
-For an unlimited descriptor, the request will not be sent to the underlying cache (Redis/Memcached), but will be quickly returned locally by the ratelimit instance. 
-This can be useful for collecting statistics, or if one wants to define a descriptor that has no limit but the client wants to distinguish between such descriptor and one that does not exist. 
+For an unlimited descriptor, the request will not be sent to the underlying cache (Redis/Memcached), but will be quickly returned locally by the ratelimit instance.
+This can be useful for collecting statistics, or if one wants to define a descriptor that has no limit but the client wants to distinguish between such descriptor and one that does not exist.
 
-The return value for unlimited descriptors will be an OK status code with the LimitRemaining field set to MaxUint32 value. 
+The return value for unlimited descriptors will be an OK status code with the LimitRemaining field set to MaxUint32 value.
 
 ## Loading Configuration
 
@@ -606,7 +607,7 @@ Experimental Memcache support has been added as an alternative to Redis in v1.5.
 To configure a Memcache instance use the following environment variables instead of the Redis variables:
 
 1. `MEMCACHE_HOST_PORT=`: a comma separated list of hostname:port pairs for memcache nodes (mutually exclusive with `MEMCACHE_SRV`)
-1. `MEMCACHE_SRV=`: an SRV record to lookup hosts from (mutually exclusive with `MEMCACHE_HOST_PORT`) 
+1. `MEMCACHE_SRV=`: an SRV record to lookup hosts from (mutually exclusive with `MEMCACHE_HOST_PORT`)
 1. `MEMCACHE_SRV_REFRESH=0`: refresh the list of hosts every n seconds, if 0 no refreshing will happen, supports duration suffixes: "ns", "us" (or "µs"), "ms", "s", "m", "h".
 1. `BACKEND_TYPE=memcache`
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
@@ -616,9 +617,9 @@ With memcache mode increments will happen asynchronously, so it's technically po
 a client to exceed quota briefly if multiple requests happen at exactly the same time.
 
 Note that Memcache has a max key length of 250 characters, so operations referencing very long
-descriptors will fail. Descriptors sent to Memcache should not contain whitespaces or control characters. 
+descriptors will fail. Descriptors sent to Memcache should not contain whitespaces or control characters.
 
-When using multiple memcache nodes in `MEMCACHE_HOST_PORT=`, one should provide the identical list of memcache nodes 
+When using multiple memcache nodes in `MEMCACHE_HOST_PORT=`, one should provide the identical list of memcache nodes
 to all ratelimiter instances to ensure that a particular cache key is always hashed to the same memcache node.
 
 # Contact
