@@ -49,9 +49,7 @@ reads the configuration from disk via [runtime](https://github.com/lyft/goruntim
 decision is then returned to the caller.
 
 # Docker Image
-For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/r/envoyproxy/ratelimit/tags?page=1&ordering=last_updated).
-
-There is currently no versioning (post v1.4.0) and tags are based on commit sha.
+For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/r/envoyproxy/ratelimit/tags?page=1&ordering=last_updated). There is currently no versioning (post v1.4.0) and tags are based on commit sha.
 
 # Deprecation of Legacy Ratelimit Proto and v2 Ratelimit proto
 
