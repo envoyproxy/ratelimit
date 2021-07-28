@@ -2,10 +2,11 @@ package redis_test
 
 import (
 	"context"
-	"github.com/envoyproxy/ratelimit/test/mocks/stats"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/envoyproxy/ratelimit/test/mocks/stats"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
@@ -43,7 +44,7 @@ func BenchmarkParallelDoLimit(b *testing.B) {
 		return func(b *testing.B) {
 			statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 			sm := stats.NewMockStatManager(statsStore)
-			client := redis.NewClientImpl(statsStore, false, "", "single", "127.0.0.1:6379", poolSize, pipelineWindow, pipelineLimit)
+			client := redis.NewClientImpl(statsStore, false, "", "tcp", "single", "127.0.0.1:6379", poolSize, pipelineWindow, pipelineLimit)
 			defer client.Close()
 
 			cache := redis.NewFixedRateLimitCacheImpl(client, nil, utils.NewTimeSourceImpl(), rand.New(utils.NewLockedSource(time.Now().Unix())), 10, nil, 0.8, "", sm)
