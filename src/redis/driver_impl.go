@@ -52,7 +52,7 @@ func checkError(err error) {
 	}
 }
 
-func NewClientImpl(scope stats.Scope, useTls bool, auth string, redisType string, url string, poolSize int,
+func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int) Client {
 	logger.Warnf("connecting to redis on %s with pool size %d", url, poolSize)
 
@@ -92,7 +92,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth string, redisType string
 	var err error
 	switch strings.ToLower(redisType) {
 	case "single":
-		client, err = poolFunc("tcp", url)
+		client, err = poolFunc(redisSocketType, url)
 	case "cluster":
 		urls := strings.Split(url, ",")
 		if implicitPipelining == false {

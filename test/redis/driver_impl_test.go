@@ -6,7 +6,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/envoyproxy/ratelimit/src/redis"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -36,7 +36,7 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 		mkRedisClient := func(auth, addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, auth, "single", addr, 1, pipelineWindow, pipelineLimit)
+			return redis.NewClientImpl(statsStore, false, auth, "tcp", "single", addr, 1, pipelineWindow, pipelineLimit)
 		}
 
 		t.Run("connection refused", func(t *testing.T) {
@@ -103,7 +103,7 @@ func TestDoCmd(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	mkRedisClient := func(addr string) redis.Client {
-		return redis.NewClientImpl(statsStore, false, "", "single", addr, 1, 0, 0)
+		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0)
 	}
 
 	t.Run("SETGET ok", func(t *testing.T) {
@@ -148,7 +148,7 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 		mkRedisClient := func(addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, "", "single", addr, 1, pipelineWindow, pipelineLimit)
+			return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, pipelineWindow, pipelineLimit)
 		}
 
 		t.Run("SETGET ok", func(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"expvar"
 	"fmt"
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"io"
 	"net/http"
 	"net/http/pprof"
@@ -12,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+
+	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"os"
 	"os/signal"
@@ -283,13 +284,13 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 func (server *server) Stop() {
 	server.grpcServer.GracefulStop()
 	server.listenerMu.Lock()
+	defer server.listenerMu.Unlock()
 	if server.debugListener.listener != nil {
 		server.debugListener.listener.Close()
 	}
 	if server.httpServer != nil {
 		server.httpServer.Close()
 	}
-	server.listenerMu.Unlock()
 }
 
 func (server *server) handleGracefulShutdown() {
@@ -300,15 +301,7 @@ func (server *server) handleGracefulShutdown() {
 		sig := <-sigs
 
 		logger.Infof("Ratelimit server received %v, shutting down gracefully", sig)
-		server.grpcServer.GracefulStop()
-		server.listenerMu.Lock()
-		if server.debugListener.listener != nil {
-			server.debugListener.listener.Close()
-		}
-		if server.httpServer != nil {
-			server.httpServer.Close()
-		}
-		server.listenerMu.Unlock()
+		server.Stop()
 		os.Exit(0)
 	}()
 }
