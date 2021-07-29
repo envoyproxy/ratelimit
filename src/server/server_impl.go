@@ -302,5 +302,6 @@ func (server *server) handleGracefulShutdown() {
 
 		logger.Infof("Ratelimit server received %v, shutting down gracefully", sig)
 		server.Stop()
+		os.Exit(0)
 	}()
 }
