@@ -621,7 +621,7 @@ func testBasicConfigLegacy(t *testing.T) {
 	defer conn.Close()
 	c := pb_legacy.NewRateLimitServiceClient(conn)
 
-	response, err := c.ShouldRateLimit(
+	_, err := c.ShouldRateLimit(
 		context.Background(),
 		common.NewRateLimitRequestLegacy("foo", [][][2]string{{{"hello", "world"}}}, 1))
 	//common.AssertProtoEqual(
@@ -632,7 +632,7 @@ func testBasicConfigLegacy(t *testing.T) {
 	//	response)
 	assert.Error(err)
 
-	response, err = c.ShouldRateLimit(
+	_, err = c.ShouldRateLimit(
 		context.Background(),
 		common.NewRateLimitRequestLegacy("basic_legacy", [][][2]string{{{"key1", "foo"}}}, 1))
 	//common.AssertProtoEqual(
@@ -648,7 +648,7 @@ func testBasicConfigLegacy(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	randomInt := r.Int()
 	for i := 0; i < 25; i++ {
-		response, err = c.ShouldRateLimit(
+		_, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequestLegacy(
 				"another", [][][2]string{{{"key2", strconv.Itoa(randomInt)}}}, 1))
@@ -673,7 +673,7 @@ func testBasicConfigLegacy(t *testing.T) {
 	// Limit now against 2 keys in the same domain.
 	randomInt = r.Int()
 	for i := 0; i < 15; i++ {
-		response, err = c.ShouldRateLimit(
+		_, err = c.ShouldRateLimit(
 			context.Background(),
 			common.NewRateLimitRequestLegacy(
 				"another_legacy",
