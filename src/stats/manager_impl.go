@@ -11,7 +11,6 @@ func NewStatManager(store gostats.Store, settings settings.Settings) *ManagerImp
 	return &ManagerImpl{
 		store:                store,
 		rlStatsScope:         serviceScope.Scope("rate_limit"),
-		legacyStatsScope:     serviceScope.Scope("call.should_rate_limit_legacy"),
 		serviceStatsScope:    serviceScope,
 		shouldRateLimitScope: serviceScope.Scope("call.should_rate_limit"),
 	}
@@ -34,14 +33,6 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret.OverLimitWithLocalCache = this.rlStatsScope.NewCounter(key + ".over_limit_with_local_cache")
 	ret.WithinLimit = this.rlStatsScope.NewCounter(key + ".within_limit")
 	return ret
-}
-
-func (this *ManagerImpl) NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats {
-	return ShouldRateLimitLegacyStats{
-		ReqConversionError:   this.legacyStatsScope.NewCounter("req_conversion_error"),
-		RespConversionError:  this.legacyStatsScope.NewCounter("resp_conversion_error"),
-		ShouldRateLimitError: this.legacyStatsScope.NewCounter("should_rate_limit_error"),
-	}
 }
 
 func (this *ManagerImpl) NewShouldRateLimitStats() ShouldRateLimitStats {
