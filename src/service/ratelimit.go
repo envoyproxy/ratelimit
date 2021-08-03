@@ -20,7 +20,6 @@ import (
 type RateLimitServiceServer interface {
 	pb.RateLimitServiceServer
 	GetCurrentConfig() config.RateLimitConfig
-	GetLegacyService() RateLimitLegacyServiceServer
 }
 
 type service struct {
@@ -31,7 +30,6 @@ type service struct {
 	runtimeUpdateEvent chan int
 	cache              limiter.RateLimitCache
 	stats              stats.ServiceStats
-	legacy             *legacyService
 	runtimeWatchRoot   bool
 }
 
@@ -185,10 +183,6 @@ func (this *service) ShouldRateLimit(
 	return response, nil
 }
 
-func (this *service) GetLegacyService() RateLimitLegacyServiceServer {
-	return this.legacy
-}
-
 func (this *service) GetCurrentConfig() config.RateLimitConfig {
 	this.configLock.RLock()
 	defer this.configLock.RUnlock()
@@ -207,10 +201,6 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		cache:              cache,
 		stats:              statsManager.NewServiceStats(),
 		runtimeWatchRoot:   runtimeWatchRoot,
-	}
-	newService.legacy = &legacyService{
-		s:                          newService,
-		shouldRateLimitLegacyStats: statsManager.NewShouldRateLimitLegacyStats(),
 	}
 
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
