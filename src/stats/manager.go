@@ -40,13 +40,6 @@ type ServiceStats struct {
 	ShouldRateLimit   ShouldRateLimitStats
 }
 
-// Legacy Stats for ratelimit errors.
-type ShouldRateLimitLegacyStats struct {
-	ReqConversionError   gostats.Counter
-	RespConversionError  gostats.Counter
-	ShouldRateLimitError gostats.Counter
-}
-
 // Stats for an individual rate limit config entry.
 type RateLimitStats struct {
 	Key                     string

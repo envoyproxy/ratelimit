@@ -30,15 +30,6 @@ func (m *MockStatManager) NewServiceStats() stats.ServiceStats {
 	return ret
 }
 
-func (m *MockStatManager) NewShouldRateLimitLegacyStats() stats.ShouldRateLimitLegacyStats {
-	s := m.store.Scope("call.should_rate_limit_legacy")
-	return stats.ShouldRateLimitLegacyStats{
-		ReqConversionError:   s.NewCounter("req_conversion_error"),
-		RespConversionError:  s.NewCounter("resp_conversion_error"),
-		ShouldRateLimitError: s.NewCounter("should_rate_limit_error"),
-	}
-}
-
 func (m *MockStatManager) NewStats(key string) stats.RateLimitStats {
 	ret := stats.RateLimitStats{}
 	logger.Debugf("outputing test gostats %s", key)
