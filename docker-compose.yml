@@ -67,4 +67,3 @@ networks:
 
 volumes:
   binary:
-

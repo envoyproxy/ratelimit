@@ -53,8 +53,8 @@ For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/
 
 # Supported Envoy APIs
 
-The [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto) is now deprecated.
-Only [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is supported.
+[v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is currently supported.
+Support for [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto) is now deprecated.
 
 ## Deprecation Schedule
 
