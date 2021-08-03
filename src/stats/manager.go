@@ -14,9 +14,6 @@ type Manager interface {
 	// Initializes a ServiceStats structure.
 	// Multiple calls to this method are idempotent.
 	NewServiceStats() ServiceStats
-	// Initializes a ShouldRateLimitLegacyStats structure.
-	// Multiple calls to this method are idempotent.
-	NewShouldRateLimitLegacyStats() ShouldRateLimitLegacyStats
 	// Returns the stats.Store wrapped by the Manager.
 	GetStatsStore() stats.Store
 }
@@ -24,7 +21,6 @@ type Manager interface {
 type ManagerImpl struct {
 	store                gostats.Store
 	rlStatsScope         gostats.Scope
-	legacyStatsScope     gostats.Scope
 	serviceStatsScope    gostats.Scope
 	shouldRateLimitScope gostats.Scope
 }
@@ -42,13 +38,6 @@ type ServiceStats struct {
 	ConfigLoadSuccess gostats.Counter
 	ConfigLoadError   gostats.Counter
 	ShouldRateLimit   ShouldRateLimitStats
-}
-
-// Legacy Stats for ratelimit errors.
-type ShouldRateLimitLegacyStats struct {
-	ReqConversionError   gostats.Counter
-	RespConversionError  gostats.Counter
-	ShouldRateLimitError gostats.Counter
 }
 
 // Stats for an individual rate limit config entry.

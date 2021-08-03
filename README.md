@@ -4,8 +4,8 @@
 
 - [Overview](#overview)
 - [Docker Image](#docker-image)
-- [Deprecation of Legacy Ratelimit Proto and v2 Ratelimit proto](#deprecation-of-legacy-ratelimit-proto-and-v2-ratelimit-proto)
-  - [Deprecation Schedule](#deprecation-schedule)
+- [Supported Envoy APIs](#supported-envoy-apis)
+  - [API Deprecation History](#api-deprecation-history)
 - [Building and Testing](#building-and-testing)
   - [Docker-compose setup](#docker-compose-setup)
   - [Full test environment](#full-test-environment)
@@ -51,16 +51,12 @@ decision is then returned to the caller.
 # Docker Image
 For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/r/envoyproxy/ratelimit/tags?page=1&ordering=last_updated). There is currently no versioning (post v1.4.0) and tags are based on commit sha.
 
-# Deprecation of Legacy Ratelimit Proto and v2 Ratelimit proto
+# Supported Envoy APIs
 
-Envoy's data-plane-api defines a ratelimit service proto v3 [rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto).
-Logically the data-plane-api rls [v3](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
-is equivalent to the rls [v2](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto).
-However, due to the namespace differences and how gRPC routing works it is not possible to transparently route the legacy v2 ratelimit requests to the v3 definitions.
-Therefore, the ratelimit service will upgrade the requests, process them internally as it would process a v3 ratelimit request, and then downgrade the response to send back to the client. This means that,
-for a slight performance hit for clients using the legacy proto, ratelimit is backwards compatible with the legacy proto.
+[v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is currently supported.
+Support for [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto) is now deprecated.
 
-## Deprecation Schedule
+## API Deprecation History
 
 1. `v1.0.0` tagged on commit `0ded92a2af8261d43096eba4132e45b99a3b8b14`. Ratelimit has been in production use at Lyft for over 2 years.
 2. `v1.1.0` introduces the data-plane-api proto and initiates the deprecation of the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
@@ -68,7 +64,7 @@ for a slight performance hit for clients using the legacy proto, ratelimit is ba
 The current version of ratelimit protocol is changed to [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
 while [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is still supported
 as a legacy protocol.
-4. `TODO` deletes support for legacy [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
+4. `TODO` deleted support for legacy [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
 
 # Building and Testing
 

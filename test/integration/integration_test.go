@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	pb_legacy "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
@@ -61,17 +60,6 @@ func newDescriptorStatus(status pb.RateLimitResponse_Code, requestsPerUnit uint3
 		CurrentLimit:       limit,
 		LimitRemaining:     limitRemaining,
 		DurationUntilReset: &duration.Duration{Seconds: durRemaining.GetSeconds()},
-	}
-}
-
-func newDescriptorStatusLegacy(
-	status pb_legacy.RateLimitResponse_Code, requestsPerUnit uint32,
-	unit pb_legacy.RateLimitResponse_RateLimit_Unit, limitRemaining uint32) *pb_legacy.RateLimitResponse_DescriptorStatus {
-
-	return &pb_legacy.RateLimitResponse_DescriptorStatus{
-		Code:           status,
-		CurrentLimit:   &pb_legacy.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit},
-		LimitRemaining: limitRemaining,
 	}
 }
 
@@ -597,107 +585,6 @@ func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 			common.NewRateLimitRequest("another", [][][2]string{{{getCacheKey("key4", enable_local_cache), "durTest"}}}, 1))
 
 		assert.Less(resp2.GetStatuses()[0].DurationUntilReset.GetSeconds(), resp1.GetStatuses()[0].DurationUntilReset.GetSeconds())
-	}
-}
-
-func TestBasicConfigLegacy(t *testing.T) {
-	common.WithMultiRedis(t, []common.RedisConfig{
-		{Port: 6383},
-	}, func() {
-		testBasicConfigLegacy(t)
-	})
-}
-
-func testBasicConfigLegacy(t *testing.T) {
-	s := makeSimpleRedisSettings(6383, 6380, false, 0)
-
-	runner := startTestRunner(t, s)
-	defer runner.Stop()
-
-	assert := assert.New(t)
-	conn, err := grpc.Dial("localhost:8083", grpc.WithInsecure())
-
-	assert.NoError(err)
-	defer conn.Close()
-	c := pb_legacy.NewRateLimitServiceClient(conn)
-
-	response, err := c.ShouldRateLimit(
-		context.Background(),
-		common.NewRateLimitRequestLegacy("foo", [][][2]string{{{"hello", "world"}}}, 1))
-	common.AssertProtoEqual(
-		assert,
-		&pb_legacy.RateLimitResponse{
-			OverallCode: pb_legacy.RateLimitResponse_OK,
-			Statuses:    []*pb_legacy.RateLimitResponse_DescriptorStatus{{Code: pb_legacy.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
-		response)
-	assert.NoError(err)
-
-	response, err = c.ShouldRateLimit(
-		context.Background(),
-		common.NewRateLimitRequestLegacy("basic_legacy", [][][2]string{{{"key1", "foo"}}}, 1))
-	common.AssertProtoEqual(
-		assert,
-		&pb_legacy.RateLimitResponse{
-			OverallCode: pb_legacy.RateLimitResponse_OK,
-			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-				newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 50, pb_legacy.RateLimitResponse_RateLimit_SECOND, 49)}},
-		response)
-	assert.NoError(err)
-
-	// Now come up with a random key, and go over limit for a minute limit which should always work.
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randomInt := r.Int()
-	for i := 0; i < 25; i++ {
-		response, err = c.ShouldRateLimit(
-			context.Background(),
-			common.NewRateLimitRequestLegacy(
-				"another", [][][2]string{{{"key2", strconv.Itoa(randomInt)}}}, 1))
-
-		status := pb_legacy.RateLimitResponse_OK
-		limitRemaining := uint32(20 - (i + 1))
-		if i >= 20 {
-			status = pb_legacy.RateLimitResponse_OVER_LIMIT
-			limitRemaining = 0
-		}
-
-		common.AssertProtoEqual(
-			assert,
-			&pb_legacy.RateLimitResponse{
-				OverallCode: status,
-				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatusLegacy(status, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining)}},
-			response)
-		assert.NoError(err)
-	}
-
-	// Limit now against 2 keys in the same domain.
-	randomInt = r.Int()
-	for i := 0; i < 15; i++ {
-		response, err = c.ShouldRateLimit(
-			context.Background(),
-			common.NewRateLimitRequestLegacy(
-				"another_legacy",
-				[][][2]string{
-					{{"key2", strconv.Itoa(randomInt)}},
-					{{"key3", strconv.Itoa(randomInt)}}}, 1))
-
-		status := pb_legacy.RateLimitResponse_OK
-		limitRemaining1 := uint32(20 - (i + 1))
-		limitRemaining2 := uint32(10 - (i + 1))
-		if i >= 10 {
-			status = pb_legacy.RateLimitResponse_OVER_LIMIT
-			limitRemaining2 = 0
-		}
-
-		common.AssertProtoEqual(
-			assert,
-			&pb_legacy.RateLimitResponse{
-				OverallCode: status,
-				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining1),
-					newDescriptorStatusLegacy(status, 10, pb_legacy.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
-			response)
-		assert.NoError(err)
 	}
 }
 
