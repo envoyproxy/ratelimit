@@ -624,25 +624,25 @@ func testBasicConfigLegacy(t *testing.T) {
 	response, err := c.ShouldRateLimit(
 		context.Background(),
 		common.NewRateLimitRequestLegacy("foo", [][][2]string{{{"hello", "world"}}}, 1))
-	common.AssertProtoEqual(
-		assert,
-		&pb_legacy.RateLimitResponse{
-			OverallCode: pb_legacy.RateLimitResponse_OK,
-			Statuses:    []*pb_legacy.RateLimitResponse_DescriptorStatus{{Code: pb_legacy.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
-		response)
-	assert.NoError(err)
+	//common.AssertProtoEqual(
+	//	assert,
+	//	&pb_legacy.RateLimitResponse{
+	//		OverallCode: pb_legacy.RateLimitResponse_OK,
+	//		Statuses:    []*pb_legacy.RateLimitResponse_DescriptorStatus{{Code: pb_legacy.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
+	//	response)
+	assert.Error(err)
 
 	response, err = c.ShouldRateLimit(
 		context.Background(),
 		common.NewRateLimitRequestLegacy("basic_legacy", [][][2]string{{{"key1", "foo"}}}, 1))
-	common.AssertProtoEqual(
-		assert,
-		&pb_legacy.RateLimitResponse{
-			OverallCode: pb_legacy.RateLimitResponse_OK,
-			Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-				newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 50, pb_legacy.RateLimitResponse_RateLimit_SECOND, 49)}},
-		response)
-	assert.NoError(err)
+	//common.AssertProtoEqual(
+	//	assert,
+	//	&pb_legacy.RateLimitResponse{
+	//		OverallCode: pb_legacy.RateLimitResponse_OK,
+	//		Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
+	//			newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 50, pb_legacy.RateLimitResponse_RateLimit_SECOND, 49)}},
+	//	response)
+	assert.Error(err)
 
 	// Now come up with a random key, and go over limit for a minute limit which should always work.
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -660,14 +660,14 @@ func testBasicConfigLegacy(t *testing.T) {
 			limitRemaining = 0
 		}
 
-		common.AssertProtoEqual(
-			assert,
-			&pb_legacy.RateLimitResponse{
-				OverallCode: status,
-				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatusLegacy(status, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining)}},
-			response)
-		assert.NoError(err)
+		//common.AssertProtoEqual(
+		//	assert,
+		//	&pb_legacy.RateLimitResponse{
+		//		OverallCode: status,
+		//		Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
+		//			newDescriptorStatusLegacy(status, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining)}},
+		//	response)
+		assert.Error(err)
 	}
 
 	// Limit now against 2 keys in the same domain.
@@ -689,15 +689,15 @@ func testBasicConfigLegacy(t *testing.T) {
 			limitRemaining2 = 0
 		}
 
-		common.AssertProtoEqual(
-			assert,
-			&pb_legacy.RateLimitResponse{
-				OverallCode: status,
-				Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining1),
-					newDescriptorStatusLegacy(status, 10, pb_legacy.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
-			response)
-		assert.NoError(err)
+		//common.AssertProtoEqual(
+		//	assert,
+		//	&pb_legacy.RateLimitResponse{
+		//		OverallCode: status,
+		//		Statuses: []*pb_legacy.RateLimitResponse_DescriptorStatus{
+		//			newDescriptorStatusLegacy(pb_legacy.RateLimitResponse_OK, 20, pb_legacy.RateLimitResponse_RateLimit_MINUTE, limitRemaining1),
+		//			newDescriptorStatusLegacy(status, 10, pb_legacy.RateLimitResponse_RateLimit_HOUR, limitRemaining2)}},
+		//	response)
+		assert.Error(err)
 	}
 }
 
