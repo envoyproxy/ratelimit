@@ -5,7 +5,7 @@
 - [Overview](#overview)
 - [Docker Image](#docker-image)
 - [Supported Envoy APIs](#supported-envoy-apis)
-  - [Deprecation Schedule](#deprecation-schedule)
+  - [API Deprecation History](#api-deprecation-history)
 - [Building and Testing](#building-and-testing)
   - [Docker-compose setup](#docker-compose-setup)
   - [Full test environment](#full-test-environment)
@@ -56,7 +56,7 @@ For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/
 [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is currently supported.
 Support for [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v2/rls.proto) is now deprecated.
 
-## Deprecation Schedule
+## API Deprecation History
 
 1. `v1.0.0` tagged on commit `0ded92a2af8261d43096eba4132e45b99a3b8b14`. Ratelimit has been in production use at Lyft for over 2 years.
 2. `v1.1.0` introduces the data-plane-api proto and initiates the deprecation of the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
