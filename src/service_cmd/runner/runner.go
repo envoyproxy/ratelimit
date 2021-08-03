@@ -120,8 +120,8 @@ func (runner *Runner) Run() {
 
 	// Ratelimit is compatible with the below proto definition
 	// data-plane-api v3 rls.proto: https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto
+	// v2 proto is no longer supported
 	pb.RegisterRateLimitServiceServer(srv.GrpcServer(), service)
-	// v2 API proto is now deprecated
 
 	srv.Start()
 }
