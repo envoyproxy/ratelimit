@@ -64,7 +64,7 @@ Support for [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/mas
 The current version of ratelimit protocol is changed to [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
 while [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is still supported
 as a legacy protocol.
-4. `TODO` deleted support for legacy [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
+4. `4bb32826` deleted support for legacy [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
 
 # Building and Testing
 
