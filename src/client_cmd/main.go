@@ -52,6 +52,7 @@ func main() {
 	flag.Var(
 		&descriptorsValue, "descriptors",
 		"descriptor list to query in <key>=<value>,<key>=<value>,... form")
+	hitsAddend := flag.Uint("hitsAddend", 1, "the number of hits a request adds to the matched limit")
 	flag.Parse()
 
 	flag.VisitAll(func(f *flag.Flag) {
@@ -66,16 +67,12 @@ func main() {
 
 	defer conn.Close()
 	c := pb.NewRateLimitServiceClient(conn)
-	desc := make([]*pb_struct.RateLimitDescriptor, len(descriptorsValue.descriptors))
-	for i, v := range descriptorsValue.descriptors {
-		desc[i] = v
-	}
 	response, err := c.ShouldRateLimit(
 		context.Background(),
 		&pb.RateLimitRequest{
 			Domain:      *domain,
-			Descriptors: desc,
-			HitsAddend:  1,
+			Descriptors: descriptorsValue.descriptors,
+			HitsAddend:  uint32(*hitsAddend),
 		})
 	if err != nil {
 		fmt.Printf("request error: %s\n", err.Error())
