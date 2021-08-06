@@ -241,6 +241,7 @@ func (this *rateLimitConfigImpl) Dump() string {
 func (this *rateLimitConfigImpl) GetLimit(
 	ctx context.Context, domain string, descriptor *pb_struct.RateLimitDescriptor) *RateLimit {
 
+	logger.Debugf("Descriptor %v", descriptor)
 	logger.Debugf("starting get limit lookup")
 	var rateLimit *RateLimit = nil
 	value := this.domains[domain]
@@ -264,13 +265,16 @@ func (this *rateLimitConfigImpl) GetLimit(
 	for i, entry := range descriptor.Entries {
 		// First see if key_value is in the map. If that isn't in the map we look for just key
 		// to check for a default value.
+		entry.Value = checkRegex(descriptorsMap, descriptor)
 		finalKey := entry.Key + "_" + entry.Value
 		logger.Debugf("looking up key: %s", finalKey)
 		nextDescriptor := descriptorsMap[finalKey]
+		logger.Debugf("nextDescriptor [not nil]: %v", nextDescriptor)
 		if nextDescriptor == nil {
 			finalKey = entry.Key
 			logger.Debugf("looking up key: %s", finalKey)
 			nextDescriptor = descriptorsMap[finalKey]
+			logger.Debugf("nextDescriptor: %v", nextDescriptor)
 		}
 
 		if nextDescriptor != nil && nextDescriptor.limit != nil {

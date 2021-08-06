@@ -8,3 +8,4 @@ key.pem
 private.pem
 redis-per-second.conf
 redis.conf
+.DS_Store
