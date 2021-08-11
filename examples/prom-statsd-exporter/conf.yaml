@@ -85,10 +85,9 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
   - match: "ratelimit.service.config_load_error"
     name: "ratelimit_service_config_load_error"
     match_metric_type: counter
-  - match: "ratelimit.service.config_load_error"
-    name: "ratelimit_service_config_load_error"
-    match_metric_type: counter
-  - match: "."
-    match_type: "regex"
-    action: "drop"
-    name: "dropped"
+
+  # Enable below in production once you have the metrics you need
+  # - match: "."
+  #   match_type: "regex"
+  #   action: "drop"
+  #   name: "dropped"
