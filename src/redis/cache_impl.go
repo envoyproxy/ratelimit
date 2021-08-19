@@ -15,11 +15,11 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 	var perSecondPool Client
 	if s.RedisPerSecond {
 		perSecondPool = NewClientImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondTls, s.RedisPerSecondAuth, s.RedisPerSecondSocketType,
-			s.RedisPerSecondType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize, s.RedisPerSecondPipelineWindow, s.RedisPerSecondPipelineLimit)
+			s.RedisPerSecondType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize, s.RedisPerSecondPipelineWindow, s.RedisPerSecondPipelineLimit, s.RedisTlsConfig)
 	}
 	var otherPool Client
 	otherPool = NewClientImpl(srv.Scope().Scope("redis_pool"), s.RedisTls, s.RedisAuth, s.RedisSocketType, s.RedisType, s.RedisUrl, s.RedisPoolSize,
-		s.RedisPipelineWindow, s.RedisPipelineLimit)
+		s.RedisPipelineWindow, s.RedisPipelineLimit, s.RedisTlsConfig)
 
 	return NewFixedRateLimitCacheImpl(
 		otherPool,
