@@ -34,6 +34,14 @@ type Settings struct {
 	RuntimeIgnoreDotFiles bool   `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
 	RuntimeWatchRoot      bool   `envconfig:"RUNTIME_WATCH_ROOT" default:"true"`
 
+	// Settings for optional returning of custom headers
+	// value: the current limit
+	HeaderRatelimitLimit string `envconfig:"LIMIT_LIMIT_HEADER" default:""`
+	// value: remaining count
+	HeaderRatelimitRemaining string `envconfig:"LIMIT_REMAINING_HEADER" default:""`
+	// value: remaining seconds
+	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:""`
+
 	// Settings for all cache types
 	ExpirationJitterMaxSeconds int64   `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	LocalCacheSizeInBytes      int     `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`

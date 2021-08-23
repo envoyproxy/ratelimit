@@ -1,9 +1,10 @@
 package limiter
 
 import (
-	mockstats "github.com/envoyproxy/ratelimit/test/mocks/stats"
 	"math/rand"
 	"testing"
+
+	mockstats "github.com/envoyproxy/ratelimit/test/mocks/stats"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
