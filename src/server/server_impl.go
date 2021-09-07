@@ -181,7 +181,7 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	ret := new(server)
 
 	keepaliveOpt := grpc.KeepaliveParams(keepalive.ServerParameters{
-		MaxConnectionAge: s.GrpcMaxConnectionAge,
+		MaxConnectionAge:      s.GrpcMaxConnectionAge,
 		MaxConnectionAgeGrace: s.GrpcMaxConnectionAgeGrace,
 	})
 
