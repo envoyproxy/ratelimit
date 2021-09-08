@@ -49,7 +49,8 @@ type Settings struct {
 	RedisPoolSize   int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
 	RedisAuth       string `envconfig:"REDIS_AUTH" default:""`
 	RedisTls        bool   `envconfig:"REDIS_TLS" default:"false"`
-	RedisTlsConfig   *tls.Config
+	RedisTlsConfig  *tls.Config
+
 	// RedisPipelineWindow sets the duration after which internal pipelines will be flushed.
 	// If window is zero then implicit pipelining will be disabled. Radix use 150us for the
 	// default value, see https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L278.
