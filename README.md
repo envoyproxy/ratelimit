@@ -542,8 +542,6 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable authentication to the redis host.
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
-Ratelimit also provides the ability to specify TLS settings via `RedisTlsConfig` in the [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go).
-
 ## Redis type
 
 Ratelimit supports different types of redis deployments:
