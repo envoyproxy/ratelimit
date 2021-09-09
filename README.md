@@ -407,6 +407,12 @@ Output example:
 {"@message":"waiting for runtime update","@timestamp":"2020-09-10T17:22:44.926267808Z","level":"debug"}
 ```
 
+## GRPC Keepalive
+Client-side GRPC DNS re-resolution in scenarios with auto scaling enabled might not work as expected and the current workaround is to [configure connection keepalive](https://github.com/grpc/grpc/issues/12295#issuecomment-382794204) on server-side.
+The behavior can be fixed by configuring the following env variables for the ratelimit server:
+* `GRPC_MAX_CONNECTION_AGE`: a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway. A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
+* `GRPC_MAX_CONNECTION_AGE_GRACE`: an additive period after MaxConnectionAge after which the connection will be forcibly closed.
+
 # Request Fields
 
 For information on the fields of a Ratelimit gRPC request please read the information
