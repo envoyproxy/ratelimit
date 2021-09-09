@@ -53,14 +53,18 @@ func checkError(err error) {
 }
 
 func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
-	pipelineWindow time.Duration, pipelineLimit int) Client {
+	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config) Client {
 	logger.Warnf("connecting to redis on %s with pool size %d", url, poolSize)
 
 	df := func(network, addr string) (radix.Conn, error) {
 		var dialOpts []radix.DialOpt
 
 		if useTls {
-			dialOpts = append(dialOpts, radix.DialUseTLS(&tls.Config{}))
+			if tlsConfig != nil {
+				dialOpts = append(dialOpts, radix.DialUseTLS(tlsConfig))
+			} else {
+				dialOpts = append(dialOpts, radix.DialUseTLS(&tls.Config{}))
+			}
 		}
 
 		if auth != "" {
