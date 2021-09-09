@@ -22,6 +22,7 @@
       - [Example 5](#example-5)
   - [Loading Configuration](#loading-configuration)
   - [Log Format](#log-format)
+  - [GRPC Keepalive](#grpc-keepalive)
 - [Request Fields](#request-fields)
 - [GRPC Client](#grpc-client)
   - [Commandline flags](#commandline-flags)
