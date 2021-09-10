@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"expvar"
 	"fmt"
+	"google.golang.org/grpc/keepalive"
 	"io"
 	"net/http"
 	"net/http/pprof"
@@ -178,7 +179,13 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	}
 
 	ret := new(server)
-	ret.grpcServer = grpc.NewServer(s.GrpcUnaryInterceptor)
+
+	keepaliveOpt := grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionAge:      s.GrpcMaxConnectionAge,
+		MaxConnectionAgeGrace: s.GrpcMaxConnectionAgeGrace,
+	})
+
+	ret.grpcServer = grpc.NewServer(s.GrpcUnaryInterceptor, keepaliveOpt)
 
 	// setup listen addresses
 	ret.httpAddress = net.JoinHostPort(s.Host, strconv.Itoa(s.Port))

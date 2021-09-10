@@ -22,6 +22,7 @@
       - [Example 5](#example-5)
   - [Loading Configuration](#loading-configuration)
   - [Log Format](#log-format)
+  - [GRPC Keepalive](#grpc-keepalive)
 - [Request Fields](#request-fields)
 - [GRPC Client](#grpc-client)
   - [Commandline flags](#commandline-flags)
@@ -406,6 +407,12 @@ Output example:
 {"@message":"Listening for HTTP on ':8080'","@timestamp":"2020-09-10T17:22:44.926227031Z","level":"warning"}
 {"@message":"waiting for runtime update","@timestamp":"2020-09-10T17:22:44.926267808Z","level":"debug"}
 ```
+
+## GRPC Keepalive
+Client-side GRPC DNS re-resolution in scenarios with auto scaling enabled might not work as expected and the current workaround is to [configure connection keepalive](https://github.com/grpc/grpc/issues/12295#issuecomment-382794204) on server-side.
+The behavior can be fixed by configuring the following env variables for the ratelimit server:
+* `GRPC_MAX_CONNECTION_AGE`: a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway. A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
+* `GRPC_MAX_CONNECTION_AGE_GRACE`: an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 
 # Request Fields
 
