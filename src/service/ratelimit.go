@@ -2,11 +2,16 @@ package ratelimit
 
 import (
 	"fmt"
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/stats"
+
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
@@ -22,15 +27,29 @@ type RateLimitServiceServer interface {
 	GetCurrentConfig() config.RateLimitConfig
 }
 
+type Clock interface {
+	Now() time.Time
+}
+
+// StdClock returns system time.
+type StdClock struct{}
+
+func (c StdClock) Now() time.Time { return time.Now() }
+
 type service struct {
-	runtime            loader.IFace
-	configLock         sync.RWMutex
-	configLoader       config.RateLimitConfigLoader
-	config             config.RateLimitConfig
-	runtimeUpdateEvent chan int
-	cache              limiter.RateLimitCache
-	stats              stats.ServiceStats
-	runtimeWatchRoot   bool
+	runtime                     loader.IFace
+	configLock                  sync.RWMutex
+	configLoader                config.RateLimitConfigLoader
+	config                      config.RateLimitConfig
+	runtimeUpdateEvent          chan int
+	cache                       limiter.RateLimitCache
+	stats                       stats.ServiceStats
+	runtimeWatchRoot            bool
+	customHeadersEnabled        bool
+	customHeaderLimitHeader     string
+	customHeaderRemainingHeader string
+	customHeaderResetHeader     string
+	customHeaderClock           Clock
 }
 
 func (this *service) reloadConfig(statsManager stats.Manager) {
@@ -61,6 +80,20 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 	this.configLock.Lock()
 	this.config = newConfig
 	this.configLock.Unlock()
+
+	rlSettings := settings.NewSettings()
+
+	if len(rlSettings.HeaderRatelimitLimit) > 0 &&
+		len(rlSettings.HeaderRatelimitReset) > 0 &&
+		len(rlSettings.HeaderRatelimitRemaining) > 0 {
+		this.customHeadersEnabled = true
+
+		this.customHeaderLimitHeader = rlSettings.HeaderRatelimitLimit
+
+		this.customHeaderRemainingHeader = rlSettings.HeaderRatelimitRemaining
+
+		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
+	}
 }
 
 type serviceError string
@@ -118,6 +151,8 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 	return limitsToCheck, isUnlimited
 }
 
+const MaxUint32 = uint32(1<<32 - 1)
+
 func (this *service) shouldRateLimitWorker(
 	ctx context.Context, request *pb.RateLimitRequest) *pb.RateLimitResponse {
 
@@ -132,7 +167,19 @@ func (this *service) shouldRateLimitWorker(
 	response := &pb.RateLimitResponse{}
 	response.Statuses = make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
 	finalCode := pb.RateLimitResponse_OK
+
+	// Keep track of the descriptor which is closes to hit the ratelimit
+	minLimitRemaining := MaxUint32
+	var minimumDescriptor *pb.RateLimitResponse_DescriptorStatus = nil
+
 	for i, descriptorStatus := range responseDescriptorStatuses {
+		// Keep track of the descriptor closest to reset if we have a CurrentLimit
+		if descriptorStatus.CurrentLimit != nil &&
+			descriptorStatus.LimitRemaining < minLimitRemaining {
+			minimumDescriptor = descriptorStatus
+			minLimitRemaining = descriptorStatus.LimitRemaining
+		}
+
 		if isUnlimited[i] {
 			response.Statuses[i] = &pb.RateLimitResponse_DescriptorStatus{
 				Code:           pb.RateLimitResponse_OK,
@@ -142,12 +189,69 @@ func (this *service) shouldRateLimitWorker(
 			response.Statuses[i] = descriptorStatus
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				finalCode = descriptorStatus.Code
+
+				minimumDescriptor = descriptorStatus
+				minLimitRemaining = 0
 			}
+		}
+	}
+
+	// Add Headers if requested
+	if this.customHeadersEnabled && minimumDescriptor != nil {
+		response.ResponseHeadersToAdd = []*core.HeaderValue{
+			this.rateLimitLimitHeader(minimumDescriptor),
+			this.rateLimitRemainingHeader(minimumDescriptor),
+			this.rateLimitResetHeader(minimumDescriptor, this.customHeaderClock.Now().Unix()),
 		}
 	}
 
 	response.OverallCode = finalCode
 	return response
+}
+
+func (this *service) rateLimitLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+
+	return &core.HeaderValue{
+		Key:   this.customHeaderLimitHeader,
+		Value: strconv.FormatUint(uint64(descriptor.CurrentLimit.RequestsPerUnit), 10),
+	}
+}
+
+func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+
+	return &core.HeaderValue{
+		Key:   this.customHeaderRemainingHeader,
+		Value: strconv.FormatUint(uint64(descriptor.LimitRemaining), 10),
+	}
+}
+
+func (this *service) rateLimitResetHeader(
+	descriptor *pb.RateLimitResponse_DescriptorStatus, now int64) *core.HeaderValue {
+
+	return &core.HeaderValue{
+		Key:   this.customHeaderResetHeader,
+		Value: strconv.FormatInt(calculateReset(descriptor, now), 10),
+	}
+}
+
+func calculateReset(descriptor *pb.RateLimitResponse_DescriptorStatus, now int64) int64 {
+	sec := unitInSeconds(descriptor.CurrentLimit.Unit)
+	return sec - now%sec
+}
+
+func unitInSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
+	switch unit {
+	case pb.RateLimitResponse_RateLimit_SECOND:
+		return 1
+	case pb.RateLimitResponse_RateLimit_MINUTE:
+		return 60
+	case pb.RateLimitResponse_RateLimit_HOUR:
+		return 60 * 60
+	case pb.RateLimitResponse_RateLimit_DAY:
+		return 60 * 60 * 24
+	default:
+		panic("unknown rate limit unit")
+	}
 }
 
 func (this *service) ShouldRateLimit(
@@ -190,7 +294,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock Clock) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -201,6 +305,7 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		cache:              cache,
 		stats:              statsManager.NewServiceStats(),
 		runtimeWatchRoot:   runtimeWatchRoot,
+		customHeaderClock:  clock,
 	}
 
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)

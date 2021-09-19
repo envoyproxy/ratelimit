@@ -49,6 +49,14 @@ type Settings struct {
 	CacheKeyPrefix             string  `envconfig:"CACHE_KEY_PREFIX" default:""`
 	BackendType                string  `envconfig:"BACKEND_TYPE" default:"redis"`
 
+	// Settings for optional returning of custom headers
+	// value: the current limit
+	HeaderRatelimitLimit string `envconfig:"LIMIT_LIMIT_HEADER" default:""`
+	// value: remaining count
+	HeaderRatelimitRemaining string `envconfig:"LIMIT_REMAINING_HEADER" default:""`
+	// value: remaining seconds
+	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:""`
+
 	// Redis settings
 	RedisSocketType string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisType       string `envconfig:"REDIS_TYPE" default:"SINGLE"`

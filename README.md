@@ -625,6 +625,14 @@ descriptors will fail. Descriptors sent to Memcache should not contain whitespac
 When using multiple memcache nodes in `MEMCACHE_HOST_PORT=`, one should provide the identical list of memcache nodes
 to all ratelimiter instances to ensure that a particular cache key is always hashed to the same memcache node.
 
+# Custom headers
+Ratelimit service can be configured to return custom headers with the ratelimit information.
+
+Setting _all_ the following environment variables to the header name to use:
+1. `LIMIT_LIMIT_HEADER` - The value will be the current limit value closest to being triggered, currently the optional quota policies are not added
+1. `LIMIT_REMAINING_HEADER` - The value will be the remaining quota
+1. `LIMIT_RESET_HEADER` - The value will be the number of seconds until the limit is being reset
+
 # Contact
 
 * [envoy-announce](https://groups.google.com/forum/#!forum/envoy-announce): Low frequency mailing
