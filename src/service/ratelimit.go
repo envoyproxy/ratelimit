@@ -172,16 +172,16 @@ func (this *service) shouldRateLimitWorker(
 	finalCode := pb.RateLimitResponse_OK
 
 	// Keep track of the descriptor which is closes to hit the ratelimit
-	var minQuotaRemaining uint32 = MaxUint32
+	var minLimitRemaining uint32 = MaxUint32
 	var minimumDescriptor *pb.RateLimitResponse_DescriptorStatus = nil
 
 	for i, descriptorStatus := range responseDescriptorStatuses {
 
 		// Keep track of the descriptor closest to reset if we have a CurrentLimit
 		if descriptorStatus.CurrentLimit != nil &&
-			descriptorStatus.LimitRemaining < minQuotaRemaining {
+			descriptorStatus.LimitRemaining < minLimitRemaining {
 			minimumDescriptor = descriptorStatus
-			minQuotaRemaining = descriptorStatus.LimitRemaining
+			minLimitRemaining = descriptorStatus.LimitRemaining
 		}
 
 		if isUnlimited[i] {
@@ -194,8 +194,9 @@ func (this *service) shouldRateLimitWorker(
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				finalCode = descriptorStatus.Code
 
+				// We have hit the limit so it's definitely the closest
 				minimumDescriptor = descriptorStatus
-				minQuotaRemaining = 0
+				minLimitRemaining = 0
 			}
 		}
 	}
