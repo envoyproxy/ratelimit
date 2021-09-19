@@ -191,6 +191,12 @@ func TestServiceWithCustomHeaders(test *testing.T) {
 	os.Setenv("LIMIT_LIMIT_HEADER", "A-Ratelimit-Limit")
 	os.Setenv("LIMIT_REMAINING_HEADER", "A-Ratelimit-Remaining")
 	os.Setenv("LIMIT_RESET_HEADER", "A-Ratelimit-Reset")
+	defer func() {
+		os.Unsetenv("LIMIT_LIMIT_HEADER")
+		os.Unsetenv("LIMIT_REMAINING_HEADER")
+		os.Unsetenv("LIMIT_RESET_HEADER")
+	}()
+
 	t := commonSetup(test)
 	defer t.controller.Finish()
 	service := t.setupBasicService()
