@@ -77,10 +77,9 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 
 	newConfig := this.configLoader.Load(files, statsManager)
 	this.stats.ConfigLoadSuccess.Inc()
+
 	this.configLock.Lock()
 	this.config = newConfig
-	this.configLock.Unlock()
-
 	rlSettings := settings.NewSettings()
 
 	if len(rlSettings.HeaderRatelimitLimit) > 0 &&
@@ -94,6 +93,7 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 
 		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
 	}
+	this.configLock.Unlock()
 }
 
 type serviceError string
