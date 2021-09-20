@@ -38,6 +38,7 @@
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
 - [Memcache](#memcache)
+- [Custom headers](#custom-headers)
 - [Contact](#contact)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
