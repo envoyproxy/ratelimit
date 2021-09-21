@@ -90,6 +90,9 @@ type Settings struct {
 	MemcacheMaxIdleConns int           `envconfig:"MEMCACHE_MAX_IDLE_CONNS" default:"2"`
 	MemcacheSrv          string        `envconfig:"MEMCACHE_SRV" default:""`
 	MemcacheSrvRefresh   time.Duration `envconfig:"MEMCACHE_SRV_REFRESH" default:"0"`
+
+	// Should the ratelimiting be running in shadow-mode, ie. never report a ratelimit status, unless a rate was provided from envoy as an override
+	ShadowMode bool `envconfig:"SHADOW_MODE" default:"false"`
 }
 
 type Option func(*Settings)

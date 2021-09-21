@@ -2,13 +2,14 @@ package metrics
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/envoyproxy/ratelimit/src/metrics"
 	stats "github.com/lyft/gostats"
 	statsMock "github.com/lyft/gostats/mock"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
-	"testing"
-	"time"
 )
 
 func TestMetricsInterceptor(t *testing.T) {

@@ -2,10 +2,12 @@ package ratelimit
 
 import (
 	"fmt"
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"math"
 	"strings"
 	"sync"
+
+	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/stats"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/assert"
@@ -31,6 +33,7 @@ type service struct {
 	cache              limiter.RateLimitCache
 	stats              stats.ServiceStats
 	runtimeWatchRoot   bool
+	shadowMode         bool
 }
 
 func (this *service) reloadConfig(statsManager stats.Manager) {
@@ -60,6 +63,8 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 	this.stats.ConfigLoadSuccess.Inc()
 	this.configLock.Lock()
 	this.config = newConfig
+	rlSettings := settings.NewSettings()
+	this.shadowMode = rlSettings.ShadowMode
 	this.configLock.Unlock()
 }
 
@@ -180,6 +185,12 @@ func (this *service) ShouldRateLimit(
 
 	response := this.shouldRateLimitWorker(ctx, request)
 	logger.Debugf("returning normal response")
+
+	// If there is a global shadowmode, it should always return OK
+	if this.shadowMode {
+		response.OverallCode = pb.RateLimitResponse_OK
+	}
+
 	return response, nil
 }
 
@@ -190,7 +201,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, shadowMode bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -201,6 +212,7 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		cache:              cache,
 		stats:              statsManager.NewServiceStats(),
 		runtimeWatchRoot:   runtimeWatchRoot,
+		shadowMode:         shadowMode,
 	}
 
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)

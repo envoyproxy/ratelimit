@@ -1,10 +1,12 @@
 package ratelimit_test
 
 import (
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"math"
+	"os"
 	"sync"
 	"testing"
+
+	"github.com/envoyproxy/ratelimit/src/stats"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/config"
@@ -87,7 +89,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 	this.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}},
 		gomock.Any()).Return(this.config)
-	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, true)
+	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, true, false)
 }
 
 func TestService(test *testing.T) {
@@ -122,7 +124,7 @@ func TestService(test *testing.T) {
 	request = common.NewRateLimitRequest(
 		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false),
 		nil}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
@@ -154,7 +156,7 @@ func TestService(test *testing.T) {
 	// Config should still be valid. Also make sure order does not affect results.
 	limits = []*config.RateLimit{
 		nil,
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false)}
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
 	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
@@ -174,6 +176,55 @@ func TestService(test *testing.T) {
 
 	t.assert.EqualValues(2, t.statStore.NewCounter("config_load_success").Value())
 	t.assert.EqualValues(1, t.statStore.NewCounter("config_load_error").Value())
+}
+
+func TestServiceGlobalShadowMode(test *testing.T) {
+	os.Setenv("SHADOW_MODE", "true")
+	defer func() {
+		os.Unsetenv("SHADOW_MODE")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Force a config reload.
+	barrier := newBarrier()
+	t.configLoader.EXPECT().Load(
+		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
+		func([]config.RateLimitConfigToLoad, stats.Manager) { barrier.signal() }).Return(t.config)
+	t.runtimeUpdateCallback <- 1
+	barrier.wait()
+
+	// Make a request.
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
+
+	// Global Shadow mode
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false),
+		nil}
+	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
+	response, err := service.ShouldRateLimit(nil, request)
+
+	// OK overall code even if limit response was OVER_LIMIT
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+			}},
+		response)
+	t.assert.Nil(err)
+
+	t.assert.EqualValues(2, t.statStore.NewCounter("config_load_success").Value())
+	t.assert.EqualValues(0, t.statStore.NewCounter("config_load_error").Value())
 }
 
 func TestEmptyDomain(test *testing.T) {
@@ -206,7 +257,7 @@ func TestCacheError(test *testing.T) {
 	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false)}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false)}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.cache.EXPECT().DoLimit(nil, request, limits).Do(
 		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
@@ -233,7 +284,7 @@ func TestInitialLoadError(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Manager) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statsManager, true)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statsManager, true, false)
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
@@ -250,9 +301,9 @@ func TestUnlimited(test *testing.T) {
 	request := common.NewRateLimitRequest(
 		"some-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}, {{"baz", "qux"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("foo_bar"), false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("foo_bar"), false, false),
 		nil,
-		config.NewRateLimit(55, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("baz_qux"), true)}
+		config.NewRateLimit(55, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("baz_qux"), true, false)}
 	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[1]).Return(limits[1])
 	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[2]).Return(limits[2])
