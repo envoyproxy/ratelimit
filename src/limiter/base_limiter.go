@@ -1,6 +1,9 @@
 package limiter
 
 import (
+	"math"
+	"math/rand"
+
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/assert"
@@ -8,8 +11,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	logger "github.com/sirupsen/logrus"
-	"math"
-	"math/rand"
 )
 
 type BaseRateLimiter struct {
@@ -75,45 +76,58 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK,
 			nil, 0)
 	}
+	var responseDescriptorStatus *pb.RateLimitResponse_DescriptorStatus
+	over_limit := false
 	if isOverLimitWithLocalCache {
+		over_limit = true
 		limitInfo.limit.Stats.OverLimit.Add(uint64(hitsAddend))
 		limitInfo.limit.Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
-		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT,
-			limitInfo.limit.Limit, 0)
-	}
-	var responseDescriptorStatus *pb.RateLimitResponse_DescriptorStatus
-	limitInfo.overLimitThreshold = limitInfo.limit.Limit.RequestsPerUnit
-	// The nearLimitThreshold is the number of requests that can be made before hitting the nearLimitRatio.
-	// We need to know it in both the OK and OVER_LIMIT scenarios.
-	limitInfo.nearLimitThreshold = uint32(math.Floor(float64(float32(limitInfo.overLimitThreshold) * this.nearLimitRatio)))
-	logger.Debugf("cache key: %s current: %d", key, limitInfo.limitAfterIncrease)
-	if limitInfo.limitAfterIncrease > limitInfo.overLimitThreshold {
 		responseDescriptorStatus = this.generateResponseDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT,
 			limitInfo.limit.Limit, 0)
-
-		this.checkOverLimitThreshold(limitInfo, hitsAddend)
-
-		if this.localCache != nil {
-			// Set the TTL of the local_cache to be the entire duration.
-			// Since the cache_key gets changed once the time crosses over current time slot, the over-the-limit
-			// cache keys in local_cache lose effectiveness.
-			// For example, if we have an hour limit on all mongo connections, the cache key would be
-			// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
-			// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
-			// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
-			err := this.localCache.Set([]byte(key), []byte{}, int(utils.UnitToDivider(limitInfo.limit.Limit.Unit)))
-			if err != nil {
-				logger.Errorf("Failing to set local cache key: %s", key)
-			}
-		}
 	} else {
-		responseDescriptorStatus = this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK,
-			limitInfo.limit.Limit, limitInfo.overLimitThreshold-limitInfo.limitAfterIncrease)
+		limitInfo.overLimitThreshold = limitInfo.limit.Limit.RequestsPerUnit
+		// The nearLimitThreshold is the number of requests that can be made before hitting the nearLimitRatio.
+		// We need to know it in both the OK and OVER_LIMIT scenarios.
+		limitInfo.nearLimitThreshold = uint32(math.Floor(float64(float32(limitInfo.overLimitThreshold) * this.nearLimitRatio)))
+		logger.Debugf("cache key: %s current: %d", key, limitInfo.limitAfterIncrease)
+		if limitInfo.limitAfterIncrease > limitInfo.overLimitThreshold {
+			over_limit = true
+			responseDescriptorStatus = this.generateResponseDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT,
+				limitInfo.limit.Limit, 0)
 
-		// The limit is OK but we additionally want to know if we are near the limit.
-		this.checkNearLimitThreshold(limitInfo, hitsAddend)
-		limitInfo.limit.Stats.WithinLimit.Add(uint64(hitsAddend))
+			this.checkOverLimitThreshold(limitInfo, hitsAddend)
+
+			if this.localCache != nil {
+				// Set the TTL of the local_cache to be the entire duration.
+				// Since the cache_key gets changed once the time crosses over current time slot, the over-the-limit
+				// cache keys in local_cache lose effectiveness.
+				// For example, if we have an hour limit on all mongo connections, the cache key would be
+				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
+				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
+				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
+				err := this.localCache.Set([]byte(key), []byte{}, int(utils.UnitToDivider(limitInfo.limit.Limit.Unit)))
+				if err != nil {
+					logger.Errorf("Failing to set local cache key: %s", key)
+				}
+			}
+		} else {
+			responseDescriptorStatus = this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK,
+				limitInfo.limit.Limit, limitInfo.overLimitThreshold-limitInfo.limitAfterIncrease)
+
+			// The limit is OK but we additionally want to know if we are near the limit.
+			this.checkNearLimitThreshold(limitInfo, hitsAddend)
+			limitInfo.limit.Stats.WithinLimit.Add(uint64(hitsAddend))
+		}
 	}
+
+	// If the limit is in ShadowMode, it should be always return OK
+	// We only want to increase stats if the limit was actually over the limit
+	if over_limit && limitInfo.limit.ShadowMode {
+		logger.Debugf("Limit with key %s, is in shadow_mode", limitInfo.limit.FullKey)
+		responseDescriptorStatus.Code = pb.RateLimitResponse_OK
+		limitInfo.limit.Stats.ShadowMode.Add(uint64(hitsAddend))
+	}
+
 	return responseDescriptorStatus
 }
 

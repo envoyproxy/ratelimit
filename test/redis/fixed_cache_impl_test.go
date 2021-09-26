@@ -466,3 +466,105 @@ func TestRedisWithJitter(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 }
+
+func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	client := mock_redis.NewMockClient(controller)
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	localCache := freecache.NewCache(100)
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm)
+	sink := &common.TestStatSink{}
+	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
+
+	// Test Near Limit Stats. Under Near Limit Ratio
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(15, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key4_value4"), false, true)}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
+
+	// Check the local cache stats.
+	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
+
+	// Test Near Limit Stats. At Near Limit Ratio, still OK
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
+
+	// Check the local cache stats.
+	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
+
+	// Test Over limit stats
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(16)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	// The result should be OK since limit is in ShadowMode
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
+
+	// Check the local cache stats.
+	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
+
+	// Test Over limit stats with local cache
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
+		"EXPIRE", "domain_key4_value4_997200", int64(3600)).Times(0)
+
+	// The result should be OK since limit is in ShadowMode
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(limits[0].Limit, timeSource)}},
+		cache.DoLimit(nil, request, limits))
+	// TODO: How should we handle statistics? Should there be a separate ShadowMode statistics?  Should the other Stats remain as if they were unaffected by shadowmode?
+	assert.Equal(uint64(4), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
+	assert.Equal(uint64(3), limits[0].Stats.WithinLimit.Value())
+
+	// Check the local cache stats.
+	testLocalCacheStats(localCacheStats, statsStore, sink, 1, 3, 4, 0, 1)
+}

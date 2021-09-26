@@ -33,7 +33,7 @@ type service struct {
 	cache              limiter.RateLimitCache
 	stats              stats.ServiceStats
 	runtimeWatchRoot   bool
-	shadowMode         bool
+	globalShadowMode   bool
 }
 
 func (this *service) reloadConfig(statsManager stats.Manager) {
@@ -64,7 +64,7 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 	this.configLock.Lock()
 	this.config = newConfig
 	rlSettings := settings.NewSettings()
-	this.shadowMode = rlSettings.ShadowMode
+	this.globalShadowMode = rlSettings.GlobalShadowMode
 	this.configLock.Unlock()
 }
 
@@ -107,9 +107,10 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 					logger.Debugf("descriptor is unlimited, not passing to the cache")
 				} else {
 					logger.Debugf(
-						"applying limit: %d requests per %s",
+						"applying limit: %d requests per %s, shadow_mode: %t",
 						limitsToCheck[i].Limit.RequestsPerUnit,
 						limitsToCheck[i].Limit.Unit.String(),
+						limitsToCheck[i].ShadowMode,
 					)
 				}
 			}
@@ -151,6 +152,12 @@ func (this *service) shouldRateLimitWorker(
 		}
 	}
 
+	// If there is a global shadow_mode, it should always return OK
+	if finalCode == pb.RateLimitResponse_OVER_LIMIT && this.globalShadowMode {
+		finalCode = pb.RateLimitResponse_OK
+		this.stats.GlobalShadowMode.Inc()
+	}
+
 	response.OverallCode = finalCode
 	return response
 }
@@ -186,11 +193,6 @@ func (this *service) ShouldRateLimit(
 	response := this.shouldRateLimitWorker(ctx, request)
 	logger.Debugf("returning normal response")
 
-	// If there is a global shadowmode, it should always return OK
-	if this.shadowMode {
-		response.OverallCode = pb.RateLimitResponse_OK
-	}
-
 	return response, nil
 }
 
@@ -212,7 +214,7 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		cache:              cache,
 		stats:              statsManager.NewServiceStats(),
 		runtimeWatchRoot:   runtimeWatchRoot,
-		shadowMode:         shadowMode,
+		globalShadowMode:   shadowMode,
 	}
 
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)

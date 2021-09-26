@@ -108,7 +108,7 @@ func (runner *Runner) Run() {
 		config.NewRateLimitConfigLoaderImpl(),
 		runner.statsManager,
 		s.RuntimeWatchRoot,
-		s.ShadowMode,
+		s.GlobalShadowMode,
 	)
 
 	srv.AddDebugHttpEndpoint(
