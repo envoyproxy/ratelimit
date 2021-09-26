@@ -168,7 +168,7 @@ func (this *service) shouldRateLimitWorker(
 	response.Statuses = make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
 	finalCode := pb.RateLimitResponse_OK
 
-	// Keep track of the descriptor which is closes to hit the ratelimit
+	// Keep track of the descriptor which is closest to hit the ratelimit
 	minLimitRemaining := MaxUint32
 	var minimumDescriptor *pb.RateLimitResponse_DescriptorStatus = nil
 
