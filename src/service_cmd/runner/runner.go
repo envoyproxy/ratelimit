@@ -108,7 +108,7 @@ func (runner *Runner) Run() {
 		config.NewRateLimitConfigLoaderImpl(),
 		runner.statsManager,
 		s.RuntimeWatchRoot,
-		ratelimit.StdClock{},
+		utils.NewTimeSourceImpl(),
 	)
 
 	srv.AddDebugHttpEndpoint(

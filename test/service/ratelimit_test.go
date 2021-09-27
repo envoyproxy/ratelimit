@@ -5,9 +5,9 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/utils"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -64,14 +64,14 @@ type rateLimitServiceTestSuite struct {
 	runtimeUpdateCallback chan<- int
 	statsManager          stats.Manager
 	statStore             gostats.Store
-	mockClock             ratelimit.Clock
+	mockClock             utils.TimeSource
 }
 
 type MockClock struct {
 	now int64
 }
 
-func (c MockClock) Now() time.Time { return time.Unix(c.now, 0) }
+func (c MockClock) UnixNow() int64 { return c.now }
 
 func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret := rateLimitServiceTestSuite{}
@@ -187,11 +187,13 @@ func TestService(test *testing.T) {
 	t.assert.EqualValues(1, t.statStore.NewCounter("config_load_error").Value())
 }
 
-func TestServiceWithCustomHeaders(test *testing.T) {
+func TestServiceWithCustomRatelimitHeaders(test *testing.T) {
+	os.Setenv("LIMIT_RESPONSE_HEADERS_ENABLED", "true")
 	os.Setenv("LIMIT_LIMIT_HEADER", "A-Ratelimit-Limit")
 	os.Setenv("LIMIT_REMAINING_HEADER", "A-Ratelimit-Remaining")
 	os.Setenv("LIMIT_RESET_HEADER", "A-Ratelimit-Reset")
 	defer func() {
+		os.Unsetenv("LIMIT_RESPONSE_HEADERS_ENABLED")
 		os.Unsetenv("LIMIT_LIMIT_HEADER")
 		os.Unsetenv("LIMIT_REMAINING_HEADER")
 		os.Unsetenv("LIMIT_RESET_HEADER")
@@ -238,46 +240,55 @@ func TestServiceWithCustomHeaders(test *testing.T) {
 		},
 		response)
 	t.assert.Nil(err)
+}
 
-	// Config load failure.
+func TestServiceWithDefaultRatelimitHeaders(test *testing.T) {
+	os.Setenv("LIMIT_RESPONSE_HEADERS_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("LIMIT_RESPONSE_HEADERS_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload.
+	barrier := newBarrier()
 	t.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}}, gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Manager) {
-			defer barrier.signal()
-			panic(config.RateLimitConfigError("load error"))
-		})
+		func([]config.RateLimitConfigToLoad, stats.Manager) { barrier.signal() }).Return(t.config)
 	t.runtimeUpdateCallback <- 1
 	barrier.wait()
 
-	// Config should still be valid. Also make sure order does not affect results.
-	limits = []*config.RateLimit{
-		nil,
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false)}
+	// Make request
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false),
+		nil}
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
 	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0}})
-	response, err = service.ShouldRateLimit(nil, request)
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
+
+	response, err := service.ShouldRateLimit(nil, request)
 	common.AssertProtoEqual(
 		t.assert,
 		&pb.RateLimitResponse{
 			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
 			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
-				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
 			},
 			ResponseHeadersToAdd: []*core.HeaderValue{
-				{Key: "A-Ratelimit-Limit", Value: "10"},
-				{Key: "A-Ratelimit-Remaining", Value: "0"},
-				{Key: "A-Ratelimit-Reset", Value: "58"},
+				{Key: "RateLimit-Limit", Value: "10"},
+				{Key: "RateLimit-Remaining", Value: "0"},
+				{Key: "RateLimit-Reset", Value: "58"},
 			},
 		},
 		response)
 	t.assert.Nil(err)
-
-	t.assert.EqualValues(2, t.statStore.NewCounter("config_load_success").Value())
-	t.assert.EqualValues(1, t.statStore.NewCounter("config_load_error").Value())
 }
 
 func TestEmptyDomain(test *testing.T) {
