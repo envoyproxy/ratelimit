@@ -190,7 +190,7 @@ func (this *service) shouldRateLimitWorker(
 		response.ResponseHeadersToAdd = []*core.HeaderValue{
 			this.rateLimitLimitHeader(minimumDescriptor),
 			this.rateLimitRemainingHeader(minimumDescriptor),
-			this.rateLimitResetHeader(minimumDescriptor, this.customHeaderClock.UnixNow()),
+			this.rateLimitResetHeader(minimumDescriptor),
 		}
 	}
 
@@ -218,7 +218,7 @@ func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_D
 }
 
 func (this *service) rateLimitResetHeader(
-	descriptor *pb.RateLimitResponse_DescriptorStatus, now int64) *core.HeaderValue {
+	descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
 	descriptor.DurationUntilReset.IsValid()
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
