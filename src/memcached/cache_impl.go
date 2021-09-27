@@ -175,7 +175,7 @@ func (this *rateLimitMemcacheImpl) Flush() {
 	this.waitGroup.Wait()
 }
 
-func refreshServersPeriodically(serverList memcache.ServerList, srv string, d time.Duration, finish <-chan struct{}) {
+func refreshServersPeriodically(serverList *memcache.ServerList, srv string, d time.Duration, finish <-chan struct{}) {
 	t := time.NewTicker(d)
 	defer t.Stop()
 	for {
@@ -193,7 +193,7 @@ func refreshServersPeriodically(serverList memcache.ServerList, srv string, d ti
 	}
 }
 
-func refreshServers(serverList memcache.ServerList, srv_ string) error {
+func refreshServers(serverList *memcache.ServerList, srv_ string) error {
 	servers, err := srv.ServerStringsFromSrv(srv_)
 	if err != nil {
 		return err
@@ -207,7 +207,7 @@ func refreshServers(serverList memcache.ServerList, srv_ string) error {
 
 func newMemcachedFromSrv(srv_ string, d time.Duration) Client {
 	serverList := new(memcache.ServerList)
-	err := refreshServers(*serverList, srv_)
+	err := refreshServers(serverList, srv_)
 	if err != nil {
 		errorText := "Unable to fetch servers from SRV"
 		logger.Errorf(errorText)
@@ -217,7 +217,7 @@ func newMemcachedFromSrv(srv_ string, d time.Duration) Client {
 	if d > 0 {
 		logger.Infof("refreshing memcache hosts every: %v milliseconds", d.Milliseconds())
 		finish := make(chan struct{})
-		go refreshServersPeriodically(*serverList, srv_, d, finish)
+		go refreshServersPeriodically(serverList, srv_, d, finish)
 	} else {
 		logger.Debugf("not periodically refreshing memcached hosts")
 	}
