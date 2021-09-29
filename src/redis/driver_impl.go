@@ -27,7 +27,7 @@ func newPoolStats(scope stats.Scope) poolStats {
 	return ret
 }
 
-func poolTrace(ps *poolStats) trace.PoolTrace {
+func poolTrace(ps *poolStats, isRestart bool) trace.PoolTrace {
 	return trace.PoolTrace{
 		ConnCreated: func(_ trace.PoolConnCreated) {
 			ps.connectionTotal.Add(1)
@@ -36,6 +36,10 @@ func poolTrace(ps *poolStats) trace.PoolTrace {
 		ConnClosed: func(_ trace.PoolConnClosed) {
 			ps.connectionActive.Sub(1)
 			ps.connectionClose.Add(1)
+                        if isRestart &&  ps.connectionActive.Value() ==  0  {
+			  panic(RedisError("All connection lost, need to restart the service"))
+			}
+			    
 		},
 	}
 }
@@ -53,7 +57,7 @@ func checkError(err error) {
 }
 
 func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
-	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config) Client {
+	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, isRestart bool) Client {
 	logger.Warnf("connecting to redis on %s with pool size %d", url, poolSize)
 
 	df := func(network, addr string) (radix.Conn, error) {
@@ -78,7 +82,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 
 	stats := newPoolStats(scope)
 
-	opts := []radix.PoolOpt{radix.PoolConnFunc(df), radix.PoolWithTrace(poolTrace(&stats))}
+	opts := []radix.PoolOpt{radix.PoolConnFunc(df), radix.PoolWithTrace(poolTrace(&stats, isRestart))}
 
 	implicitPipelining := true
 	if pipelineWindow == 0 && pipelineLimit == 0 {
