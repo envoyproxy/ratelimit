@@ -177,13 +177,13 @@ func (this *rateLimitMemcacheImpl) Flush() {
 	this.waitGroup.Wait()
 }
 
-func refreshServersPeriodically(serverList *memcache.ServerList, srv string, d time.Duration, finish <-chan struct{}) {
+func refreshServersPeriodically(serverList *memcache.ServerList, srv string, d time.Duration, resolver srv.SrvResolver, finish <-chan struct{}) {
 	t := time.NewTicker(d)
 	defer t.Stop()
 	for {
 		select {
 		case <-t.C:
-			err := refreshServers(serverList, srv)
+			err := refreshServers(serverList, srv, resolver)
 			if err != nil {
 				logger.Warn("failed to refresh memcahce hosts")
 			} else {
@@ -195,8 +195,8 @@ func refreshServersPeriodically(serverList *memcache.ServerList, srv string, d t
 	}
 }
 
-func refreshServers(serverList *memcache.ServerList, srv_ string) error {
-	servers, err := srv.ServerStringsFromSrv(srv_)
+func refreshServers(serverList *memcache.ServerList, srv string, resolver srv.SrvResolver) error {
+	servers, err := resolver.ServerStringsFromSrv(srv)
 	if err != nil {
 		return err
 	}
@@ -207,9 +207,9 @@ func refreshServers(serverList *memcache.ServerList, srv_ string) error {
 	return nil
 }
 
-func newMemcachedFromSrv(srv_ string, d time.Duration) Client {
+func newMemcachedFromSrv(srv string, d time.Duration, resolver srv.SrvResolver) Client {
 	serverList := new(memcache.ServerList)
-	err := refreshServers(serverList, srv_)
+	err := refreshServers(serverList, srv, resolver)
 	if err != nil {
 		errorText := "Unable to fetch servers from SRV"
 		logger.Errorf(errorText)
@@ -219,7 +219,7 @@ func newMemcachedFromSrv(srv_ string, d time.Duration) Client {
 	if d > 0 {
 		logger.Infof("refreshing memcache hosts every: %v milliseconds", d.Milliseconds())
 		finish := make(chan struct{})
-		go refreshServersPeriodically(serverList, srv_, d, finish)
+		go refreshServersPeriodically(serverList, srv, d, resolver, finish)
 	} else {
 		logger.Debugf("not periodically refreshing memcached hosts")
 	}
@@ -233,7 +233,7 @@ func newMemcacheFromSettings(s settings.Settings) Client {
 	}
 	if s.MemcacheSrv != "" {
 		logger.Debugf("Using MEMCACHE_SRV: %v", s.MemcacheSrv)
-		return newMemcachedFromSrv(s.MemcacheSrv, s.MemcacheSrvRefresh)
+		return newMemcachedFromSrv(s.MemcacheSrv, s.MemcacheSrvRefresh, new(srv.DnsSrvResolver))
 	}
 	logger.Debugf("Usng MEMCACHE_HOST_PORT:: %v", s.MemcacheHostPort)
 	client := memcache.New(s.MemcacheHostPort...)

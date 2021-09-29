@@ -28,12 +28,14 @@ func TestParseSrv(t *testing.T) {
 }
 
 func TestServerStringsFromSrvWhenSrvIsNotWellFormed(t *testing.T) {
-	_, err := srv.ServerStringsFromSrv("example.org")
+	srvResolver := srv.DnsSrvResolver{}
+	_, err := srvResolver.ServerStringsFromSrv("example.org")
 	assert.Equal(t, err, errors.New("could not parse example.org to SRV parts"))
 }
 
 func TestServerStringsFromSevWhenSrvIsWellFormedButNotLookupable(t *testing.T) {
-	_, err := srv.ServerStringsFromSrv("_something._tcp.example.invalid")
+	srvResolver := srv.DnsSrvResolver{}
+	_, err := srvResolver.ServerStringsFromSrv("_something._tcp.example.invalid")
 	var e *net.DNSError
 	if errors.As(err, &e) {
 		assert.Equal(t, e.Err, "no such host")
@@ -48,7 +50,8 @@ func TestServerStringsFromSevWhenSrvIsWellFormedButNotLookupable(t *testing.T) {
 
 func TestServerStrings(t *testing.T) {
 	// it seems reasonable to think _xmpp-server._tcp.gmail.com will be available for a long time!
-	servers, err := srv.ServerStringsFromSrv("_xmpp-server._tcp.gmail.com.")
+	srvResolver := srv.DnsSrvResolver{}
+	servers, err := srvResolver.ServerStringsFromSrv("_xmpp-server._tcp.gmail.com.")
 	assert.True(t, len(servers) > 0)
 	for _, s := range servers {
 		assert.Regexp(t, `^.*xmpp-server.*google.com.:\d+$`, s)
