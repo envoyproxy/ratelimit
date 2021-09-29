@@ -38,6 +38,7 @@
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
 - [Memcache](#memcache)
+- [Custom headers](#custom-headers)
 - [Contact](#contact)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -624,6 +625,15 @@ descriptors will fail. Descriptors sent to Memcache should not contain whitespac
 
 When using multiple memcache nodes in `MEMCACHE_HOST_PORT=`, one should provide the identical list of memcache nodes
 to all ratelimiter instances to ensure that a particular cache key is always hashed to the same memcache node.
+
+# Custom headers
+Ratelimit service can be configured to return custom headers with the ratelimit information. It will populate the response_headers_to_add as part of the [RateLimitResponse](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ratelimit/v3/rls.proto#service-ratelimit-v3-ratelimitresponse).
+
+The following environment variables control the custom response feature:
+1. `LIMIT_RESPONSE_HEADERS_ENABLED` - Enables the custom response headers
+1. `LIMIT_LIMIT_HEADER` - The default value is "RateLimit-Limit", setting the environment variable will specify an alternative header name
+1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
+1. `LIMIT_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
 
 # Contact
 

@@ -1,14 +1,15 @@
 package runner
 
 import (
-	"github.com/envoyproxy/ratelimit/src/metrics"
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"io"
 	"math/rand"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/envoyproxy/ratelimit/src/metrics"
+	"github.com/envoyproxy/ratelimit/src/stats"
 
 	gostats "github.com/lyft/gostats"
 
@@ -107,6 +108,7 @@ func (runner *Runner) Run() {
 		config.NewRateLimitConfigLoaderImpl(),
 		runner.statsManager,
 		s.RuntimeWatchRoot,
+		utils.NewTimeSourceImpl(),
 	)
 
 	srv.AddDebugHttpEndpoint(

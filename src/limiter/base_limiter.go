@@ -1,6 +1,9 @@
 package limiter
 
 import (
+	"math"
+	"math/rand"
+
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/assert"
@@ -8,8 +11,6 @@ import (
 	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/utils"
 	logger "github.com/sirupsen/logrus"
-	"math"
-	"math/rand"
 )
 
 type BaseRateLimiter struct {
@@ -168,7 +169,7 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(limit, this.timeSource),
+			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{
