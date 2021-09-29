@@ -124,6 +124,7 @@ as explained in the [two redis instances](#two-redis-instances) section.
 ## Full test environment
 To run a fully configured environment to demo Envoy based rate limiting, run:
 ```bash
+docker-compose -f docker-compose-example.yml build
 docker-compose -f docker-compose-example.yml up
 ```
 This will run ratelimit, redis, prom-statsd-exporter and two Envoy containers such that you can demo rate limiting by hitting the below endpoints.
@@ -133,10 +134,17 @@ curl localhost:8888/header -H "foo: foo" # Header based
 curl localhost:8888/twoheader -H "foo: foo" -H "bar: bar" # Two headers
 curl localhost:8888/twoheader -H "foo: foo" -H "baz: baz"
 curl localhost:8888/twoheader -H "foo: foo" -H "bar: banned" # Ban a particular header value
+curl localhost:8888/twoheader -H "foo: foo" -H "baz: shady" # This will never be ratelimited since "baz" is in shadow_mode
 ```
 Edit `examples/ratelimit/config/example.yaml` to test different rate limit configs. Hot reloading is enabled.
 
 The descriptors in `example.yaml` and the actions in `examples/envoy/proxy.yaml` should give you a good idea on how to configure rate limits.
+
+To see the metrics in the example
+```bash
+# The metrics for the shadow_mode key
+curl -v http://localhost:9102/metrics | grep -i shadow
+```
 
 # Configuration
 
