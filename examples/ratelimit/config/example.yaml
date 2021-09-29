@@ -27,15 +27,15 @@ descriptors:
         rate_limit:
           unit: second
           requests_per_unit: 1
-      - key: bay
-        rate_limit:
-          unlimited: true
       - key: baz
         value: shady
         rate_limit:
           unit: minute
-          requests_per_unit: 1
+          requests_per_unit: 3
         shadow_mode: true
+      - key: bay
+        rate_limit:
+          unlimited: true
   - key: qux
     rate_limit:
       unlimited: true
