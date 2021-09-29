@@ -163,7 +163,8 @@ func (this *service) shouldRateLimitWorker(
 
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		// Keep track of the descriptor closest to hit the ratelimit
-		if descriptorStatus.CurrentLimit != nil &&
+		if this.customHeadersEnabled &&
+			descriptorStatus.CurrentLimit != nil &&
 			descriptorStatus.LimitRemaining < minLimitRemaining {
 			minimumDescriptor = descriptorStatus
 			minLimitRemaining = descriptorStatus.LimitRemaining
@@ -219,30 +220,10 @@ func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_D
 
 func (this *service) rateLimitResetHeader(
 	descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
-	descriptor.DurationUntilReset.IsValid()
+
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
 		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
-	}
-}
-
-func calculateReset(descriptor *pb.RateLimitResponse_DescriptorStatus, now int64) int64 {
-	sec := unitInSeconds(descriptor.CurrentLimit.Unit)
-	return sec - now%sec
-}
-
-func unitInSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
-	switch unit {
-	case pb.RateLimitResponse_RateLimit_SECOND:
-		return 1
-	case pb.RateLimitResponse_RateLimit_MINUTE:
-		return 60
-	case pb.RateLimitResponse_RateLimit_HOUR:
-		return 60 * 60
-	case pb.RateLimitResponse_RateLimit_DAY:
-		return 60 * 60 * 24
-	default:
-		panic("unknown rate limit unit")
 	}
 }
 

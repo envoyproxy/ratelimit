@@ -627,12 +627,13 @@ When using multiple memcache nodes in `MEMCACHE_HOST_PORT=`, one should provide 
 to all ratelimiter instances to ensure that a particular cache key is always hashed to the same memcache node.
 
 # Custom headers
-Ratelimit service can be configured to return custom headers with the ratelimit information. It will populate the response_headers_to_add as part of the [RateLimitRespons](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ratelimit/v3/rls.proto#service-ratelimit-v3-ratelimitresponse).
+Ratelimit service can be configured to return custom headers with the ratelimit information. It will populate the response_headers_to_add as part of the [RateLimitResponse](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ratelimit/v3/rls.proto#service-ratelimit-v3-ratelimitresponse).
 
-Setting _all_ the following environment variables to the header name to use:
-1. `LIMIT_LIMIT_HEADER` - The value will be the current limit value closest to being triggered, currently the optional quota policies are not added
-1. `LIMIT_REMAINING_HEADER` - The value will be the remaining quota
-1. `LIMIT_RESET_HEADER` - The value will be the number of seconds until the limit is being reset
+The following environment variables control the custom response feature:
+1. `LIMIT_RESPONSE_HEADERS_ENABLED` - Enables the custom response headers
+1. `LIMIT_LIMIT_HEADER` - The default value is "RateLimit-Limit", setting the environment variable will specify an alternative header name
+1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
+1. `LIMIT_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
 
 # Contact
 
