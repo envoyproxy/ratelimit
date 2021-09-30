@@ -36,10 +36,10 @@ func poolTrace(ps *poolStats, isRestart bool) trace.PoolTrace {
 		ConnClosed: func(_ trace.PoolConnClosed) {
 			ps.connectionActive.Sub(1)
 			ps.connectionClose.Add(1)
-                        if isRestart &&  ps.connectionActive.Value() ==  0  {
-			  panic(RedisError("All connection lost, need to restart the service"))
+			if isRestart && ps.connectionActive.Value() == 0 {
+				panic(RedisError("All connection lost, need to restart the service"))
 			}
-			    
+
 		},
 	}
 }
