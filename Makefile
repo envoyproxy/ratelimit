@@ -113,3 +113,9 @@ docker_image: docker_tests
 .PHONY: docker_push
 docker_push: docker_image
 	docker push $(IMAGE):$(VERSION)
+
+.PHONY: integration-tests
+integration-tests:
+	docker-compose --project-dir $(PWD)  -f integration-test/docker-compose-integration-test.yml up --build  --exit-code-from tester
+
+# docker-compose --project-dir $(PWD)  -f integration-test/docker-compose-integration-test.yml up --build  --exit-code-from tester

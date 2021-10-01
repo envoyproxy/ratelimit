@@ -26,7 +26,9 @@ services:
       - ./examples/prom-statsd-exporter/conf.yaml:/etc/statsd-exporter/conf.yaml
 
   ratelimit:
-    image: envoyproxy/ratelimit:master
+    build:
+      context: ${PWD}
+      dockerfile: Dockerfile
     command: /bin/ratelimit
     ports:
       - 8080:8080
@@ -60,6 +62,8 @@ services:
       - "--concurrency 1"
       - "--mode serve"
       - "--log-level info"
+    depends_on:
+      - ratelimit
     volumes:
       - ./examples/envoy/proxy.yaml:/etc/envoy/envoy.yaml
     networks:
@@ -89,6 +93,19 @@ services:
        - "9999"
     ports:
        - "9999:9999"
+
+  tester:
+    build:
+      context: ${PWD}
+      dockerfile: integration-test/Dockerfile.tester
+    depends_on:
+      - envoy-proxy
+      - envoy-mock
+    command: /test/run-all.sh
+    volumes:
+      - ${PWD}/integration-test/:/test/
+    networks:
+      - ratelimit-network
 
 networks:
   ratelimit-network:

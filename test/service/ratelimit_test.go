@@ -78,7 +78,7 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	return ret
 }
 
-func (this *rateLimitServiceTestSuite) setupBasicService(shadow_mode bool) ratelimit.RateLimitServiceServer {
+func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitServiceServer {
 	this.runtime.EXPECT().AddUpdateCallback(gomock.Any()).Do(
 		func(callback chan<- int) {
 			this.runtimeUpdateCallback = callback
@@ -89,13 +89,13 @@ func (this *rateLimitServiceTestSuite) setupBasicService(shadow_mode bool) ratel
 	this.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}},
 		gomock.Any()).Return(this.config)
-	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, true, shadow_mode)
+	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, true, false)
 }
 
 func TestService(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService(false)
+	service := t.setupBasicService()
 
 	// First request, config should be loaded.
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
@@ -189,7 +189,7 @@ func TestServiceGlobalShadowMode(test *testing.T) {
 	defer t.controller.Finish()
 
 	// No global shadow_mode, this should be picked-up from environment variables during re-load of config
-	service := t.setupBasicService(false)
+	service := t.setupBasicService()
 
 	// Force a config reload.
 	barrier := newBarrier()
@@ -236,7 +236,7 @@ func TestRuleShadowMode(test *testing.T) {
 	defer t.controller.Finish()
 
 	// No Global Shadowmode
-	service := t.setupBasicService(false)
+	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest(
 		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
@@ -265,7 +265,7 @@ func TestRuleShadowMode(test *testing.T) {
 func TestMixedRuleShadowMode(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService(false)
+	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest(
 		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
@@ -300,7 +300,7 @@ func TestMixedRuleShadowMode(test *testing.T) {
 func TestEmptyDomain(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService(false)
+	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest("", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
@@ -312,7 +312,7 @@ func TestEmptyDomain(test *testing.T) {
 func TestEmptyDescriptors(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService(false)
+	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{}, 1)
 	response, err := service.ShouldRateLimit(nil, request)
@@ -324,7 +324,7 @@ func TestEmptyDescriptors(test *testing.T) {
 func TestCacheError(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService(false)
+	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false)}
@@ -366,7 +366,7 @@ func TestInitialLoadError(test *testing.T) {
 func TestUnlimited(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
-	service := t.setupBasicService(false)
+	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest(
 		"some-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}, {{"baz", "qux"}}}, 1)

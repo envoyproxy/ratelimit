@@ -28,6 +28,11 @@ descriptors:
           unit: second
           requests_per_unit: 1
       - key: baz
+        value: not-so-shady
+        rate_limit:
+          unit: minute
+          requests_per_unit: 3
+      - key: baz
         value: shady
         rate_limit:
           unit: minute

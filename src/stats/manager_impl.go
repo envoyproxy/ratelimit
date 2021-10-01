@@ -48,7 +48,7 @@ func (this *ManagerImpl) NewServiceStats() ServiceStats {
 	ret.ConfigLoadSuccess = this.serviceStatsScope.NewCounter("config_load_success")
 	ret.ConfigLoadError = this.serviceStatsScope.NewCounter("config_load_error")
 	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
-	ret.GlobalShadowMode = this.serviceStatsScope.NewCounter(("global_shadow_mode"))
+	ret.GlobalShadowMode = this.serviceStatsScope.NewCounter("global_shadow_mode")
 	return ret
 }
 

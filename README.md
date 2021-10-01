@@ -146,6 +146,18 @@ To see the metrics in the example
 curl http://localhost:9102/metrics | grep -i shadow
 ```
 
+## Self-contained end-to-end integration test
+
+Integration tests are coded as bash-scripts in `integration-test/scripts`.
+
+The test suite will spin up a docker-compose environment from `integration-test/docker-compose-integration-test.yml`
+
+If the test suite fails it will exit with code 1.
+
+```bash
+make integration-tests
+```
+
 # Configuration
 
 ## The configuration format
