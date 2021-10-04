@@ -113,3 +113,10 @@ docker_image: docker_tests
 .PHONY: docker_push
 docker_push: docker_image
 	docker push $(IMAGE):$(VERSION)
+
+.PHONY: precommits_install
+precommits_install:
+	python3 -m pip install -r requirements-dev.txt
+	go install mvdan.cc/gofumpt@v0.1.1
+	go install golang.org/x/tools/cmd/goimports@v0.1.7
+	pre-commit install

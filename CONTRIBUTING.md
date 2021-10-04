@@ -2,15 +2,26 @@ We welcome contributions from the community. Here are some guidelines.
 
 # Coding style
 
-* Ratelimit uses golang's `fmt` too.
+- Ratelimit uses [gofumpt](https://github.com/mvdan/gofumpt) and [goimports](https://pkg.go.dev/golang.org/x/tools/cmd/goimports) for Go styling.
 
 # Submitting a PR
 
-* Fork the repo and create your PR.
-* Tests will automatically run for you.
-* When all of the tests are passing, tag @envoyproxy/ratelimit-maintainers and
+- Fork the repo.
+- Before commiting any code, install the pre-commits by:
+
+```bash
+make precommits_install
+# Example usage if you want to run it manually
+pre-commit run # Run against staged changes
+pre-commit run -a # Run against all files
+```
+
+- Pre-commits will automatically format your code at commit time.
+- Create your PR.
+- Tests will automatically run for you.
+- When all of the tests are passing, tag @envoyproxy/ratelimit-maintainers and
   we will review it and merge.
-* Party time.
+- Party time.
 
 # DCO: Sign your work
 
