@@ -9,6 +9,7 @@
 - [Building and Testing](#building-and-testing)
   - [Docker-compose setup](#docker-compose-setup)
   - [Full test environment](#full-test-environment)
+  - [Self-contained end-to-end integration test](#self-contained-end-to-end-integration-test)
 - [Configuration](#configuration)
   - [The configuration format](#the-configuration-format)
     - [Definitions](#definitions)
