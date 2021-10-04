@@ -3,12 +3,16 @@ package ratelimit
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/stats"
 
+	"github.com/envoyproxy/ratelimit/src/utils"
+
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
@@ -25,15 +29,20 @@ type RateLimitServiceServer interface {
 }
 
 type service struct {
-	runtime            loader.IFace
-	configLock         sync.RWMutex
-	configLoader       config.RateLimitConfigLoader
-	config             config.RateLimitConfig
-	runtimeUpdateEvent chan int
-	cache              limiter.RateLimitCache
-	stats              stats.ServiceStats
-	runtimeWatchRoot   bool
-	globalShadowMode   bool
+	runtime                     loader.IFace
+	configLock                  sync.RWMutex
+	configLoader                config.RateLimitConfigLoader
+	config                      config.RateLimitConfig
+	runtimeUpdateEvent          chan int
+	cache                       limiter.RateLimitCache
+	stats                       stats.ServiceStats
+	runtimeWatchRoot            bool
+	customHeadersEnabled        bool
+	customHeaderLimitHeader     string
+	customHeaderRemainingHeader string
+	customHeaderResetHeader     string
+	customHeaderClock           utils.TimeSource
+	globalShadowMode            bool
 }
 
 func (this *service) reloadConfig(statsManager stats.Manager) {
@@ -61,10 +70,21 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 
 	newConfig := this.configLoader.Load(files, statsManager)
 	this.stats.ConfigLoadSuccess.Inc()
+
 	this.configLock.Lock()
 	this.config = newConfig
 	rlSettings := settings.NewSettings()
 	this.globalShadowMode = rlSettings.GlobalShadowMode
+
+	if rlSettings.RateLimitResponseHeadersEnabled {
+		this.customHeadersEnabled = true
+
+		this.customHeaderLimitHeader = rlSettings.HeaderRatelimitLimit
+
+		this.customHeaderRemainingHeader = rlSettings.HeaderRatelimitRemaining
+
+		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
+	}
 	this.configLock.Unlock()
 }
 
@@ -124,6 +144,8 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 	return limitsToCheck, isUnlimited
 }
 
+const MaxUint32 = uint32(1<<32 - 1)
+
 func (this *service) shouldRateLimitWorker(
 	ctx context.Context, request *pb.RateLimitRequest) *pb.RateLimitResponse {
 
@@ -138,7 +160,20 @@ func (this *service) shouldRateLimitWorker(
 	response := &pb.RateLimitResponse{}
 	response.Statuses = make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
 	finalCode := pb.RateLimitResponse_OK
+
+	// Keep track of the descriptor which is closest to hit the ratelimit
+	minLimitRemaining := MaxUint32
+	var minimumDescriptor *pb.RateLimitResponse_DescriptorStatus = nil
+
 	for i, descriptorStatus := range responseDescriptorStatuses {
+		// Keep track of the descriptor closest to hit the ratelimit
+		if this.customHeadersEnabled &&
+			descriptorStatus.CurrentLimit != nil &&
+			descriptorStatus.LimitRemaining < minLimitRemaining {
+			minimumDescriptor = descriptorStatus
+			minLimitRemaining = descriptorStatus.LimitRemaining
+		}
+
 		if isUnlimited[i] {
 			response.Statuses[i] = &pb.RateLimitResponse_DescriptorStatus{
 				Code:           pb.RateLimitResponse_OK,
@@ -148,7 +183,19 @@ func (this *service) shouldRateLimitWorker(
 			response.Statuses[i] = descriptorStatus
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				finalCode = descriptorStatus.Code
+
+				minimumDescriptor = descriptorStatus
+				minLimitRemaining = 0
 			}
+		}
+	}
+
+	// Add Headers if requested
+	if this.customHeadersEnabled && minimumDescriptor != nil {
+		response.ResponseHeadersToAdd = []*core.HeaderValue{
+			this.rateLimitLimitHeader(minimumDescriptor),
+			this.rateLimitRemainingHeader(minimumDescriptor),
+			this.rateLimitResetHeader(minimumDescriptor),
 		}
 	}
 
@@ -160,6 +207,34 @@ func (this *service) shouldRateLimitWorker(
 
 	response.OverallCode = finalCode
 	return response
+}
+
+func (this *service) rateLimitLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+
+	// Limit header only provides the mandatory part from the spec, the actual limit
+	// the optional quota policy is currently not provided
+	return &core.HeaderValue{
+		Key:   this.customHeaderLimitHeader,
+		Value: strconv.FormatUint(uint64(descriptor.CurrentLimit.RequestsPerUnit), 10),
+	}
+}
+
+func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+
+	// How much of the limit is remaining
+	return &core.HeaderValue{
+		Key:   this.customHeaderRemainingHeader,
+		Value: strconv.FormatUint(uint64(descriptor.LimitRemaining), 10),
+	}
+}
+
+func (this *service) rateLimitResetHeader(
+	descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+
+	return &core.HeaderValue{
+		Key:   this.customHeaderResetHeader,
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
+	}
 }
 
 func (this *service) ShouldRateLimit(
@@ -203,7 +278,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, shadowMode bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -215,6 +290,7 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		stats:              statsManager.NewServiceStats(),
 		runtimeWatchRoot:   runtimeWatchRoot,
 		globalShadowMode:   shadowMode,
+		customHeaderClock:  clock,
 	}
 
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
