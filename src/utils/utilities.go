@@ -29,8 +29,8 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 	panic("should not get here")
 }
 
-func CalculateReset(currentLimit *pb.RateLimitResponse_RateLimit, timeSource TimeSource) *duration.Duration {
-	sec := UnitToDivider(currentLimit.Unit)
+func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource) *duration.Duration {
+	sec := UnitToDivider(*unit)
 	now := timeSource.UnixNow()
 	return &duration.Duration{Seconds: sec - now%sec}
 }

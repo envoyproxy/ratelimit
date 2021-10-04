@@ -108,6 +108,7 @@ func (runner *Runner) Run() {
 		config.NewRateLimitConfigLoaderImpl(),
 		runner.statsManager,
 		s.RuntimeWatchRoot,
+		utils.NewTimeSourceImpl(),
 		s.GlobalShadowMode,
 	)
 

@@ -182,7 +182,7 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(limit, this.timeSource),
+			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{
