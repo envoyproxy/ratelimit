@@ -5,9 +5,11 @@
 package mock_redis
 
 import (
-	redis "github.com/envoyproxy/ratelimit/src/redis"
-	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
+
+	gomock "github.com/golang/mock/gomock"
+
+	redis "github.com/envoyproxy/ratelimit/src/redis"
 )
 
 // MockClient is a mock of Client interface

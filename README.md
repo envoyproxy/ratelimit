@@ -1,6 +1,5 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Overview](#overview)
 - [Docker Image](#docker-image)
@@ -57,6 +56,7 @@ reads the configuration from disk via [runtime](https://github.com/lyft/goruntim
 decision is then returned to the caller.
 
 # Docker Image
+
 For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/r/envoyproxy/ratelimit/tags?page=1&ordering=last_updated). There is currently no versioning (post v1.4.0) and tags are based on commit sha.
 
 # Supported Envoy APIs
@@ -69,26 +69,27 @@ Support for [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/mas
 1. `v1.0.0` tagged on commit `0ded92a2af8261d43096eba4132e45b99a3b8b14`. Ratelimit has been in production use at Lyft for over 2 years.
 2. `v1.1.0` introduces the data-plane-api proto and initiates the deprecation of the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
 3. `e91321b` [commit](https://github.com/envoyproxy/ratelimit/commit/e91321b10f1ad7691d0348e880bd75d0fca05758) deleted support for the legacy [ratelimit.proto](https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
-The current version of ratelimit protocol is changed to [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
-while [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is still supported
-as a legacy protocol.
+   The current version of ratelimit protocol is changed to [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
+   while [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is still supported
+   as a legacy protocol.
 4. `4bb32826` deleted support for legacy [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
 
 # Building and Testing
 
-* Install Redis-server.
-* Make sure go is setup correctly and checkout rate limit service into your go path. More information about installing
-go [here](https://golang.org/doc/install).
-* In order to run the integration tests using a local Redis server please run two Redis-server instances: one on port `6379` and another on port `6380`
+- Install Redis-server.
+- Make sure go is setup correctly and checkout rate limit service into your go path. More information about installing
+  go [here](https://golang.org/doc/install).
+- In order to run the integration tests using a local Redis server please run two Redis-server instances: one on port `6379` and another on port `6380`
   ```bash
   redis-server --port 6379 &
   redis-server --port 6380 &
   ```
-* To setup for the first time (only done once):
+- To setup for the first time (only done once):
   ```bash
   make bootstrap
   ```
-* To compile:
+- To compile:
+
   ```bash
   make compile
   ```
@@ -99,11 +100,11 @@ go [here](https://golang.org/doc/install).
   GOOS=linux make compile
   ```
 
-* To compile and run tests:
+- To compile and run tests:
   ```bash
   make tests
   ```
-* To run the server locally using some sensible default settings you can do this (this will setup the server to read the configuration files from the path you specify):
+- To run the server locally using some sensible default settings you can do this (this will setup the server to read the configuration files from the path you specify):
   ```bash
   USE_STATSD=false LOG_LEVEL=debug REDIS_SOCKET_TYPE=tcp REDIS_URL=localhost:6379 RUNTIME_ROOT=/home/user/src/runtime/data RUNTIME_SUBDIRECTORY=ratelimit
   ```
@@ -124,11 +125,15 @@ the docker-compose.yml file to run a second redis container, and change the envi
 as explained in the [two redis instances](#two-redis-instances) section.
 
 ## Full test environment
+
 To run a fully configured environment to demo Envoy based rate limiting, run:
+
 ```bash
 docker-compose -f docker-compose-example.yml up --build --remove-orphans
 ```
+
 This will run ratelimit, redis, prom-statsd-exporter and two Envoy containers such that you can demo rate limiting by hitting the below endpoints.
+
 ```bash
 curl localhost:8888/test
 curl localhost:8888/header -H "foo: foo" # Header based
@@ -138,11 +143,13 @@ curl localhost:8888/twoheader -H "foo: foo" -H "bar: banned" # Ban a particular 
 curl localhost:8888/twoheader -H "foo: foo" -H "baz: shady" # This will never be ratelimited since "baz" with value "shady" is in shadow_mode
 curl localhost:8888/twoheader -H "foo: foo" -H "baz: not-so-shady" # This is subject to rate-limiting because the it's now in shadow_mode
 ```
+
 Edit `examples/ratelimit/config/example.yaml` to test different rate limit configs. Hot reloading is enabled.
 
 The descriptors in `example.yaml` and the actions in `examples/envoy/proxy.yaml` should give you a good idea on how to configure rate limits.
 
 To see the metrics in the example
+
 ```bash
 # The metrics for the shadow_mode keys
 curl http://localhost:9102/metrics | grep -i shadow
@@ -157,7 +164,7 @@ The test suite will spin up a docker-compose environment from `integration-test/
 If the test suite fails it will exit with code 1.
 
 ```bash
-make integration-tests
+make integration_tests
 ```
 
 # Configuration
@@ -168,14 +175,14 @@ The rate limit configuration file format is YAML (mainly so that comments are su
 
 ### Definitions
 
-* **Domain:** A domain is a container for a set of rate limits. All domains known to the Ratelimit service must be
-globally unique. They serve as a way for different teams/projects to have rate limit configurations that don't conflict.
-* **Descriptor:** A descriptor is a list of key/value pairs owned by a domain that the Ratelimit service uses to
-select the correct rate limit to use when limiting. Descriptors are case-sensitive. Examples of descriptors are:
-  * ("database", "users")
-  * ("message_type", "marketing"),("to_number","2061234567")
-  * ("to_cluster", "service_a")
-  * ("to_cluster", "service_a"),("from_cluster", "service_b")
+- **Domain:** A domain is a container for a set of rate limits. All domains known to the Ratelimit service must be
+  globally unique. They serve as a way for different teams/projects to have rate limit configurations that don't conflict.
+- **Descriptor:** A descriptor is a list of key/value pairs owned by a domain that the Ratelimit service uses to
+  select the correct rate limit to use when limiting. Descriptors are case-sensitive. Examples of descriptors are:
+  - ("database", "users")
+  - ("message_type", "marketing"),("to_number","2061234567")
+  - ("to_cluster", "service_a")
+  - ("to_cluster", "service_a"),("from_cluster", "service_b")
 
 ### Descriptor list definition
 
@@ -212,6 +219,7 @@ Currently the service supports per second, minute, hour, and day limits. More ty
 future based on user demand.
 
 ### ShadowMode
+
 A shadow_mode key in a rule indicates that whatever the outcome of the evaluation of the rule, the end-result will always be "OK".
 
 When a block is in ShadowMode all functions of the rate limiting service are executed as normal, with cache-lookup and statistics
@@ -272,7 +280,7 @@ descriptors:
 
 In the preceding example, the domain is "messaging" and we setup two different scenarios that illustrate more
 complex functionality. First, we want to limit on marketing messages to a specific number. To enable this, we make
-use of *nested descriptor lists.* The top level descriptor is ("message_type", "marketing"). However this descriptor
+use of _nested descriptor lists._ The top level descriptor is ("message_type", "marketing"). However this descriptor
 does not have a limit assigned so it's just a placeholder. Contained within this entry we have another descriptor list
 that includes an entry with key "to_number". However, notice that no value is provided. This means that the service
 will match against any value supplied for "to_number" and generate a unique limit. Thus, ("message_type", "marketing"),
@@ -283,7 +291,7 @@ The configuration also sets up another rule without a value. This one creates an
 any particular number during a 1 day period. Thus, ("to_number", "2061111111") and ("to_number", "2062222222") both
 get 100 requests per day.
 
-When calling the rate limit service, the client can specify *multiple descriptors* to limit on in a single call. This
+When calling the rate limit service, the client can specify _multiple descriptors_ to limit on in a single call. This
 limits round trips and allows limiting on aggregate rule definitions. For example, using the preceding configuration,
 the client could send this complete request (in pseudo IDL):
 
@@ -294,7 +302,7 @@ RateLimitRequest:
   descriptor: ("to_number", "2061111111")
 ```
 
-And the service will rate limit against *all* matching rules and return an aggregate result; a logical OR of all
+And the service will rate limit against _all_ matching rules and return an aggregate result; a logical OR of all
 the individual rate limit decisions.
 
 #### Example 3
@@ -318,11 +326,12 @@ descriptors:
 ```
 
 In the preceding example, we setup a generic rate limit for individual IP addresses. The architecture's edge proxy can
-be configured to make a rate limit service call with the descriptor ("remote_address", "50.0.0.1") for example. This IP would
+be configured to make a rate limit service call with the descriptor `("remote_address", "50.0.0.1")` for example. This IP would
 get 10 requests per second as
 would any other IP. However, the configuration also contains a second configuration that explicitly defines a
-value along with the same key. If the descriptor ("remote_address", "50.0.0.5") is received, the service will
-*attempt the most specific match possible*. This means
+value along with the same key.
+If the descriptor `("remote_address", "50.0.0.5")` is received, the service
+will _attempt the most specific match possible_. This means
 the most specific descriptor at the same level as your request. Thus, key/value is always attempted as a match before just key.
 
 #### Example 4
@@ -387,9 +396,9 @@ This can be useful for collecting statistics, or if one wants to define a descri
 
 The return value for unlimited descriptors will be an OK status code with the LimitRemaining field set to MaxUint32 value.
 
- ### Example 6
+### Example 6
 
- A rule using shadow_mode is useful for soft-launching rate limiting. In this example
+A rule using shadow_mode is useful for soft-launching rate limiting. In this example
 
 ```
 RateLimitRequest:
@@ -419,7 +428,6 @@ descriptors:
           unit: second
 ```
 
-
 ## Loading Configuration
 
 The Ratelimit service uses a library written by Lyft called [goruntime](https://github.com/lyft/goruntime) to do configuration loading. Goruntime monitors
@@ -437,6 +445,7 @@ RUNTIME_IGNOREDOTFILES default:"false"
 **Configuration files are loaded from RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/\*.yaml**
 
 There are two methods for triggering a configuration reload:
+
 1. Symlink RUNTIME_ROOT to a different directory.
 2. Update the contents inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` directly.
 
@@ -467,6 +476,7 @@ LOG_FORMAT=json
 ```
 
 Output example:
+
 ```
 {"@message":"loading domain: messaging","@timestamp":"2020-09-10T17:22:44.926010192Z","level":"debug"}
 {"@message":"loading descriptor: key=messaging.message_type_marketing","@timestamp":"2020-09-10T17:22:44.926019315Z","level":"debug"}
@@ -479,10 +489,12 @@ Output example:
 ```
 
 ## GRPC Keepalive
+
 Client-side GRPC DNS re-resolution in scenarios with auto scaling enabled might not work as expected and the current workaround is to [configure connection keepalive](https://github.com/grpc/grpc/issues/12295#issuecomment-382794204) on server-side.
 The behavior can be fixed by configuring the following env variables for the ratelimit server:
-* `GRPC_MAX_CONNECTION_AGE`: a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway. A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
-* `GRPC_MAX_CONNECTION_AGE_GRACE`: an additive period after MaxConnectionAge after which the connection will be forcibly closed.
+
+- `GRPC_MAX_CONNECTION_AGE`: a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway. A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
+- `GRPC_MAX_CONNECTION_AGE_GRACE`: an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 
 # Request Fields
 
@@ -490,11 +502,15 @@ For information on the fields of a Ratelimit gRPC request please read the inform
 on the RateLimitRequest message type in the Ratelimit [proto file.](https://github.com/envoyproxy/envoy/blob/master/api/envoy/service/ratelimit/v3/rls.proto)
 
 # GRPC Client
+
 The [gRPC client](https://github.com/envoyproxy/ratelimit/blob/master/src/client_cmd/main.go) will interact with ratelimit server and tell you if the requests are over limit.
+
 ## Commandline flags
-* `-dial_string`: used to specify the address of ratelimit server. It defaults to `localhost:8081`.
-* `-domain`: used to specify the domain.
-* `-descriptors`: used to specify one descriptor. You can pass multiple descriptors like following:
+
+- `-dial_string`: used to specify the address of ratelimit server. It defaults to `localhost:8081`.
+- `-domain`: used to specify the domain.
+- `-descriptors`: used to specify one descriptor. You can pass multiple descriptors like following:
+
 ```
 go run main.go -domain test \
 -descriptors name=foo,age=14 -descriptors name=bar,age=18
@@ -505,13 +521,14 @@ go run main.go -domain test \
 There is a global shadow-mode which can make it easier to introduce rate limiting into an existing service landscape. It will override whatever result is returned by the regular rate limiting process.
 
 ## Configuration
+
 The global shadow mode is configured with an environment variable
 
 Setting environment variable`SHADOW_MODE` to `true` will enable the feature.
 
 ## Statistics
-There is an additional service-level statistics generated that will increment whenever the global shadow mode has overridden a rate limiting result.
 
+There is an additional service-level statistics generated that will increment whenever the global shadow mode has overridden a rate limiting result.
 
 # Statistics
 
@@ -526,17 +543,20 @@ ratelimit.service.rate_limit.DOMAIN.KEY_VALUE.STAT
 ```
 
 DOMAIN:
-* As specified in the domain value in the YAML runtime file
+
+- As specified in the domain value in the YAML runtime file
 
 KEY_VALUE:
-* A combination of the key value
-* Nested descriptors would be suffixed in the stats path
+
+- A combination of the key value
+- Nested descriptors would be suffixed in the stats path
 
 STAT:
-* near_limit: Number of rule hits over the NearLimit ratio threshold (currently 80%) but under the threshold rate.
-* over_limit: Number of rule hits exceeding the threshold rate
-* total_hits: Number of rule hits in total
-* shadow_mode: Number of rule hits where shadow_mode would trigger and override the over_limit result
+
+- near_limit: Number of rule hits over the NearLimit ratio threshold (currently 80%) but under the threshold rate.
+- over_limit: Number of rule hits exceeding the threshold rate
+- total_hits: Number of rule hits in total
+- shadow_mode: Number of rule hits where shadow_mode would trigger and override the over_limit result
 
 To use a custom near_limit ratio threshold, you can specify with `NEAR_LIMIT_RATIO` environment variable. It defaults to `0.8` (0-1 scale). These are examples of generated stats for some configured rate limit rules from the above examples:
 
@@ -559,28 +579,29 @@ ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 # HTTP Port
 
 The ratelimit service listens to HTTP 1.1 (by default on port 8080) with two endpoints:
+
 1. /healthcheck → return a 200 if this service is healthy
 1. /json → HTTP 1.1 endpoint for interacting with ratelimit service
 
 ## /json endpoint
 
 Takes an HTTP POST with a JSON body of the form e.g.
+
 ```json
 {
   "domain": "dummy",
   "descriptors": [
-    {"entries": [
-      {"key": "one_per_day",
-       "value":  "something"}
-    ]}
+    { "entries": [{ "key": "one_per_day", "value": "something" }] }
   ]
 }
 ```
+
 The service will return an http 200 if this request is allowed (if no ratelimits exceeded) or 429 if one or more
 ratelimits were exceeded.
 
 The response is a RateLimitResponse encoded with
 [proto3-to-json mapping](https://developers.google.com/protocol-buffers/docs/proto3#json):
+
 ```json
 {
   "overallCode": "OVER_LIMIT",
@@ -656,10 +677,10 @@ By default, for each request, ratelimit will pick up a connection from pool, wri
 
 For high throughput scenarios, ratelimit also support [implicit pipelining](https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L238) . It can be configured using the following environment variables:
 
-1. `REDIS_PIPELINE_WINDOW` & `REDIS_PERSECOND_PIPELINE_WINDOW`:  sets the duration after which internal pipelines will be flushed.
-If window is zero then implicit pipelining will be disabled.
+1. `REDIS_PIPELINE_WINDOW` & `REDIS_PERSECOND_PIPELINE_WINDOW`: sets the duration after which internal pipelines will be flushed.
+   If window is zero then implicit pipelining will be disabled.
 1. `REDIS_PIPELINE_LIMIT` & `REDIS_PERSECOND_PIPELINE_LIMIT`: sets maximum number of commands that can be pipelined before flushing.
-If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
+   If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
 
 `implicit pipelining` is disabled by default. To enable it, you can use default values [used by radix](https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L278) and tune for the optimal value.
 
@@ -713,9 +734,11 @@ When using multiple memcache nodes in `MEMCACHE_HOST_PORT=`, one should provide 
 to all ratelimiter instances to ensure that a particular cache key is always hashed to the same memcache node.
 
 # Custom headers
+
 Ratelimit service can be configured to return custom headers with the ratelimit information. It will populate the response_headers_to_add as part of the [RateLimitResponse](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ratelimit/v3/rls.proto#service-ratelimit-v3-ratelimitresponse).
 
 The following environment variables control the custom response feature:
+
 1. `LIMIT_RESPONSE_HEADERS_ENABLED` - Enables the custom response headers
 1. `LIMIT_LIMIT_HEADER` - The default value is "RateLimit-Limit", setting the environment variable will specify an alternative header name
 1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
@@ -723,13 +746,13 @@ The following environment variables control the custom response feature:
 
 # Contact
 
-* [envoy-announce](https://groups.google.com/forum/#!forum/envoy-announce): Low frequency mailing
+- [envoy-announce](https://groups.google.com/forum/#!forum/envoy-announce): Low frequency mailing
   list where we will email announcements only.
-* [envoy-users](https://groups.google.com/forum/#!forum/envoy-users): General user discussion.
+- [envoy-users](https://groups.google.com/forum/#!forum/envoy-users): General user discussion.
   Please add `[ratelimit]` to the email subject.
-* [envoy-dev](https://groups.google.com/forum/#!forum/envoy-dev): Envoy developer discussion (APIs,
+- [envoy-dev](https://groups.google.com/forum/#!forum/envoy-dev): Envoy developer discussion (APIs,
   feature design, etc.). Please add `[ratelimit]` to the email subject.
-* [Slack](https://envoyproxy.slack.com/): Slack, to get invited go [here](http://envoyslack.cncf.io).
+- [Slack](https://envoyproxy.slack.com/): Slack, to get invited go [here](http://envoyslack.cncf.io).
   We have the IRC/XMPP gateways enabled if you prefer either of those. Once an account is created,
   connection instructions for IRC/XMPP can be found [here](https://envoyproxy.slack.com/account/gateways).
   The `#ratelimit-users` channel is used for discussions about the ratelimit service.

@@ -23,14 +23,12 @@ func ParseSrv(srv string) (string, string, string, error) {
 
 func ServerStringsFromSrv(srv string) ([]string, error) {
 	service, proto, name, err := ParseSrv(srv)
-
 	if err != nil {
 		logger.Errorf("failed to parse SRV: %s", err)
 		return nil, err
 	}
 
 	_, srvs, err := net.LookupSRV(service, proto, name)
-
 	if err != nil {
 		logger.Errorf("failed to lookup SRV: %s", err)
 		return nil, err

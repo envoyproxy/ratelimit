@@ -2,9 +2,10 @@ package metrics
 
 import (
 	"context"
+	"time"
+
 	stats "github.com/lyft/gostats"
 	"google.golang.org/grpc"
-	"time"
 )
 
 type serverMetrics struct {

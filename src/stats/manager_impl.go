@@ -1,9 +1,10 @@
 package stats
 
 import (
-	"github.com/envoyproxy/ratelimit/src/settings"
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
+
+	"github.com/envoyproxy/ratelimit/src/settings"
 )
 
 func NewStatManager(store gostats.Store, settings settings.Settings) *ManagerImpl {

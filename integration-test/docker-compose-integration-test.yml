@@ -69,11 +69,11 @@ services:
     networks:
       - ratelimit-network
     expose:
-       - "8888"
-       - "8001"
+      - "8888"
+      - "8001"
     ports:
-       - "8888:8888"
-       - "8001:8001"
+      - "8888:8888"
+      - "8001:8001"
 
   envoy-mock:
     image: envoyproxy/envoy-dev:latest
@@ -90,9 +90,9 @@ services:
     networks:
       - ratelimit-network
     expose:
-       - "9999"
+      - "9999"
     ports:
-       - "9999:9999"
+      - "9999:9999"
 
   tester:
     build:

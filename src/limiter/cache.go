@@ -2,8 +2,9 @@ package limiter
 
 import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/config"
 	"golang.org/x/net/context"
+
+	"github.com/envoyproxy/ratelimit/src/config"
 )
 
 // Interface for interacting with a cache backend for rate limiting.

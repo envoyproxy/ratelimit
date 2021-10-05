@@ -2,6 +2,7 @@ package redis_test
 
 import (
 	"context"
+	"math/rand"
 	"runtime"
 	"testing"
 	"time"
@@ -9,12 +10,11 @@ import (
 	"github.com/envoyproxy/ratelimit/test/mocks/stats"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	gostats "github.com/lyft/gostats"
+
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/utils"
-	gostats "github.com/lyft/gostats"
-
-	"math/rand"
 
 	"github.com/envoyproxy/ratelimit/test/common"
 )

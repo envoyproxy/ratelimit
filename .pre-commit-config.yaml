@@ -1,0 +1,31 @@
+default_language_version:
+  python: python3
+repos:
+  - repo: https://github.com/tekwizely/pre-commit-golang
+    rev: v1.0.0-beta.4
+    hooks:
+      - id: go-imports
+        args: ["-w", "-local", "github.com/envoyproxy/ratelimit"]
+      - id: go-fumpt
+        args: ["-w"]
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: "v2.4.1"
+    hooks:
+      - id: prettier
+        exclude: "test/config/bad_yaml.yaml"
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.0.1
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-json
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/jumanjihouse/pre-commit-hooks
+    rev: 2.1.5
+    hooks:
+      - id: shfmt

@@ -6,10 +6,12 @@ package mock_limiter
 
 import (
 	context "context"
-	envoy_service_ratelimit_v3 "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	config "github.com/envoyproxy/ratelimit/src/config"
-	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
+
+	envoy_service_ratelimit_v3 "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	gomock "github.com/golang/mock/gomock"
+
+	config "github.com/envoyproxy/ratelimit/src/config"
 )
 
 // MockRateLimitCache is a mock of RateLimitCache interface
