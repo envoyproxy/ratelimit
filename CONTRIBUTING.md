@@ -10,7 +10,7 @@ We welcome contributions from the community. Here are some guidelines.
 - Before commiting any code, install the pre-commits by:
 
 ```bash
-make precommits_install
+make precommit_install
 # Example usage if you want to run it manually
 pre-commit run # Run against staged changes
 pre-commit run -a # Run against all files

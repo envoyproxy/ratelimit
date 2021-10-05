@@ -43,5 +43,5 @@ jobs:
 
       - name: run pre-commits
         run: |
-          make precommits_install
+          make precommit_install
           pre-commit run -a

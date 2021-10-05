@@ -118,8 +118,8 @@ docker_push: docker_image
 integration_tests:
 	docker-compose --project-dir $(PWD)  -f integration-test/docker-compose-integration-test.yml up --build  --exit-code-from tester
 
-.PHONY: precommits_install
-precommits_install:
+.PHONY: precommit_install
+precommit_install:
 	python3 -m pip install -r requirements-dev.txt
 	go install mvdan.cc/gofumpt@v0.1.1
 	go install golang.org/x/tools/cmd/goimports@v0.1.7
