@@ -1,0 +1,7 @@
+FROM alpine:latest
+
+USER root
+
+RUN apk update && apk upgrade && apk add bash curl sed grep
+
+ENTRYPOINT [ "bash" ]

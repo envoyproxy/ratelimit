@@ -86,6 +86,16 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
     name: "ratelimit_service_config_load_error"
     match_metric_type: counter
 
+  - match:
+      "ratelimit.service.rate_limit.*.*.*.shadow_mode"
+    name: "ratelimit_service_rate_limit_shadow_mode"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+      key2: "$3"
+
+
   # Enable below in production once you have the metrics you need
   # - match: "."
   #   match_type: "regex"

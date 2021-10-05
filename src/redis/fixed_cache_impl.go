@@ -1,8 +1,9 @@
 package redis
 
 import (
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"math/rand"
+
+	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -53,8 +54,14 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		// Check if key is over the limit in local cache.
 		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
-			isOverLimitWithLocalCache[i] = true
-			logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
+
+			if limits[i].ShadowMode {
+				logger.Debugf("Cache key %s would be rate limited but shadow mode is enabled on this rule", cacheKey.Key)
+			} else {
+				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
+				isOverLimitWithLocalCache[i] = true
+			}
+
 			continue
 		}
 

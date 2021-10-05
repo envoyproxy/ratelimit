@@ -109,6 +109,7 @@ func (runner *Runner) Run() {
 		runner.statsManager,
 		s.RuntimeWatchRoot,
 		utils.NewTimeSourceImpl(),
+		s.GlobalShadowMode,
 	)
 
 	srv.AddDebugHttpEndpoint(
