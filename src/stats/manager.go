@@ -1,7 +1,9 @@
 package stats
 
-import stats "github.com/lyft/gostats"
-import gostats "github.com/lyft/gostats"
+import (
+	gostats "github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
+)
 
 // Manager is the interface that wraps initialization of stat structures.
 type Manager interface {
@@ -38,6 +40,7 @@ type ServiceStats struct {
 	ConfigLoadSuccess gostats.Counter
 	ConfigLoadError   gostats.Counter
 	ShouldRateLimit   ShouldRateLimitStats
+	GlobalShadowMode  gostats.Counter
 }
 
 // Stats for an individual rate limit config entry.
@@ -48,4 +51,5 @@ type RateLimitStats struct {
 	NearLimit               gostats.Counter
 	OverLimitWithLocalCache gostats.Counter
 	WithinLimit             gostats.Counter
+	ShadowMode              gostats.Counter
 }

@@ -114,6 +114,10 @@ docker_image: docker_tests
 docker_push: docker_image
 	docker push $(IMAGE):$(VERSION)
 
+.PHONY: integration_tests
+integration_tests:
+	docker-compose --project-dir $(PWD)  -f integration-test/docker-compose-integration-test.yml up --build  --exit-code-from tester
+
 .PHONY: precommits_install
 precommits_install:
 	python3 -m pip install -r requirements-dev.txt

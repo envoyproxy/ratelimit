@@ -2,6 +2,7 @@ cover.out
 
 bin/
 .idea/
+.vscode/
 vendor
 cert.pem
 key.pem

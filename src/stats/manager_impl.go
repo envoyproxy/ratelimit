@@ -32,6 +32,7 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret.NearLimit = this.rlStatsScope.NewCounter(key + ".near_limit")
 	ret.OverLimitWithLocalCache = this.rlStatsScope.NewCounter(key + ".over_limit_with_local_cache")
 	ret.WithinLimit = this.rlStatsScope.NewCounter(key + ".within_limit")
+	ret.ShadowMode = this.rlStatsScope.NewCounter(key + ".shadow_mode")
 	return ret
 }
 
@@ -47,6 +48,7 @@ func (this *ManagerImpl) NewServiceStats() ServiceStats {
 	ret.ConfigLoadSuccess = this.serviceStatsScope.NewCounter("config_load_success")
 	ret.ConfigLoadError = this.serviceStatsScope.NewCounter("config_load_error")
 	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
+	ret.GlobalShadowMode = this.serviceStatsScope.NewCounter("global_shadow_mode")
 	return ret
 }
 
