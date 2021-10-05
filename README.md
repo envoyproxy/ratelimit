@@ -326,11 +326,12 @@ descriptors:
 ```
 
 In the preceding example, we setup a generic rate limit for individual IP addresses. The architecture's edge proxy can
-be configured to make a rate limit service call with the descriptor ("remote*address", "50.0.0.1") for example. This IP would
+be configured to make a rate limit service call with the descriptor `("remote_address", "50.0.0.1")` for example. This IP would
 get 10 requests per second as
 would any other IP. However, the configuration also contains a second configuration that explicitly defines a
-value along with the same key. If the descriptor ("remote_address", "50.0.0.5") is received, the service will
-\_attempt the most specific match possible*. This means
+value along with the same key.
+If the descriptor `("remote_address", "50.0.0.5")` is received, the service
+will _attempt the most specific match possible_. This means
 the most specific descriptor at the same level as your request. Thus, key/value is always attempted as a match before just key.
 
 #### Example 4
