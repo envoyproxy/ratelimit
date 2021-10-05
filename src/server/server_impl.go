@@ -4,27 +4,24 @@ import (
 	"bytes"
 	"expvar"
 	"fmt"
-	"google.golang.org/grpc/keepalive"
 	"io"
+	"net"
 	"net/http"
 	"net/http/pprof"
+	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"sync"
+	"syscall"
+
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/envoyproxy/ratelimit/src/stats"
 
-	"os"
-	"os/signal"
-	"syscall"
-
-	"net"
-
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/gorilla/mux"
 	reuseport "github.com/kavu/go_reuseport"
@@ -34,6 +31,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+
+	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/settings"
 )
 
 type serverDebugListener struct {
@@ -215,7 +215,6 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 			ret.store.ScopeWithTags("runtime", s.ExtraTags),
 			&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
 			loaderOpts...)
-
 	} else {
 		ret.runtime = loader.New(
 			filepath.Join(s.RuntimePath, s.RuntimeSubdirectory),

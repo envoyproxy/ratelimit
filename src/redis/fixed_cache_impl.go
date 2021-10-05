@@ -7,11 +7,12 @@ import (
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	logger "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
+
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/utils"
-	logger "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 )
 
 type fixedRateLimitCacheImpl struct {

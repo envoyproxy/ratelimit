@@ -8,13 +8,14 @@ import (
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/golang/mock/gomock"
+	stats "github.com/lyft/gostats"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
-	"github.com/golang/mock/gomock"
-	stats "github.com/lyft/gostats"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateCacheKeys(t *testing.T) {
@@ -206,7 +207,6 @@ func TestGetResponseStatusBelowLimit(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 	// No shadow_mode so, no stats change
 	assert.Equal(uint64(0), limits[0].Stats.ShadowMode.Value())
-
 }
 
 func TestGetResponseStatusBelowLimitShadowMode(t *testing.T) {
@@ -228,5 +228,4 @@ func TestGetResponseStatusBelowLimitShadowMode(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 	// No shadow_mode so, no stats change
 	assert.Equal(uint64(0), limits[0].Stats.ShadowMode.Value())
-
 }

@@ -6,11 +6,13 @@ package mock_config
 
 import (
 	context "context"
+	reflect "reflect"
+
 	envoy_extensions_common_ratelimit_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
+	gomock "github.com/golang/mock/gomock"
+
 	config "github.com/envoyproxy/ratelimit/src/config"
 	stats "github.com/envoyproxy/ratelimit/src/stats"
-	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
 )
 
 // MockRateLimitConfig is a mock of RateLimitConfig interface

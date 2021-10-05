@@ -4,6 +4,7 @@ import (
 	"math/rand"
 
 	"github.com/coocood/freecache"
+
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/settings"

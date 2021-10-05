@@ -8,10 +8,11 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/envoyproxy/ratelimit/src/server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+
+	"github.com/envoyproxy/ratelimit/src/server"
 )
 
 func TestHealthCheck(t *testing.T) {
@@ -42,7 +43,6 @@ func TestHealthCheck(t *testing.T) {
 	if 500 != recorder.Code {
 		t.Errorf("expected code 500 actual %d", recorder.Code)
 	}
-
 }
 
 func TestGrpcHealthCheck(t *testing.T) {

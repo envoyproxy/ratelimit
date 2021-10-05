@@ -14,13 +14,14 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/lyft/goruntime/loader"
+	logger "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
+
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
-	"github.com/lyft/goruntime/loader"
-	logger "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 )
 
 type RateLimitServiceServer interface {
@@ -210,7 +211,6 @@ func (this *service) shouldRateLimitWorker(
 }
 
 func (this *service) rateLimitLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
-
 	// Limit header only provides the mandatory part from the spec, the actual limit
 	// the optional quota policy is currently not provided
 	return &core.HeaderValue{
@@ -220,7 +220,6 @@ func (this *service) rateLimitLimitHeader(descriptor *pb.RateLimitResponse_Descr
 }
 
 func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
-
 	// How much of the limit is remaining
 	return &core.HeaderValue{
 		Key:   this.customHeaderRemainingHeader,

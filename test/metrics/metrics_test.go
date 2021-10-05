@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/envoyproxy/ratelimit/src/metrics"
 	stats "github.com/lyft/gostats"
 	statsMock "github.com/lyft/gostats/mock"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
+
+	"github.com/envoyproxy/ratelimit/src/metrics"
 )
 
 func TestMetricsInterceptor(t *testing.T) {

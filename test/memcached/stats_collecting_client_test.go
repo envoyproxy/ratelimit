@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/envoyproxy/ratelimit/src/memcached"
-	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached"
 	"github.com/golang/mock/gomock"
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/envoyproxy/ratelimit/src/memcached"
+	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached"
 )
 
 type fakeSink struct {

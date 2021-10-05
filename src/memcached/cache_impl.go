@@ -17,11 +17,12 @@ package memcached
 
 import (
 	"context"
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"math/rand"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
 	gostats "github.com/lyft/gostats"
