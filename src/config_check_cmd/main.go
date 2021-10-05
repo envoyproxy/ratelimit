@@ -3,14 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
-	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/stats"
+
 	gostats "github.com/lyft/gostats"
+
+	"github.com/envoyproxy/ratelimit/src/config"
 )
 
 func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {

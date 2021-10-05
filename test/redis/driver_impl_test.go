@@ -5,9 +5,10 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/envoyproxy/ratelimit/src/redis"
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/envoyproxy/ratelimit/src/redis"
 )
 
 func mustNewRedisServer() *miniredis.Miniredis {

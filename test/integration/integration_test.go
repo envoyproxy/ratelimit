@@ -12,15 +12,16 @@ import (
 	"time"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/memcached"
-	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/test/common"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+
+	"github.com/envoyproxy/ratelimit/src/memcached"
+	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
+	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/test/common"
 )
 
 func init() {
@@ -52,7 +53,6 @@ func defaultSettings() settings.Settings {
 }
 
 func newDescriptorStatus(status pb.RateLimitResponse_Code, requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, limitRemaining uint32, durRemaining *duration.Duration) *pb.RateLimitResponse_DescriptorStatus {
-
 	limit := &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}
 
 	return &pb.RateLimitResponse_DescriptorStatus{
@@ -387,7 +387,8 @@ func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
-				Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}}},
+				Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}},
+			},
 			response)
 		assert.NoError(err)
 
@@ -409,7 +410,9 @@ func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses: []*pb.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49, durRemaining)}},
+					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49, durRemaining),
+				},
+			},
 			response)
 		assert.NoError(err)
 
@@ -451,7 +454,9 @@ func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 				&pb.RateLimitResponse{
 					OverallCode: status,
 					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
-						newDescriptorStatus(status, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining, durRemaining)}},
+						newDescriptorStatus(status, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining, durRemaining),
+					},
+				},
 				response)
 			assert.NoError(err)
 			key2HitCounter := runner.GetStatsStore().NewCounter(fmt.Sprintf("ratelimit.service.rate_limit.another.%s.total_hits", getCacheKey("key2", enable_local_cache)))
@@ -499,7 +504,8 @@ func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 					"another",
 					[][][2]string{
 						{{getCacheKey("key2", enable_local_cache), strconv.Itoa(randomInt)}},
-						{{getCacheKey("key3", enable_local_cache), strconv.Itoa(randomInt)}}}, 1))
+						{{getCacheKey("key3", enable_local_cache), strconv.Itoa(randomInt)}},
+					}, 1))
 
 			status := pb.RateLimitResponse_OK
 			limitRemaining1 := uint32(20 - (i + 1))
@@ -516,7 +522,9 @@ func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 					OverallCode: status,
 					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
 						newDescriptorStatus(pb.RateLimitResponse_OK, 20, pb.RateLimitResponse_RateLimit_MINUTE, limitRemaining1, durRemaining1),
-						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2, durRemaining2)}},
+						newDescriptorStatus(status, 10, pb.RateLimitResponse_RateLimit_HOUR, limitRemaining2, durRemaining2),
+					},
+				},
 				response)
 			assert.NoError(err)
 
@@ -630,7 +638,8 @@ func testConfigReload(s settings.Settings) func(*testing.T) {
 			assert,
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
-				Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK}}},
+				Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK}},
+			},
 			response)
 		assert.NoError(err)
 
@@ -688,7 +697,9 @@ func testConfigReload(s settings.Settings) func(*testing.T) {
 			&pb.RateLimitResponse{
 				OverallCode: pb.RateLimitResponse_OK,
 				Statuses: []*pb.RateLimitResponse_DescriptorStatus{
-					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49, durRemaining)}},
+					newDescriptorStatus(pb.RateLimitResponse_OK, 50, pb.RateLimitResponse_RateLimit_SECOND, 49, durRemaining),
+				},
+			},
 			response)
 		assert.NoError(err)
 

@@ -1,9 +1,10 @@
 package stats
 
 import (
-	"github.com/envoyproxy/ratelimit/src/stats"
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
+
+	"github.com/envoyproxy/ratelimit/src/stats"
 )
 
 type MockStatManager struct {

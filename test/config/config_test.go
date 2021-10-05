@@ -9,10 +9,11 @@ import (
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	pb_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/envoyproxy/ratelimit/src/config"
-	mockstats "github.com/envoyproxy/ratelimit/test/mocks/stats"
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/envoyproxy/ratelimit/src/config"
+	mockstats "github.com/envoyproxy/ratelimit/test/mocks/stats"
 )
 
 func loadFile(path string) []config.RateLimitConfigToLoad {
@@ -350,7 +351,6 @@ func TestMisspelledKey(t *testing.T) {
 			config.NewRateLimitConfigImpl(
 				loadFile("misspelled_key2.yaml"),
 				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
-
 		},
 		"misspelled_key2.yaml: config error, unknown key 'requestsperunit'")
 }

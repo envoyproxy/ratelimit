@@ -6,11 +6,12 @@ import (
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	logger "github.com/sirupsen/logrus"
+
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/utils"
-	logger "github.com/sirupsen/logrus"
 )
 
 type BaseRateLimiter struct {
@@ -33,8 +34,10 @@ type LimitInfo struct {
 
 func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint32, limitAfterIncrease uint32,
 	nearLimitThreshold uint32, overLimitThreshold uint32) *LimitInfo {
-	return &LimitInfo{limit: limit, limitBeforeIncrease: limitBeforeIncrease, limitAfterIncrease: limitAfterIncrease,
-		nearLimitThreshold: nearLimitThreshold, overLimitThreshold: overLimitThreshold}
+	return &LimitInfo{
+		limit: limit, limitBeforeIncrease: limitBeforeIncrease, limitAfterIncrease: limitAfterIncrease,
+		nearLimitThreshold: nearLimitThreshold, overLimitThreshold: overLimitThreshold,
+	}
 }
 
 // Generates cache keys for given rate limit request. Each cache key is represented by a concatenation of

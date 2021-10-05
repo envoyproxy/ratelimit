@@ -2,20 +2,22 @@ package server_test
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/mock"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/mock"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/envoyproxy/ratelimit/src/server"
 	mock_v3 "github.com/envoyproxy/ratelimit/test/mocks/rls"
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 )
 
 func assertHttpResponse(t *testing.T,

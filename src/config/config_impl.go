@@ -6,10 +6,11 @@ import (
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/envoyproxy/ratelimit/src/stats"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"gopkg.in/yaml.v2"
+
+	"github.com/envoyproxy/ratelimit/src/stats"
 )
 
 type yamlRateLimit struct {
@@ -96,7 +97,6 @@ func newRateLimitConfigError(config RateLimitConfigToLoad, err string) RateLimit
 // @param descriptors supplies the YAML descriptors to load.
 // @param statsManager that owns the stats.Scope.
 func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, parentKey string, descriptors []yamlDescriptor, statsManager stats.Manager) {
-
 	for _, descriptorConfig := range descriptors {
 		if descriptorConfig.Key == "" {
 			panic(newRateLimitConfigError(config, "descriptor has empty key"))

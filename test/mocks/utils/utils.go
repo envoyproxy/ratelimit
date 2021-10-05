@@ -5,8 +5,9 @@
 package mock_utils
 
 import (
-	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
+
+	gomock "github.com/golang/mock/gomock"
 )
 
 // MockTimeSource is a mock of TimeSource interface

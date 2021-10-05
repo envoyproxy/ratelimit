@@ -125,7 +125,6 @@ func startCacheProcess(ctx context.Context, command string, args []string, port 
 	}()
 
 	err := cmd.Start()
-
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("Problem starting %s subprocess: %v", command, err)

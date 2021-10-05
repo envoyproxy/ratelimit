@@ -5,9 +5,10 @@
 package mock_memcached
 
 import (
+	reflect "reflect"
+
 	memcache "github.com/bradfitz/gomemcache/memcache"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
 )
 
 // MockClient is a mock of Client interface

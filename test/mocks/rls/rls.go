@@ -6,9 +6,10 @@ package mock_v3
 
 import (
 	context "context"
+	reflect "reflect"
+
 	envoy_service_ratelimit_v3 "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
 )
 
 // MockRateLimitServiceServer is a mock of RateLimitServiceServer interface

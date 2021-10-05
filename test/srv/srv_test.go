@@ -5,8 +5,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/envoyproxy/ratelimit/src/srv"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/envoyproxy/ratelimit/src/srv"
 )
 
 func TestParseSrv(t *testing.T) {
