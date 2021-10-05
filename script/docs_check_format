@@ -1,9 +1,9 @@
 #!/bin/bash
 if ! npm list -g | grep -q doctoc; then
-  npm install -g doctoc
+	npm install -g doctoc
 fi
 
-TEMP_DIR=`mktemp -d`
+TEMP_DIR=$(mktemp -d)
 
 cp README.md $TEMP_DIR/
 doctoc $TEMP_DIR
@@ -13,6 +13,6 @@ DIFF_RESULT=$?
 rm -fr $TEMP_DIR
 
 if [[ $DIFF_RESULT != 0 ]]; then
-  echo "doc formatting is invalid. run make fix_format"
-  exit 1
+	echo "doc formatting is invalid. run make fix_format"
+	exit 1
 fi

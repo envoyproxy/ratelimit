@@ -24,3 +24,8 @@ repos:
       - id: check-merge-conflict
       - id: end-of-file-fixer
       - id: trailing-whitespace
+
+  - repo: https://github.com/jumanjihouse/pre-commit-hooks
+    rev: 2.1.5
+    hooks:
+      - id: shfmt
