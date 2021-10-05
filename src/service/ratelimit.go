@@ -9,6 +9,7 @@ import (
 
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/stats"
+
 	"github.com/envoyproxy/ratelimit/src/utils"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -41,6 +42,7 @@ type service struct {
 	customHeaderRemainingHeader string
 	customHeaderResetHeader     string
 	customHeaderClock           utils.TimeSource
+	globalShadowMode            bool
 }
 
 func (this *service) reloadConfig(statsManager stats.Manager) {
@@ -72,6 +74,7 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 	this.configLock.Lock()
 	this.config = newConfig
 	rlSettings := settings.NewSettings()
+	this.globalShadowMode = rlSettings.GlobalShadowMode
 
 	if rlSettings.RateLimitResponseHeadersEnabled {
 		this.customHeadersEnabled = true
@@ -124,9 +127,10 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 					logger.Debugf("descriptor is unlimited, not passing to the cache")
 				} else {
 					logger.Debugf(
-						"applying limit: %d requests per %s",
+						"applying limit: %d requests per %s, shadow_mode: %t",
 						limitsToCheck[i].Limit.RequestsPerUnit,
 						limitsToCheck[i].Limit.Unit.String(),
+						limitsToCheck[i].ShadowMode,
 					)
 				}
 			}
@@ -195,6 +199,12 @@ func (this *service) shouldRateLimitWorker(
 		}
 	}
 
+	// If there is a global shadow_mode, it should always return OK
+	if finalCode == pb.RateLimitResponse_OVER_LIMIT && this.globalShadowMode {
+		finalCode = pb.RateLimitResponse_OK
+		this.stats.GlobalShadowMode.Inc()
+	}
+
 	response.OverallCode = finalCode
 	return response
 }
@@ -257,6 +267,7 @@ func (this *service) ShouldRateLimit(
 
 	response := this.shouldRateLimitWorker(ctx, request)
 	logger.Debugf("returning normal response")
+
 	return response, nil
 }
 
@@ -267,7 +278,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -278,6 +289,7 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		cache:              cache,
 		stats:              statsManager.NewServiceStats(),
 		runtimeWatchRoot:   runtimeWatchRoot,
+		globalShadowMode:   shadowMode,
 		customHeaderClock:  clock,
 	}
 

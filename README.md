@@ -9,24 +9,30 @@
 - [Building and Testing](#building-and-testing)
   - [Docker-compose setup](#docker-compose-setup)
   - [Full test environment](#full-test-environment)
+  - [Self-contained end-to-end integration test](#self-contained-end-to-end-integration-test)
 - [Configuration](#configuration)
   - [The configuration format](#the-configuration-format)
     - [Definitions](#definitions)
     - [Descriptor list definition](#descriptor-list-definition)
     - [Rate limit definition](#rate-limit-definition)
+    - [ShadowMode](#shadowmode)
     - [Examples](#examples)
       - [Example 1](#example-1)
       - [Example 2](#example-2)
       - [Example 3](#example-3)
       - [Example 4](#example-4)
       - [Example 5](#example-5)
+    - [Example 6](#example-6)
   - [Loading Configuration](#loading-configuration)
   - [Log Format](#log-format)
   - [GRPC Keepalive](#grpc-keepalive)
 - [Request Fields](#request-fields)
 - [GRPC Client](#grpc-client)
   - [Commandline flags](#commandline-flags)
-- [Statistics](#statistics)
+- [Global ShadowMode](#global-shadowmode)
+  - [Configuration](#configuration-1)
+  - [Statistics](#statistics)
+- [Statistics](#statistics-1)
   - [Statistics options](#statistics-options)
 - [HTTP Port](#http-port)
   - [/json endpoint](#json-endpoint)
@@ -120,19 +126,39 @@ as explained in the [two redis instances](#two-redis-instances) section.
 ## Full test environment
 To run a fully configured environment to demo Envoy based rate limiting, run:
 ```bash
-docker-compose -f docker-compose-example.yml up
+docker-compose -f docker-compose-example.yml up --build --remove-orphans
 ```
 This will run ratelimit, redis, prom-statsd-exporter and two Envoy containers such that you can demo rate limiting by hitting the below endpoints.
 ```bash
 curl localhost:8888/test
 curl localhost:8888/header -H "foo: foo" # Header based
 curl localhost:8888/twoheader -H "foo: foo" -H "bar: bar" # Two headers
-curl localhost:8888/twoheader -H "foo: foo" -H "baz: baz"
+curl localhost:8888/twoheader -H "foo: foo" -H "baz: baz"  # This will be rate limited
 curl localhost:8888/twoheader -H "foo: foo" -H "bar: banned" # Ban a particular header value
+curl localhost:8888/twoheader -H "foo: foo" -H "baz: shady" # This will never be ratelimited since "baz" with value "shady" is in shadow_mode
+curl localhost:8888/twoheader -H "foo: foo" -H "baz: not-so-shady" # This is subject to rate-limiting because the it's now in shadow_mode
 ```
 Edit `examples/ratelimit/config/example.yaml` to test different rate limit configs. Hot reloading is enabled.
 
 The descriptors in `example.yaml` and the actions in `examples/envoy/proxy.yaml` should give you a good idea on how to configure rate limits.
+
+To see the metrics in the example
+```bash
+# The metrics for the shadow_mode keys
+curl http://localhost:9102/metrics | grep -i shadow
+```
+
+## Self-contained end-to-end integration test
+
+Integration tests are coded as bash-scripts in `integration-test/scripts`.
+
+The test suite will spin up a docker-compose environment from `integration-test/docker-compose-integration-test.yml`
+
+If the test suite fails it will exit with code 1.
+
+```bash
+make integration-tests
+```
 
 # Configuration
 
@@ -163,6 +189,7 @@ descriptors:
     rate_limit: (optional block)
       unit: <see below: required>
       requests_per_unit: <see below: required>
+    shadow_mode: (optional)
     descriptors: (optional block)
       - ... (nested repetition of above)
 ```
@@ -183,6 +210,15 @@ rate_limit:
 The rate limit block specifies the actual rate limit that will be used when there is a match.
 Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
 future based on user demand.
+
+### ShadowMode
+A shadow_mode key in a rule indicates that whatever the outcome of the evaluation of the rule, the end-result will always be "OK".
+
+When a block is in ShadowMode all functions of the rate limiting service are executed as normal, with cache-lookup and statistics
+
+An additional statistic is added to keep track of how many times a key with "shadow_mode" has overridden result.
+
+There is also a Global Shadow Mode
 
 ### Examples
 
@@ -351,6 +387,39 @@ This can be useful for collecting statistics, or if one wants to define a descri
 
 The return value for unlimited descriptors will be an OK status code with the LimitRemaining field set to MaxUint32 value.
 
+ ### Example 6
+
+ A rule using shadow_mode is useful for soft-launching rate limiting. In this example
+
+```
+RateLimitRequest:
+  domain: example6
+  descriptor: ("service", "auth-service"),("user", "user-a")
+```
+
+`user-a` of the `auth-service` would not get rate-limited regardless of the rate of requests, there would however be statistics related to the breach of the configured limit of 10 req / sec.
+
+`user-b` would be limited to 20 req / sec however.
+
+```yaml
+domain: example6
+descriptors:
+  - key: service
+    descriptors:
+      - key: user
+        value: user-a
+        rate_limit:
+          requests_per_unit: 10
+          unit: second
+        shadow_mode: true
+      - key: user
+        value: user-b
+        rate_limit:
+          requests_per_unit: 20
+          unit: second
+```
+
+
 ## Loading Configuration
 
 The Ratelimit service uses a library written by Lyft called [goruntime](https://github.com/lyft/goruntime) to do configuration loading. Goruntime monitors
@@ -431,6 +500,19 @@ go run main.go -domain test \
 -descriptors name=foo,age=14 -descriptors name=bar,age=18
 ```
 
+# Global ShadowMode
+
+There is a global shadow-mode which can make it easier to introduce rate limiting into an existing service landscape. It will override whatever result is returned by the regular rate limiting process.
+
+## Configuration
+The global shadow mode is configured with an environment variable
+
+Setting environment variable`SHADOW_MODE` to `true` will enable the feature.
+
+## Statistics
+There is an additional service-level statistics generated that will increment whenever the global shadow mode has overridden a rate limiting result.
+
+
 # Statistics
 
 The rate limit service generates various statistics for each configured rate limit rule that will be useful for end
@@ -454,6 +536,7 @@ STAT:
 * near_limit: Number of rule hits over the NearLimit ratio threshold (currently 80%) but under the threshold rate.
 * over_limit: Number of rule hits exceeding the threshold rate
 * total_hits: Number of rule hits in total
+* shadow_mode: Number of rule hits where shadow_mode would trigger and override the over_limit result
 
 To use a custom near_limit ratio threshold, you can specify with `NEAR_LIMIT_RATIO` environment variable. It defaults to `0.8` (0-1 scale). These are examples of generated stats for some configured rate limit rules from the above examples:
 
@@ -464,6 +547,9 @@ ratelimit.service.rate_limit.mongo_cps.database_users.over_limit: 0
 ratelimit.service.rate_limit.mongo_cps.database_users.total_hits: 2939
 ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.over_limit: 0
 ratelimit.service.rate_limit.messaging.message_type_marketing.to_number.total_hits: 0
+ratelimit.service.rate_limit.messaging.auth-service.over_limit.total_hits: 1
+ratelimit.service.rate_limit.messaging.auth-service.over_limit.over_limit: 1
+ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 ```
 
 ## Statistics options

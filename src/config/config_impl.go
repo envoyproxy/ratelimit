@@ -23,6 +23,7 @@ type yamlDescriptor struct {
 	Value       string
 	RateLimit   *yamlRateLimit `yaml:"rate_limit"`
 	Descriptors []yamlDescriptor
+	ShadowMode  bool `yaml:"shadow_mode"`
 }
 
 type yamlRoot struct {
@@ -53,6 +54,7 @@ var validKeys = map[string]bool{
 	"unit":              true,
 	"requests_per_unit": true,
 	"unlimited":         true,
+	"shadow_mode":       true,
 }
 
 // Create a new rate limit config entry.
@@ -62,9 +64,9 @@ var validKeys = map[string]bool{
 // @param unlimited supplies whether the rate limit is unlimited
 // @return the new config entry.
 func NewRateLimit(
-	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats, unlimited bool) *RateLimit {
+	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats, unlimited bool, shadowMode bool) *RateLimit {
 
-	return &RateLimit{FullKey: rlStats.GetKey(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}, Unlimited: unlimited}
+	return &RateLimit{FullKey: rlStats.GetKey(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}, Unlimited: unlimited, ShadowMode: shadowMode}
 }
 
 // Dump an individual descriptor for debugging purposes.
@@ -72,8 +74,8 @@ func (this *rateLimitDescriptor) dump() string {
 	ret := ""
 	if this.limit != nil {
 		ret += fmt.Sprintf(
-			"%s: unit=%s requests_per_unit=%d\n", this.limit.FullKey,
-			this.limit.Limit.Unit.String(), this.limit.Limit.RequestsPerUnit)
+			"%s: unit=%s requests_per_unit=%d, shadow_mode: %t\n", this.limit.FullKey,
+			this.limit.Limit.Unit.String(), this.limit.Limit.RequestsPerUnit, this.limit.ShadowMode)
 	}
 	for _, descriptor := range this.descriptors {
 		ret += descriptor.dump()
@@ -134,10 +136,10 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			}
 
 			rateLimit = NewRateLimit(
-				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), statsManager.NewStats(newParentKey), unlimited)
+				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode)
 			rateLimitDebugString = fmt.Sprintf(
-				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t}", rateLimit.Limit.RequestsPerUnit,
-				rateLimit.Limit.Unit.String(), rateLimit.Unlimited)
+				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t}", rateLimit.Limit.RequestsPerUnit,
+				rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode)
 		}
 
 		logger.Debugf(
@@ -252,10 +254,12 @@ func (this *rateLimitConfigImpl) GetLimit(
 	if descriptor.GetLimit() != nil {
 		rateLimitKey := descriptorKey(domain, descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
+		// When limit override is provided by envoy config, we don't want to enable shadow_mode
 		rateLimit = NewRateLimit(
 			descriptor.GetLimit().GetRequestsPerUnit(),
 			rateLimitOverrideUnit,
 			this.statsManager.NewStats(rateLimitKey),
+			false,
 			false)
 		return rateLimit
 	}

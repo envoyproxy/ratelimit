@@ -27,6 +27,7 @@ func (m *MockStatManager) NewServiceStats() stats.ServiceStats {
 	ret.ConfigLoadSuccess = m.store.NewCounter("config_load_success")
 	ret.ConfigLoadError = m.store.NewCounter("config_load_error")
 	ret.ShouldRateLimit = m.NewShouldRateLimitStats()
+	ret.GlobalShadowMode = m.store.NewCounter("global_shadow_mode")
 	return ret
 }
 
@@ -39,6 +40,8 @@ func (m *MockStatManager) NewStats(key string) stats.RateLimitStats {
 	ret.NearLimit = m.store.NewCounter(key + ".near_limit")
 	ret.OverLimitWithLocalCache = m.store.NewCounter(key + ".over_limit_with_local_cache")
 	ret.WithinLimit = m.store.NewCounter(key + ".within_limit")
+	ret.ShadowMode = m.store.NewCounter(key + ".shadow_mode")
+
 	return ret
 }
 
