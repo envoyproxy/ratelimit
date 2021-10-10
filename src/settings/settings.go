@@ -87,8 +87,7 @@ type Settings struct {
 	RedisPerSecondPipelineWindow time.Duration `envconfig:"REDIS_PERSECOND_PIPELINE_WINDOW" default:"0"`
 	// RedisPerSecondPipelineLimit sets maximum number of commands that can be pipelined before flushing for per second redis.
 	// See comments of RedisPipelineLimit for details.
-	RedisPerSecondPipelineLimit          int  `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
-	RedisRestartServiceForZeroConnection bool `envconfig:"REDIS_RESTART_SERVICE_FOR_ZERO_CONNECTION" default:"false"`
+	RedisPerSecondPipelineLimit int `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 
 	// Memcache settings
 	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`

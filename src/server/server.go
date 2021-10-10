@@ -43,4 +43,7 @@ type Server interface {
 	 *  Stops serving the grpc port (for integration testing).
 	 */
 	Stop()
+
+	HealthCheckFail()
+	HealthCheckOK()
 }
