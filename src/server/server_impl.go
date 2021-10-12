@@ -314,7 +314,6 @@ func (server *server) handleGracefulShutdown() {
 
 func (server *server) HealthCheckFail() {
 	server.health.Fail()
-
 }
 
 func (server *server) HealthCheckOK() {

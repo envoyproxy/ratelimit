@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/mediocregopher/radix/v3/trace"
-
 	stats "github.com/lyft/gostats"
 	"github.com/mediocregopher/radix/v3"
 	logger "github.com/sirupsen/logrus"
