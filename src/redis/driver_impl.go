@@ -3,13 +3,15 @@ package redis
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/envoyproxy/ratelimit/src/server"
+	"strings"
+	"time"
+
 	stats "github.com/lyft/gostats"
 	"github.com/mediocregopher/radix/v3"
 	"github.com/mediocregopher/radix/v3/trace"
 	logger "github.com/sirupsen/logrus"
-	"strings"
-	"time"
+
+	"github.com/envoyproxy/ratelimit/src/server"
 )
 
 type poolStats struct {
