@@ -3,13 +3,13 @@ package redis
 import (
 	"crypto/tls"
 	"fmt"
-	"strings"
-	"time"
 	"github.com/envoyproxy/ratelimit/src/server"
-	"github.com/mediocregopher/radix/v3/trace"
 	stats "github.com/lyft/gostats"
 	"github.com/mediocregopher/radix/v3"
+	"github.com/mediocregopher/radix/v3/trace"
 	logger "github.com/sirupsen/logrus"
+	"strings"
+	"time"
 )
 
 type poolStats struct {
@@ -26,19 +26,19 @@ func newPoolStats(scope stats.Scope) poolStats {
 	return ret
 }
 
-func poolTrace(ps *poolStats, srv server.Server) trace.PoolTrace {
+func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Server) trace.PoolTrace {
 	return trace.PoolTrace{
 		ConnCreated: func(_ trace.PoolConnCreated) {
 			ps.connectionTotal.Add(1)
 			ps.connectionActive.Add(1)
-			if srv != nil {
+			if healthCheckActiveConnection && srv != nil {
 				srv.HealthCheckOK()
 			}
 		},
 		ConnClosed: func(_ trace.PoolConnClosed) {
 			ps.connectionActive.Sub(1)
 			ps.connectionClose.Add(1)
-			if srv != nil && ps.connectionActive.Value() == 0 {
+			if healthCheckActiveConnection && srv != nil && ps.connectionActive.Value() == 0 {
 				srv.HealthCheckFail()
 			}
 		},
@@ -58,7 +58,7 @@ func checkError(err error) {
 }
 
 func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
-	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, srv server.Server) Client {
+	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server) Client {
 	logger.Warnf("connecting to redis on %s with pool size %d", url, poolSize)
 
 	df := func(network, addr string) (radix.Conn, error) {
@@ -83,7 +83,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 
 	stats := newPoolStats(scope)
 
-	opts := []radix.PoolOpt{radix.PoolConnFunc(df), radix.PoolWithTrace(poolTrace(&stats, srv))}
+	opts := []radix.PoolOpt{radix.PoolConnFunc(df), radix.PoolWithTrace(poolTrace(&stats, healthCheckActiveConnection, srv))}
 
 	implicitPipelining := true
 	if pipelineWindow == 0 && pipelineLimit == 0 {

@@ -12,15 +12,15 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
-func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, statsManager stats.Manager) limiter.RateLimitCache {
+func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, statsManager stats.Manager, healthCheckActiveConnection bool) limiter.RateLimitCache {
 	var perSecondPool Client
 	if s.RedisPerSecond {
 		perSecondPool = NewClientImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondTls, s.RedisPerSecondAuth, s.RedisPerSecondSocketType,
-			s.RedisPerSecondType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize, s.RedisPerSecondPipelineWindow, s.RedisPerSecondPipelineLimit, s.RedisTlsConfig, srv)
+			s.RedisPerSecondType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize, s.RedisPerSecondPipelineWindow, s.RedisPerSecondPipelineLimit, s.RedisTlsConfig, healthCheckActiveConnection, srv)
 	}
 	var otherPool Client
 	otherPool = NewClientImpl(srv.Scope().Scope("redis_pool"), s.RedisTls, s.RedisAuth, s.RedisSocketType, s.RedisType, s.RedisUrl, s.RedisPoolSize,
-		s.RedisPipelineWindow, s.RedisPipelineLimit, s.RedisTlsConfig, srv)
+		s.RedisPipelineWindow, s.RedisPipelineLimit, s.RedisTlsConfig, healthCheckActiveConnection, srv)
 
 	return NewFixedRateLimitCacheImpl(
 		otherPool,
