@@ -42,6 +42,7 @@
   - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
+  - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
 - [Contact](#contact)
@@ -710,6 +711,12 @@ To configure two Redis instances use the following environment variables:
 
 This setup will use the Redis server configured with the `_PERSECOND_` vars for
 per second limits, and the other Redis server for all other limits.
+
+## Health Checking for Redis Active Connection
+
+To configure whether to return health check failure if there is no active redis connection
+
+1. `REDIS_HEALTH_CHECK_ACTIVE_CONNECTION` : (default is "false")
 
 # Memcache
 
