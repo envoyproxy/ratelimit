@@ -25,6 +25,17 @@ func TestHealthCheck(t *testing.T) {
 	r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
 	hc.ServeHTTP(recorder, r)
 
+	if 500 != recorder.Code {
+		t.Errorf("expected code 500 actual %d", recorder.Code)
+	}
+
+	hc.Pass()
+
+	recorder = httptest.NewRecorder()
+
+	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
+	hc.ServeHTTP(recorder, r)
+
 	if 200 != recorder.Code {
 		t.Errorf("expected code 200 actual %d", recorder.Code)
 	}
@@ -57,6 +68,13 @@ func TestGrpcHealthCheck(t *testing.T) {
 	}
 
 	res, _ := grpcHealthServer.Check(context.Background(), req)
+	if healthpb.HealthCheckResponse_NOT_SERVING != res.Status {
+		t.Errorf("expected status NOT_SERVING actual %v", res.Status)
+	}
+
+	hc.Pass()
+
+	res, _ = grpcHealthServer.Check(context.Background(), req)
 	if healthpb.HealthCheckResponse_SERVING != res.Status {
 		t.Errorf("expected status SERVING actual %v", res.Status)
 	}

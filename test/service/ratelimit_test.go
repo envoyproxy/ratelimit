@@ -16,9 +16,11 @@ import (
 	gostats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/health"
 
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/redis"
+	server "github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_config "github.com/envoyproxy/ratelimit/test/mocks/config"
@@ -63,6 +65,7 @@ type rateLimitServiceTestSuite struct {
 	cache                 *mock_limiter.MockRateLimitCache
 	configLoader          *mock_config.MockRateLimitConfigLoader
 	config                *mock_config.MockRateLimitConfig
+	health                *server.HealthChecker
 	runtimeUpdateCallback chan<- int
 	statsManager          stats.Manager
 	statStore             gostats.Store
@@ -86,6 +89,7 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret.config = mock_config.NewMockRateLimitConfig(ret.controller)
 	ret.statStore = gostats.NewStore(gostats.NewNullSink(), false)
 	ret.statsManager = mock_stats.NewMockStatManager(ret.statStore)
+	ret.health = server.NewHealthChecker(health.NewServer(), "ratelimit")
 	return ret
 }
 
@@ -100,7 +104,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 	this.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}},
 		gomock.Any()).Return(this.config)
-	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, true, MockClock{now: int64(2222)}, false)
+	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, this.health, true, MockClock{now: int64(2222)}, false)
 }
 
 func TestService(test *testing.T) {
@@ -496,7 +500,7 @@ func TestInitialLoadError(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Manager) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statsManager, true, t.mockClock, false)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statsManager, t.health, true, t.mockClock, false)
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(nil, request)

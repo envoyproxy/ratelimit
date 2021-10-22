@@ -40,6 +40,11 @@ type Server interface {
 	Runtime() loader.IFace
 
 	/**
+	 * Returns the health checker for the server.
+	 */
+	HealthChecker() *HealthChecker
+
+	/**
 	 *  Stops serving the grpc port (for integration testing).
 	 */
 	Stop()

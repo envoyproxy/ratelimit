@@ -169,6 +169,10 @@ func (server *server) Runtime() loader.IFace {
 	return server.runtime
 }
 
+func (server *server) HealthChecker() *HealthChecker {
+	return server.health
+}
+
 func NewServer(s settings.Settings, name string, statsManager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) Server {
 	return newServer(s, name, statsManager, localCache, opts...)
 }

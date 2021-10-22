@@ -108,6 +108,7 @@ func (runner *Runner) Run() {
 		createLimiter(srv, s, localCache, runner.statsManager),
 		config.NewRateLimitConfigLoaderImpl(),
 		runner.statsManager,
+		srv.HealthChecker(),
 		s.RuntimeWatchRoot,
 		utils.NewTimeSourceImpl(),
 		s.GlobalShadowMode,

@@ -22,6 +22,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/server"
 )
 
 type RateLimitServiceServer interface {
@@ -37,6 +38,7 @@ type service struct {
 	runtimeUpdateEvent          chan int
 	cache                       limiter.RateLimitCache
 	stats                       stats.ServiceStats
+	health                      *server.HealthChecker
 	runtimeWatchRoot            bool
 	customHeadersEnabled        bool
 	customHeaderLimitHeader     string
@@ -76,6 +78,11 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 	this.config = newConfig
 	rlSettings := settings.NewSettings()
 	this.globalShadowMode = rlSettings.GlobalShadowMode
+	if len(files) > 0 {
+		this.health.Pass()
+	} else {
+		this.health.Fail()
+	}
 
 	if rlSettings.RateLimitResponseHeadersEnabled {
 		this.customHeadersEnabled = true
@@ -277,8 +284,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
-
+	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, health *server.HealthChecker, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
 	newService := &service{
 		runtime:            runtime,
 		configLock:         sync.RWMutex{},
@@ -287,6 +293,7 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		runtimeUpdateEvent: make(chan int),
 		cache:              cache,
 		stats:              statsManager.NewServiceStats(),
+		health:             health,
 		runtimeWatchRoot:   runtimeWatchRoot,
 		globalShadowMode:   shadowMode,
 		customHeaderClock:  clock,
