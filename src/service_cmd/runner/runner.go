@@ -118,7 +118,7 @@ func (runner *Runner) Run() {
 		"print out the currently loaded configuration for debugging",
 		func(writer http.ResponseWriter, request *http.Request) {
 			current := service.GetCurrentConfig()
-			if (current != nil) {
+			if current != nil {
 				io.WriteString(writer, current.Dump())
 			}
 		})
