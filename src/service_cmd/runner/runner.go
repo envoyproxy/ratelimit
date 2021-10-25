@@ -117,7 +117,9 @@ func (runner *Runner) Run() {
 		"/rlconfig",
 		"print out the currently loaded configuration for debugging",
 		func(writer http.ResponseWriter, request *http.Request) {
-			io.WriteString(writer, service.GetCurrentConfig().Dump())
+			if current := service.GetCurrentConfig(); current != nil {
+				io.WriteString(writer, current.Dump())
+			}
 		})
 
 	srv.AddJsonHandler(service)
