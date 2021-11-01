@@ -88,7 +88,8 @@ type Settings struct {
 	// RedisPerSecondPipelineLimit sets maximum number of commands that can be pipelined before flushing for per second redis.
 	// See comments of RedisPipelineLimit for details.
 	RedisPerSecondPipelineLimit int `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
-
+	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
+	RedisHealthCheckActiveConnection bool `envconfig:"REDIS_HEALTH_CHECK_ACTIVE_CONNECTION" default:"false"`
 	// Memcache settings
 	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`
 	// MemcacheMaxIdleConns sets the maximum number of idle TCP connections per memcached node.

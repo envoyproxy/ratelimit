@@ -51,6 +51,11 @@ func (hc *HealthChecker) Fail() {
 	hc.grpc.SetServingStatus(hc.name, healthpb.HealthCheckResponse_NOT_SERVING)
 }
 
+func (hc *HealthChecker) Ok() {
+	atomic.StoreUint32(&hc.ok, 1)
+	hc.grpc.SetServingStatus(hc.name, healthpb.HealthCheckResponse_SERVING)
+}
+
 func (hc *HealthChecker) Server() *health.Server {
 	return hc.grpc
 }

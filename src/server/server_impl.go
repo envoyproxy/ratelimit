@@ -311,3 +311,11 @@ func (server *server) handleGracefulShutdown() {
 		os.Exit(0)
 	}()
 }
+
+func (server *server) HealthCheckFail() {
+	server.health.Fail()
+}
+
+func (server *server) HealthCheckOK() {
+	server.health.Ok()
+}
