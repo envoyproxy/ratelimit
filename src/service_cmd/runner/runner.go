@@ -57,7 +57,8 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 			utils.NewTimeSourceImpl(),
 			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			s.ExpirationJitterMaxSeconds,
-			statsManager)
+			statsManager,
+		)
 	case "memcache":
 		return memcached.NewRateLimitCacheImplFromSettings(
 			s,
