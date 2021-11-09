@@ -11,6 +11,12 @@ import (
 
 var srvRegex = regexp.MustCompile(`^_(.+?)\._(.+?)\.(.+)$`)
 
+type SrvResolver interface {
+	ServerStringsFromSrv(srv string) ([]string, error)
+}
+
+type DnsSrvResolver struct{}
+
 func ParseSrv(srv string) (string, string, string, error) {
 	matches := srvRegex.FindStringSubmatch(srv)
 	if matches == nil {
@@ -21,7 +27,7 @@ func ParseSrv(srv string) (string, string, string, error) {
 	return matches[1], matches[2], matches[3], nil
 }
 
-func ServerStringsFromSrv(srv string) ([]string, error) {
+func (dnsSrvResolver DnsSrvResolver) ServerStringsFromSrv(srv string) ([]string, error) {
 	service, proto, name, err := ParseSrv(srv)
 	if err != nil {
 		logger.Errorf("failed to parse SRV: %s", err)
