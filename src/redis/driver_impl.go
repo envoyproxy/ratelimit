@@ -30,11 +30,15 @@ func newPoolStats(scope stats.Scope) poolStats {
 
 func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Server) trace.PoolTrace {
 	return trace.PoolTrace{
-		ConnCreated: func(_ trace.PoolConnCreated) {
-			ps.connectionTotal.Add(1)
-			ps.connectionActive.Add(1)
-			if healthCheckActiveConnection && srv != nil {
-				srv.HealthCheckOK()
+		ConnCreated: func(newConn trace.PoolConnCreated) {
+			if newConn.Err == nil {
+				ps.connectionTotal.Add(1)
+				ps.connectionActive.Add(1)
+				if healthCheckActiveConnection && srv != nil {
+					srv.HealthCheckOK()
+				}
+			} else {
+				fmt.Println("creating redis connection error :", newConn.Err)
 			}
 		},
 		ConnClosed: func(_ trace.PoolConnClosed) {
