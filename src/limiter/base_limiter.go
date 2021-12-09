@@ -43,7 +43,7 @@ func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint32, limit
 // Generates cache keys for given rate limit request. Each cache key is represented by a concatenation of
 // domain, descriptor and current timestamp.
 func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
-	limits []*config.RateLimit, hitsAddend uint32) []CacheKey {
+	limits []*config.RateLimit, hitsAddend uint32) ([]CacheKey, int64) {
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]CacheKey, len(request.Descriptors))
 	now := this.timeSource.UnixNow()
@@ -56,7 +56,7 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 			limits[i].Stats.TotalHits.Add(uint64(hitsAddend))
 		}
 	}
-	return cacheKeys
+	return cacheKeys, now
 }
 
 // Returns `true` in case local cache is enabled and contains value for provided cache key, `false` otherwise.
