@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"sort"
 
 	logger "github.com/sirupsen/logrus"
 )
@@ -17,6 +18,8 @@ type SrvResolver interface {
 
 type DnsSrvResolver struct{}
 
+type addrsLookup func(service, proto, name string) (cname string, addrs []*net.SRV, err error)
+
 func ParseSrv(srv string) (string, string, string, error) {
 	matches := srvRegex.FindStringSubmatch(srv)
 	if matches == nil {
@@ -28,13 +31,17 @@ func ParseSrv(srv string) (string, string, string, error) {
 }
 
 func (dnsSrvResolver DnsSrvResolver) ServerStringsFromSrv(srv string) ([]string, error) {
+	return lookupServerStringsFromSrv(srv, net.LookupSRV)
+}
+
+func lookupServerStringsFromSrv(srv string, addrsLookup addrsLookup) ([]string, error) {
 	service, proto, name, err := ParseSrv(srv)
 	if err != nil {
 		logger.Errorf("failed to parse SRV: %s", err)
 		return nil, err
 	}
 
-	_, srvs, err := net.LookupSRV(service, proto, name)
+	_, srvs, err := addrsLookup(service, proto, name)
 	if err != nil {
 		logger.Errorf("failed to lookup SRV: %s", err)
 		return nil, err
@@ -48,6 +55,10 @@ func (dnsSrvResolver DnsSrvResolver) ServerStringsFromSrv(srv string) ([]string,
 		logger.Debugf("server from srv[%v]: %s", i, server)
 		serversFromSrv[i] = fmt.Sprintf("%s:%v", srv.Target, srv.Port)
 	}
+
+	// we sort the server strings (host:port) to make sure we ge a consistent order as
+	// bradfitz/gomemcache uses assigns shards based on order of given hosts
+	sort.Strings(serversFromSrv)
 
 	return serversFromSrv, nil
 }
