@@ -109,6 +109,7 @@ type Option func(*Settings)
 
 func NewSettings() Settings {
 	var s Settings
+	s.RedisTlsConfig = &tls.Config{}
 
 	err := envconfig.Process("", &s)
 	if err != nil {

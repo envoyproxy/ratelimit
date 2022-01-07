@@ -71,11 +71,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		var dialOpts []radix.DialOpt
 
 		if useTls {
-			if tlsConfig != nil {
-				dialOpts = append(dialOpts, radix.DialUseTLS(tlsConfig))
-			} else {
-				dialOpts = append(dialOpts, radix.DialUseTLS(&tls.Config{}))
-			}
+			dialOpts = append(dialOpts, radix.DialUseTLS(tlsConfig))
 		}
 
 		if auth != "" {

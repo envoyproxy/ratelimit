@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"math/rand"
@@ -223,7 +224,7 @@ func TestMultiNodeMemcache(t *testing.T) {
 
 func testBasicConfigAuthTLS(perSecond bool, local_cache_size int) func(*testing.T) {
 	s := makeSimpleRedisSettings(16381, 16382, perSecond, local_cache_size)
-	s.RedisTlsConfig = nil
+	s.RedisTlsConfig = &tls.Config{}
 	s.RedisAuth = "password123"
 	s.RedisTls = true
 	s.RedisPerSecondAuth = "password123"
