@@ -305,6 +305,15 @@ func (this *rateLimitConfigImpl) GetLimit(
 		finalKey := entry.Key + "_" + entry.Value
 		logger.Debugf("looking up key: %s", finalKey)
 		nextDescriptor := descriptorsMap[finalKey]
+
+		if nextDescriptor == nil {
+			for descriptorKey := range descriptorsMap {
+				if descriptorKey[len(descriptorKey)-1:] == "*" && strings.HasPrefix(finalKey, strings.TrimSuffix(descriptorKey, "*")) {
+					nextDescriptor = descriptorsMap[descriptorKey]
+				}
+			}
+		}
+
 		if nextDescriptor == nil {
 			finalKey = entry.Key
 			logger.Debugf("looking up key: %s", finalKey)
