@@ -36,6 +36,7 @@ redis-per-second.conf:
 bootstrap_redis_tls: redis.conf redis-per-second.conf
 	openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
     -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost" \
+    -addext "subjectAltName = DNS:localhost" \
     -keyout key.pem  -out cert.pem
 	cat key.pem cert.pem > private.pem
 	sudo cp cert.pem /usr/local/share/ca-certificates/redis-stunnel.crt
