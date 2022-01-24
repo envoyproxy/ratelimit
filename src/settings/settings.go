@@ -109,8 +109,13 @@ type Option func(*Settings)
 
 func NewSettings() Settings {
 	var s Settings
-
 	err := envconfig.Process("", &s)
+
+	// Golang copy-by-value causes the RootCAs to no longer be nil
+	// which isn't the expected default behavior of continuing to use system roots
+	// so let's just initialize to what we want the correct value to be.
+	s.RedisTlsConfig = &tls.Config{}
+
 	if err != nil {
 		panic(err)
 	}
