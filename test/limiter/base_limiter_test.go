@@ -31,7 +31,7 @@ func TestGenerateCacheKeys(t *testing.T) {
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false)}
 	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
-	cacheKeys := baseRateLimit.GenerateCacheKeys(request, limits, 1)
+	cacheKeys, _ := baseRateLimit.GenerateCacheKeys(request, limits, 1)
 	assert.Equal(1, len(cacheKeys))
 	assert.Equal("domain_key_value_1234", cacheKeys[0].Key)
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
@@ -50,7 +50,7 @@ func TestGenerateCacheKeysPrefix(t *testing.T) {
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false)}
 	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
-	cacheKeys := baseRateLimit.GenerateCacheKeys(request, limits, 1)
+	cacheKeys, _ := baseRateLimit.GenerateCacheKeys(request, limits, 1)
 	assert.Equal(1, len(cacheKeys))
 	assert.Equal("prefix:domain_key_value_1234", cacheKeys[0].Key)
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())

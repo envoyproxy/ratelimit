@@ -66,7 +66,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	hitsAddend := utils.Max(1, request.HitsAddend)
 
 	// First build a list of all cache keys that we are actually going to hit.
-	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
+	cacheKeys, _ := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 
