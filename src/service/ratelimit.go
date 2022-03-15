@@ -148,8 +148,8 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 const MaxUint32 = uint32(1<<32 - 1)
 
 func (this *service) shouldRateLimitWorker(
-	ctx context.Context, request *pb.RateLimitRequest) *pb.RateLimitResponse {
-
+	ctx context.Context, request *pb.RateLimitRequest,
+) *pb.RateLimitResponse {
 	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
 	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
 
@@ -228,8 +228,8 @@ func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_D
 }
 
 func (this *service) rateLimitResetHeader(
-	descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
-
+	descriptor *pb.RateLimitResponse_DescriptorStatus,
+) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
 		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
@@ -238,8 +238,8 @@ func (this *service) rateLimitResetHeader(
 
 func (this *service) ShouldRateLimit(
 	ctx context.Context,
-	request *pb.RateLimitRequest) (finalResponse *pb.RateLimitResponse, finalError error) {
-
+	request *pb.RateLimitRequest,
+) (finalResponse *pb.RateLimitResponse, finalError error) {
 	defer func() {
 		err := recover()
 		if err == nil {
@@ -277,8 +277,8 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
-
+	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool,
+) RateLimitServiceServer {
 	newService := &service{
 		runtime:            runtime,
 		configLock:         sync.RWMutex{},

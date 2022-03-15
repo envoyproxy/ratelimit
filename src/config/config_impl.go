@@ -65,8 +65,8 @@ var validKeys = map[string]bool{
 // @param unlimited supplies whether the rate limit is unlimited
 // @return the new config entry.
 func NewRateLimit(
-	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats, unlimited bool, shadowMode bool) *RateLimit {
-
+	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats, unlimited bool, shadowMode bool,
+) *RateLimit {
 	return &RateLimit{FullKey: rlStats.GetKey(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}, Unlimited: unlimited, ShadowMode: shadowMode}
 }
 
@@ -119,8 +119,7 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 		if descriptorConfig.RateLimit != nil {
 			unlimited := descriptorConfig.RateLimit.Unlimited
 
-			value, present :=
-				pb.RateLimitResponse_RateLimit_Unit_value[strings.ToUpper(descriptorConfig.RateLimit.Unit)]
+			value, present := pb.RateLimitResponse_RateLimit_Unit_value[strings.ToUpper(descriptorConfig.RateLimit.Unit)]
 			validUnit := present && value != int32(pb.RateLimitResponse_RateLimit_UNKNOWN)
 
 			if unlimited {
@@ -135,8 +134,9 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 					fmt.Sprintf("invalid rate limit unit '%s'", descriptorConfig.RateLimit.Unit)))
 			}
 
+			// Enable detailed stats IF NewDetailedStats is defined in env vars
 			rateLimit = NewRateLimit(
-				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode)
+				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), statsManager.NewDetailedStats(newParentKey), unlimited, descriptorConfig.ShadowMode)
 			rateLimitDebugString = fmt.Sprintf(
 				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t}", rateLimit.Limit.RequestsPerUnit,
 				rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode)
@@ -241,8 +241,8 @@ func (this *rateLimitConfigImpl) Dump() string {
 }
 
 func (this *rateLimitConfigImpl) GetLimit(
-	ctx context.Context, domain string, descriptor *pb_struct.RateLimitDescriptor) *RateLimit {
-
+	ctx context.Context, domain string, descriptor *pb_struct.RateLimitDescriptor,
+) *RateLimit {
 	logger.Debugf("starting get limit lookup")
 	var rateLimit *RateLimit = nil
 	value := this.domains[domain]
@@ -252,13 +252,13 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
-		rateLimitKey := descriptorKey(domain, descriptor)
+		rateLimitKey := DescriptorKey(domain, descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		// When limit override is provided by envoy config, we don't want to enable shadow_mode
 		rateLimit = NewRateLimit(
 			descriptor.GetLimit().GetRequestsPerUnit(),
 			rateLimitOverrideUnit,
-			this.statsManager.NewStats(rateLimitKey),
+			this.statsManager.NewDetailedStats(rateLimitKey),
 			false,
 			false)
 		return rateLimit
@@ -297,7 +297,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 	return rateLimit
 }
 
-func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
+func DescriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
 	rateLimitKey := ""
 	for _, entry := range descriptor.Entries {
 		if rateLimitKey != "" {
@@ -316,8 +316,8 @@ func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) str
 // @param stats supplies the stats scope to use for limit stats during runtime.
 // @return a new config.
 func NewRateLimitConfigImpl(
-	configs []RateLimitConfigToLoad, statsManager stats.Manager) RateLimitConfig {
-
+	configs []RateLimitConfigToLoad, statsManager stats.Manager,
+) RateLimitConfig {
 	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsManager}
 	for _, config := range configs {
 		ret.loadConfig(config)
@@ -329,8 +329,8 @@ func NewRateLimitConfigImpl(
 type rateLimitConfigLoaderImpl struct{}
 
 func (this *rateLimitConfigLoaderImpl) Load(
-	configs []RateLimitConfigToLoad, statsManager stats.Manager) RateLimitConfig {
-
+	configs []RateLimitConfigToLoad, statsManager stats.Manager,
+) RateLimitConfig {
 	return NewRateLimitConfigImpl(configs, statsManager)
 }
 

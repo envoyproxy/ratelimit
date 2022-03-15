@@ -36,6 +36,9 @@ type Settings struct {
 	StatsdPort int               `envconfig:"STATSD_PORT" default:"8125"`
 	ExtraTags  map[string]string `envconfig:"EXTRA_TAGS" default:""`
 
+	// Detailed Metrics Mode
+	DetailedMetrics bool `envconfig:"DETAILED_METRICS_MODE" default:"false"`
+
 	// Settings for rate limit configuration
 	RuntimePath           string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`
 	RuntimeSubdirectory   string `envconfig:"RUNTIME_SUBDIRECTORY"`
