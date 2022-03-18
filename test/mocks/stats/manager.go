@@ -32,6 +32,15 @@ func (m *MockStatManager) NewServiceStats() stats.ServiceStats {
 	return ret
 }
 
+func (m *MockStatManager) NewShouldRateLimitLegacyStats() stats.ShouldRateLimitLegacyStats {
+	s := m.store.Scope("call.should_rate_limit_legacy")
+	return stats.ShouldRateLimitLegacyStats{
+		ReqConversionError:   s.NewCounter("req_conversion_error"),
+		RespConversionError:  s.NewCounter("resp_conversion_error"),
+		ShouldRateLimitError: s.NewCounter("should_rate_limit_error"),
+	}
+}
+
 func (m *MockStatManager) NewStats(key string) stats.RateLimitStats {
 	ret := stats.RateLimitStats{}
 	logger.Debugf("outputing test gostats %s", key)
@@ -44,6 +53,30 @@ func (m *MockStatManager) NewStats(key string) stats.RateLimitStats {
 	ret.ShadowMode = m.store.NewCounter(key + ".shadow_mode")
 
 	return ret
+}
+
+func (m *MockStatManager) AddTotalHits(u uint64, rlStats stats.RateLimitStats, key string) {
+	rlStats.TotalHits.Add(u)
+}
+
+func (this *MockStatManager) AddOverLimit(u uint64, rlStats stats.RateLimitStats, key string) {
+	rlStats.OverLimit.Add(u)
+}
+
+func (this *MockStatManager) AddNearLimit(u uint64, rlStats stats.RateLimitStats, key string) {
+	rlStats.NearLimit.Add(u)
+}
+
+func (this *MockStatManager) AddOverLimitWithLocalCache(u uint64, rlStats stats.RateLimitStats, key string) {
+	rlStats.OverLimitWithLocalCache.Add(u)
+}
+
+func (this *MockStatManager) AddWithinLimit(u uint64, rlStats stats.RateLimitStats, key string) {
+	rlStats.WithinLimit.Add(u)
+}
+
+func (this *MockStatManager) NewDetailedStats(key string) stats.RateLimitStats {
+	return this.NewStats(key)
 }
 
 func NewMockStatManager(store gostats.Store) stats.Manager {
