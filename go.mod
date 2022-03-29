@@ -17,7 +17,7 @@ require (
 	github.com/mediocregopher/radix/v3 v3.5.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.5.1
-	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
+	golang.org/x/net v0.0.0-20220325170049-de3da57026de
 	google.golang.org/grpc v1.27.0
 	gopkg.in/yaml.v2 v2.3.0
 )
@@ -33,8 +33,8 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
-	golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e // indirect
-	golang.org/x/text v0.3.3-0.20191122225017-cbf43d21aaeb // indirect
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
+	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 // indirect
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
