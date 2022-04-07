@@ -7,6 +7,7 @@ MODULE = github.com/envoyproxy/ratelimit
 GIT_REF = $(shell git describe --tags --exact-match 2>/dev/null || git rev-parse --short=8 --verify HEAD)
 VERSION ?= $(GIT_REF)
 SHELL := /bin/bash
+BUILDX_PLATFORMS := linux/amd64,linux/arm64/v8
 
 .PHONY: bootstrap
 bootstrap: ;
@@ -114,6 +115,14 @@ docker_image: docker_tests
 .PHONY: docker_push
 docker_push: docker_image
 	docker push $(IMAGE):$(VERSION)
+
+.PHONY: docker_multiarch_image
+docker_multiarch_image: docker_tests
+	docker buildx build -t $(IMAGE):$(VERSION) --platform $(BUILDX_PLATFORMS) .
+
+.PHONY: docker_multiarch_push
+docker_multiarch_push: docker_multiarch_image
+	docker buildx build -t $(IMAGE):$(VERSION) --platform $(BUILDX_PLATFORMS) --push .
 
 .PHONY: integration_tests
 integration_tests:
