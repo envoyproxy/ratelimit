@@ -26,6 +26,8 @@ import (
 	"github.com/envoyproxy/ratelimit/test/common"
 )
 
+var projectDir = os.Getenv("PROJECT_DIR")
+
 func init() {
 	os.Setenv("USE_STATSD", "false")
 	// Memcache does async increments, which can cause race conditions during
@@ -137,6 +139,9 @@ func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS(true, 0))
 	t.Run("WithoutPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS(false, 1000))
 	t.Run("WithPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS(true, 1000))
+
+	// Test using client cert.
+	t.Run("WithoutPerSecondRedisTLSWithClientCert", testBasicConfigAuthTLSWithClientCert(false, 0))
 }
 
 func TestBasicAuthConfig(t *testing.T) {
@@ -226,6 +231,20 @@ func TestMultiNodeMemcache(t *testing.T) {
 func testBasicConfigAuthTLS(perSecond bool, local_cache_size int) func(*testing.T) {
 	s := makeSimpleRedisSettings(16381, 16382, perSecond, local_cache_size)
 	s.RedisTlsConfig = &tls.Config{}
+	s.RedisAuth = "password123"
+	s.RedisTls = true
+	s.RedisPerSecondAuth = "password123"
+	s.RedisPerSecondTls = true
+
+	return testBasicBaseConfig(s)
+}
+
+func testBasicConfigAuthTLSWithClientCert(perSecond bool, local_cache_size int) func(*testing.T) {
+	// "16361" is the port of the redis server running behind stunnel with verify level 2 (the level 2
+	// verifies the peer certificate against the defined CA certificate (CAfile).
+	// See: Makefile#REDIS_VERIFY_PEER_STUNNEL.
+	s := makeSimpleRedisSettings(16361, 16382, perSecond, local_cache_size)
+	settings.TlsConfigFromFiles(filepath.Join(projectDir, "cert.pem"), filepath.Join(projectDir, "key.pem"), filepath.Join(projectDir, "cert.pem"))(&s)
 	s.RedisAuth = "password123"
 	s.RedisTls = true
 	s.RedisPerSecondAuth = "password123"
