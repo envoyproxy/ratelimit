@@ -125,8 +125,8 @@ func NewSettings() Settings {
 	// so let's just initialize to what we want the correct value to be.
 	s.RedisTlsConfig = &tls.Config{}
 
-	// When we require to connect using TLS, we check if we need to connect using a provided key-pair.
-	if s.RedisTls {
+	// When we require to connect using TLS, we check if we need to connect using the provided key-pair.
+	if s.RedisTls || s.RedisPerSecondTls {
 		TlsConfigFromFiles(s.RedisTlsClientCert, s.RedisTlsClientKey, s.RedisTlsCACert)(&s)
 	}
 
