@@ -242,7 +242,7 @@ func testBasicConfigAuthTLS(perSecond bool, local_cache_size int) func(*testing.
 
 func testBasicConfigAuthTLSWithClientCert(perSecond bool, local_cache_size int) func(*testing.T) {
 	// "16361" is the port of the redis server running behind stunnel with verify level 2 (the level 2
-	// verifies the peer certificate against the defined CA certificate (CAfile).
+	// verifies the peer certificate against the defined CA certificate (CAfile)).
 	// See: Makefile#REDIS_VERIFY_PEER_STUNNEL.
 	s := makeSimpleRedisSettings(16361, 16382, perSecond, local_cache_size)
 	settings.TlsConfigFromFiles(filepath.Join(projectDir, "cert.pem"), filepath.Join(projectDir, "key.pem"), filepath.Join(projectDir, "cert.pem"))(&s)
