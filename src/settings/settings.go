@@ -140,8 +140,11 @@ func GrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 }
 
 // TlsConfigFromFiles sets the TLS config from the provided files.
-func TlsConfigFromFiles(cert, key, cacert string) Option {
+func TlsConfigFromFiles(cert, key, caCert string) Option {
 	return func(s *Settings) {
+		if s.RedisTlsConfig == nil {
+			s.RedisTlsConfig = new(tls.Config)
+		}
 		if cert != "" && key != "" {
 			clientCert, err := tls.LoadX509KeyPair(cert, key)
 			if err != nil {
@@ -150,12 +153,12 @@ func TlsConfigFromFiles(cert, key, cacert string) Option {
 			s.RedisTlsConfig.Certificates = append(s.RedisTlsConfig.Certificates, clientCert)
 		}
 
-		if cacert != "" {
-			certpool := x509.NewCertPool()
-			if !certpool.AppendCertsFromPEM(mustReadFile(cacert)) {
+		if caCert != "" {
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM(mustReadFile(caCert)) {
 				panic("failed to load the provided TLS CA certificate")
 			}
-			s.RedisTlsConfig.RootCAs = certpool
+			s.RedisTlsConfig.RootCAs = certPool
 		}
 	}
 }
