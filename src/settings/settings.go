@@ -2,6 +2,9 @@ package settings
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -67,6 +70,10 @@ type Settings struct {
 	RedisTls        bool   `envconfig:"REDIS_TLS" default:"false"`
 	// TODO: Make this setting configurable out of the box instead of having to provide it through code.
 	RedisTlsConfig *tls.Config
+	// Allow to set the client certificate and key for TLS connections.
+	RedisTlsClientCert string `envconfig:"REDIS_TLS_CLIENT_CERT" default:""`
+	RedisTlsClientKey  string `envconfig:"REDIS_TLS_CLIENT_KEY" default:""`
+	RedisTlsCACert     string `envconfig:"REDIS_TLS_CACERT" default:""`
 
 	// RedisPipelineWindow sets the duration after which internal pipelines will be flushed.
 	// If window is zero then implicit pipelining will be disabled. Radix use 150us for the
@@ -109,15 +116,18 @@ type Option func(*Settings)
 
 func NewSettings() Settings {
 	var s Settings
-	err := envconfig.Process("", &s)
+	if err := envconfig.Process("", &s); err != nil {
+		panic(err)
+	}
 
 	// Golang copy-by-value causes the RootCAs to no longer be nil
 	// which isn't the expected default behavior of continuing to use system roots
 	// so let's just initialize to what we want the correct value to be.
 	s.RedisTlsConfig = &tls.Config{}
 
-	if err != nil {
-		panic(err)
+	// When we require to connect using TLS, we check if we need to connect using the provided key-pair.
+	if s.RedisTls || s.RedisPerSecondTls {
+		TlsConfigFromFiles(s.RedisTlsClientCert, s.RedisTlsClientKey, s.RedisTlsCACert)(&s)
 	}
 
 	return s
@@ -127,4 +137,36 @@ func GrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 	return func(s *Settings) {
 		s.GrpcUnaryInterceptor = grpc.UnaryInterceptor(i)
 	}
+}
+
+// TlsConfigFromFiles sets the TLS config from the provided files.
+func TlsConfigFromFiles(cert, key, caCert string) Option {
+	return func(s *Settings) {
+		if s.RedisTlsConfig == nil {
+			s.RedisTlsConfig = new(tls.Config)
+		}
+		if cert != "" && key != "" {
+			clientCert, err := tls.LoadX509KeyPair(cert, key)
+			if err != nil {
+				panic(fmt.Errorf("failed lo load client TLS key pair: %w", err))
+			}
+			s.RedisTlsConfig.Certificates = append(s.RedisTlsConfig.Certificates, clientCert)
+		}
+
+		if caCert != "" {
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM(mustReadFile(caCert)) {
+				panic("failed to load the provided TLS CA certificate")
+			}
+			s.RedisTlsConfig.RootCAs = certPool
+		}
+	}
+}
+
+func mustReadFile(name string) []byte {
+	b, err := os.ReadFile(name)
+	if err != nil {
+		panic(fmt.Errorf("failed to read file: %s: %w", name, err))
+	}
+	return b
 }
