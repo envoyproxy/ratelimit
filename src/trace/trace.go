@@ -2,6 +2,7 @@ package trace
 
 import (
 	"context"
+	"sync"
 
 	"github.com/google/uuid"
 	logger "github.com/sirupsen/logrus"
@@ -12,7 +13,13 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
+)
+
+var (
+	testSpanExporter   *tracetest.InMemoryExporter
+	testSpanExporterMu sync.Mutex
 )
 
 func Init(protocol string, serviceName string, serviceNamespace string, serviceInstanceId string) *sdktrace.TracerProvider {
@@ -66,4 +73,27 @@ func createClient(protocol string) (client otlptrace.Client) {
 		panic("Invalid otlptrace client protocol")
 	}
 	return
+}
+
+// This function returns the initialized inMemoryExporter if it already exists. If not, it initializes an inMemoryExporter, a trace provider using the exporter, and bind otel package with the trace provider. It is designed to serve testing purpose solely.
+// Note: only call this function once in each of the test packages, and assign the returned exporter to a package level variable
+func GetTestSpanExporter() *tracetest.InMemoryExporter {
+	testSpanExporterMu.Lock()
+	defer testSpanExporterMu.Unlock()
+	if testSpanExporter != nil {
+		return testSpanExporter
+	}
+	// init a new InMemoryExporter and share it with the entire test runtime
+	testSpanExporter := tracetest.NewInMemoryExporter()
+
+	// add in-memory span exporter to default openTelemetry trace provider
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		// use syncer instead of batcher here to leverage its synchronization nature to avoid flaky test
+		sdktrace.WithSyncer(testSpanExporter),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+
+	return testSpanExporter
 }

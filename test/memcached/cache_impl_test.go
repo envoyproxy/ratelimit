@@ -22,20 +22,18 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/trace"
 	"github.com/envoyproxy/ratelimit/src/utils"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached"
 	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
 )
+
+var testSpanExporter = trace.GetTestSpanExporter()
 
 func TestMemcached(t *testing.T) {
 	assert := assert.New(t)
@@ -659,21 +657,12 @@ func TestMemcachedTracer(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
+	testSpanExporter.Reset()
+
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-
-	// setup inmemory span exporter and the default trace provider
-	spanExporter := tracetest.NewInMemoryExporter()
-	// add in-memory span exporter to default openTelemetry trace provider
-	tp := trace.NewTracerProvider(
-		trace.WithSampler(trace.AlwaysSample()),
-		// use syncer instead of batcher here to leverage its synchronization nature to avoid flaky test
-		trace.WithSyncer(spanExporter),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "")
 
@@ -688,7 +677,7 @@ func TestMemcachedTracer(t *testing.T) {
 
 	cache.DoLimit(context.Background(), request, limits)
 
-	spanStubs := spanExporter.GetSpans()
+	spanStubs := testSpanExporter.GetSpans()
 	assert.NotNil(spanStubs)
 	assert.Len(spanStubs, 1)
 	assert.Equal(spanStubs[0].Name, "Memcached Fetch Execution")

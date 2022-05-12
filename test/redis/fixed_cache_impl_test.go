@@ -16,20 +16,18 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/trace"
 	"github.com/envoyproxy/ratelimit/src/utils"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_redis "github.com/envoyproxy/ratelimit/test/mocks/redis"
 	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
 )
+
+var testSpanExporter = trace.GetTestSpanExporter()
 
 func TestRedis(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testRedis(false))
@@ -600,19 +598,10 @@ func TestRedisTracer(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
+	testSpanExporter.Reset()
+
 	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 	sm := stats.NewMockStatManager(statsStore)
-
-	// setup inmemory span exporter and the default trace provider
-	spanExporter := tracetest.NewInMemoryExporter()
-	// add in-memory span exporter to default openTelemetry trace provider
-	tp := trace.NewTracerProvider(
-		trace.WithSampler(trace.AlwaysSample()),
-		// use syncer instead of batcher here to leverage its synchronization nature to avoid flaky test
-		trace.WithSyncer(spanExporter),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	client := mock_redis.NewMockClient(controller)
 
@@ -629,7 +618,7 @@ func TestRedisTracer(t *testing.T) {
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false)}
 	cache.DoLimit(context.Background(), request, limits)
 
-	spanStubs := spanExporter.GetSpans()
+	spanStubs := testSpanExporter.GetSpans()
 	assert.NotNil(spanStubs)
 	assert.Len(spanStubs, 1)
 	assert.Equal(spanStubs[0].Name, "Redis Pipeline Execution")

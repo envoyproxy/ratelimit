@@ -15,11 +15,9 @@ import (
 	"github.com/golang/mock/gomock"
 	gostats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"golang.org/x/net/context"
+
+	"github.com/envoyproxy/ratelimit/src/trace"
 
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/redis"
@@ -111,24 +109,8 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, true, MockClock{now: int64(2222)}, false)
 }
 
-func initTestTraceExporter() *tracetest.InMemoryExporter {
-	// init a new InMemoryExporter and share it with the entire test runtime
-	spanExporter := tracetest.NewInMemoryExporter()
-
-	// add in-memory span exporter to default openTelemetry trace provider
-	tp := trace.NewTracerProvider(
-		trace.WithSampler(trace.AlwaysSample()),
-		// use syncer instead of batcher here to leverage its synchronization nature to avoid flaky test
-		trace.WithSyncer(spanExporter),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-
-	return spanExporter
-}
-
 // once a ratelimit service is initiated, the package always fetches a default tracer from otel runtime and it can't be change until a new round of test is run. It is necessary to keep a package level exporter in this test package in order to correctly run the tests.
-var testSpanExporter = initTestTraceExporter()
+var testSpanExporter = trace.GetTestSpanExporter()
 
 func TestService(test *testing.T) {
 	t := commonSetup(test)
