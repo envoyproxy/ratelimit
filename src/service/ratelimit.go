@@ -7,6 +7,10 @@ import (
 	"strings"
 	"sync"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/stats"
 
@@ -23,6 +27,8 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
 )
+
+var tracer = otel.Tracer("ratelimit")
 
 type RateLimitServiceServer interface {
 	pb.RateLimitServiceServer
@@ -239,6 +245,15 @@ func (this *service) rateLimitResetHeader(
 func (this *service) ShouldRateLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest) (finalResponse *pb.RateLimitResponse, finalError error) {
+
+	// Generate trace
+	_, span := tracer.Start(ctx, "ShouldRateLimit Execution",
+		trace.WithAttributes(
+			attribute.String("domain", request.Domain),
+			attribute.String("request string", request.String()),
+		),
+	)
+	defer span.End()
 
 	defer func() {
 		err := recover()

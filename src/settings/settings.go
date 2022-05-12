@@ -13,7 +13,8 @@ import (
 
 type Settings struct {
 	// runtime options
-	GrpcUnaryInterceptor grpc.ServerOption
+	// This value shall be imported into unary server interceptor in order to enable chaining
+	GrpcUnaryInterceptor grpc.UnaryServerInterceptor
 	// Server listen address config
 	Host      string `envconfig:"HOST" default:"0.0.0.0"`
 	Port      int    `envconfig:"PORT" default:"8080"`
@@ -110,6 +111,15 @@ type Settings struct {
 
 	// Should the ratelimiting be running in Global shadow-mode, ie. never report a ratelimit status, unless a rate was provided from envoy as an override
 	GlobalShadowMode bool `envconfig:"SHADOW_MODE" default:"false"`
+
+	// OTLP trace settings
+	TracingEnabled           bool   `envconfig:"TRACING_ENABLED" default:"false"`
+	TracingServiceName       string `envconfig:"TRACING_SERVICE_NAME" default:"RateLimit"`
+	TracingServiceNamespace  string `envconfig:"TRACING_SERVICE_NAMESPACE" default:""`
+	TracingServiceInstanceId string `envconfig:"TRACING_SERVICE_INSTANCE_ID" default:""`
+	// can only be http or gRPC
+	TracingExporterProtocol string `envconfig:"TRACING_EXPORTER_PROTOCOL" default:"http"`
+	// detailed setting of exporter should refer to https://opentelemetry.io/docs/reference/specification/protocol/exporter/, e.g. OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_CERTIFICATE, OTEL_EXPORTER_OTLP_TIMEOUT
 }
 
 type Option func(*Settings)
@@ -135,7 +145,7 @@ func NewSettings() Settings {
 
 func GrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 	return func(s *Settings) {
-		s.GrpcUnaryInterceptor = grpc.UnaryInterceptor(i)
+		s.GrpcUnaryInterceptor = i
 	}
 }
 

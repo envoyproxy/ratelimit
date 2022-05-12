@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 
+	"github.com/envoyproxy/ratelimit/src/trace"
+
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
@@ -100,8 +102,15 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 	this.configLoader.EXPECT().Load(
 		[]config.RateLimitConfigToLoad{{"config.basic_config", "fake_yaml"}},
 		gomock.Any()).Return(this.config)
+
+	// reset exporter before using
+	testSpanExporter.Reset()
+
 	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, true, MockClock{now: int64(2222)}, false)
 }
+
+// once a ratelimit service is initiated, the package always fetches a default tracer from otel runtime and it can't be change until a new round of test is run. It is necessary to keep a package level exporter in this test package in order to correctly run the tests.
+var testSpanExporter = trace.GetTestSpanExporter()
 
 func TestService(test *testing.T) {
 	t := commonSetup(test)
@@ -110,11 +119,11 @@ func TestService(test *testing.T) {
 
 	// First request, config should be loaded.
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
-	t.config.EXPECT().GetLimit(nil, "test-domain", request.Descriptors[0]).Return(nil)
-	t.cache.EXPECT().DoLimit(nil, request, []*config.RateLimit{nil}).Return(
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(nil)
+	t.cache.EXPECT().DoLimit(context.Background(), request, []*config.RateLimit{nil}).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
 
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	common.AssertProtoEqual(
 		t.assert,
 		&pb.RateLimitResponse{
@@ -139,14 +148,14 @@ func TestService(test *testing.T) {
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false),
 		nil,
 	}
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 		})
-	response, err = service.ShouldRateLimit(nil, request)
+	response, err = service.ShouldRateLimit(context.Background(), request)
 	common.AssertProtoEqual(
 		t.assert,
 		&pb.RateLimitResponse{
@@ -174,14 +183,14 @@ func TestService(test *testing.T) {
 		nil,
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false),
 	}
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
 		})
-	response, err = service.ShouldRateLimit(nil, request)
+	response, err = service.ShouldRateLimit(context.Background(), request)
 	common.AssertProtoEqual(
 		t.assert,
 		&pb.RateLimitResponse{
@@ -228,14 +237,14 @@ func TestServiceGlobalShadowMode(test *testing.T) {
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false),
 		nil,
 	}
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 		})
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 
 	// OK overall code even if limit response was OVER_LIMIT
 	common.AssertProtoEqual(
@@ -268,14 +277,14 @@ func TestRuleShadowMode(test *testing.T) {
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true),
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true),
 	}
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 		})
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	t.assert.Equal(
 		&pb.RateLimitResponse{
 			OverallCode: pb.RateLimitResponse_OK,
@@ -301,20 +310,20 @@ func TestMixedRuleShadowMode(test *testing.T) {
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true),
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false),
 	}
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
 	testResults := []pb.RateLimitResponse_Code{pb.RateLimitResponse_OVER_LIMIT, pb.RateLimitResponse_OVER_LIMIT}
 	for i := 0; i < len(limits); i++ {
 		if limits[i].ShadowMode {
 			testResults[i] = pb.RateLimitResponse_OK
 		}
 	}
-	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: testResults[0], CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: testResults[1], CurrentLimit: nil, LimitRemaining: 0},
 		})
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	t.assert.Equal(
 		&pb.RateLimitResponse{
 			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
@@ -360,15 +369,15 @@ func TestServiceWithCustomRatelimitHeaders(test *testing.T) {
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false),
 		nil,
 	}
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 		})
 
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	common.AssertProtoEqual(
 		t.assert,
 		&pb.RateLimitResponse{
@@ -412,15 +421,15 @@ func TestServiceWithDefaultRatelimitHeaders(test *testing.T) {
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false),
 		nil,
 	}
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[1]).Return(limits[1])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Return(
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 		})
 
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	common.AssertProtoEqual(
 		t.assert,
 		&pb.RateLimitResponse{
@@ -445,7 +454,7 @@ func TestEmptyDomain(test *testing.T) {
 	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest("", [][][2]string{{{"hello", "world"}}}, 1)
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit domain must not be empty", err.Error())
 	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
@@ -457,7 +466,7 @@ func TestEmptyDescriptors(test *testing.T) {
 	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{}, 1)
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	t.assert.Nil(response)
 	t.assert.Equal("rate limit descriptor list must not be empty", err.Error())
 	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
@@ -470,13 +479,13 @@ func TestCacheError(test *testing.T) {
 
 	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false)}
-	t.config.EXPECT().GetLimit(nil, "different-domain", request.Descriptors[0]).Return(limits[0])
-	t.cache.EXPECT().DoLimit(nil, request, limits).Do(
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Do(
 		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
 			panic(redis.RedisError("cache error"))
 		})
 
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	t.assert.Nil(response)
 	t.assert.Equal("cache error", err.Error())
 	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.redis_error").Value())
@@ -499,7 +508,7 @@ func TestInitialLoadError(test *testing.T) {
 	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statsManager, true, t.mockClock, false)
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	t.assert.Nil(response)
 	t.assert.Equal("no rate limit configuration loaded", err.Error())
 	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
@@ -517,20 +526,20 @@ func TestUnlimited(test *testing.T) {
 		nil,
 		config.NewRateLimit(55, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("baz_qux"), true, false),
 	}
-	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[0]).Return(limits[0])
-	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[1]).Return(limits[1])
-	t.config.EXPECT().GetLimit(nil, "some-domain", request.Descriptors[2]).Return(limits[2])
+	t.config.EXPECT().GetLimit(context.Background(), "some-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "some-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(context.Background(), "some-domain", request.Descriptors[2]).Return(limits[2])
 
 	// Unlimited descriptors should not hit the cache
 	expectedCacheLimits := []*config.RateLimit{limits[0], nil, nil}
 
-	t.cache.EXPECT().DoLimit(nil, request, expectedCacheLimits).Return([]*pb.RateLimitResponse_DescriptorStatus{
+	t.cache.EXPECT().DoLimit(context.Background(), request, expectedCacheLimits).Return([]*pb.RateLimitResponse_DescriptorStatus{
 		{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9},
 		{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 		{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 	})
 
-	response, err := service.ShouldRateLimit(nil, request)
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	common.AssertProtoEqual(
 		t.assert,
 		&pb.RateLimitResponse{
@@ -543,4 +552,31 @@ func TestUnlimited(test *testing.T) {
 		},
 		response)
 	t.assert.Nil(err)
+}
+
+func TestServiceTracer(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// First request, config should be loaded.
+	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(nil)
+	t.cache.EXPECT().DoLimit(context.Background(), request, []*config.RateLimit{nil}).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}},
+		},
+		response)
+	t.assert.Nil(err)
+
+	spanStubs := testSpanExporter.GetSpans()
+	t.assert.NotNil(spanStubs)
+	t.assert.Len(spanStubs, 1)
+	t.assert.Equal(spanStubs[0].Name, "ShouldRateLimit Execution")
 }

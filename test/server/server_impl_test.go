@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -60,25 +61,25 @@ func TestJsonHandler(t *testing.T) {
 	assertHttpResponse(t, handler, "}", 400, "text/plain; charset=utf-8", "invalid character '}' looking for beginning of value\n")
 
 	// Unknown response code
-	rls.EXPECT().ShouldRateLimit(nil, requestMatcher).Return(&pb.RateLimitResponse{}, nil)
+	rls.EXPECT().ShouldRateLimit(context.Background(), requestMatcher).Return(&pb.RateLimitResponse{}, nil)
 	assertHttpResponse(t, handler, `{"domain": "foo"}`, 500, "application/json", "{}")
 
 	// ratelimit service error
-	rls.EXPECT().ShouldRateLimit(nil, requestMatcher).Return(nil, fmt.Errorf("some error"))
+	rls.EXPECT().ShouldRateLimit(context.Background(), requestMatcher).Return(nil, fmt.Errorf("some error"))
 	assertHttpResponse(t, handler, `{"domain": "foo"}`, 400, "text/plain; charset=utf-8", "some error\n")
 
 	// json unmarshaling error
-	rls.EXPECT().ShouldRateLimit(nil, requestMatcher).Return(nil, nil)
+	rls.EXPECT().ShouldRateLimit(context.Background(), requestMatcher).Return(nil, nil)
 	assertHttpResponse(t, handler, `{"domain": "foo"}`, 500, "text/plain; charset=utf-8", "error marshaling proto3 to json: Marshal called with nil\n")
 
 	// successful request, not rate limited
-	rls.EXPECT().ShouldRateLimit(nil, requestMatcher).Return(&pb.RateLimitResponse{
+	rls.EXPECT().ShouldRateLimit(context.Background(), requestMatcher).Return(&pb.RateLimitResponse{
 		OverallCode: pb.RateLimitResponse_OK,
 	}, nil)
 	assertHttpResponse(t, handler, `{"domain": "foo"}`, 200, "application/json", `{"overallCode":"OK"}`)
 
 	// successful request, rate limited
-	rls.EXPECT().ShouldRateLimit(nil, requestMatcher).Return(&pb.RateLimitResponse{
+	rls.EXPECT().ShouldRateLimit(context.Background(), requestMatcher).Return(&pb.RateLimitResponse{
 		OverallCode: pb.RateLimitResponse_OVER_LIMIT,
 	}, nil)
 	assertHttpResponse(t, handler, `{"domain": "foo"}`, 429, "application/json", `{"overallCode":"OVER_LIMIT"}`)
