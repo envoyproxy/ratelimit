@@ -3,6 +3,10 @@ package redis
 import (
 	"math/rand"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
@@ -14,6 +18,8 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
+
+var tracer = otel.Tracer("redis.fixedCacaheImpl")
 
 type fixedRateLimitCacheImpl struct {
 	client Client
@@ -86,6 +92,15 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 		}
 	}
+
+	// Generate trace
+	_, span := tracer.Start(ctx, "Redis Pipeline Execution",
+		trace.WithAttributes(
+			attribute.Int("pipeline length", len(pipeline)),
+			attribute.Int("perSecondPipeline length", len(perSecondPipeline)),
+		),
+	)
+	defer span.End()
 
 	if pipeline != nil {
 		checkError(this.client.PipeDo(pipeline))

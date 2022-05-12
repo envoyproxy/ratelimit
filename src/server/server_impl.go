@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"expvar"
 	"fmt"
 	"io"
@@ -34,7 +35,14 @@ import (
 
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
+
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var tracer = otel.Tracer("ratelimit server")
 
 type serverDebugListener struct {
 	endpoints map[string]string
@@ -75,18 +83,28 @@ func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *ht
 	return func(writer http.ResponseWriter, request *http.Request) {
 		var req pb.RateLimitRequest
 
+		ctx := context.Background()
+
 		if err := jsonpb.Unmarshal(request.Body, &req); err != nil {
 			logger.Warnf("error: %s", err.Error())
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		resp, err := svc.ShouldRateLimit(nil, &req)
+		resp, err := svc.ShouldRateLimit(ctx, &req)
 		if err != nil {
 			logger.Warnf("error: %s", err.Error())
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		// Generate trace
+		_, span := tracer.Start(ctx, "NewJsonHandler Remaining Execution",
+			trace.WithAttributes(
+				attribute.String("response", resp.String()),
+			),
+		)
+		defer span.End()
 
 		logger.Debugf("resp:%s", resp)
 
@@ -185,7 +203,14 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		MaxConnectionAgeGrace: s.GrpcMaxConnectionAgeGrace,
 	})
 
-	ret.grpcServer = grpc.NewServer(s.GrpcUnaryInterceptor, keepaliveOpt)
+	ret.grpcServer = grpc.NewServer(
+		keepaliveOpt,
+		grpc.ChainUnaryInterceptor(
+			s.GrpcUnaryInterceptor, // chain otel interceptor after the input interceptor
+			otelgrpc.UnaryServerInterceptor(),
+		),
+		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+	)
 
 	// setup listen addresses
 	ret.httpAddress = net.JoinHostPort(s.Host, strconv.Itoa(s.Port))

@@ -1,6 +1,7 @@
 package redis_test
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/trace"
 	"github.com/envoyproxy/ratelimit/src/utils"
 
 	"github.com/golang/mock/gomock"
@@ -24,6 +26,8 @@ import (
 	mock_redis "github.com/envoyproxy/ratelimit/test/mocks/redis"
 	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
 )
+
+var testSpanExporter = trace.GetTestSpanExporter()
 
 func TestRedis(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testRedis(false))
@@ -69,7 +73,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 
 		assert.Equal(
 			[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)}},
-			cache.DoLimit(nil, request, limits))
+			cache.DoLimit(context.Background(), request, limits))
 		assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 		assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 		assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
@@ -97,7 +101,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[1].Limit.Unit, timeSource)},
 			},
-			cache.DoLimit(nil, request, limits))
+			cache.DoLimit(context.Background(), request, limits))
 		assert.Equal(uint64(1), limits[1].Stats.TotalHits.Value())
 		assert.Equal(uint64(1), limits[1].Stats.OverLimit.Value())
 		assert.Equal(uint64(0), limits[1].Stats.NearLimit.Value())
@@ -128,7 +132,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[1].Limit.Unit, timeSource)},
 			},
-			cache.DoLimit(nil, request, limits))
+			cache.DoLimit(context.Background(), request, limits))
 		assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 		assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 		assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
@@ -207,7 +211,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
@@ -228,7 +232,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
@@ -249,7 +253,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
@@ -268,7 +272,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(4), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimitWithLocalCache.Value())
@@ -307,7 +311,7 @@ func TestNearLimit(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
@@ -324,7 +328,7 @@ func TestNearLimit(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
@@ -342,7 +346,7 @@ func TestNearLimit(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
@@ -360,7 +364,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)}},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
@@ -377,7 +381,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)}},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
@@ -394,7 +398,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)}},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(3), limits[0].Stats.NearLimit.Value())
@@ -411,7 +415,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)}},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
@@ -428,7 +432,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)}},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(7), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(4), limits[0].Stats.NearLimit.Value())
@@ -445,7 +449,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)}},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(3), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
@@ -475,7 +479,7 @@ func TestRedisWithJitter(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)}},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
@@ -513,7 +517,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
@@ -534,7 +538,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
@@ -556,7 +560,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
@@ -577,7 +581,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
-		cache.DoLimit(nil, request, limits))
+		cache.DoLimit(context.Background(), request, limits))
 	// TODO: How should we handle statistics? Should there be a separate ShadowMode statistics?  Should the other Stats remain as if they were unaffected by shadowmode?
 	assert.Equal(uint64(4), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
@@ -587,4 +591,35 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 1, 3, 4, 0, 1)
+}
+
+func TestRedisTracer(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	testSpanExporter.Reset()
+
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+
+	client := mock_redis.NewMockClient(controller)
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm)
+
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(1, uint32(5)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false)}
+	cache.DoLimit(context.Background(), request, limits)
+
+	spanStubs := testSpanExporter.GetSpans()
+	assert.NotNil(spanStubs)
+	assert.Len(spanStubs, 1)
+	assert.Equal(spanStubs[0].Name, "Redis Pipeline Execution")
 }

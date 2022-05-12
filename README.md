@@ -45,6 +45,7 @@
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
+- [Tracing](#tracing)
 - [Contact](#contact)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -751,6 +752,28 @@ The following environment variables control the custom response feature:
 1. `LIMIT_LIMIT_HEADER` - The default value is "RateLimit-Limit", setting the environment variable will specify an alternative header name
 1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
 1. `LIMIT_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
+
+You may use the following commands to quickly setup a openTelemetry collector together with a Jaeger all-in-one binary for quickstart:
+
+```bash
+docker run --name otlp -d -p 4318 -p 4317 -v examples/otlp-collector:/tmp/otlp-collector otel/opentelemetry-collector:0.48.0 -- --config /tmp/otlp-collector/config.yaml
+otelcol-contrib --config examples/otlp-collector/config.yaml
+
+docker run -d --name jaeger -p 16686:16686 -p 14250:14250 jaegertracing/all-in-one:1.33
+```
+
+# Tracing
+
+Ratelimit supports exporting spans in OLTP format. See [OpenTelemetry](https://opentelemetry.io/) for more information.
+
+Theh following environment variables control the tracing feature:
+
+1. `TRACING_ENABLED` - Enables the tracing feature. Only "true" and "false"(default) are allowed in this field.
+1. `TRACING_EXPORTER_PROTOCOL` - Controls the protocol of exporter in tracing feature. Only "http"(default) and "grpc" are allowed in this field.
+1. `TRACING_SERVICE_NAME` - Controls the service name appears in tracing span. The default value is "RateLimit".
+1. `TRACING_SERVICE_NAMESPACE` - Controls the service namespace appears in tracing span. The default value is empty.
+1. `TRACING_SERVICE_INSTANCE_ID` - Controls the service instance id appears in tracing span. It is recommended to put the pod name or container name in this field. The default value is a randomly generated version 4 uuid if unspecified.
+1. Other fields in [OTLP Exporter Documentation](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.8.0/specification/protocol/exporter.md). These section needs to be correctly configured in order to enable the exporter to export span to the correct destination.
 
 # Contact
 

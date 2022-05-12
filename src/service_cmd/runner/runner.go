@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"io"
 	"math/rand"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/envoyproxy/ratelimit/src/metrics"
 	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/trace"
 
 	gostats "github.com/lyft/gostats"
 
@@ -75,6 +77,16 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 
 func (runner *Runner) Run() {
 	s := runner.settings
+	if s.TracingEnabled {
+		tp := trace.InitProductionTraceProvider(s.TracingExporterProtocol, s.TracingServiceName, s.TracingServiceNamespace, s.TracingServiceInstanceId)
+		defer func() {
+			if err := tp.Shutdown(context.Background()); err != nil {
+				logger.Printf("Error shutting down tracer provider: %v", err)
+			}
+		}()
+	} else {
+		logger.Infof("Tracing disabled")
+	}
 
 	logLevel, err := logger.ParseLevel(s.LogLevel)
 	if err != nil {

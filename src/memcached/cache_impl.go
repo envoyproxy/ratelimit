@@ -22,6 +22,10 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
@@ -39,6 +43,8 @@ import (
 	"github.com/envoyproxy/ratelimit/src/srv"
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
+
+var tracer = otel.Tracer("memcached.cacheImpl")
 
 type rateLimitMemcacheImpl struct {
 	client                     Client
@@ -87,6 +93,14 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		logger.Debugf("looking up cache key: %s", cacheKey.Key)
 		keysToGet = append(keysToGet, cacheKey.Key)
 	}
+
+	// Generate trace
+	_, span := tracer.Start(ctx, "Memcached Fetch Execution",
+		trace.WithAttributes(
+			attribute.Int("keysToGet length", len(keysToGet)),
+		),
+	)
+	defer span.End()
 
 	// Now fetch from memcache.
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
