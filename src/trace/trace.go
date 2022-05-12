@@ -22,7 +22,7 @@ var (
 	testSpanExporterMu sync.Mutex
 )
 
-func Init(protocol string, serviceName string, serviceNamespace string, serviceInstanceId string) *sdktrace.TracerProvider {
+func InitProductionTraceProvider(protocol string, serviceName string, serviceNamespace string, serviceInstanceId string) *sdktrace.TracerProvider {
 	client := createClient(protocol)
 	exporter, err := otlptrace.New(context.Background(), client)
 	if err != nil {
