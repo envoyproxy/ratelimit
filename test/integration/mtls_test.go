@@ -57,7 +57,10 @@ func writeContentToTempFile(content []byte, filenameprefix string) (filename str
 	if err != nil {
 		return "", err
 	}
-	f.Write(content)
+	_, err = f.Write(content)
+	if err != nil {
+		return "", err
+	}
 	err = f.Close()
 	return f.Name(), err
 }
@@ -115,6 +118,7 @@ func signCert(caType utils.CAType, ca *x509.Certificate, caPK *rsa.PrivateKey) (
 	}
 	return certfileName, pkFileName, nil
 }
+
 func mTLSSetup(caType utils.CAType) (caFile string, certFile string, keyFile string, err error) {
 	caFile, serverCA, serverCApk, err := createCA()
 	if err != nil {
@@ -122,7 +126,6 @@ func mTLSSetup(caType utils.CAType) (caFile string, certFile string, keyFile str
 	}
 	certFile, keyFile, err = signCert(caType, serverCA, serverCApk)
 	return caFile, certFile, keyFile, err
-
 }
 
 func Test_mTLSSetup(t *testing.T) {
@@ -130,5 +133,4 @@ func Test_mTLSSetup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 }

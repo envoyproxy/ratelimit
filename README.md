@@ -46,6 +46,7 @@
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
 - [Tracing](#tracing)
+- [mTLS](#mtls)
 - [Contact](#contact)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -782,6 +783,7 @@ Ratelimit supports mTLS when Envoy sends requests to the service.
 The following environment variables control the mTLS feature:
 
 The following variables can be set to enable mTLS on the Ratelimit service.
+
 1. `GRPC_SERVER_USE_TLS` - Enables gprc connections to server over TLS
 1. `GRPC_SERVER_TLS_CERT` - Path to the file containing the server cert chain
 1. `GRPC_SERVER_TLS_KEY` - Path to the file containing the server private key
@@ -789,23 +791,24 @@ The following variables can be set to enable mTLS on the Ratelimit service.
 1. `GRPC_CLIENT_TLS_SAN` - (Optional) DNS Name to validate from the client cert during mTLS auth
 
 In the envoy config use, add the `transport_socket` section to the ratelimit service cluster config
+
 ```yaml
-    "name": "ratelimit"
-    "transport_socket":
-      "name": "envoy.transport_sockets.tls"
-      "typed_config":
-        "@type": "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext"
-        "common_tls_context":
-          "tls_certificates":
-          - "certificate_chain":
-              "filename": "/opt/envoy/tls/ratelimit-client-cert.pem"
-            "private_key":
-              "filename": "/opt/envoy/tls/ratelimit-client-key.pem"
-          "validation_context":
-            "match_subject_alt_names":
-            - "exact": "ratelimit.server.dnsname"
-            "trusted_ca":
-              "filename": "/opt/envoy/tls/ratelimit-server-ca.pem"
+"name": "ratelimit"
+"transport_socket":
+  "name": "envoy.transport_sockets.tls"
+  "typed_config":
+    "@type": "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext"
+    "common_tls_context":
+      "tls_certificates":
+        - "certificate_chain":
+            "filename": "/opt/envoy/tls/ratelimit-client-cert.pem"
+          "private_key":
+            "filename": "/opt/envoy/tls/ratelimit-client-key.pem"
+      "validation_context":
+        "match_subject_alt_names":
+          - "exact": "ratelimit.server.dnsname"
+        "trusted_ca":
+          "filename": "/opt/envoy/tls/ratelimit-server-ca.pem"
 ```
 
 # Contact

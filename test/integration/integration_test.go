@@ -229,8 +229,14 @@ func TestMultiNodeMemcache(t *testing.T) {
 		t.Run("MemcacheMultipleNodes", testBasicConfig(makeSimpleMemcacheSettings(multiNodePorts, 0)))
 	})
 }
+
 func Test_mTLS(t *testing.T) {
-	s := defaultSettings()
+	s := makeSimpleRedisSettings(16381, 16382, false, 0)
+	s.RedisTlsConfig = &tls.Config{}
+	s.RedisAuth = "password123"
+	s.RedisTls = true
+	s.RedisPerSecondAuth = "password123"
+	s.RedisPerSecondTls = true
 	assert := assert.New(t)
 	serverCAFile, serverCertFile, serverCertKey, err := mTLSSetup(utils.ServerCA)
 	assert.NoError(err)
