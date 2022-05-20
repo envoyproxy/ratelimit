@@ -2,13 +2,12 @@ package settings
 
 import (
 	"crypto/tls"
-	"crypto/x509"
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
 	"google.golang.org/grpc"
+
+	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
 type Settings struct {
@@ -18,18 +17,31 @@ type Settings struct {
 	// Server listen address config
 	Host      string `envconfig:"HOST" default:"0.0.0.0"`
 	Port      int    `envconfig:"PORT" default:"8080"`
-	GrpcHost  string `envconfig:"GRPC_HOST" default:"0.0.0.0"`
-	GrpcPort  int    `envconfig:"GRPC_PORT" default:"8081"`
 	DebugHost string `envconfig:"DEBUG_HOST" default:"0.0.0.0"`
 	DebugPort int    `envconfig:"DEBUG_PORT" default:"6070"`
 
 	// GRPC server settings
+	GrpcHost string `envconfig:"GRPC_HOST" default:"0.0.0.0"`
+	GrpcPort int    `envconfig:"GRPC_PORT" default:"8081"`
+	// GrpcServerTlsConfig configures grpc for the server
+	GrpcServerTlsConfig *tls.Config
 	// GrpcMaxConnectionAge is a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway.
 	// A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
 	GrpcMaxConnectionAge time.Duration `envconfig:"GRPC_MAX_CONNECTION_AGE" default:"24h" description:"Duration a connection may exist before it will be closed by sending a GoAway."`
 	// GrpcMaxConnectionAgeGrace is an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 	GrpcMaxConnectionAgeGrace time.Duration `envconfig:"GRPC_MAX_CONNECTION_AGE_GRACE" default:"1h" description:"Period after MaxConnectionAge after which the connection will be forcibly closed."`
-
+	// GrpcServerUseTLS enables gprc connections to server over TLS
+	GrpcServerUseTLS bool `envconfig:"GRPC_SERVER_USE_TLS" default:"false"`
+	// Allow to set the server certificate and key for TLS connections.
+	// 	GrpcServerTlsCert is the path to the file containing the server cert chain
+	GrpcServerTlsCert string `envconfig:"GRPC_SERVER_TLS_CERT" default:""`
+	// 	GrpcServerTlsKey is the path to the file containing the server private key
+	GrpcServerTlsKey string `envconfig:"GRPC_SERVER_TLS_KEY" default:""`
+	// GrpcClientTlsCACert is the path to the file containing the client CA certificate.
+	// Use for validating client certificate
+	GrpcClientTlsCACert string `envconfig:"GRPC_CLIENT_TLS_CACERT" default:""`
+	// GrpcClientTlsSAN is the SAN to validate from the client cert during mTLS auth
+	GrpcClientTlsSAN string `envconfig:"GRPC_CLIENT_TLS_SAN" default:""`
 	// Logging settings
 	LogLevel  string `envconfig:"LOG_LEVEL" default:"WARN"`
 	LogFormat string `envconfig:"LOG_FORMAT" default:"text"`
@@ -129,54 +141,40 @@ func NewSettings() Settings {
 	if err := envconfig.Process("", &s); err != nil {
 		panic(err)
 	}
-
-	// Golang copy-by-value causes the RootCAs to no longer be nil
-	// which isn't the expected default behavior of continuing to use system roots
-	// so let's just initialize to what we want the correct value to be.
-	s.RedisTlsConfig = &tls.Config{}
-
-	// When we require to connect using TLS, we check if we need to connect using the provided key-pair.
-	if s.RedisTls || s.RedisPerSecondTls {
-		TlsConfigFromFiles(s.RedisTlsClientCert, s.RedisTlsClientKey, s.RedisTlsCACert)(&s)
-	}
-
+	// When we require TLS to connect to Redis, we check if we need to connect using the provided key-pair.
+	RedisTlsConfig(s.RedisTls || s.RedisPerSecondTls)(&s)
+	GrpcServerTlsConfig()(&s)
 	return s
+}
+
+func RedisTlsConfig(redisTls bool) Option {
+	return func(s *Settings) {
+		// Golang copy-by-value causes the RootCAs to no longer be nil
+		// which isn't the expected default behavior of continuing to use system roots
+		// so let's just initialize to what we want the correct value to be.
+		s.RedisTlsConfig = &tls.Config{}
+		if redisTls {
+			s.RedisTlsConfig = utils.TlsConfigFromFiles(s.RedisTlsClientCert, s.RedisTlsClientKey, s.RedisTlsCACert, utils.ServerCA)
+		}
+	}
+}
+
+func GrpcServerTlsConfig() Option {
+	return func(s *Settings) {
+		if s.GrpcServerUseTLS {
+			grpcServerTlsConfig := utils.TlsConfigFromFiles(s.GrpcServerTlsCert, s.GrpcServerTlsKey, s.GrpcClientTlsCACert, utils.ClientCA)
+			if s.GrpcClientTlsCACert != "" {
+				grpcServerTlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+			} else {
+				grpcServerTlsConfig.ClientAuth = tls.NoClientCert
+			}
+			s.GrpcServerTlsConfig = grpcServerTlsConfig
+		}
+	}
 }
 
 func GrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 	return func(s *Settings) {
 		s.GrpcUnaryInterceptor = i
 	}
-}
-
-// TlsConfigFromFiles sets the TLS config from the provided files.
-func TlsConfigFromFiles(cert, key, caCert string) Option {
-	return func(s *Settings) {
-		if s.RedisTlsConfig == nil {
-			s.RedisTlsConfig = new(tls.Config)
-		}
-		if cert != "" && key != "" {
-			clientCert, err := tls.LoadX509KeyPair(cert, key)
-			if err != nil {
-				panic(fmt.Errorf("failed lo load client TLS key pair: %w", err))
-			}
-			s.RedisTlsConfig.Certificates = append(s.RedisTlsConfig.Certificates, clientCert)
-		}
-
-		if caCert != "" {
-			certPool := x509.NewCertPool()
-			if !certPool.AppendCertsFromPEM(mustReadFile(caCert)) {
-				panic("failed to load the provided TLS CA certificate")
-			}
-			s.RedisTlsConfig.RootCAs = certPool
-		}
-	}
-}
-
-func mustReadFile(name string) []byte {
-	b, err := os.ReadFile(name)
-	if err != nil {
-		panic(fmt.Errorf("failed to read file: %s: %w", name, err))
-	}
-	return b
 }

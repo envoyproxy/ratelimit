@@ -12,6 +12,9 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+
+	"github.com/envoyproxy/ratelimit/src/utils"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 
@@ -65,7 +68,11 @@ func main() {
 	flag.Var(
 		&descriptorsValue, "descriptors",
 		"descriptor list to query in <key>=<value>,<key>=<value>,... form")
-	oltpProtocol := flag.String("oltp_protocol", "", "protocol to use when exporting tracing span, accept http, grpc or empty (disable tracing) as value, please use OLTP environment variables to set endpoint (refer to README.MD)")
+	oltpProtocol := flag.String("oltp-protocol", "", "protocol to use when exporting tracing span, accept http, grpc or empty (disable tracing) as value, please use OLTP environment variables to set endpoint (refer to README.MD)")
+	grpcServerTlsCACert := flag.String("grpc-server-ca-file", "", "path to the server CA file for TLS connection")
+	grpcUseTLS := flag.Bool("grpc-use-tls", false, "Use TLS for connection to server")
+	grpcTlsCertFile := flag.String("grpc-cert-file", "", "path to the client cert file for TLS connection")
+	grpcTlsKeyFile := flag.String("grpc-key-file", "", "path to the client key for TLS connection")
 	flag.Parse()
 
 	flag.VisitAll(func(f *flag.Flag) {
@@ -80,12 +87,17 @@ func main() {
 			}
 		}()
 	}
-
-	conn, err := grpc.Dial(*dialString,
-		grpc.WithInsecure(),
+	dialOptions := []grpc.DialOption{
 		grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
 		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()),
-	)
+	}
+	if *grpcUseTLS {
+		tlsConfig := utils.TlsConfigFromFiles(*grpcTlsCertFile, *grpcTlsKeyFile, *grpcServerTlsCACert, utils.ServerCA)
+		dialOptions = append(dialOptions, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	} else {
+		dialOptions = append(dialOptions, grpc.WithInsecure())
+	}
+	conn, err := grpc.Dial(*dialString, dialOptions...)
 	if err != nil {
 		fmt.Printf("error connecting: %s\n", err.Error())
 		os.Exit(1)
