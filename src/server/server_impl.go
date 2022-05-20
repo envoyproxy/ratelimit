@@ -17,6 +17,7 @@ import (
 	"sync"
 	"syscall"
 
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/envoyproxy/ratelimit/src/stats"
@@ -202,15 +203,23 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		MaxConnectionAge:      s.GrpcMaxConnectionAge,
 		MaxConnectionAgeGrace: s.GrpcMaxConnectionAgeGrace,
 	})
-
-	ret.grpcServer = grpc.NewServer(
+	grpcOptions := []grpc.ServerOption{
 		keepaliveOpt,
 		grpc.ChainUnaryInterceptor(
 			s.GrpcUnaryInterceptor, // chain otel interceptor after the input interceptor
 			otelgrpc.UnaryServerInterceptor(),
 		),
 		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
-	)
+	}
+	if s.GrpcServerUseTLS {
+		grpcServerTlsConfig := s.GrpcServerTlsConfig
+		// Verify client SAN if provided
+		if s.GrpcClientTlsSAN != "" {
+			grpcServerTlsConfig.VerifyPeerCertificate = verifyClient(grpcServerTlsConfig.ClientCAs, s.GrpcClientTlsSAN)
+		}
+		grpcOptions = append(grpcOptions, grpc.Creds(credentials.NewTLS(grpcServerTlsConfig)))
+	}
+	ret.grpcServer = grpc.NewServer(grpcOptions...)
 
 	// setup listen addresses
 	ret.httpAddress = net.JoinHostPort(s.Host, strconv.Itoa(s.Port))

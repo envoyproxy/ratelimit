@@ -46,6 +46,7 @@
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
 - [Tracing](#tracing)
+- [mTLS](#mtls)
 - [Contact](#contact)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -764,9 +765,9 @@ docker run -d --name jaeger -p 16686:16686 -p 14250:14250 jaegertracing/all-in-o
 
 # Tracing
 
-Ratelimit supports exporting spans in OLTP format. See [OpenTelemetry](https://opentelemetry.io/) for more information.
+Ratelimit service supports exporting spans in OLTP format. See [OpenTelemetry](https://opentelemetry.io/) for more information.
 
-Theh following environment variables control the tracing feature:
+The following environment variables control the tracing feature:
 
 1. `TRACING_ENABLED` - Enables the tracing feature. Only "true" and "false"(default) are allowed in this field.
 1. `TRACING_EXPORTER_PROTOCOL` - Controls the protocol of exporter in tracing feature. Only "http"(default) and "grpc" are allowed in this field.
@@ -774,6 +775,41 @@ Theh following environment variables control the tracing feature:
 1. `TRACING_SERVICE_NAMESPACE` - Controls the service namespace appears in tracing span. The default value is empty.
 1. `TRACING_SERVICE_INSTANCE_ID` - Controls the service instance id appears in tracing span. It is recommended to put the pod name or container name in this field. The default value is a randomly generated version 4 uuid if unspecified.
 1. Other fields in [OTLP Exporter Documentation](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.8.0/specification/protocol/exporter.md). These section needs to be correctly configured in order to enable the exporter to export span to the correct destination.
+
+# mTLS
+
+Ratelimit supports mTLS when Envoy sends requests to the service.
+
+The following environment variables control the mTLS feature:
+
+The following variables can be set to enable mTLS on the Ratelimit service.
+
+1. `GRPC_SERVER_USE_TLS` - Enables gprc connections to server over TLS
+1. `GRPC_SERVER_TLS_CERT` - Path to the file containing the server cert chain
+1. `GRPC_SERVER_TLS_KEY` - Path to the file containing the server private key
+1. `GRPC_CLIENT_TLS_CACERT` - Path to the file containing the client CA certificate.
+1. `GRPC_CLIENT_TLS_SAN` - (Optional) DNS Name to validate from the client cert during mTLS auth
+
+In the envoy config use, add the `transport_socket` section to the ratelimit service cluster config
+
+```yaml
+"name": "ratelimit"
+"transport_socket":
+  "name": "envoy.transport_sockets.tls"
+  "typed_config":
+    "@type": "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext"
+    "common_tls_context":
+      "tls_certificates":
+        - "certificate_chain":
+            "filename": "/opt/envoy/tls/ratelimit-client-cert.pem"
+          "private_key":
+            "filename": "/opt/envoy/tls/ratelimit-client-key.pem"
+      "validation_context":
+        "match_subject_alt_names":
+          - "exact": "ratelimit.server.dnsname"
+        "trusted_ca":
+          "filename": "/opt/envoy/tls/ratelimit-server-ca.pem"
+```
 
 # Contact
 

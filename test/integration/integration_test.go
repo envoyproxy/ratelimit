@@ -1,5 +1,4 @@
 //go:build integration
-// +build integration
 
 package integration_test
 
@@ -20,10 +19,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/utils"
 	"github.com/envoyproxy/ratelimit/test/common"
 )
 
@@ -229,6 +230,32 @@ func TestMultiNodeMemcache(t *testing.T) {
 	})
 }
 
+func Test_mTLS(t *testing.T) {
+	s := makeSimpleRedisSettings(16381, 16382, false, 0)
+	s.RedisTlsConfig = &tls.Config{}
+	s.RedisAuth = "password123"
+	s.RedisTls = true
+	s.RedisPerSecondAuth = "password123"
+	s.RedisPerSecondTls = true
+	assert := assert.New(t)
+	serverCAFile, serverCertFile, serverCertKey, err := mTLSSetup(utils.ServerCA)
+	assert.NoError(err)
+	clientCAFile, clientCertFile, clientCertKey, err := mTLSSetup(utils.ClientCA)
+	assert.NoError(err)
+	s.GrpcServerUseTLS = true
+	s.GrpcServerTlsCert = serverCertFile
+	s.GrpcServerTlsKey = serverCertKey
+	s.GrpcClientTlsCACert = clientCAFile
+	s.GrpcClientTlsSAN = "localhost"
+	settings.GrpcServerTlsConfig()(&s)
+	runner := startTestRunner(t, s)
+	defer runner.Stop()
+	clientTlsConfig := utils.TlsConfigFromFiles(clientCertFile, clientCertKey, serverCAFile, utils.ServerCA)
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", s.GrpcPort), grpc.WithTransportCredentials(credentials.NewTLS(clientTlsConfig)))
+	assert.NoError(err)
+	defer conn.Close()
+}
+
 func testBasicConfigAuthTLS(perSecond bool, local_cache_size int) func(*testing.T) {
 	s := makeSimpleRedisSettings(16381, 16382, perSecond, local_cache_size)
 	s.RedisTlsConfig = &tls.Config{}
@@ -245,11 +272,14 @@ func testBasicConfigAuthTLSWithClientCert(perSecond bool, local_cache_size int) 
 	// verifies the peer certificate against the defined CA certificate (CAfile)).
 	// See: Makefile#REDIS_VERIFY_PEER_STUNNEL.
 	s := makeSimpleRedisSettings(16361, 16382, perSecond, local_cache_size)
-	settings.TlsConfigFromFiles(filepath.Join(projectDir, "cert.pem"), filepath.Join(projectDir, "key.pem"), filepath.Join(projectDir, "cert.pem"))(&s)
-	s.RedisAuth = "password123"
+	s.RedisTlsClientCert = filepath.Join(projectDir, "cert.pem")
+	s.RedisTlsClientKey = filepath.Join(projectDir, "key.pem")
+	s.RedisTlsCACert = filepath.Join(projectDir, "cert.pem")
 	s.RedisTls = true
-	s.RedisPerSecondAuth = "password123"
 	s.RedisPerSecondTls = true
+	settings.RedisTlsConfig(s.RedisTls || s.RedisPerSecondTls)(&s)
+	s.RedisAuth = "password123"
+	s.RedisPerSecondAuth = "password123"
 
 	return testBasicBaseConfig(s)
 }
