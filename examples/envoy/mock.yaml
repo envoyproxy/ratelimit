@@ -26,7 +26,8 @@ static_resources:
                               inline_string: "Hello World"
                 http_filters:
                   - name: envoy.filters.http.router
-                    typed_config: {}
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 admin:
   access_log_path: "/dev/null"
   address:
