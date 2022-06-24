@@ -62,7 +62,8 @@ static_resources:
                             cluster_name: ratelimit
                         transport_api_version: V3
                   - name: envoy.filters.http.router
-                    typed_config: {}
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
                 route_config:
                   name: route
                   virtual_hosts:
