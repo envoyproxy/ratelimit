@@ -1,0 +1,12 @@
+domain: test-domain
+descriptors:
+  - key: key1
+    value: value1
+    descriptors:
+      - key: subkey1
+        rate_limit:
+          name: self
+          replaces:
+            - name:
+          unit: second
+          requests_per_unit: 5

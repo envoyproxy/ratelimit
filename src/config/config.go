@@ -22,6 +22,8 @@ type RateLimit struct {
 	Limit      *pb.RateLimitResponse_RateLimit
 	Unlimited  bool
 	ShadowMode bool
+	Name       string
+	Replaces   []string
 }
 
 // Interface for interacting with a loaded rate limit config.

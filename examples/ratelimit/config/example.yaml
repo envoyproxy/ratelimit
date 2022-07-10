@@ -1,14 +1,42 @@
 ---
 domain: rl
 descriptors:
+  - key: category
+    value: account
+    rate_limit:
+      replaces:
+        - name: bkthomps
+        - name: fake_name
+      unit: minute
+      requests_per_unit: 4
   - key: source_cluster
     value: proxy
     descriptors:
+      - key: destination_cluster
+        value: bkthomps
+        rate_limit:
+          replaces:
+            - name: bkthomps
+          unit: minute
+          requests_per_unit: 2
       - key: destination_cluster
         value: mock
         rate_limit:
           unit: minute
           requests_per_unit: 1
+      - key: destination_cluster
+        value: override
+        rate_limit:
+          replaces:
+            - name: banned_limit
+          unit: minute
+          requests_per_unit: 2
+      - key: destination_cluster
+        value: fake
+        rate_limit:
+          name: fake_name
+          unit: minute
+          requests_per_unit: 2
   - key: foo
     rate_limit:
       unit: minute
@@ -19,8 +47,15 @@ descriptors:
           unit: minute
           requests_per_unit: 3
       - key: bar
+        value: bkthomps
+        rate_limit:
+          name: bkthomps
+          unit: minute
+          requests_per_unit: 1
+      - key: bar
         value: banned
         rate_limit:
+          name: banned_limit
           unit: minute
           requests_per_unit: 0
       - key: baz
