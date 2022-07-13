@@ -14,6 +14,7 @@
     - [Definitions](#definitions)
     - [Descriptor list definition](#descriptor-list-definition)
     - [Rate limit definition](#rate-limit-definition)
+    - [Replaces](#replaces)
     - [ShadowMode](#shadowmode)
     - [Examples](#examples)
       - [Example 1](#example-1)
@@ -21,7 +22,8 @@
       - [Example 3](#example-3)
       - [Example 4](#example-4)
       - [Example 5](#example-5)
-    - [Example 6](#example-6)
+      - [Example 6](#example-6)
+      - [Example 7](#example-7)
   - [Loading Configuration](#loading-configuration)
   - [Log Format](#log-format)
   - [GRPC Keepalive](#grpc-keepalive)
@@ -197,6 +199,9 @@ descriptors:
   - key: <rule key: required>
     value: <rule value: optional>
     rate_limit: (optional block)
+      name: (optional)
+      replaces: (optional)
+       - name: (optional)
       unit: <see below: required>
       requests_per_unit: <see below: required>
     shadow_mode: (optional)
@@ -220,6 +225,23 @@ rate_limit:
 The rate limit block specifies the actual rate limit that will be used when there is a match.
 Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
 future based on user demand.
+
+### Replaces
+
+The replaces key indicates that this descriptor will replace the configuration set by another descriptor.
+
+If there is a rule being evaluated, and multiple descriptors can apply, the replaces descriptor will drop evaluation of
+the descriptor which it is replacing.
+
+To enable this, any descriptor which should potentially be replaced by another should have a name keyword in the
+rate_limit section, and any descriptor which should potentially replace the original descriptor should have a name
+keyword in its respective replaces section. Whenever limits match to both rules, only the rule which replaces the
+original will take effect, and the limit of the original will not be changed after evaluation.
+
+For example, let's say you have a bunch of endpoints and each is classified under read or write, with read having a
+certain limit and write having another. Each user has a certain limit for both endpoints. However, let's say that you
+want to increase a user's limit to a single read endpoint. The only option without using replaces would be to increase
+their limit for the read category. The replaces keyword allows increasing the limit of a single endpoint in this case.
 
 ### ShadowMode
 
@@ -399,7 +421,7 @@ This can be useful for collecting statistics, or if one wants to define a descri
 
 The return value for unlimited descriptors will be an OK status code with the LimitRemaining field set to MaxUint32 value.
 
-### Example 6
+#### Example 6
 
 A rule using shadow_mode is useful for soft-launching rate limiting. In this example
 
@@ -428,6 +450,43 @@ descriptors:
         value: user-b
         rate_limit:
           requests_per_unit: 20
+          unit: second
+```
+
+#### Example 7
+
+When the replaces keyword is used, that limit will replace any limit which has the name being replaced as its name, and
+the original descriptor's limit will not be affected.
+
+In the example below, the following limits will apply:
+
+```
+(key_1, value_1), (user, bkthomps): 5 / sec
+(key_2, value_2), (user, bkthomps): 10 / sec
+(key_1, value_1), (key_2, value_2), (user, bkthomps): 10 / sec since the (key_1, value_1), (user, bkthomps) rule was replaced and this will not affect the 5 / sec limit that would take effect with (key_2, value_2), (user, bkthomps)
+```
+
+```yaml
+domain: example7
+descriptors:
+  - key: key_1
+    value: value_1
+    descriptors:
+      - key: user
+        value: bkthomps
+        rate_limit:
+          name: specific_limit
+          requests_per_unit: 5
+          unit: second
+  - key: key_2
+    value: value_2
+    descriptors:
+      - key: user
+        value: bkthomps
+        rate_limit:
+          replaces:
+            - name: specific_limit
+          requests_per_unit: 10
           unit: second
 ```
 

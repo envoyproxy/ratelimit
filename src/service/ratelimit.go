@@ -114,6 +114,8 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 	limitsToCheck := make([]*config.RateLimit, len(request.Descriptors))
 	isUnlimited := make([]bool, len(request.Descriptors))
 
+	replacing := make(map[string]bool)
+
 	for i, descriptor := range request.Descriptors {
 		if logger.IsLevelEnabled(logger.DebugLevel) {
 			var descriptorEntryStrings []string
@@ -143,9 +145,28 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 			}
 		}
 
-		if limitsToCheck[i] != nil && limitsToCheck[i].Unlimited {
-			isUnlimited[i] = true
+		if limitsToCheck[i] != nil {
+			for _, replace := range limitsToCheck[i].Replaces {
+				replacing[replace] = true
+			}
+
+			if limitsToCheck[i].Unlimited {
+				isUnlimited[i] = true
+				limitsToCheck[i] = nil
+			}
+		}
+	}
+
+	for i, limit := range limitsToCheck {
+		if limit == nil || limit.Name == "" {
+			continue
+		}
+		_, exists := replacing[limit.Name]
+		if exists {
 			limitsToCheck[i] = nil
+			if logger.IsLevelEnabled(logger.DebugLevel) {
+				logger.Debugf("replacing %s", limit.Name)
+			}
 		}
 	}
 	return limitsToCheck, isUnlimited
