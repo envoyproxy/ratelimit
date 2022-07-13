@@ -13,10 +13,16 @@ import (
 	"github.com/envoyproxy/ratelimit/src/stats"
 )
 
+type yamlReplaces struct {
+	Name string
+}
+
 type yamlRateLimit struct {
 	RequestsPerUnit uint32 `yaml:"requests_per_unit"`
 	Unit            string
 	Unlimited       bool `yaml:"unlimited"`
+	Name            string
+	Replaces        []yamlReplaces
 }
 
 type yamlDescriptor struct {
@@ -56,6 +62,8 @@ var validKeys = map[string]bool{
 	"requests_per_unit": true,
 	"unlimited":         true,
 	"shadow_mode":       true,
+	"name":              true,
+	"replaces":          true,
 }
 
 // Create a new rate limit config entry.
@@ -64,10 +72,21 @@ var validKeys = map[string]bool{
 // @param rlStats supplies the stats structure associated with the RateLimit
 // @param unlimited supplies whether the rate limit is unlimited
 // @return the new config entry.
-func NewRateLimit(
-	requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats, unlimited bool, shadowMode bool) *RateLimit {
+func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats,
+	unlimited bool, shadowMode bool, name string, replaces []string) *RateLimit {
 
-	return &RateLimit{FullKey: rlStats.GetKey(), Stats: rlStats, Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}, Unlimited: unlimited, ShadowMode: shadowMode}
+	return &RateLimit{
+		FullKey: rlStats.GetKey(),
+		Stats:   rlStats,
+		Limit: &pb.RateLimitResponse_RateLimit{
+			RequestsPerUnit: requestsPerUnit,
+			Unit:            unit,
+		},
+		Unlimited:  unlimited,
+		ShadowMode: shadowMode,
+		Name:       name,
+		Replaces:   replaces,
+	}
 }
 
 // Dump an individual descriptor for debugging purposes.
@@ -135,11 +154,28 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 					fmt.Sprintf("invalid rate limit unit '%s'", descriptorConfig.RateLimit.Unit)))
 			}
 
+			replaces := make([]string, len(descriptorConfig.RateLimit.Replaces))
+			for i, e := range descriptorConfig.RateLimit.Replaces {
+				replaces[i] = e.Name
+			}
+
 			rateLimit = NewRateLimit(
-				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode)
+				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value),
+				statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode,
+				descriptorConfig.RateLimit.Name, replaces,
+			)
 			rateLimitDebugString = fmt.Sprintf(
 				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t}", rateLimit.Limit.RequestsPerUnit,
 				rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode)
+
+			for _, replaces := range descriptorConfig.RateLimit.Replaces {
+				if replaces.Name == "" {
+					panic(newRateLimitConfigError(config, "should not have an empty replaces entry"))
+				}
+				if replaces.Name == descriptorConfig.RateLimit.Name {
+					panic(newRateLimitConfigError(config, "replaces should not contain name of same descriptor"))
+				}
+			}
 		}
 
 		logger.Debugf(
@@ -260,7 +296,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 			rateLimitOverrideUnit,
 			this.statsManager.NewStats(rateLimitKey),
 			false,
-			false)
+			false,
+			"",
+			[]string{},
+		)
 		return rateLimit
 	}
 

@@ -107,3 +107,45 @@ static_resources:
                                   - request_headers:
                                       header_name: "baz"
                                       descriptor_key: "baz"
+                        - match:
+                            prefix: /fourheader
+                          route:
+                            cluster: mock
+                            rate_limits:
+                              - actions:
+                                  - request_headers:
+                                      header_name: "foo"
+                                      descriptor_key: "foo"
+                                  - request_headers:
+                                      header_name: "bar"
+                                      descriptor_key: "bar"
+                              - actions:
+                                  - request_headers:
+                                      header_name: "source_cluster"
+                                      descriptor_key: "source_cluster"
+                                  - request_headers:
+                                      header_name: "destination_cluster"
+                                      descriptor_key: "destination_cluster"
+                        - match:
+                            prefix: /fiveheader
+                          route:
+                            cluster: mock
+                            rate_limits:
+                              - actions:
+                                  - request_headers:
+                                      header_name: "foo"
+                                      descriptor_key: "foo"
+                                  - request_headers:
+                                      header_name: "bar"
+                                      descriptor_key: "bar"
+                              - actions:
+                                  - request_headers:
+                                      header_name: "source_cluster"
+                                      descriptor_key: "source_cluster"
+                                  - request_headers:
+                                      header_name: "destination_cluster"
+                                      descriptor_key: "destination_cluster"
+                              - actions:
+                                  - request_headers:
+                                      header_name: "category"
+                                      descriptor_key: "category"

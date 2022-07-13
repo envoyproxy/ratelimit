@@ -324,6 +324,28 @@ func TestBadLimitUnit(t *testing.T) {
 		"bad_limit_unit.yaml: invalid rate limit unit 'foo'")
 }
 
+func TestReplacesSelf(t *testing.T) {
+	expectConfigPanic(
+		t,
+		func() {
+			config.NewRateLimitConfigImpl(
+				loadFile("replaces_self.yaml"),
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
+		},
+		"replaces_self.yaml: replaces should not contain name of same descriptor")
+}
+
+func TestReplacesEmpty(t *testing.T) {
+	expectConfigPanic(
+		t,
+		func() {
+			config.NewRateLimitConfigImpl(
+				loadFile("replaces_empty.yaml"),
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)))
+		},
+		"replaces_empty.yaml: should not have an empty replaces entry")
+}
+
 func TestBadYaml(t *testing.T) {
 	expectConfigPanic(
 		t,
