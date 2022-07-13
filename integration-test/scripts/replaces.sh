@@ -1,19 +1,17 @@
 #!/bin/bash
 
-function assert_ok()
-{
-  if [ $? -ne 0 ]; then
-    echo "Rate limited the request, but should not have"
-    exit 1
-  fi
+function assert_ok() {
+	if [ $? -ne 0 ]; then
+		echo "Rate limited the request, but should not have"
+		exit 1
+	fi
 }
 
-function assert_limited()
-{
-  if [ $? -eq 0 ]; then
-    echo "Should have rate limited the request, but it was not"
-    exit 1
-  fi
+function assert_limited() {
+	if [ $? -eq 0 ]; then
+		echo "Should have rate limited the request, but it was not"
+		exit 1
+	fi
 }
 
 #
@@ -95,7 +93,7 @@ assert_ok
 response=$(curl -f -s -H "foo: my_foo" -H "bar: bkthomps" -H "source_cluster: proxy" -H "destination_cluster: fake" -H "category: account" http://envoy-proxy:8888/fiveheader)
 assert_limited
 
-response=$(curl -f -s -H "foo: foo_2" -H "bar: bkthomps"  http://envoy-proxy:8888/twoheader)
+response=$(curl -f -s -H "foo: foo_2" -H "bar: bkthomps" http://envoy-proxy:8888/twoheader)
 assert_ok
 response=$(curl -f -s -H "foo: foo_2" -H "bar: bkthomps" http://envoy-proxy:8888/twoheader)
 assert_limited

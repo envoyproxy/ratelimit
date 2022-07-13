@@ -416,7 +416,7 @@ This can be useful for collecting statistics, or if one wants to define a descri
 
 The return value for unlimited descriptors will be an OK status code with the LimitRemaining field set to MaxUint32 value.
 
-### Example 6
+#### Example 6
 
 A rule using shadow_mode is useful for soft-launching rate limiting. In this example
 
@@ -448,7 +448,7 @@ descriptors:
           unit: second
 ```
 
-### Example 7
+#### Example 7
 
 When the replaces keyword is used, that limit will replace any limit which has the name being replaced as its name, and
 the original descriptor's limit will not be affected.
