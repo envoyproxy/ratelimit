@@ -233,10 +233,15 @@ The replaces key indicates that this descriptor will replace the configuration s
 If there is a rule being evaluated, and multiple descriptors can apply, the replaces descriptor will drop evaluation of
 the descriptor which it is replacing.
 
-To enable this, any descriptor which should potentially be replaced by another should have a name keyword with a unique
-name in the rate_limit section, and any descriptor which should potentially replace that descriptor should have a name
-keyword in the replaces section in the rate_limit section. Then, whenever limits match to both rules, only the rule
-which replaces the original will take effect, and the limit of the original will not be changed after evaluation.
+To enable this, any descriptor which should potentially be replaced by another should have a name keyword in the
+rate_limit section, and any descriptor which should potentially replace the original descriptor should have a name
+keyword in its respective replaces section. Whenever limits match to both rules, only the rule which replaces the
+original will take effect, and the limit of the original will not be changed after evaluation.
+
+For example, let's say you have a bunch of endpoints and each is classified under read or write, with read having a
+certain limit and write having another. Each user has a certain limit for both endpoints. However, let's say that you
+want to increase a user's limit to a single read endpoint. The only option without using replaces would be to increase
+their limit for the read category. The replaces keyword allows increasing the limit of a single endpoint in this case.
 
 ### ShadowMode
 
