@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"strings"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/golang/protobuf/ptypes/duration"
 )
@@ -40,4 +42,22 @@ func Max(a uint32, b uint32) uint32 {
 		return a
 	}
 	return b
+}
+
+// Mask credentials from a redis connection string like
+// foo,redis://user:pass@redisurl1,redis://user:pass@redisurl2
+// resulting in
+// foo,redis://*****@redisurl1,redis://*****@redisurl2
+func MaskCredentialsInUrl(url string) string {
+	urls := strings.Split(url, ",")
+
+	for i := 0; i < len(urls); i++ {
+		url := urls[i]
+		authUrlParts := strings.Split(url, "@")
+		if len(authUrlParts) > 1 && strings.HasPrefix(authUrlParts[0], "redis://") {
+			urls[i] = "redis://*****@" + authUrlParts[len(authUrlParts)-1]
+		}
+	}
+
+	return strings.Join(urls, ",")
 }
