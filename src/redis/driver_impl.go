@@ -12,6 +12,7 @@ import (
 	logger "github.com/sirupsen/logrus"
 
 	"github.com/envoyproxy/ratelimit/src/server"
+	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
 type poolStats struct {
@@ -65,7 +66,8 @@ func checkError(err error) {
 
 func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server) Client {
-	logger.Warnf("connecting to redis on %s with pool size %d", url, poolSize)
+	maskedUrl := utils.MaskCredentialsInUrl(url)
+	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
 
 	df := func(network, addr string) (radix.Conn, error) {
 		var dialOpts []radix.DialOpt
@@ -75,7 +77,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		}
 
 		if auth != "" {
-			logger.Warnf("enabling authentication to redis on %s", url)
+			logger.Warnf("enabling authentication to redis on %s", maskedUrl)
 
 			dialOpts = append(dialOpts, radix.DialAuthPass(auth))
 		}
