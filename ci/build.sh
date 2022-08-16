@@ -38,7 +38,6 @@ mkdir -p ~/.docker/cli-plugins
 mv buildx-v0.4.2.linux-amd64 ~/.docker/cli-plugins/docker-buildx
 chmod a+rx ~/.docker/cli-plugins/docker-buildx
 docker run --privileged --rm tonistiigi/binfmt --install all
-
 docker buildx create --name multi-arch-builder --driver-opt network=host --use
 
 TAG="b-$VERSION"
