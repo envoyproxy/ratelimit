@@ -15,9 +15,17 @@ RUN if [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then go test -v -race github.co
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /go/bin/ratelimit -ldflags="-w -s" -v github.com/replicon/ratelimit/src/service_cmd && \
  CGO_ENABLED=0 GOOS=linux go build -o /go/bin/ratelimit_config_check -ldflags="-w -s" -v github.com/replicon/ratelimit/src/config_check_cmd
-FROM alpine:3.11 AS final
-RUN apk --no-cache add ca-certificates
+
+
+FROM python:3.10-alpine AS final
+
+RUN apk update && apk add --update ca-certificates curl && \
+  pip3 install ipaddress awscli && \
+  mkdir -p /srv/runtime_data/current/config && \
+  mkdir -p /srv/runtime_data/current/validate_config
+
 COPY --from=build /go/bin/ratelimit /bin/ratelimit
 COPY --from=build /go/bin/ratelimit_config_check /bin/ratelimit_config_check
-RUN mkdir -p /srv/runtime_data/current/config
-ENTRYPOINT [ "/bin/ratelimit" ]
+COPY entrypoint.sh /entrypoint.sh
+COPY sync_config.sh /sync_config.sh
+ENTRYPOINT [ "/entrypoint.sh" ]

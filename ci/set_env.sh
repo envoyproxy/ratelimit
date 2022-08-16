@@ -3,7 +3,7 @@ if [ -f version ]; then
     export VERSION=$(cat version)
 else
     TIMESTAMP=$(date +%s)
-    export VERSION="1.0.${TIMESTAMP//[$'\t\r\n']}"
+    export VERSION="2.0.${TIMESTAMP//[$'\t\r\n']}"
     echo -n "$VERSION" > version
 fi
 export PROJECTNAME=ratelimit
