@@ -19,4 +19,5 @@ FROM alpine:3.11 AS final
 RUN apk --no-cache add ca-certificates
 COPY --from=build /go/bin/ratelimit /bin/ratelimit
 COPY --from=build /go/bin/ratelimit_config_check /bin/ratelimit_config_check
+RUN mkdir -p /srv/runtime_data/current/config
 ENTRYPOINT [ "/bin/ratelimit" ]
