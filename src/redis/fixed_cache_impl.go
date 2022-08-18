@@ -7,16 +7,16 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/zackzhangverkada/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/zackzhangverkada/ratelimit/src/config"
+	"github.com/zackzhangverkada/ratelimit/src/limiter"
+	"github.com/zackzhangverkada/ratelimit/src/utils"
 )
 
 var tracer = otel.Tracer("redis.fixedCacaheImpl")

@@ -7,7 +7,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"google.golang.org/grpc"
 
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/zackzhangverkada/ratelimit/src/utils"
 )
 
 type Settings struct {

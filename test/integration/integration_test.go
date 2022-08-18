@@ -21,11 +21,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/envoyproxy/ratelimit/src/memcached"
-	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/src/utils"
-	"github.com/envoyproxy/ratelimit/test/common"
+	"github.com/zackzhangverkada/ratelimit/src/memcached"
+	"github.com/zackzhangverkada/ratelimit/src/service_cmd/runner"
+	"github.com/zackzhangverkada/ratelimit/src/settings"
+	"github.com/zackzhangverkada/ratelimit/src/utils"
+	"github.com/zackzhangverkada/ratelimit/test/common"
 )
 
 var projectDir = os.Getenv("PROJECT_DIR")

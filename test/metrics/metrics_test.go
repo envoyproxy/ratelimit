@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
-	"github.com/envoyproxy/ratelimit/src/metrics"
+	"github.com/zackzhangverkada/ratelimit/src/metrics"
 )
 
 func TestMetricsInterceptor(t *testing.T) {

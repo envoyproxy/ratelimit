@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/envoyproxy/ratelimit/src/server"
+	"github.com/zackzhangverkada/ratelimit/src/server"
 )
 
 func TestHealthCheck(t *testing.T) {

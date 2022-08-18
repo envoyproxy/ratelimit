@@ -5,7 +5,7 @@ repos:
     rev: v1.0.0-beta.4
     hooks:
       - id: go-imports
-        args: ["-w", "-local", "github.com/envoyproxy/ratelimit"]
+        args: ["-w", "-local", "github.com/zackzhangverkada/ratelimit"]
       - id: go-fumpt
         args: ["-w"]
 

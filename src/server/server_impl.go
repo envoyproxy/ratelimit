@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
-	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/zackzhangverkada/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -34,13 +34,15 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/zackzhangverkada/ratelimit/src/limiter"
+	"github.com/zackzhangverkada/ratelimit/src/settings"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	grpctrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/google.golang.org/grpc"
 )
 
 var tracer = otel.Tracer("ratelimit server")
@@ -206,11 +208,16 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	grpcOptions := []grpc.ServerOption{
 		keepaliveOpt,
 		grpc.ChainUnaryInterceptor(
+			grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName("vratelimit")),
 			s.GrpcUnaryInterceptor, // chain otel interceptor after the input interceptor
 			otelgrpc.UnaryServerInterceptor(),
 		),
-		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+		grpc.ChainStreamInterceptor(
+			grpctrace.StreamServerInterceptor(grpctrace.WithServiceName("vratelimits")),
+			otelgrpc.StreamServerInterceptor(),
+		),
 	}
+
 	if s.GrpcServerUseTLS {
 		grpcServerTlsConfig := s.GrpcServerTlsConfig
 		// Verify client SAN if provided
