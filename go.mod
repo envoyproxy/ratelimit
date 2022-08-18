@@ -1,4 +1,4 @@
-module github.com/envoyproxy/ratelimit
+module github.com/zackzhangverkada/ratelimit
 
 go 1.18
 
