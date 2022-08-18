@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/envoyproxy/ratelimit/test/mocks/stats"
+	"github.com/zackzhangverkada/ratelimit/test/mocks/stats"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	gostats "github.com/lyft/gostats"
 
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/redis"
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/zackzhangverkada/ratelimit/src/config"
+	"github.com/zackzhangverkada/ratelimit/src/redis"
+	"github.com/zackzhangverkada/ratelimit/src/utils"
 
-	"github.com/envoyproxy/ratelimit/test/common"
+	"github.com/zackzhangverkada/ratelimit/test/common"
 )
 
 func BenchmarkParallelDoLimit(b *testing.B) {

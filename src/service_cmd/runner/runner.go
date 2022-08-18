@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/envoyproxy/ratelimit/src/metrics"
-	"github.com/envoyproxy/ratelimit/src/stats"
-	"github.com/envoyproxy/ratelimit/src/trace"
+	"github.com/zackzhangverkada/ratelimit/src/metrics"
+	"github.com/zackzhangverkada/ratelimit/src/stats"
+	"github.com/zackzhangverkada/ratelimit/src/trace"
 
 	gostats "github.com/lyft/gostats"
 
@@ -21,14 +21,14 @@ import (
 
 	logger "github.com/sirupsen/logrus"
 
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/memcached"
-	"github.com/envoyproxy/ratelimit/src/redis"
-	"github.com/envoyproxy/ratelimit/src/server"
-	ratelimit "github.com/envoyproxy/ratelimit/src/service"
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/zackzhangverkada/ratelimit/src/config"
+	"github.com/zackzhangverkada/ratelimit/src/limiter"
+	"github.com/zackzhangverkada/ratelimit/src/memcached"
+	"github.com/zackzhangverkada/ratelimit/src/redis"
+	"github.com/zackzhangverkada/ratelimit/src/server"
+	ratelimit "github.com/zackzhangverkada/ratelimit/src/service"
+	"github.com/zackzhangverkada/ratelimit/src/settings"
+	"github.com/zackzhangverkada/ratelimit/src/utils"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )

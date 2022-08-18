@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
-	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/zackzhangverkada/ratelimit/src/service_cmd/runner"
+	"github.com/zackzhangverkada/ratelimit/src/settings"
 )
 
 func main() {

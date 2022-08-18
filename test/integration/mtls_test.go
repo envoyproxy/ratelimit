@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/zackzhangverkada/ratelimit/src/utils"
 )
 
 func createCA() (caFileName string, ca *x509.Certificate, pk *rsa.PrivateKey, err error) {
