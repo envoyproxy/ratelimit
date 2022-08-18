@@ -41,6 +41,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	grpctrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/google.golang.org/grpc"
 )
 
 var tracer = otel.Tracer("ratelimit server")
@@ -206,11 +208,16 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	grpcOptions := []grpc.ServerOption{
 		keepaliveOpt,
 		grpc.ChainUnaryInterceptor(
+			grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName("vratelimit")),
 			s.GrpcUnaryInterceptor, // chain otel interceptor after the input interceptor
 			otelgrpc.UnaryServerInterceptor(),
 		),
-		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+		grpc.ChainStreamInterceptor(
+			grpctrace.StreamServerInterceptor(grpctrace.WithServiceName("vratelimits")),
+			otelgrpc.StreamServerInterceptor(),
+		),
 	}
+
 	if s.GrpcServerUseTLS {
 		grpcServerTlsConfig := s.GrpcServerTlsConfig
 		// Verify client SAN if provided

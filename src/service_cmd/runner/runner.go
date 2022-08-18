@@ -29,6 +29,8 @@ import (
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/utils"
+
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
 type Runner struct {
@@ -76,6 +78,9 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 }
 
 func (runner *Runner) Run() {
+	tracer.Start()
+	defer tracer.Stop()
+
 	s := runner.settings
 	if s.TracingEnabled {
 		tp := trace.InitProductionTraceProvider(s.TracingExporterProtocol, s.TracingServiceName, s.TracingServiceNamespace, s.TracingServiceInstanceId)
