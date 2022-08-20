@@ -153,11 +153,6 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 					fmt.Sprintf("invalid rate limit unit '%s'", descriptorConfig.RateLimit.Unit)))
 			}
 
-<<<<<<< HEAD
-			// Enable detailed stats IF NewDetailedStats is defined in env vars
-			rateLimit = NewRateLimit(
-				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value), statsManager.NewDetailedStats(newParentKey), unlimited, descriptorConfig.ShadowMode)
-=======
 			replaces := make([]string, len(descriptorConfig.RateLimit.Replaces))
 			for i, e := range descriptorConfig.RateLimit.Replaces {
 				replaces[i] = e.Name
@@ -168,7 +163,6 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 				statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode,
 				descriptorConfig.RateLimit.Name, replaces,
 			)
->>>>>>> Add descriptor replacing (#344)
 			rateLimitDebugString = fmt.Sprintf(
 				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t}", rateLimit.Limit.RequestsPerUnit,
 				rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode)

@@ -14,7 +14,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/lyft/goruntime v0.2.5
 	github.com/lyft/gostats v0.4.0
-	github.com/mediocregopher/radix/v3 v3.5.1
+	github.com/mediocregopher/radix/v3 v3.8.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.7.1
 	golang.org/x/net v0.0.0-20220325170049-de3da57026de
