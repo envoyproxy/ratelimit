@@ -7,12 +7,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/irlapp/rate-limiter/src/settings"
+	"github.com/irlapp/rate-limiter/src/stats"
 
 	gostats "github.com/lyft/gostats"
 
-	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/irlapp/rate-limiter/src/config"
 )
 
 func loadConfigs(allConfigs []config.RateLimitConfigToLoad) {

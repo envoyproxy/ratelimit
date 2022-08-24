@@ -11,10 +11,10 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/irlapp/rate-limiter/src/settings"
+	"github.com/irlapp/rate-limiter/src/stats"
 
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/irlapp/rate-limiter/src/utils"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -22,10 +22,10 @@ import (
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 
-	"github.com/envoyproxy/ratelimit/src/assert"
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/irlapp/rate-limiter/src/assert"
+	"github.com/irlapp/rate-limiter/src/config"
+	"github.com/irlapp/rate-limiter/src/limiter"
+	"github.com/irlapp/rate-limiter/src/redis"
 )
 
 var tracer = otel.Tracer("ratelimit")

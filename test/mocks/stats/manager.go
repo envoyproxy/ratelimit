@@ -4,7 +4,7 @@ import (
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 
-	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/irlapp/rate-limiter/src/stats"
 )
 
 type MockStatManager struct {

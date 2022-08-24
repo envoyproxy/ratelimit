@@ -9,8 +9,8 @@ import (
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/envoyproxy/ratelimit/src/memcached"
-	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached"
+	"github.com/irlapp/rate-limiter/src/memcached"
+	mock_memcached "github.com/irlapp/rate-limiter/test/mocks/memcached"
 )
 
 type fakeSink struct {

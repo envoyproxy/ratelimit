@@ -10,7 +10,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 
-	mock_srv "github.com/envoyproxy/ratelimit/test/mocks/srv"
+	mock_srv "github.com/irlapp/rate-limiter/test/mocks/srv"
 )
 
 func TestRefreshServersSetsServersOnEmptyServerList(t *testing.T) {
