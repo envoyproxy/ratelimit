@@ -48,8 +48,9 @@ type rateLimitDomain struct {
 }
 
 type rateLimitConfigImpl struct {
-	domains      map[string]*rateLimitDomain
-	statsManager stats.Manager
+	domains            map[string]*rateLimitDomain
+	statsManager       stats.Manager
+	mergeDomainConfigs bool
 }
 
 var validKeys = map[string]bool{
@@ -257,8 +258,14 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	}
 
 	if _, present := this.domains[root.Domain]; present {
-		panic(newRateLimitConfigError(
-			config, fmt.Sprintf("duplicate domain '%s' in config file", root.Domain)))
+		if !this.mergeDomainConfigs {
+			panic(newRateLimitConfigError(
+				config, fmt.Sprintf("duplicate domain '%s' in config file", root.Domain)))
+		}
+
+		logger.Debugf("patching domain: %s", root.Domain)
+		this.domains[root.Domain].loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsManager)
+		return
 	}
 
 	logger.Debugf("loading domain: %s", root.Domain)
@@ -353,11 +360,12 @@ func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) str
 // Create rate limit config from a list of input YAML files.
 // @param configs specifies a list of YAML files to load.
 // @param stats supplies the stats scope to use for limit stats during runtime.
+// @param mergeDomainConfigs defines whether multiple configurations referencing the same domain will be merged or rejected throwing an error.
 // @return a new config.
 func NewRateLimitConfigImpl(
-	configs []RateLimitConfigToLoad, statsManager stats.Manager) RateLimitConfig {
+	configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool) RateLimitConfig {
 
-	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsManager}
+	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsManager, mergeDomainConfigs}
 	for _, config := range configs {
 		ret.loadConfig(config)
 	}
@@ -368,9 +376,9 @@ func NewRateLimitConfigImpl(
 type rateLimitConfigLoaderImpl struct{}
 
 func (this *rateLimitConfigLoaderImpl) Load(
-	configs []RateLimitConfigToLoad, statsManager stats.Manager) RateLimitConfig {
+	configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool) RateLimitConfig {
 
-	return NewRateLimitConfigImpl(configs, statsManager)
+	return NewRateLimitConfigImpl(configs, statsManager, mergeDomainConfigs)
 }
 
 // @return a new default config loader implementation.
