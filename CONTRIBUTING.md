@@ -19,7 +19,7 @@ pre-commit run -a # Run against all files
 - Pre-commits will automatically format your code at commit time.
 - Create your PR.
 - Tests will automatically run for you.
-- When all of the tests are passing, tag @envoyproxy/ratelimit-maintainers and
+- When all of the tests are passing, tag @irlapp/rate-limiter-maintainers and
   we will review it and merge.
 - Party time.
 

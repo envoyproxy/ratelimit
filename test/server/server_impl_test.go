@@ -17,8 +17,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/envoyproxy/ratelimit/src/server"
-	mock_v3 "github.com/envoyproxy/ratelimit/test/mocks/rls"
+	"github.com/irlapp/rate-limiter/src/server"
+	mock_v3 "github.com/irlapp/rate-limiter/test/mocks/rls"
 )
 
 func assertHttpResponse(t *testing.T,

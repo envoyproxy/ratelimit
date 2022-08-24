@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/envoyproxy/ratelimit/test/mocks/stats"
+	"github.com/irlapp/rate-limiter/test/mocks/stats"
 
 	"github.com/coocood/freecache"
 	"github.com/mediocregopher/radix/v3"
@@ -13,18 +13,18 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	gostats "github.com/lyft/gostats"
 
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/redis"
-	"github.com/envoyproxy/ratelimit/src/trace"
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/irlapp/rate-limiter/src/config"
+	"github.com/irlapp/rate-limiter/src/limiter"
+	"github.com/irlapp/rate-limiter/src/redis"
+	"github.com/irlapp/rate-limiter/src/trace"
+	"github.com/irlapp/rate-limiter/src/utils"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/envoyproxy/ratelimit/test/common"
-	mock_redis "github.com/envoyproxy/ratelimit/test/mocks/redis"
-	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
+	"github.com/irlapp/rate-limiter/test/common"
+	mock_redis "github.com/irlapp/rate-limiter/test/mocks/redis"
+	mock_utils "github.com/irlapp/rate-limiter/test/mocks/utils"
 )
 
 var testSpanExporter = trace.GetTestSpanExporter()

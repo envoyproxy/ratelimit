@@ -5,11 +5,11 @@ import (
 
 	"github.com/coocood/freecache"
 
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/server"
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/src/stats"
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/irlapp/rate-limiter/src/limiter"
+	"github.com/irlapp/rate-limiter/src/server"
+	"github.com/irlapp/rate-limiter/src/settings"
+	"github.com/irlapp/rate-limiter/src/stats"
+	"github.com/irlapp/rate-limiter/src/utils"
 )
 
 func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freecache.Cache, srv server.Server, timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64, statsManager stats.Manager) limiter.RateLimitCache {

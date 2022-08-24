@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/irlapp/rate-limiter/src/stats"
 
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/irlapp/rate-limiter/src/utils"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -17,17 +17,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 
-	"github.com/envoyproxy/ratelimit/src/trace"
+	"github.com/irlapp/rate-limiter/src/trace"
 
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/redis"
-	ratelimit "github.com/envoyproxy/ratelimit/src/service"
-	"github.com/envoyproxy/ratelimit/test/common"
-	mock_config "github.com/envoyproxy/ratelimit/test/mocks/config"
-	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
-	mock_loader "github.com/envoyproxy/ratelimit/test/mocks/runtime/loader"
-	mock_snapshot "github.com/envoyproxy/ratelimit/test/mocks/runtime/snapshot"
-	mock_stats "github.com/envoyproxy/ratelimit/test/mocks/stats"
+	"github.com/irlapp/rate-limiter/src/config"
+	"github.com/irlapp/rate-limiter/src/redis"
+	ratelimit "github.com/irlapp/rate-limiter/src/service"
+	"github.com/irlapp/rate-limiter/test/common"
+	mock_config "github.com/irlapp/rate-limiter/test/mocks/config"
+	mock_limiter "github.com/irlapp/rate-limiter/test/mocks/limiter"
+	mock_loader "github.com/irlapp/rate-limiter/test/mocks/runtime/loader"
+	mock_snapshot "github.com/irlapp/rate-limiter/test/mocks/runtime/snapshot"
+	mock_stats "github.com/irlapp/rate-limiter/test/mocks/stats"
 )
 
 type barrier struct {

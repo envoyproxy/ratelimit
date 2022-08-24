@@ -62,7 +62,7 @@ decision is then returned to the caller.
 
 # Docker Image
 
-For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/r/envoyproxy/ratelimit/tags?page=1&ordering=last_updated). There is currently no versioning (post v1.4.0) and tags are based on commit sha.
+For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/r/irlapp/rate-limiter/tags?page=1&ordering=last_updated). There is currently no versioning (post v1.4.0) and tags are based on commit sha.
 
 # Supported Envoy APIs
 
@@ -73,7 +73,7 @@ Support for [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/mas
 
 1. `v1.0.0` tagged on commit `0ded92a2af8261d43096eba4132e45b99a3b8b14`. Ratelimit has been in production use at Lyft for over 2 years.
 2. `v1.1.0` introduces the data-plane-api proto and initiates the deprecation of the legacy [ratelimit.proto](https://github.com/lyft/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
-3. `e91321b` [commit](https://github.com/envoyproxy/ratelimit/commit/e91321b10f1ad7691d0348e880bd75d0fca05758) deleted support for the legacy [ratelimit.proto](https://github.com/envoyproxy/ratelimit/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
+3. `e91321b` [commit](https://github.com/irlapp/rate-limiter/commit/e91321b10f1ad7691d0348e880bd75d0fca05758) deleted support for the legacy [ratelimit.proto](https://github.com/irlapp/rate-limiter/blob/0ded92a2af8261d43096eba4132e45b99a3b8b14/proto/ratelimit/ratelimit.proto).
    The current version of ratelimit protocol is changed to [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto)
    while [v2 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is still supported
    as a legacy protocol.
@@ -495,7 +495,7 @@ descriptors:
 The Ratelimit service uses a library written by Lyft called [goruntime](https://github.com/lyft/goruntime) to do configuration loading. Goruntime monitors
 a designated path, and watches for symlink swaps to files in the directory tree to reload configuration files.
 
-The path to watch can be configured via the [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go)
+The path to watch can be configured via the [settings](https://github.com/irlapp/rate-limiter/blob/master/src/settings/settings.go)
 package with the following environment variables:
 
 ```
@@ -565,7 +565,7 @@ on the RateLimitRequest message type in the Ratelimit [proto file.](https://gith
 
 # GRPC Client
 
-The [gRPC client](https://github.com/envoyproxy/ratelimit/blob/master/src/client_cmd/main.go) will interact with ratelimit server and tell you if the requests are over limit.
+The [gRPC client](https://github.com/irlapp/rate-limiter/blob/master/src/client_cmd/main.go) will interact with ratelimit server and tell you if the requests are over limit.
 
 ## Commandline flags
 
@@ -703,7 +703,7 @@ You can specify the debug server address with the `DEBUG_HOST` and `DEBUG_PORT` 
 # Local Cache
 
 Ratelimit optionally uses [freecache](https://github.com/coocood/freecache) as its local caching layer, which stores the over-the-limit cache keys, and thus avoids reading the
-redis cache again for the already over-the-limit keys. The local cache size can be configured via `LocalCacheSizeInBytes` in the [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go).
+redis cache again for the already over-the-limit keys. The local cache size can be configured via `LocalCacheSizeInBytes` in the [settings](https://github.com/irlapp/rate-limiter/blob/master/src/settings/settings.go).
 If `LocalCacheSizeInBytes` is 0, local cache is disabled.
 
 # Redis

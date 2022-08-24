@@ -8,7 +8,7 @@ import (
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/irlapp/rate-limiter/src/redis"
 )
 
 func mustNewRedisServer() *miniredis.Miniredis {

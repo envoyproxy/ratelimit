@@ -26,7 +26,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/irlapp/rate-limiter/src/stats"
 
 	"github.com/coocood/freecache"
 	gostats "github.com/lyft/gostats"
@@ -37,11 +37,11 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/src/srv"
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/irlapp/rate-limiter/src/config"
+	"github.com/irlapp/rate-limiter/src/limiter"
+	"github.com/irlapp/rate-limiter/src/settings"
+	"github.com/irlapp/rate-limiter/src/srv"
+	"github.com/irlapp/rate-limiter/src/utils"
 )
 
 var tracer = otel.Tracer("memcached.cacheImpl")

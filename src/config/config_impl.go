@@ -10,7 +10,7 @@ import (
 	"golang.org/x/net/context"
 	"gopkg.in/yaml.v2"
 
-	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/irlapp/rate-limiter/src/stats"
 )
 
 type yamlReplaces struct {

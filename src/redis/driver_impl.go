@@ -11,8 +11,8 @@ import (
 	"github.com/mediocregopher/radix/v3/trace"
 	logger "github.com/sirupsen/logrus"
 
-	"github.com/envoyproxy/ratelimit/src/server"
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/irlapp/rate-limiter/src/server"
+	"github.com/irlapp/rate-limiter/src/utils"
 )
 
 type poolStats struct {

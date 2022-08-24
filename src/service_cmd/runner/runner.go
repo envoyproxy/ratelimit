@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/envoyproxy/ratelimit/src/metrics"
-	"github.com/envoyproxy/ratelimit/src/stats"
-	"github.com/envoyproxy/ratelimit/src/trace"
+	"github.com/irlapp/rate-limiter/src/metrics"
+	"github.com/irlapp/rate-limiter/src/stats"
+	"github.com/irlapp/rate-limiter/src/trace"
 
 	gostats "github.com/lyft/gostats"
 
@@ -21,14 +21,14 @@ import (
 
 	logger "github.com/sirupsen/logrus"
 
-	"github.com/envoyproxy/ratelimit/src/config"
-	"github.com/envoyproxy/ratelimit/src/limiter"
-	"github.com/envoyproxy/ratelimit/src/memcached"
-	"github.com/envoyproxy/ratelimit/src/redis"
-	"github.com/envoyproxy/ratelimit/src/server"
-	ratelimit "github.com/envoyproxy/ratelimit/src/service"
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/src/utils"
+	"github.com/irlapp/rate-limiter/src/config"
+	"github.com/irlapp/rate-limiter/src/limiter"
+	"github.com/irlapp/rate-limiter/src/memcached"
+	"github.com/irlapp/rate-limiter/src/redis"
+	"github.com/irlapp/rate-limiter/src/server"
+	ratelimit "github.com/irlapp/rate-limiter/src/service"
+	"github.com/irlapp/rate-limiter/src/settings"
+	"github.com/irlapp/rate-limiter/src/utils"
 )
 
 type Runner struct {
