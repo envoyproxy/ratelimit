@@ -23,7 +23,7 @@ func loadConfigs(allConfigs []config.RateLimitConfigToLoad, mergeDomainConfigs b
 			os.Exit(1)
 		}
 	}()
-	statsManager := stats.NewStatManager(gostats.NewStore(gostats.NewNullSink(), mergeDomainConfigs), settings.NewSettings())
+	statsManager := stats.NewStatManager(gostats.NewStore(gostats.NewNullSink(), false), settings.NewSettings())
 	config.NewRateLimitConfigImpl(allConfigs, statsManager, mergeDomainConfigs)
 }
 
