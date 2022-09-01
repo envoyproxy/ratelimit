@@ -124,6 +124,9 @@ type Settings struct {
 	// Should the ratelimiting be running in Global shadow-mode, ie. never report a ratelimit status, unless a rate was provided from envoy as an override
 	GlobalShadowMode bool `envconfig:"SHADOW_MODE" default:"false"`
 
+	// Allow merging of multiple yaml files referencing the same domain
+	MergeDomainConfigurations bool `envconfig:"MERGE_DOMAIN_CONFIG" default:"false"`
+
 	// OTLP trace settings
 	TracingEnabled           bool   `envconfig:"TRACING_ENABLED" default:"false"`
 	TracingServiceName       string `envconfig:"TRACING_SERVICE_NAME" default:"RateLimit"`

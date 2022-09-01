@@ -75,12 +75,12 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
 	}
 
-	newConfig := this.configLoader.Load(files, statsManager)
+	rlSettings := settings.NewSettings()
+	newConfig := this.configLoader.Load(files, statsManager, rlSettings.MergeDomainConfigurations)
 	this.stats.ConfigLoadSuccess.Inc()
 
 	this.configLock.Lock()
 	this.config = newConfig
-	rlSettings := settings.NewSettings()
 	this.globalShadowMode = rlSettings.GlobalShadowMode
 
 	if rlSettings.RateLimitResponseHeadersEnabled {

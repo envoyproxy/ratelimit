@@ -90,15 +90,15 @@ func (m *MockRateLimitConfigLoader) EXPECT() *MockRateLimitConfigLoaderMockRecor
 }
 
 // Load mocks base method
-func (m *MockRateLimitConfigLoader) Load(arg0 []config.RateLimitConfigToLoad, arg1 stats.Manager) config.RateLimitConfig {
+func (m *MockRateLimitConfigLoader) Load(arg0 []config.RateLimitConfigToLoad, arg1 stats.Manager, arg2 bool) config.RateLimitConfig {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Load", arg0, arg1)
+	ret := m.ctrl.Call(m, "Load", arg0, arg1, arg2)
 	ret0, _ := ret[0].(config.RateLimitConfig)
 	return ret0
 }
 
 // Load indicates an expected call of Load
-func (mr *MockRateLimitConfigLoaderMockRecorder) Load(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockRateLimitConfigLoaderMockRecorder) Load(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockRateLimitConfigLoader)(nil).Load), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockRateLimitConfigLoader)(nil).Load), arg0, arg1, arg2)
 }
