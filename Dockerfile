@@ -17,7 +17,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /go/bin/ratelimit -ldflags="-w -s" -v g
  CGO_ENABLED=0 GOOS=linux go build -o /go/bin/ratelimit_config_check -ldflags="-w -s" -v github.com/replicon/ratelimit/src/config_check_cmd
 
 
-FROM python:3.10-alpine AS final
+FROM python:3.10-alpine3.16 AS final
 
 RUN apk update && apk add --update ca-certificates curl && \
   pip3 install ipaddress awscli && \
