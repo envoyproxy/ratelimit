@@ -78,7 +78,7 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 func (runner *Runner) Run() {
 	s := runner.settings
 	if s.TracingEnabled {
-		tp := trace.InitProductionTraceProvider(s.TracingExporterProtocol, s.TracingServiceName, s.TracingServiceNamespace, s.TracingServiceInstanceId)
+		tp := trace.InitProductionTraceProvider(s.TracingExporterProtocol, s.TracingServiceName, s.TracingServiceNamespace, s.TracingServiceInstanceId, s.TracingSamplingRate)
 		defer func() {
 			if err := tp.Shutdown(context.Background()); err != nil {
 				logger.Printf("Error shutting down tracer provider: %v", err)

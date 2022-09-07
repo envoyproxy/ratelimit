@@ -22,7 +22,7 @@ var (
 	testSpanExporterMu sync.Mutex
 )
 
-func InitProductionTraceProvider(protocol string, serviceName string, serviceNamespace string, serviceInstanceId string) *sdktrace.TracerProvider {
+func InitProductionTraceProvider(protocol string, serviceName string, serviceNamespace string, serviceInstanceId string, samplingRate float64) *sdktrace.TracerProvider {
 	client := createClient(protocol)
 	exporter, err := otlptrace.New(context.Background(), client)
 	if err != nil {
@@ -50,14 +50,21 @@ func InitProductionTraceProvider(protocol string, serviceName string, serviceNam
 	if err != nil {
 		logger.Fatal(err)
 	}
+	// trace if parent contains root span and is sampled
+	// otherwise only trace according to sampling rate
+	// if samplingRate >= 1, the AlwaysSample sampler is used
+	// if samplingRate <= 0, the NeverSampler sampler is used
+	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(samplingRate))
+
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSampler(sampler),
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(resource),
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	logger.Infof("TracerProvider initialized with following parameters: protocol: %s, serviceName: %s, serviceNamespace: %s, serviceInstanceId: %s", protocol, serviceName, serviceNamespace, useServiceInstanceId)
+	logger.Infof("TracerProvider initialized with following parameters: protocol: %s, serviceName: %s, serviceNamespace: %s, serviceInstanceId: %s, samplingRate: %f",
+		protocol, serviceName, serviceNamespace, useServiceInstanceId, samplingRate)
 	return tp
 }
 
