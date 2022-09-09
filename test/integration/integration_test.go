@@ -177,7 +177,8 @@ func TestBasicReloadConfig(t *testing.T) {
 		{Port: 6383},
 	}, func() {
 		t.Run("BasicWithoutWatchRoot", testBasicConfigWithoutWatchRoot(false, 0))
-		t.Run("ReloadWithoutWatchRoot", testBasicConfigReload(false, 0, false))
+		t.Run("ReloadWithoutWatchRoot", testBasicConfigReload(false, 0, false, false))
+		t.Run("ReloadWithoutWatchRootAndWithDeletion", testBasicConfigReload(false, 0, false, true))
 	})
 }
 
@@ -378,9 +379,10 @@ func testBasicConfigWithoutWatchRootWithRedisSentinel(perSecond bool, local_cach
 	return testBasicBaseConfig(s)
 }
 
-func testBasicConfigReload(perSecond bool, local_cache_size int, runtimeWatchRoot bool) func(*testing.T) {
+func testBasicConfigReload(perSecond bool, local_cache_size int, runtimeWatchRoot bool, runtimeWatchDeletion bool) func(*testing.T) {
 	s := makeSimpleRedisSettings(6383, 6380, perSecond, local_cache_size)
 	s.RuntimeWatchRoot = runtimeWatchRoot
+	s.RuntimeWatchDeletion = runtimeWatchDeletion
 	return testConfigReload(s)
 }
 
@@ -696,7 +698,7 @@ func testConfigReload(s settings.Settings) func(*testing.T) {
 		assert.NoError(err)
 
 		runner.GetStatsStore().Flush()
-		loadCount1 := runner.GetStatsStore().NewCounter("ratelimit.service.config_load_success").Value()
+		loadCountBefore := runner.GetStatsStore().NewCounter("ratelimit.service.config_load_success").Value()
 
 		// Copy a new file to config folder to test config reload functionality
 		in, err := os.Open("runtime/current/ratelimit/reload.yaml")
@@ -718,26 +720,10 @@ func testConfigReload(s settings.Settings) func(*testing.T) {
 			panic(err)
 		}
 
-		// Need to wait for config reload to take place and new descriptors to be loaded.
-		// Shouldn't take more than 5 seconds but wait 120 at most just to be safe.
-		wait := 120
-		reloaded := false
-		loadCount2 := uint64(0)
-
-		for i := 0; i < wait; i++ {
-			time.Sleep(1 * time.Second)
-			runner.GetStatsStore().Flush()
-			loadCount2 = runner.GetStatsStore().NewCounter("ratelimit.service.config_load_success").Value()
-
-			// Check that successful loads count has increased before continuing.
-			if loadCount2 > loadCount1 {
-				reloaded = true
-				break
-			}
-		}
+		loadCountAfter, reloaded := waitForConfigReload(runner, loadCountBefore)
 
 		assert.True(reloaded)
-		assert.Greater(loadCount2, loadCount1)
+		assert.Greater(loadCountAfter, loadCountBefore)
 
 		response, err = c.ShouldRateLimit(
 			context.Background(),
@@ -759,5 +745,34 @@ func testConfigReload(s settings.Settings) func(*testing.T) {
 		if err != nil {
 			panic(err)
 		}
+
+		if s.RuntimeWatchDeletion {
+			loadCountBefore = loadCountAfter
+			// If RuntimeWatchDeletion is specified, removal of config files must trigger a reload
+			loadCountAfter, reloaded = waitForConfigReload(runner, loadCountBefore)
+			assert.True(reloaded)
+			assert.Greater(loadCountAfter, loadCountBefore)
+		}
 	}
+}
+
+func waitForConfigReload(runner *runner.Runner, loadCountBefore uint64) (uint64, bool) {
+	// Need to wait for config reload to take place and new descriptors to be loaded.
+	// Shouldn't take more than 5 seconds but wait 120 at most just to be safe.
+	wait := 120
+	reloaded := false
+	loadCountAfter := uint64(0)
+
+	for i := 0; i < wait; i++ {
+		time.Sleep(1 * time.Second)
+		runner.GetStatsStore().Flush()
+		loadCountAfter = runner.GetStatsStore().NewCounter("ratelimit.service.config_load_success").Value()
+
+		// Check that successful loads count has increased before continuing.
+		if loadCountAfter > loadCountBefore {
+			reloaded = true
+			break
+		}
+	}
+	return loadCountAfter, reloaded
 }

@@ -512,6 +512,15 @@ There are two methods for triggering a configuration reload:
 2. Update the contents inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` directly.
 
 The former is the default behavior. To use the latter method, set the `RUNTIME_WATCH_ROOT` environment variable to `false`.
+Having `RUNTIME_WATCH_ROOT` set to `false` will listen for a [default set of filesystem operations](https://github.com/lyft/goruntime/blob/master/loader/directory_refresher.go#L10).
+
+As the default implementation will not force a configuration reload in case of deletion, `RUNTIME_WATCH_DELETION` was introduced.
+If set to `true` the following filesystem operations on configuration files inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` will force a reload of all config files:
+
+- Write
+- Create
+- Chmod
+- Remove
 
 For more information on how runtime works you can read its [README](https://github.com/lyft/goruntime).
 
