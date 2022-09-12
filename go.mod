@@ -12,8 +12,8 @@ require (
 	github.com/gorilla/mux v1.7.4-0.20191121170500-49c01487a141
 	github.com/kavu/go_reuseport v1.2.0
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/lyft/goruntime v0.2.5
-	github.com/lyft/gostats v0.4.0
+	github.com/lyft/goruntime v0.3.0
+	github.com/lyft/gostats v0.4.1
 	github.com/mediocregopher/radix/v3 v3.8.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.7.1
@@ -40,7 +40,7 @@ require (
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/envoyproxy/protoc-gen-validate v0.1.0 // indirect
-	github.com/fsnotify/fsnotify v1.4.7 // indirect
+	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
