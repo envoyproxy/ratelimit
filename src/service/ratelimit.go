@@ -52,7 +52,20 @@ type service struct {
 	globalShadowMode            bool
 }
 
-func (this *service) reloadConfig(statsManager stats.Manager) {
+func (this *service) loadRuntime() []config.RateLimitConfigToLoad {
+	files := []config.RateLimitConfigToLoad{}
+	snapshot := this.runtime.Snapshot()
+	for _, key := range snapshot.Keys() {
+		if this.runtimeWatchRoot && !strings.HasPrefix(key, "config.") {
+			continue
+		}
+
+		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
+	}
+	return files
+}
+
+func (this *service) reloadConfig(statsManager stats.Manager, files []config.RateLimitConfigToLoad) {
 	defer func() {
 		if e := recover(); e != nil {
 			configError, ok := e.(config.RateLimitConfigError)
@@ -64,16 +77,6 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 			logger.Errorf("error loading new configuration from runtime: %s", configError.Error())
 		}
 	}()
-
-	files := []config.RateLimitConfigToLoad{}
-	snapshot := this.runtime.Snapshot()
-	for _, key := range snapshot.Keys() {
-		if this.runtimeWatchRoot && !strings.HasPrefix(key, "config.") {
-			continue
-		}
-
-		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
-	}
 
 	rlSettings := settings.NewSettings()
 	newConfig := this.configLoader.Load(files, statsManager, rlSettings.MergeDomainConfigurations)
@@ -313,7 +316,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, httpProviderChan chan []config.RateLimitConfigToLoad, httpProviderEnabled bool, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -328,18 +331,28 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		customHeaderClock:  clock,
 	}
 
-	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
-
-	newService.reloadConfig(statsManager)
-	go func() {
-		// No exit right now.
-		for {
-			logger.Debugf("waiting for runtime update")
-			<-newService.runtimeUpdateEvent
-			logger.Debugf("got runtime update and reloading config")
-			newService.reloadConfig(statsManager)
-		}
-	}()
+	if httpProviderEnabled {
+		go func() {
+			for {
+				logger.Debugf("waiting for http provider update")
+				configs := <-httpProviderChan
+				logger.Debugf("got http provider update and reloading config")
+				newService.reloadConfig(statsManager, configs)
+			}
+		}()
+	} else {
+		runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
+		newService.reloadConfig(statsManager, newService.loadRuntime())
+		go func() {
+			// No exit right now.
+			for {
+				logger.Debugf("waiting for runtime update")
+				<-newService.runtimeUpdateEvent
+				logger.Debugf("got runtime update and reloading config")
+				newService.reloadConfig(statsManager, newService.loadRuntime())
+			}
+		}()
+	}
 
 	return newService
 }

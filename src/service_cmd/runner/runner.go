@@ -116,11 +116,20 @@ func (runner *Runner) Run() {
 	runner.srv = srv
 	runner.mu.Unlock()
 
+	var httpProviderChan chan []config.RateLimitConfigToLoad
+	if s.HttpProviderEnabled {
+		httpProviderChan = srv.HttpProvider().ConfigChan
+	} else {
+		httpProviderChan = make(chan []config.RateLimitConfigToLoad)
+	}
+
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		createLimiter(srv, s, localCache, runner.statsManager),
 		config.NewRateLimitConfigLoaderImpl(),
 		runner.statsManager,
+		httpProviderChan,
+		s.HttpProviderEnabled,
 		s.RuntimeWatchRoot,
 		utils.NewTimeSourceImpl(),
 		s.GlobalShadowMode,

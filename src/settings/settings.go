@@ -58,6 +58,13 @@ type Settings struct {
 	RuntimeIgnoreDotFiles bool   `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
 	RuntimeWatchRoot      bool   `envconfig:"RUNTIME_WATCH_ROOT" default:"true"`
 
+	// Settings for configuraiton http provider
+	HttpProviderEnabled      bool     `envconfig:"HTTP_PROVIDER_ENABLED" default:"false"`
+	HttpProviderEndpoint     string   `envconfig:"HTTP_PROVIDER_ENDPOINT"`
+	HttpProviderSubpath      []string `envconfig:"HTTP_PROVIDER_SUBPATH" default:""`
+	HttpProviderPollInterval int      `envconfig:"HTTP_PROVIDER_POLL_INTERVAL" default:"10"`
+	HttpProviderPollTimeout  int      `envconfig:"HTTP_PROVIDER_POLL_TIMEOUT" default:"10"`
+
 	// Settings for all cache types
 	ExpirationJitterMaxSeconds int64   `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	LocalCacheSizeInBytes      int     `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`

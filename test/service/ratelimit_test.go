@@ -106,7 +106,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 	// reset exporter before using
 	testSpanExporter.Reset()
 
-	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, true, MockClock{now: int64(2222)}, false)
+	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, make(chan []config.RateLimitConfigToLoad), false, true, MockClock{now: int64(2222)}, false)
 }
 
 // once a ratelimit service is initiated, the package always fetches a default tracer from otel runtime and it can't be change until a new round of test is run. It is necessary to keep a package level exporter in this test package in order to correctly run the tests.
@@ -505,7 +505,7 @@ func TestInitialLoadError(test *testing.T) {
 		func([]config.RateLimitConfigToLoad, stats.Manager, bool) {
 			panic(config.RateLimitConfigError("load error"))
 		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statsManager, true, t.mockClock, false)
+	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statsManager, make(chan []config.RateLimitConfigToLoad), false, true, t.mockClock, false)
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(context.Background(), request)

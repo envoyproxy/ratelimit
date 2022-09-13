@@ -25,6 +25,8 @@
       - [Example 6](#example-6)
       - [Example 7](#example-7)
   - [Loading Configuration](#loading-configuration)
+    - [From local files](#from-local-files)
+    - [From http provider](#from-http-provider)
   - [Log Format](#log-format)
   - [GRPC Keepalive](#grpc-keepalive)
 - [Request Fields](#request-fields)
@@ -492,6 +494,8 @@ descriptors:
 
 ## Loading Configuration
 
+### From local files
+
 The Ratelimit service uses a library written by Lyft called [goruntime](https://github.com/lyft/goruntime) to do configuration loading. Goruntime monitors
 a designated path, and watches for symlink swaps to files in the directory tree to reload configuration files.
 
@@ -524,6 +528,20 @@ For more information on how runtime works you can read its [README](https://gith
 
 By default it is not possible to define multiple configuration files within `RUNTIME_SUBDIRECTORY` referencing the same domain.
 To enable this behavior set `MERGE_DOMAIN_CONFIG` to `true`.
+
+### From http provider
+
+The Ratelimit service allows to load configuration from a http server. The endpoint can be configured via the settings package with the following environment variables:
+
+```
+HTTP_PROVIDER_ENABLED default:"false"
+HTTP_PROVIDER_ENDPOINT
+HTTP_PROVIDER_SUBPATH default:""
+HTTP_PROVIDER_POLL_INTERVAL default:"10"
+HTTP_PROVIDER_POLL_TIMEOUT default:"10"
+```
+
+Configuration will be reloaded intervally according to the value of `HTTP_POLL_INTERVAL` (second). `HTTP_PROVIDER_SUBPATH` is an array which allows you to have multiple endpoints for different config files.
 
 ## Log Format
 

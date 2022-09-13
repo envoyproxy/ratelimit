@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -34,6 +35,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
+	"github.com/envoyproxy/ratelimit/src/httpprovider"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
 
@@ -60,6 +62,7 @@ type server struct {
 	store         gostats.Store
 	scope         gostats.Scope
 	runtime       loader.IFace
+	httpProvider  *httpprovider.HttpProvider
 	debugListener serverDebugListener
 	httpServer    *http.Server
 	listenerMu    sync.Mutex
@@ -151,6 +154,10 @@ func (server *server) Start() {
 		logger.Infof("Failed to start debug server '%+v'", err)
 	}()
 
+	if server.httpProvider != nil {
+		go server.httpProvider.Provide()
+	}
+
 	go server.startGrpc()
 
 	server.handleGracefulShutdown()
@@ -186,6 +193,10 @@ func (server *server) Scope() gostats.Scope {
 
 func (server *server) Runtime() loader.IFace {
 	return server.runtime
+}
+
+func (server *server) HttpProvider() *httpprovider.HttpProvider {
+	return server.httpProvider
 }
 
 func NewServer(s settings.Settings, name string, statsManager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) Server {
@@ -234,36 +245,42 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
 	}
 
-	// setup runtime
-	loaderOpts := make([]loader.Option, 0, 1)
-	if s.RuntimeIgnoreDotFiles {
-		loaderOpts = append(loaderOpts, loader.IgnoreDotFiles)
+	// setup configuration getter
+	if s.HttpProviderEnabled {
+		// setup http provider
+		ret.httpProvider = httpprovider.NewHttpProvider(s.HttpProviderEndpoint, s.HttpProviderSubpath, time.Duration(s.HttpProviderPollInterval)*time.Second, time.Duration(s.HttpProviderPollTimeout)*time.Second)
 	} else {
-		loaderOpts = append(loaderOpts, loader.AllowDotFiles)
-	}
-	var err error
-	if s.RuntimeWatchRoot {
-		ret.runtime, err = loader.New2(
-			s.RuntimePath,
-			s.RuntimeSubdirectory,
-			ret.store.ScopeWithTags("runtime", s.ExtraTags),
-			&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
-			loaderOpts...)
-	} else {
-		directoryRefresher := &loader.DirectoryRefresher{}
-		// Adding loader.Remove to the default set of goruntime's FileSystemOps.
-		directoryRefresher.WatchFileSystemOps(loader.Remove, loader.Write, loader.Create, loader.Chmod)
+		// setup runtime
+		loaderOpts := make([]loader.Option, 0, 1)
+		if s.RuntimeIgnoreDotFiles {
+			loaderOpts = append(loaderOpts, loader.IgnoreDotFiles)
+		} else {
+			loaderOpts = append(loaderOpts, loader.AllowDotFiles)
+		}
+		var err error
+		if s.RuntimeWatchRoot {
+			ret.runtime, err = loader.New2(
+				s.RuntimePath,
+				s.RuntimeSubdirectory,
+				ret.store.ScopeWithTags("runtime", s.ExtraTags),
+				&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
+				loaderOpts...)
+		} else {
+			directoryRefresher := &loader.DirectoryRefresher{}
+			// Adding loader.Remove to the default set of goruntime's FileSystemOps.
+			directoryRefresher.WatchFileSystemOps(loader.Remove, loader.Write, loader.Create, loader.Chmod)
 
-		ret.runtime, err = loader.New2(
-			filepath.Join(s.RuntimePath, s.RuntimeSubdirectory),
-			"config",
-			ret.store.ScopeWithTags("runtime", s.ExtraTags),
-			directoryRefresher,
-			loaderOpts...)
-	}
+			ret.runtime, err = loader.New2(
+				filepath.Join(s.RuntimePath, s.RuntimeSubdirectory),
+				"config",
+				ret.store.ScopeWithTags("runtime", s.ExtraTags),
+				directoryRefresher,
+				loaderOpts...)
+		}
 
-	if err != nil {
-		panic(err)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// setup http router
@@ -331,6 +348,9 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 
 func (server *server) Stop() {
 	server.grpcServer.GracefulStop()
+	if server.httpProvider != nil {
+		server.httpProvider.Stop()
+	}
 	server.listenerMu.Lock()
 	defer server.listenerMu.Unlock()
 	if server.debugListener.listener != nil {

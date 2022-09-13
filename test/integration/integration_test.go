@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -92,6 +94,30 @@ func TestBasicConfig(t *testing.T) {
 		cacheSettings := makeSimpleRedisSettings(6383, 6380, false, 0)
 		cacheSettings.CacheKeyPrefix = "prefix:"
 		t.Run("WithoutPerSecondRedisWithCachePrefix", testBasicConfig(cacheSettings))
+	})
+}
+
+func TestBasicConfig_HttpProvider(t *testing.T) {
+	basicConfig, _ := os.ReadFile("runtime/current/ratelimit/config/basic.yaml")
+	antherConfig, _ := os.ReadFile("runtime/current/ratelimit/config/another.yaml")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/basic", func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(http.StatusOK)
+		res.Write(basicConfig)
+	})
+	mux.HandleFunc("/another", func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(http.StatusOK)
+		res.Write(antherConfig)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6383},
+		{Port: 6380},
+	}, func() {
+		t.Run("WithHttpProviderEnabled", testBasicConfigFromHttpProvider(6383, 6380, server.URL))
 	})
 }
 
@@ -304,6 +330,16 @@ func testBasicConfigAuthWithRedisCluster(perSecond bool, local_cache_size int) f
 	s.BackendType = "redis"
 
 	configRedisCluster(&s)
+
+	return testBasicBaseConfig(s)
+}
+
+func testBasicConfigFromHttpProvider(redisPort int, perSecondPort int, url string) func(*testing.T) {
+	s := makeSimpleRedisSettings(redisPort, perSecondPort, false, 0)
+
+	s.HttpProviderEnabled = true
+	s.HttpProviderEndpoint = url
+	s.HttpProviderSubpath = []string{"basic", "another"}
 
 	return testBasicBaseConfig(s)
 }
