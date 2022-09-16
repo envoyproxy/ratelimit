@@ -1,6 +1,7 @@
 package redis_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -76,6 +77,32 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 			redisSrv.RequireAuth(redisAuth)
 
 			assert.NotPanics(t, func() {
+				mkRedisClient(redisAuth, redisSrv.Addr())
+			})
+		})
+
+		t.Run("auth user pass", func(t *testing.T) {
+			redisSrv := mustNewRedisServer()
+			defer redisSrv.Close()
+
+			user, pass := "test-user", "test-pass"
+			redisSrv.RequireUserAuth(user, pass)
+
+			redisAuth := fmt.Sprintf("%s:%s", user, pass)
+			assert.NotPanics(t, func() {
+				mkRedisClient(redisAuth, redisSrv.Addr())
+			})
+		})
+
+		t.Run("auth user pass fail", func(t *testing.T) {
+			redisSrv := mustNewRedisServer()
+			defer redisSrv.Close()
+
+			user, pass := "test-user", "test-pass"
+			redisSrv.RequireUserAuth(user, pass)
+
+			redisAuth := fmt.Sprintf("%s:invalid-password", user)
+			assert.PanicsWithError(t, "WRONGPASS invalid username-password pair", func() {
 				mkRedisClient(redisAuth, redisSrv.Addr())
 			})
 		})
