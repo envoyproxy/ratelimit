@@ -77,9 +77,14 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		}
 
 		if auth != "" {
-			logger.Warnf("enabling authentication to redis on %s", maskedUrl)
-
-			dialOpts = append(dialOpts, radix.DialAuthPass(auth))
+			user, pass, found := strings.Cut(auth, ":")
+			if found {
+				logger.Warnf("enabling authentication to redis on %s with user %s", maskedUrl, user)
+				dialOpts = append(dialOpts, radix.DialAuthUser(user, pass))
+			} else {
+				logger.Warnf("enabling authentication to redis on %s without user", maskedUrl)
+				dialOpts = append(dialOpts, radix.DialAuthPass(auth))
+			}
 		}
 
 		return radix.Dial(network, addr, dialOpts...)
