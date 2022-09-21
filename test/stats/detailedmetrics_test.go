@@ -3,6 +3,10 @@ package stats
 import (
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	gostats "github.com/lyft/gostats"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/envoyproxy/ratelimit/src/config"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	settings "github.com/envoyproxy/ratelimit/src/settings"
@@ -12,9 +16,6 @@ import (
 	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
 	mock_loader "github.com/envoyproxy/ratelimit/test/mocks/runtime/loader"
 	mock_snapshot "github.com/envoyproxy/ratelimit/test/mocks/runtime/snapshot"
-	"github.com/golang/mock/gomock"
-	gostats "github.com/lyft/gostats"
-	"github.com/stretchr/testify/assert"
 )
 
 type rateLimitServiceTestSuite struct {
@@ -77,6 +78,7 @@ func TestDetailedMetricsTotalHits(test *testing.T) {
 	assert.Equal(test, uint64(11), t.statsManager.NewDetailedStats(detailedKey1).TotalHits.Value())
 	assert.Equal(test, uint64(22), t.statsManager.NewDetailedStats(detailedKey2).TotalHits.Value())
 }
+
 func TestDetailedMetricsNearLimit(test *testing.T) {
 	t := commonSetup(test, true)
 	defer t.controller.Finish()
@@ -92,6 +94,7 @@ func TestDetailedMetricsNearLimit(test *testing.T) {
 	assert.Equal(test, uint64(11), t.statsManager.NewDetailedStats(detailedKey1).NearLimit.Value())
 	assert.Equal(test, uint64(22), t.statsManager.NewDetailedStats(detailedKey2).NearLimit.Value())
 }
+
 func TestDetailedMetricsOverLimit(test *testing.T) {
 	t := commonSetup(test, true)
 	defer t.controller.Finish()
@@ -107,6 +110,7 @@ func TestDetailedMetricsOverLimit(test *testing.T) {
 	assert.Equal(test, uint64(11), t.statsManager.NewDetailedStats(detailedKey1).OverLimit.Value())
 	assert.Equal(test, uint64(22), t.statsManager.NewDetailedStats(detailedKey2).OverLimit.Value())
 }
+
 func TestDetailedMetricsOverLimitWithLocalCache(test *testing.T) {
 	t := commonSetup(test, true)
 	defer t.controller.Finish()
@@ -122,6 +126,7 @@ func TestDetailedMetricsOverLimitWithLocalCache(test *testing.T) {
 	assert.Equal(test, uint64(11), t.statsManager.NewDetailedStats(detailedKey1).OverLimitWithLocalCache.Value())
 	assert.Equal(test, uint64(22), t.statsManager.NewDetailedStats(detailedKey2).OverLimitWithLocalCache.Value())
 }
+
 func TestDetailedMetricsTurnedOff(test *testing.T) {
 	t := commonSetup(test, false)
 	defer t.controller.Finish()
