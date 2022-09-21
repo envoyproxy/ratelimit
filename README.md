@@ -513,7 +513,17 @@ There are two methods for triggering a configuration reload:
 
 The former is the default behavior. To use the latter method, set the `RUNTIME_WATCH_ROOT` environment variable to `false`.
 
+The following filesystem operations on configuration files inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` will force a reload of all config files:
+
+- Write
+- Create
+- Chmod
+- Remove
+
 For more information on how runtime works you can read its [README](https://github.com/lyft/goruntime).
+
+By default it is not possible to define multiple configuration files within `RUNTIME_SUBDIRECTORY` referencing the same domain.
+To enable this behavior set `MERGE_DOMAIN_CONFIG` to `true`.
 
 ## Log Format
 
@@ -586,7 +596,7 @@ There is a global shadow-mode which can make it easier to introduce rate limitin
 
 The global shadow mode is configured with an environment variable
 
-Setting environment variable`SHADOW_MODE` to `true` will enable the feature.
+Setting environment variable `SHADOW_MODE` to `true` will enable the feature.
 
 ## Statistics
 

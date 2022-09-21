@@ -142,7 +142,7 @@ docker_multiarch_push: docker_multiarch_image
 
 .PHONY: integration_tests
 integration_tests:
-	docker-compose --project-dir $(PWD)  -f integration-test/docker-compose-integration-test.yml up --build  --exit-code-from tester
+	docker-compose --project-directory $(PWD)  -f integration-test/docker-compose-integration-test.yml up --build  --exit-code-from tester
 
 .PHONY: precommit_install
 precommit_install:
