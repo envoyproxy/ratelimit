@@ -1,5 +1,8 @@
 #!/bin/sh
 
+mkdir -p /extra_metrics
+/usr/local/bin/python3 /metrics/main.py >/dev/null 2>&1 &
+
 cd /srv/runtime_data/current
 
 while true
@@ -12,6 +15,7 @@ do
     --blacklist data/${RLS_BLACKLIST_DIR} \
     --override data/${RLS_OVERRIDE_DIR} \
     --output /srv/runtime_data/current/validate_config/new_config.yaml \
+    --node-exporter-textfile /extra_metrics \
     --swimlane ${SWIMLANE} > /dev/null
 
   [ $? -eq 0 ] && mv validate_config/new_config.yaml config/config.yaml
