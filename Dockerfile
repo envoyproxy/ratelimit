@@ -28,4 +28,5 @@ COPY --from=build /go/bin/ratelimit /bin/ratelimit
 COPY --from=build /go/bin/ratelimit_config_check /bin/ratelimit_config_check
 COPY entrypoint.sh /entrypoint.sh
 COPY sync_config.sh /sync_config.sh
+COPY metrics /metrics
 ENTRYPOINT [ "/entrypoint.sh" ]
