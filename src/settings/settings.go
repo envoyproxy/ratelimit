@@ -135,6 +135,8 @@ type Settings struct {
 	// can only be http or gRPC
 	TracingExporterProtocol string `envconfig:"TRACING_EXPORTER_PROTOCOL" default:"http"`
 	// detailed setting of exporter should refer to https://opentelemetry.io/docs/reference/specification/protocol/exporter/, e.g. OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_CERTIFICATE, OTEL_EXPORTER_OTLP_TIMEOUT
+	// TracingSamplingRate defaults to 1 which amounts to using the `AlwaysSample` sampler
+	TracingSamplingRate float64 `envconfig:"TRACING_SAMPLING_RATE" default:"1"`
 }
 
 type Option func(*Settings)

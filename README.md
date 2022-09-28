@@ -845,6 +845,7 @@ The following environment variables control the tracing feature:
 1. `TRACING_SERVICE_NAMESPACE` - Controls the service namespace appears in tracing span. The default value is empty.
 1. `TRACING_SERVICE_INSTANCE_ID` - Controls the service instance id appears in tracing span. It is recommended to put the pod name or container name in this field. The default value is a randomly generated version 4 uuid if unspecified.
 1. Other fields in [OTLP Exporter Documentation](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.8.0/specification/protocol/exporter.md). These section needs to be correctly configured in order to enable the exporter to export span to the correct destination.
+1. `TRACING_SAMPLING_RATE` - Controls the sampling rate, defaults to 1 which means always sample. Valid range: 0.0-1.0. For high volume services, adjusting the sampling rate is recommended.
 
 # mTLS
 
