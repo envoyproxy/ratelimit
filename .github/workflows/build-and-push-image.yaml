@@ -6,7 +6,7 @@ on:
 jobs:
   build-and-push:
     name: Build and push Docker image to ACR
-    runs-on: self-hosted
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
 
