@@ -12,6 +12,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/metrics"
 	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/trace"
+	"github.com/microsoft/ApplicationInsights-Go/appinsights"
 
 	gostats "github.com/lyft/gostats"
 
@@ -116,6 +117,13 @@ func (runner *Runner) Run() {
 	runner.srv = srv
 	runner.mu.Unlock()
 
+	var aiClient *appinsights.TelemetryClient
+	// setup application insight client
+	if s.ApplicationInsightInstrumentationKey != "" {
+		client := appinsights.NewTelemetryClient(s.ApplicationInsightInstrumentationKey)
+		aiClient = &client
+	}
+
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		createLimiter(srv, s, localCache, runner.statsManager),
@@ -124,6 +132,7 @@ func (runner *Runner) Run() {
 		s.RuntimeWatchRoot,
 		utils.NewTimeSourceImpl(),
 		s.GlobalShadowMode,
+		aiClient,
 	)
 
 	srv.AddDebugHttpEndpoint(

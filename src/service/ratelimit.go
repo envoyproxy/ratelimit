@@ -13,6 +13,7 @@ import (
 
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/microsoft/ApplicationInsights-Go/appinsights"
 
 	"github.com/envoyproxy/ratelimit/src/utils"
 
@@ -50,6 +51,7 @@ type service struct {
 	customHeaderResetHeader     string
 	customHeaderClock           utils.TimeSource
 	globalShadowMode            bool
+	aiClient                    *appinsights.TelemetryClient
 }
 
 func (this *service) reloadConfig(statsManager stats.Manager) {
@@ -234,6 +236,13 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	response.OverallCode = finalCode
+
+	for _, descripter := range request.Descriptors {
+		for _, entry := range descripter.Entries {
+			(*this.aiClient).TrackMetric(fmt.Sprintf("%s_%s", entry.Key, entry.Value), float64(request.HitsAddend))
+		}
+	}
+
 	return response
 }
 
@@ -313,7 +322,8 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
-	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
+	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource,
+	shadowMode bool, aiClient *appinsights.TelemetryClient) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
@@ -326,6 +336,7 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		runtimeWatchRoot:   runtimeWatchRoot,
 		globalShadowMode:   shadowMode,
 		customHeaderClock:  clock,
+		aiClient:           aiClient,
 	}
 
 	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
