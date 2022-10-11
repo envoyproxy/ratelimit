@@ -180,6 +180,10 @@ func (server *server) startGrpc() {
 	server.grpcServer.Serve(lis)
 }
 
+func (server *server) Store() gostats.Store {
+	return server.store
+}
+
 func (server *server) Scope() gostats.Scope {
 	return server.scope
 }

@@ -38,6 +38,7 @@ type RateLimitServiceServer interface {
 type service struct {
 	runtime                     loader.IFace
 	configLock                  sync.RWMutex
+	configUpdateEvent           <-chan *config.ConfigUpdateEvent
 	configLoader                config.RateLimitConfigLoader
 	config                      config.RateLimitConfig
 	runtimeUpdateEvent          chan int
@@ -52,35 +53,24 @@ type service struct {
 	globalShadowMode            bool
 }
 
-func (this *service) reloadConfig(statsManager stats.Manager) {
-	defer func() {
-		if e := recover(); e != nil {
-			configError, ok := e.(config.RateLimitConfigError)
-			if !ok {
-				panic(e)
-			}
-
-			this.stats.ConfigLoadError.Inc()
-			logger.Errorf("error loading new configuration from runtime: %s", configError.Error())
-		}
-	}()
-
-	files := []config.RateLimitConfigToLoad{}
-	snapshot := this.runtime.Snapshot()
-	for _, key := range snapshot.Keys() {
-		if this.runtimeWatchRoot && !strings.HasPrefix(key, "config.") {
-			continue
+func (this *service) reloadConfig(updateEvent *config.ConfigUpdateEvent) {
+	if err := updateEvent.Err; err != nil {
+		configError, ok := err.(config.RateLimitConfigError)
+		if !ok {
+			panic(err)
 		}
 
-		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
+		this.stats.ConfigLoadError.Inc()
+		logger.Errorf("error loading new configuration from runtime: %s", configError.Error())
+		return
 	}
 
-	rlSettings := settings.NewSettings()
-	newConfig := this.configLoader.Load(files, statsManager, rlSettings.MergeDomainConfigurations)
 	this.stats.ConfigLoadSuccess.Inc()
 
 	this.configLock.Lock()
-	this.config = newConfig
+	this.config = updateEvent.Config
+
+	rlSettings := settings.NewSettings()
 	this.globalShadowMode = rlSettings.GlobalShadowMode
 
 	if rlSettings.RateLimitResponseHeadersEnabled {
@@ -312,12 +302,13 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 	return this.config
 }
 
-func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
+func NewService(runtime loader.IFace, cache limiter.RateLimitCache, configProvider config.RateLimitConfigProvider,
 	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
 
 	newService := &service{
 		runtime:            runtime,
 		configLock:         sync.RWMutex{},
+		configUpdateEvent:  configProvider.ConfigUpdateEvent(),
 		configLoader:       configLoader,
 		config:             nil,
 		runtimeUpdateEvent: make(chan int),
@@ -328,18 +319,27 @@ func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 		customHeaderClock:  clock,
 	}
 
-	runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
-
-	newService.reloadConfig(statsManager)
 	go func() {
-		// No exit right now.
 		for {
-			logger.Debugf("waiting for runtime update")
-			<-newService.runtimeUpdateEvent
-			logger.Debugf("got runtime update and reloading config")
-			newService.reloadConfig(statsManager)
+			logger.Debugf("waiting for config update")
+			updateEvent := <-newService.configUpdateEvent
+			logger.Debugf("got config update and reloading config")
+			newService.reloadConfig(updateEvent)
 		}
 	}()
+
+	// runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
+
+	// newService.reloadConfig(statsManager)
+	// go func() {
+	// 	// No exit right now.
+	// 	for {
+	// 		logger.Debugf("waiting for runtime update")
+	// 		<-newService.runtimeUpdateEvent
+	// 		logger.Debugf("got runtime update and reloading config")
+	// 		newService.reloadConfig(statsManager)
+	// 	}
+	// }()
 
 	return newService
 }

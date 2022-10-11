@@ -19,6 +19,11 @@ type Server interface {
 	Start()
 
 	/**
+	 * Returns the root store of the stats tree for the server
+	 */
+	Store() stats.Store
+
+	/**
 	 * Returns the root of the stats tree for the server
 	 */
 	Scope() stats.Scope
