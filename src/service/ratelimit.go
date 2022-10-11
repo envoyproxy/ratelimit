@@ -38,7 +38,7 @@ type RateLimitServiceServer interface {
 type service struct {
 	runtime                     loader.IFace
 	configLock                  sync.RWMutex
-	configUpdateEvent           <-chan *config.ConfigUpdateEvent
+	configUpdateEvent           <-chan config.ConfigUpdateEvent
 	configLoader                config.RateLimitConfigLoader
 	config                      config.RateLimitConfig
 	runtimeUpdateEvent          chan int
@@ -53,8 +53,9 @@ type service struct {
 	globalShadowMode            bool
 }
 
-func (this *service) reloadConfig(updateEvent *config.ConfigUpdateEvent) {
-	if err := updateEvent.Err; err != nil {
+func (this *service) reloadConfig(updateEvent config.ConfigUpdateEvent) {
+	newConfig, err := updateEvent.GetConfig()
+	if err != nil {
 		configError, ok := err.(config.RateLimitConfigError)
 		if !ok {
 			panic(err)
@@ -68,7 +69,7 @@ func (this *service) reloadConfig(updateEvent *config.ConfigUpdateEvent) {
 	this.stats.ConfigLoadSuccess.Inc()
 
 	this.configLock.Lock()
-	this.config = updateEvent.Config
+	this.config = newConfig
 
 	rlSettings := settings.NewSettings()
 	this.globalShadowMode = rlSettings.GlobalShadowMode

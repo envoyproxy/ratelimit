@@ -63,6 +63,9 @@ type rateLimitServiceTestSuite struct {
 	runtime               *mock_loader.MockIFace
 	snapshot              *mock_snapshot.MockIFace
 	cache                 *mock_limiter.MockRateLimitCache
+	configProvider        *mock_config.MockRateLimitConfigProvider
+	configUpdateEventChan chan config.ConfigUpdateEvent
+	configUpdateEvent     *mock_config.MockConfigUpdateEvent
 	configLoader          *mock_config.MockRateLimitConfigLoader
 	config                *mock_config.MockRateLimitConfig
 	runtimeUpdateCallback chan<- int
@@ -81,10 +84,13 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret := rateLimitServiceTestSuite{}
 	ret.assert = assert.New(t)
 	ret.controller = gomock.NewController(t)
-	ret.runtime = mock_loader.NewMockIFace(ret.controller)
-	ret.snapshot = mock_snapshot.NewMockIFace(ret.controller)
+	// ret.runtime = mock_loader.NewMockIFace(ret.controller)
+	// ret.snapshot = mock_snapshot.NewMockIFace(ret.controller)
 	ret.cache = mock_limiter.NewMockRateLimitCache(ret.controller)
-	ret.configLoader = mock_config.NewMockRateLimitConfigLoader(ret.controller)
+	ret.configProvider = mock_config.NewMockRateLimitConfigProvider(ret.controller)
+	ret.configUpdateEventChan = make(chan config.ConfigUpdateEvent)
+	ret.configUpdateEvent = mock_config.NewMockConfigUpdateEvent(ret.controller)
+	// ret.configLoader = mock_config.NewMockRateLimitConfigLoader(ret.controller)
 	ret.config = mock_config.NewMockRateLimitConfig(ret.controller)
 	ret.statStore = gostats.NewStore(gostats.NewNullSink(), false)
 	ret.statsManager = mock_stats.NewMockStatManager(ret.statStore)
@@ -92,21 +98,31 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 }
 
 func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitServiceServer {
-	this.runtime.EXPECT().AddUpdateCallback(gomock.Any()).Do(
-		func(callback chan<- int) {
-			this.runtimeUpdateCallback = callback
-		})
-	this.runtime.EXPECT().Snapshot().Return(this.snapshot).MinTimes(1)
-	this.snapshot.EXPECT().Keys().Return([]string{"foo", "config.basic_config"}).MinTimes(1)
-	this.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
-	this.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}},
-		gomock.Any(), gomock.Any()).Return(this.config)
+	barrier := newBarrier()
+	// this.runtime.EXPECT().AddUpdateCallback(gomock.Any()).Do(
+	// 	func(callback chan<- int) {
+	// 		this.runtimeUpdateCallback = callback
+	// 	})
+	// this.runtime.EXPECT().Snapshot().Return(this.snapshot).MinTimes(1)
+	// this.snapshot.EXPECT().Keys().Return([]string{"foo", "config.basic_config"}).MinTimes(1)
+	// this.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
+	this.configProvider.EXPECT().ConfigUpdateEvent().Return(this.configUpdateEventChan).Times(1)
+	this.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return this.config, nil
+	})
+	go func() { this.configUpdateEventChan <- this.configUpdateEvent }() // initial config update from provider
+
+	// this.configLoader.EXPECT().Load(
+	// 	[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}},
+	// 	gomock.Any(), gomock.Any()).Return(this.config)
 
 	// reset exporter before using
 	testSpanExporter.Reset()
 
-	return ratelimit.NewService(this.runtime, this.cache, this.configLoader, this.statsManager, true, MockClock{now: int64(2222)}, false)
+	svc := ratelimit.NewService(this.runtime, this.cache, this.configProvider, this.configLoader, this.statsManager, true, MockClock{now: int64(2222)}, false)
+	barrier.wait()
+	return svc
 }
 
 // once a ratelimit service is initiated, the package always fetches a default tracer from otel runtime and it can't be change until a new round of test is run. It is necessary to keep a package level exporter in this test package in order to correctly run the tests.
@@ -116,6 +132,7 @@ func TestService(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
 	service := t.setupBasicService()
+	barrier := newBarrier()
 
 	// First request, config should be loaded.
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
@@ -133,12 +150,16 @@ func TestService(test *testing.T) {
 		response)
 	t.assert.Nil(err)
 
-	// Force a config reload.
-	barrier := newBarrier()
-	t.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Manager, bool) { barrier.signal() }).Return(t.config)
-	t.runtimeUpdateCallback <- 1
+	// Force a config reload - config event from config provider.
+	// t.configLoader.EXPECT().Load(
+	// 	[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
+	// 	func([]config.RateLimitConfigToLoad, stats.Manager, bool) { barrier.signal() }).Return(t.config)
+	// t.runtimeUpdateCallback <- 1
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
 	barrier.wait()
 
 	// Different request.
@@ -169,14 +190,19 @@ func TestService(test *testing.T) {
 	t.assert.Nil(err)
 
 	// Config load failure.
-	t.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Manager, bool) {
-			defer barrier.signal()
-			panic(config.RateLimitConfigError("load error"))
-		})
-	t.runtimeUpdateCallback <- 1
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return nil, config.RateLimitConfigError("load error")
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
 	barrier.wait()
+	// t.configLoader.EXPECT().Load(
+	// 	[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
+	// 	func([]config.RateLimitConfigToLoad, stats.Manager, bool) {
+	// 		defer barrier.signal()
+	// 		panic(config.RateLimitConfigError("load error"))
+	// 	})
+	// t.runtimeUpdateCallback <- 1
 
 	// Config should still be valid. Also make sure order does not affect results.
 	limits = []*config.RateLimit{
@@ -222,11 +248,17 @@ func TestServiceGlobalShadowMode(test *testing.T) {
 
 	// Force a config reload.
 	barrier := newBarrier()
-	t.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Manager, bool) { barrier.signal() }).Return(t.config)
-	t.runtimeUpdateCallback <- 1
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
 	barrier.wait()
+	// t.configLoader.EXPECT().Load(
+	// 	[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
+	// 	func([]config.RateLimitConfigToLoad, stats.Manager, bool) { barrier.signal() }).Return(t.config)
+	// t.runtimeUpdateCallback <- 1
+	// barrier.wait()
 
 	// Make a request.
 	request := common.NewRateLimitRequest(
@@ -356,11 +388,17 @@ func TestServiceWithCustomRatelimitHeaders(test *testing.T) {
 
 	// Config reload.
 	barrier := newBarrier()
-	t.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Manager, bool) { barrier.signal() }).Return(t.config)
-	t.runtimeUpdateCallback <- 1
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
 	barrier.wait()
+	// t.configLoader.EXPECT().Load(
+	// 	[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
+	// 	func([]config.RateLimitConfigToLoad, stats.Manager, bool) { barrier.signal() }).Return(t.config)
+	// t.runtimeUpdateCallback <- 1
+	// barrier.wait()
 
 	// Make request
 	request := common.NewRateLimitRequest(
@@ -408,11 +446,17 @@ func TestServiceWithDefaultRatelimitHeaders(test *testing.T) {
 
 	// Config reload.
 	barrier := newBarrier()
-	t.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Manager, bool) { barrier.signal() }).Return(t.config)
-	t.runtimeUpdateCallback <- 1
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
 	barrier.wait()
+	// t.configLoader.EXPECT().Load(
+	// 	[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
+	// 	func([]config.RateLimitConfigToLoad, stats.Manager, bool) { barrier.signal() }).Return(t.config)
+	// t.runtimeUpdateCallback <- 1
+	// barrier.wait()
 
 	// Make request
 	request := common.NewRateLimitRequest(
@@ -495,17 +539,25 @@ func TestInitialLoadError(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
 
-	t.runtime.EXPECT().AddUpdateCallback(gomock.Any()).Do(
-		func(callback chan<- int) { t.runtimeUpdateCallback = callback })
-	t.runtime.EXPECT().Snapshot().Return(t.snapshot).MinTimes(1)
-	t.snapshot.EXPECT().Keys().Return([]string{"foo", "config.basic_config"}).MinTimes(1)
-	t.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
-	t.configLoader.EXPECT().Load(
-		[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
-		func([]config.RateLimitConfigToLoad, stats.Manager, bool) {
-			panic(config.RateLimitConfigError("load error"))
-		})
-	service := ratelimit.NewService(t.runtime, t.cache, t.configLoader, t.statsManager, true, t.mockClock, false)
+	// t.runtime.EXPECT().AddUpdateCallback(gomock.Any()).Do(
+	// 	func(callback chan<- int) { t.runtimeUpdateCallback = callback })
+	// t.runtime.EXPECT().Snapshot().Return(t.snapshot).MinTimes(1)
+	// t.snapshot.EXPECT().Keys().Return([]string{"foo", "config.basic_config"}).MinTimes(1)
+	// t.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
+	// t.configLoader.EXPECT().Load(
+	// 	[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
+	// 	func([]config.RateLimitConfigToLoad, stats.Manager, bool) {
+	// 		panic(config.RateLimitConfigError("load error"))
+	// 	})
+	t.configProvider.EXPECT().ConfigUpdateEvent().Return(t.configUpdateEventChan).Times(1)
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return nil, config.RateLimitConfigError("load error")
+	})
+	go func() { t.configUpdateEventChan <- t.configUpdateEvent }() // initial config update from provider
+	service := ratelimit.NewService(t.runtime, t.cache, t.configProvider, t.configLoader, t.statsManager, true, t.mockClock, false)
+	barrier.wait()
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
 	response, err := service.ShouldRateLimit(context.Background(), request)

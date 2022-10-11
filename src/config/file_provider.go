@@ -4,17 +4,18 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/envoyproxy/ratelimit/src/settings"
-	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/lyft/goruntime/loader"
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
+
+	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/stats"
 )
 
 type FileProvider struct {
 	settings              settings.Settings
 	loader                RateLimitConfigLoader
-	configUpdateEventChan chan *ConfigUpdateEvent
+	configUpdateEventChan chan ConfigUpdateEvent
 	runtime               loader.IFace
 	runtimeUpdateEvent    chan int
 	runtimeWatchRoot      bool
@@ -22,7 +23,7 @@ type FileProvider struct {
 	statsManager          stats.Manager
 }
 
-func (p *FileProvider) ConfigUpdateEvent() <-chan *ConfigUpdateEvent {
+func (p *FileProvider) ConfigUpdateEvent() <-chan ConfigUpdateEvent {
 	return p.configUpdateEventChan
 }
 
@@ -44,7 +45,7 @@ func (p *FileProvider) watch() {
 func (p *FileProvider) sendEvent() {
 	defer func() {
 		if e := recover(); e != nil {
-			p.configUpdateEventChan <- &ConfigUpdateEvent{Err: e}
+			p.configUpdateEventChan <- &ConfigUpdateEventImpl{err: e}
 		}
 	}()
 
@@ -61,7 +62,7 @@ func (p *FileProvider) sendEvent() {
 	rlSettings := settings.NewSettings()
 	newConfig := p.loader.Load(files, p.statsManager, rlSettings.MergeDomainConfigurations)
 
-	p.configUpdateEventChan <- &ConfigUpdateEvent{Config: newConfig}
+	p.configUpdateEventChan <- &ConfigUpdateEventImpl{config: newConfig}
 }
 
 func (p *FileProvider) setupRuntime() {
@@ -101,7 +102,7 @@ func NewFileProvider(settings settings.Settings, rootStore gostats.Store, statsM
 	p := &FileProvider{
 		settings:              settings,
 		loader:                NewRateLimitConfigLoaderImpl(),
-		configUpdateEventChan: make(chan *ConfigUpdateEvent),
+		configUpdateEventChan: make(chan ConfigUpdateEvent),
 		runtimeUpdateEvent:    make(chan int),
 		runtimeWatchRoot:      settings.RuntimeWatchRoot,
 		rootStore:             rootStore,
