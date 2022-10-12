@@ -1,4 +1,4 @@
-package config
+package provider
 
 import (
 	"path/filepath"
@@ -8,13 +8,14 @@ import (
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 
+	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/stats"
 )
 
 type FileProvider struct {
 	settings              settings.Settings
-	loader                RateLimitConfigLoader
+	loader                config.RateLimitConfigLoader
 	configUpdateEventChan chan ConfigUpdateEvent
 	runtime               loader.IFace
 	runtimeUpdateEvent    chan int
@@ -49,14 +50,14 @@ func (p *FileProvider) sendEvent() {
 		}
 	}()
 
-	files := []RateLimitConfigToLoad{}
+	files := []config.RateLimitConfigToLoad{}
 	snapshot := p.runtime.Snapshot()
 	for _, key := range snapshot.Keys() {
 		if p.runtimeWatchRoot && !strings.HasPrefix(key, "config.") {
 			continue
 		}
 
-		files = append(files, RateLimitConfigToLoad{key, snapshot.Get(key)})
+		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
 	}
 
 	rlSettings := settings.NewSettings()
@@ -101,7 +102,7 @@ func (p *FileProvider) setupRuntime() {
 func NewFileProvider(settings settings.Settings, rootStore gostats.Store, statsManager stats.Manager) RateLimitConfigProvider {
 	p := &FileProvider{
 		settings:              settings,
-		loader:                NewRateLimitConfigLoaderImpl(),
+		loader:                config.NewRateLimitConfigLoaderImpl(),
 		configUpdateEventChan: make(chan ConfigUpdateEvent),
 		runtimeUpdateEvent:    make(chan int),
 		runtimeWatchRoot:      settings.RuntimeWatchRoot,

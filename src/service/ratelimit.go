@@ -25,6 +25,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/redis"
 )
 
@@ -38,7 +39,7 @@ type RateLimitServiceServer interface {
 type service struct {
 	runtime                     loader.IFace
 	configLock                  sync.RWMutex
-	configUpdateEvent           <-chan config.ConfigUpdateEvent
+	configUpdateEvent           <-chan provider.ConfigUpdateEvent
 	configLoader                config.RateLimitConfigLoader
 	config                      config.RateLimitConfig
 	runtimeUpdateEvent          chan int
@@ -53,7 +54,7 @@ type service struct {
 	globalShadowMode            bool
 }
 
-func (this *service) reloadConfig(updateEvent config.ConfigUpdateEvent) {
+func (this *service) reloadConfig(updateEvent provider.ConfigUpdateEvent) {
 	newConfig, err := updateEvent.GetConfig()
 	if err != nil {
 		configError, ok := err.(config.RateLimitConfigError)
@@ -303,7 +304,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 	return this.config
 }
 
-func NewService(runtime loader.IFace, cache limiter.RateLimitCache, configProvider config.RateLimitConfigProvider,
+func NewService(runtime loader.IFace, cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider,
 	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
 
 	newService := &service{

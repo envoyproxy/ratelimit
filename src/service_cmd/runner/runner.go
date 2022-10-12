@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/envoyproxy/ratelimit/src/metrics"
+	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/trace"
 
@@ -119,7 +120,7 @@ func (runner *Runner) Run() {
 	service := ratelimit.NewService(
 		srv.Runtime(),
 		createLimiter(srv, s, localCache, runner.statsManager),
-		config.NewFileProvider(s, srv.Store(), runner.statsManager),
+		provider.NewFileProvider(s, srv.Store(), runner.statsManager),
 		config.NewRateLimitConfigLoaderImpl(),
 		runner.statsManager,
 		s.RuntimeWatchRoot,

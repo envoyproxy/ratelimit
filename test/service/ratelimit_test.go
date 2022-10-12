@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"github.com/envoyproxy/ratelimit/src/utils"
@@ -25,6 +26,7 @@ import (
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_config "github.com/envoyproxy/ratelimit/test/mocks/config"
 	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
+	mock_provider "github.com/envoyproxy/ratelimit/test/mocks/provider"
 	mock_loader "github.com/envoyproxy/ratelimit/test/mocks/runtime/loader"
 	mock_snapshot "github.com/envoyproxy/ratelimit/test/mocks/runtime/snapshot"
 	mock_stats "github.com/envoyproxy/ratelimit/test/mocks/stats"
@@ -63,9 +65,9 @@ type rateLimitServiceTestSuite struct {
 	runtime               *mock_loader.MockIFace
 	snapshot              *mock_snapshot.MockIFace
 	cache                 *mock_limiter.MockRateLimitCache
-	configProvider        *mock_config.MockRateLimitConfigProvider
-	configUpdateEventChan chan config.ConfigUpdateEvent
-	configUpdateEvent     *mock_config.MockConfigUpdateEvent
+	configProvider        *mock_provider.MockRateLimitConfigProvider
+	configUpdateEventChan chan provider.ConfigUpdateEvent
+	configUpdateEvent     *mock_provider.MockConfigUpdateEvent
 	configLoader          *mock_config.MockRateLimitConfigLoader
 	config                *mock_config.MockRateLimitConfig
 	runtimeUpdateCallback chan<- int
@@ -87,9 +89,9 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	// ret.runtime = mock_loader.NewMockIFace(ret.controller)
 	// ret.snapshot = mock_snapshot.NewMockIFace(ret.controller)
 	ret.cache = mock_limiter.NewMockRateLimitCache(ret.controller)
-	ret.configProvider = mock_config.NewMockRateLimitConfigProvider(ret.controller)
-	ret.configUpdateEventChan = make(chan config.ConfigUpdateEvent)
-	ret.configUpdateEvent = mock_config.NewMockConfigUpdateEvent(ret.controller)
+	ret.configProvider = mock_provider.NewMockRateLimitConfigProvider(ret.controller)
+	ret.configUpdateEventChan = make(chan provider.ConfigUpdateEvent)
+	ret.configUpdateEvent = mock_provider.NewMockConfigUpdateEvent(ret.controller)
 	// ret.configLoader = mock_config.NewMockRateLimitConfigLoader(ret.controller)
 	ret.config = mock_config.NewMockRateLimitConfig(ret.controller)
 	ret.statStore = gostats.NewStore(gostats.NewNullSink(), false)
