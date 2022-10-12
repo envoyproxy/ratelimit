@@ -57,7 +57,7 @@ func (p *FileProvider) sendEvent() {
 			continue
 		}
 
-		files = append(files, config.RateLimitConfigToLoad{key, snapshot.Get(key)})
+		files = append(files, config.RateLimitConfigToLoad{Name: key, FileBytes: snapshot.Get(key)})
 	}
 
 	rlSettings := settings.NewSettings()
@@ -99,7 +99,7 @@ func (p *FileProvider) setupRuntime() {
 	}
 }
 
-func NewFileProvider(settings settings.Settings, rootStore gostats.Store, statsManager stats.Manager) RateLimitConfigProvider {
+func NewFileProvider(settings settings.Settings, statsManager stats.Manager, rootStore gostats.Store) RateLimitConfigProvider {
 	p := &FileProvider{
 		settings:              settings,
 		loader:                config.NewRateLimitConfigLoaderImpl(),

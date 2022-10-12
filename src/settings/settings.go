@@ -46,6 +46,14 @@ type Settings struct {
 	LogLevel  string `envconfig:"LOG_LEVEL" default:"WARN"`
 	LogFormat string `envconfig:"LOG_FORMAT" default:"text"`
 
+	// Rate limit configuration
+	// ConfigType is the method of configuring rate limits. Possible values "FILE", "GRPC_XDS_SOTW".
+	ConfigType                              string        `envconfig:"CONFIG_TYPE" default:"FILE"`
+	ConfigGrpcXdsNodeId                     string        `envconfig:"CONFIG_GRPC_XDS_NODE_ID" default:"default"`
+	ConfigGrpcXdsServerUrl                  string        `envconfig:"CONFIG_GRPC_XDS_SERVER_URL" default:"localhost:18000"`
+	ConfigGrpcXdsServerConnectRetryInterval time.Duration `envconfig:"CONFIG_GRPC_XDS_SERVER_CONNECT_RETRY_INTERVAL" default:"3s"`
+	ConfigGrpcXdsServerConnectTimeout       time.Duration `envconfig:"CONFIG_GRPC_XDS_SERVER_CONNECT_TIMEOUT" default:"3s"`
+
 	// Stats-related settings
 	UseStatsd  bool              `envconfig:"USE_STATSD" default:"true"`
 	StatsdHost string            `envconfig:"STATSD_HOST" default:"localhost"`
