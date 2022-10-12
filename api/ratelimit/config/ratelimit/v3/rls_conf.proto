@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package ratelimit.config.ratelimit.v3;
+
+option java_package = "io.envoyproxy.ratelimit.config.ratelimit.v3";
+option java_outer_classname = "RlsConfigProto";
+option java_multiple_files = true;
+option go_package = "github.com/envoyproxy/go-control-plane/ratelimit/config/ratelimit/v3;ratelimitv3";
+
+// [#protodoc-title: Rate Limit Config Discovery Service (RLS Conf DS)]
+
+// Rate-limit domain model
+message RateLimitConfig {
+  repeated RateLimitDomainConfig domain_configs = 1;
+}
+
+// Rate-limit domain config model
+message RateLimitDomainConfig {
+  string domain = 1;
+  repeated RateLimitDescriptor descriptors = 2;
+}
+
+// Rate-limit descriptor model
+message RateLimitDescriptor {
+  string key = 1;
+  string value = 2;
+  RateLimitPolicy rate_limit = 3;
+  repeated RateLimitDescriptor descriptors = 4;
+  bool shadow_mode = 5;
+}
+
+// Rate-limit policy model
+message RateLimitPolicy {
+  string unit = 1;
+  uint32 requests_per_unit = 2;
+  bool unlimited = 3;
+  string name = 4;
+  repeated RateLimitReplace replaces = 5;
+}
+
+// Rate-limit replace model
+message RateLimitReplace {
+  string name = 1;
+}
