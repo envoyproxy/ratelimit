@@ -22,7 +22,6 @@ import (
 
 	logger "github.com/sirupsen/logrus"
 
-	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/redis"
@@ -130,12 +129,9 @@ func (runner *Runner) Run() {
 	runner.mu.Unlock()
 
 	service := ratelimit.NewService(
-		srv.Runtime(),
 		createLimiter(srv, s, localCache, runner.statsManager),
 		getProviderImpl(s, runner.statsManager, srv.Store()),
-		config.NewRateLimitConfigLoaderImpl(),
 		runner.statsManager,
-		s.RuntimeWatchRoot,
 		utils.NewTimeSourceImpl(),
 		s.GlobalShadowMode,
 	)

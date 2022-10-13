@@ -18,7 +18,6 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/lyft/goruntime/loader"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 
@@ -37,15 +36,11 @@ type RateLimitServiceServer interface {
 }
 
 type service struct {
-	runtime                     loader.IFace
 	configLock                  sync.RWMutex
 	configUpdateEvent           <-chan provider.ConfigUpdateEvent
-	configLoader                config.RateLimitConfigLoader
 	config                      config.RateLimitConfig
-	runtimeUpdateEvent          chan int
 	cache                       limiter.RateLimitCache
 	stats                       stats.ServiceStats
-	runtimeWatchRoot            bool
 	customHeadersEnabled        bool
 	customHeaderLimitHeader     string
 	customHeaderRemainingHeader string
@@ -304,21 +299,17 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 	return this.config
 }
 
-func NewService(runtime loader.IFace, cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider,
-	configLoader config.RateLimitConfigLoader, statsManager stats.Manager, runtimeWatchRoot bool, clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
+func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
+	clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
 
 	newService := &service{
-		runtime:            runtime,
-		configLock:         sync.RWMutex{},
-		configUpdateEvent:  configProvider.ConfigUpdateEvent(),
-		configLoader:       configLoader,
-		config:             nil,
-		runtimeUpdateEvent: make(chan int),
-		cache:              cache,
-		stats:              statsManager.NewServiceStats(),
-		runtimeWatchRoot:   runtimeWatchRoot,
-		globalShadowMode:   shadowMode,
-		customHeaderClock:  clock,
+		configLock:        sync.RWMutex{},
+		configUpdateEvent: configProvider.ConfigUpdateEvent(),
+		config:            nil,
+		cache:             cache,
+		stats:             statsManager.NewServiceStats(),
+		globalShadowMode:  shadowMode,
+		customHeaderClock: clock,
 	}
 
 	go func() {

@@ -27,8 +27,6 @@ import (
 	mock_config "github.com/envoyproxy/ratelimit/test/mocks/config"
 	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
 	mock_provider "github.com/envoyproxy/ratelimit/test/mocks/provider"
-	mock_loader "github.com/envoyproxy/ratelimit/test/mocks/runtime/loader"
-	mock_snapshot "github.com/envoyproxy/ratelimit/test/mocks/runtime/snapshot"
 	mock_stats "github.com/envoyproxy/ratelimit/test/mocks/stats"
 )
 
@@ -62,15 +60,11 @@ func newBarrier() barrier {
 type rateLimitServiceTestSuite struct {
 	assert                *assert.Assertions
 	controller            *gomock.Controller
-	runtime               *mock_loader.MockIFace
-	snapshot              *mock_snapshot.MockIFace
 	cache                 *mock_limiter.MockRateLimitCache
 	configProvider        *mock_provider.MockRateLimitConfigProvider
 	configUpdateEventChan chan provider.ConfigUpdateEvent
 	configUpdateEvent     *mock_provider.MockConfigUpdateEvent
-	configLoader          *mock_config.MockRateLimitConfigLoader
 	config                *mock_config.MockRateLimitConfig
-	runtimeUpdateCallback chan<- int
 	statsManager          stats.Manager
 	statStore             gostats.Store
 	mockClock             utils.TimeSource
@@ -86,8 +80,6 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret := rateLimitServiceTestSuite{}
 	ret.assert = assert.New(t)
 	ret.controller = gomock.NewController(t)
-	// ret.runtime = mock_loader.NewMockIFace(ret.controller)
-	// ret.snapshot = mock_snapshot.NewMockIFace(ret.controller)
 	ret.cache = mock_limiter.NewMockRateLimitCache(ret.controller)
 	ret.configProvider = mock_provider.NewMockRateLimitConfigProvider(ret.controller)
 	ret.configUpdateEventChan = make(chan provider.ConfigUpdateEvent)
@@ -101,13 +93,6 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 
 func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitServiceServer {
 	barrier := newBarrier()
-	// this.runtime.EXPECT().AddUpdateCallback(gomock.Any()).Do(
-	// 	func(callback chan<- int) {
-	// 		this.runtimeUpdateCallback = callback
-	// 	})
-	// this.runtime.EXPECT().Snapshot().Return(this.snapshot).MinTimes(1)
-	// this.snapshot.EXPECT().Keys().Return([]string{"foo", "config.basic_config"}).MinTimes(1)
-	// this.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
 	this.configProvider.EXPECT().ConfigUpdateEvent().Return(this.configUpdateEventChan).Times(1)
 	this.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
 		barrier.signal()
@@ -115,15 +100,10 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 	})
 	go func() { this.configUpdateEventChan <- this.configUpdateEvent }() // initial config update from provider
 
-	// this.configLoader.EXPECT().Load(
-	// 	[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}},
-	// 	gomock.Any(), gomock.Any()).Return(this.config)
-
-	// reset exporter before using
 	testSpanExporter.Reset()
 
-	svc := ratelimit.NewService(this.runtime, this.cache, this.configProvider, this.configLoader, this.statsManager, true, MockClock{now: int64(2222)}, false)
-	barrier.wait()
+	svc := ratelimit.NewService(this.cache, this.configProvider, this.statsManager, MockClock{now: int64(2222)}, false)
+	barrier.wait() // wait for initial config load
 	return svc
 }
 
@@ -541,16 +521,6 @@ func TestInitialLoadError(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
 
-	// t.runtime.EXPECT().AddUpdateCallback(gomock.Any()).Do(
-	// 	func(callback chan<- int) { t.runtimeUpdateCallback = callback })
-	// t.runtime.EXPECT().Snapshot().Return(t.snapshot).MinTimes(1)
-	// t.snapshot.EXPECT().Keys().Return([]string{"foo", "config.basic_config"}).MinTimes(1)
-	// t.snapshot.EXPECT().Get("config.basic_config").Return("fake_yaml").MinTimes(1)
-	// t.configLoader.EXPECT().Load(
-	// 	[]config.RateLimitConfigToLoad{{Name: "config.basic_config", FileBytes: "fake_yaml"}}, gomock.Any(), gomock.Any()).Do(
-	// 	func([]config.RateLimitConfigToLoad, stats.Manager, bool) {
-	// 		panic(config.RateLimitConfigError("load error"))
-	// 	})
 	t.configProvider.EXPECT().ConfigUpdateEvent().Return(t.configUpdateEventChan).Times(1)
 	barrier := newBarrier()
 	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
@@ -558,7 +528,7 @@ func TestInitialLoadError(test *testing.T) {
 		return nil, config.RateLimitConfigError("load error")
 	})
 	go func() { t.configUpdateEventChan <- t.configUpdateEvent }() // initial config update from provider
-	service := ratelimit.NewService(t.runtime, t.cache, t.configProvider, t.configLoader, t.statsManager, true, t.mockClock, false)
+	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, t.mockClock, false)
 	barrier.wait()
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
