@@ -6,6 +6,7 @@ import (
 
 type RateLimitConfigProvider interface {
 	ConfigUpdateEvent() <-chan ConfigUpdateEvent
+	Stop()
 }
 
 type ConfigUpdateEvent interface {

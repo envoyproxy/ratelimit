@@ -50,6 +50,18 @@ func (mr *MockRateLimitConfigProviderMockRecorder) ConfigUpdateEvent() *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigUpdateEvent", reflect.TypeOf((*MockRateLimitConfigProvider)(nil).ConfigUpdateEvent))
 }
 
+// Stop mocks base method
+func (m *MockRateLimitConfigProvider) Stop() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Stop")
+}
+
+// Stop indicates an expected call of Stop
+func (mr *MockRateLimitConfigProviderMockRecorder) Stop() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockRateLimitConfigProvider)(nil).Stop))
+}
+
 // MockConfigUpdateEvent is a mock of ConfigUpdateEvent interface
 type MockConfigUpdateEvent struct {
 	ctrl     *gomock.Controller

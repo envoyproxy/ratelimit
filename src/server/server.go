@@ -5,7 +5,8 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 
-	"github.com/lyft/goruntime/loader"
+	"github.com/envoyproxy/ratelimit/src/provider"
+
 	stats "github.com/lyft/gostats"
 	"google.golang.org/grpc"
 )
@@ -17,11 +18,6 @@ type Server interface {
 	 * and 'GrpcServer'.
 	 */
 	Start()
-
-	/**
-	 * Returns the root store of the stats tree for the server
-	 */
-	Store() stats.Store
 
 	/**
 	 * Returns the root of the stats tree for the server
@@ -40,9 +36,9 @@ type Server interface {
 	GrpcServer() *grpc.Server
 
 	/**
-	 * Returns the runtime configuration for the server.
+	 * Returns the configuration provider for the server.
 	 */
-	Runtime() loader.IFace
+	Provider() provider.RateLimitConfigProvider
 
 	/**
 	 *  Stops serving the grpc port (for integration testing).

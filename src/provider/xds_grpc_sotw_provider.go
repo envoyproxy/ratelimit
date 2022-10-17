@@ -24,8 +24,8 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 
-	rls_conf_v3 "github.com/envoyproxy/ratelimit/src/api/ratelimit/config/ratelimit/v3"
-	rls_svc_v3 "github.com/envoyproxy/ratelimit/src/api/ratelimit/service/ratelimit/v3"
+	rls_conf_v3 "github.com/envoyproxy/go-control-plane/ratelimit/config/ratelimit/v3"
+	// rls_svc_v3 "github.com/envoyproxy/go-control-plane/ratelimit/service/ratelimit/v3"
 )
 
 const (
@@ -37,20 +37,22 @@ type XdsGrpcSotwProvider struct {
 	loader                config.RateLimitConfigLoader
 	configUpdateEventChan chan ConfigUpdateEvent
 	statsManager          stats.Manager
-	xdsStream             rls_svc_v3.RateLimitConfigDiscoveryService_StreamRlsConfigsClient
-	lastAckedResponse     *discovery.DiscoveryResponse
+	// xdsStream             rls_svc_v3.RateLimitConfigDiscoveryService_StreamRlsConfigsClient
+	xdsStream         discovery.AggregatedDiscoveryService_StreamAggregatedResourcesClient
+	lastAckedResponse *discovery.DiscoveryResponse
 	// TODO: (renuka) lastAckedResponse and lastReceivedResponse are equal
 	lastReceivedResponse *discovery.DiscoveryResponse
 	// If a connection error occurs, true event would be returned
-	connectionFaultChannel chan bool
+	connectionRetryChannel chan bool
 }
 
 func NewXdsGrpcSotwProvider(settings settings.Settings, statsManager stats.Manager) RateLimitConfigProvider {
 	return &XdsGrpcSotwProvider{
-		settings:              settings,
-		statsManager:          statsManager,
-		configUpdateEventChan: make(chan ConfigUpdateEvent),
-		loader:                config.NewRateLimitConfigLoaderImpl(),
+		settings:               settings,
+		statsManager:           statsManager,
+		configUpdateEventChan:  make(chan ConfigUpdateEvent),
+		connectionRetryChannel: make(chan bool),
+		loader:                 config.NewRateLimitConfigLoaderImpl(),
 	}
 }
 
@@ -59,15 +61,20 @@ func (p *XdsGrpcSotwProvider) ConfigUpdateEvent() <-chan ConfigUpdateEvent {
 	return p.configUpdateEventChan
 }
 
+func (p *XdsGrpcSotwProvider) Stop() {
+	p.connectionRetryChannel <- false
+}
+
 func (p *XdsGrpcSotwProvider) initXdsClient() {
 	logger.Info("Starting xDS client connection for rate limit configurations")
 	conn := p.initializeAndWatch()
-	for retryTrueReceived := range p.connectionFaultChannel {
-		if !retryTrueReceived {
-			continue
-		}
+	for retryEvent := range p.connectionRetryChannel {
 		if conn != nil {
 			conn.Close()
+		}
+		if !retryEvent { // stop watching
+			logger.Info("Stopping xDS client watch for rate limit configurations")
+			break
 		}
 		conn = p.initializeAndWatch()
 	}
@@ -76,7 +83,7 @@ func (p *XdsGrpcSotwProvider) initXdsClient() {
 func (p *XdsGrpcSotwProvider) initializeAndWatch() *grpc.ClientConn {
 	conn, err := p.initConnection()
 	if err != nil {
-		p.connectionFaultChannel <- true
+		p.connectionRetryChannel <- true
 		return conn
 	}
 	go p.watchConfigs()
@@ -104,16 +111,16 @@ func (p *XdsGrpcSotwProvider) watchConfigs() {
 		if err == io.EOF {
 			// reinitialize again, if stream ends
 			logger.Error("EOF is received from xDS Configuration Server")
-			p.connectionFaultChannel <- true
+			p.connectionRetryChannel <- true
 			return
 		}
 		if err != nil {
 			logger.Errorf("Failed to receive the discovery response from xDS Configuration Server: %s", err.Error())
 			errStatus, _ := grpcStatus.FromError(err)
-			if errStatus.Code() == codes.Unavailable {
-				logger.Errorf("Connection unavailable. errorCode: %s errorMessage: %s",
+			if errStatus.Code() == codes.Unavailable || errStatus.Code() == codes.Canceled {
+				logger.Errorf("Connection error. errorCode: %s errorMessage: %s",
 					errStatus.Code().String(), errStatus.Message())
-				p.connectionFaultChannel <- true
+				p.connectionRetryChannel <- true
 				return
 			}
 			logger.Errorf("Error while xDS communication; errorCode: %s errorMessage: %s",
@@ -134,7 +141,7 @@ func (p *XdsGrpcSotwProvider) initConnection() (*grpc.ClientConn, error) {
 		logger.Errorf("Error initializing gRPC connection to xDS Configuration Server: %s", err.Error())
 		return nil, err
 	}
-	p.xdsStream, err = rls_svc_v3.NewRateLimitConfigDiscoveryServiceClient(conn).StreamRlsConfigs(context.Background())
+	p.xdsStream, err = discovery.NewAggregatedDiscoveryServiceClient(conn).StreamAggregatedResources(context.Background())
 	if err != nil {
 		logger.Errorf("Error initializing gRPC stream to xDS Configuration Server: %s", err.Error())
 		return nil, err

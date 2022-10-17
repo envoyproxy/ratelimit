@@ -11,7 +11,6 @@ import (
 	"net/http/pprof"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"sync"
@@ -20,6 +19,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
+	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
@@ -59,6 +59,7 @@ type server struct {
 	grpcServer    *grpc.Server
 	store         gostats.Store
 	scope         gostats.Scope
+	provider      provider.RateLimitConfigProvider
 	runtime       loader.IFace
 	debugListener serverDebugListener
 	httpServer    *http.Server
@@ -127,6 +128,18 @@ func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *ht
 	}
 }
 
+func getProviderImpl(s settings.Settings, statsManager stats.Manager, rootStore gostats.Store) provider.RateLimitConfigProvider {
+	switch s.ConfigType {
+	case "FILE":
+		return provider.NewFileProvider(s, statsManager, rootStore)
+	case "GRPC_XDS_SOTW":
+		return provider.NewXdsGrpcSotwProvider(s, statsManager)
+	default:
+		logger.Fatalf("Invalid setting for ConfigType: %s", s.ConfigType)
+		panic("This line should not be reachable")
+	}
+}
+
 func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
 	server.router.HandleFunc("/json", NewJsonHandler(svc))
 }
@@ -180,16 +193,12 @@ func (server *server) startGrpc() {
 	server.grpcServer.Serve(lis)
 }
 
-func (server *server) Store() gostats.Store {
-	return server.store
-}
-
 func (server *server) Scope() gostats.Scope {
 	return server.scope
 }
 
-func (server *server) Runtime() loader.IFace {
-	return server.runtime
+func (server *server) Provider() provider.RateLimitConfigProvider {
+	return server.provider
 }
 
 func NewServer(s settings.Settings, name string, statsManager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) Server {
@@ -238,37 +247,8 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
 	}
 
-	// setup runtime
-	loaderOpts := make([]loader.Option, 0, 1)
-	if s.RuntimeIgnoreDotFiles {
-		loaderOpts = append(loaderOpts, loader.IgnoreDotFiles)
-	} else {
-		loaderOpts = append(loaderOpts, loader.AllowDotFiles)
-	}
-	var err error
-	if s.RuntimeWatchRoot {
-		ret.runtime, err = loader.New2(
-			s.RuntimePath,
-			s.RuntimeSubdirectory,
-			ret.store.ScopeWithTags("runtime", s.ExtraTags),
-			&loader.SymlinkRefresher{RuntimePath: s.RuntimePath},
-			loaderOpts...)
-	} else {
-		directoryRefresher := &loader.DirectoryRefresher{}
-		// Adding loader.Remove to the default set of goruntime's FileSystemOps.
-		directoryRefresher.WatchFileSystemOps(loader.Remove, loader.Write, loader.Create, loader.Chmod)
-
-		ret.runtime, err = loader.New2(
-			filepath.Join(s.RuntimePath, s.RuntimeSubdirectory),
-			"config",
-			ret.store.ScopeWithTags("runtime", s.ExtraTags),
-			directoryRefresher,
-			loaderOpts...)
-	}
-
-	if err != nil {
-		panic(err)
-	}
+	// setup config provider
+	ret.provider = getProviderImpl(s, statsManager, ret.store)
 
 	// setup http router
 	ret.router = mux.NewRouter()
@@ -343,6 +323,7 @@ func (server *server) Stop() {
 	if server.httpServer != nil {
 		server.httpServer.Close()
 	}
+	server.provider.Stop()
 }
 
 func (server *server) handleGracefulShutdown() {

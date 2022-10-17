@@ -28,6 +28,8 @@ func (p *FileProvider) ConfigUpdateEvent() <-chan ConfigUpdateEvent {
 	return p.configUpdateEventChan
 }
 
+func (p *FileProvider) Stop() {}
+
 func (p *FileProvider) watch() {
 	p.runtime.AddUpdateCallback(p.runtimeUpdateEvent)
 

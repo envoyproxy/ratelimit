@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/envoyproxy/ratelimit/src/metrics"
-	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/trace"
 
@@ -75,18 +74,6 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 	}
 }
 
-func getProviderImpl(s settings.Settings, statsManager stats.Manager, rootStore gostats.Store) provider.RateLimitConfigProvider {
-	switch s.ConfigType {
-	case "FILE":
-		return provider.NewFileProvider(s, statsManager, rootStore)
-	case "GRPC_XDS_SOTW":
-		return provider.NewXdsGrpcSotwProvider(s, statsManager)
-	default:
-		logger.Fatalf("Invalid setting for ConfigType: %s", s.ConfigType)
-		panic("This line should not be reachable")
-	}
-}
-
 func (runner *Runner) Run() {
 	s := runner.settings
 	if s.TracingEnabled {
@@ -130,7 +117,7 @@ func (runner *Runner) Run() {
 
 	service := ratelimit.NewService(
 		createLimiter(srv, s, localCache, runner.statsManager),
-		getProviderImpl(s, runner.statsManager, srv.Store()),
+		srv.Provider(),
 		runner.statsManager,
 		utils.NewTimeSourceImpl(),
 		s.GlobalShadowMode,
