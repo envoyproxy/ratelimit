@@ -2,7 +2,8 @@ module github.com/envoyproxy/ratelimit
 
 go 1.18
 
-replace github.com/envoyproxy/go-control-plane => /Users/renuka/git/go-control-plane
+// replace github.com/envoyproxy/go-control-plane => /Users/renuka/git/go-control-plane
+replace github.com/envoyproxy/go-control-plane => github.com/renuka-fernando/go-control-plane v0.0.1
 
 require (
 	github.com/alicebob/miniredis/v2 v2.23.0
