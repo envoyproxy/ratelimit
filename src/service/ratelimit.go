@@ -312,6 +312,7 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 		customHeaderClock: clock,
 	}
 
+	newService.reloadConfig(<-newService.configUpdateEvent)
 	go func() {
 		for {
 			logger.Debugf("waiting for config update")

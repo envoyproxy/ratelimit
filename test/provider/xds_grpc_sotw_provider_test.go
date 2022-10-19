@@ -47,7 +47,7 @@ func TestXdsProvider(t *testing.T) {
 			},
 		},
 	)
-	snapCache, cancel := common.StartXdsSotwServer(t, &common.XdsServerConfig{Port: xdsPort, NodeId: xdsNodeId}, intSnapshot)
+	setSnapshotFunc, cancel := common.StartXdsSotwServer(t, &common.XdsServerConfig{Port: xdsPort, NodeId: xdsNodeId}, intSnapshot)
 	defer cancel()
 
 	s := settings.Settings{
@@ -62,12 +62,12 @@ func TestXdsProvider(t *testing.T) {
 	defer p.Stop()
 	providerEventChan := p.ConfigUpdateEvent()
 
-	t.Run("Test initial xDS config", testInitialXdsConfig(snapCache, providerEventChan))
-	t.Run("Test new (after initial) xDS config update", testNewXdsConfigUpdate(snapCache, providerEventChan))
-	t.Run("Test multi domain xDS config update", testMultiDomainXdsConfigUpdate(snapCache, providerEventChan))
+	t.Run("Test initial xDS config", testInitialXdsConfig(setSnapshotFunc, providerEventChan))
+	t.Run("Test new (after initial) xDS config update", testNewXdsConfigUpdate(setSnapshotFunc, providerEventChan))
+	t.Run("Test multi domain xDS config update", testMultiDomainXdsConfigUpdate(setSnapshotFunc, providerEventChan))
 }
 
-func testInitialXdsConfig(snapCache cache.SnapshotCache, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+func testInitialXdsConfig(setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
 	return func(t *testing.T) {
 		assert := assert.New(t)
 
@@ -80,7 +80,7 @@ func testInitialXdsConfig(snapCache cache.SnapshotCache, providerEventChan <-cha
 	}
 }
 
-func testNewXdsConfigUpdate(snapCache cache.SnapshotCache, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+func testNewXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
 	return func(t *testing.T) {
 		assert := assert.New(t)
 
@@ -103,7 +103,7 @@ func testNewXdsConfigUpdate(snapCache cache.SnapshotCache, providerEventChan <-c
 				},
 			},
 		)
-		setSnapshot(t, snapCache, snapshot)
+		setSnapshotFunc(snapshot)
 
 		configEvent := <-providerEventChan
 		assert.NotNil(configEvent)
@@ -114,7 +114,7 @@ func testNewXdsConfigUpdate(snapCache cache.SnapshotCache, providerEventChan <-c
 	}
 }
 
-func testMultiDomainXdsConfigUpdate(snapCache cache.SnapshotCache, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+func testMultiDomainXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
 	return func(t *testing.T) {
 		assert := assert.New(t)
 
@@ -126,7 +126,7 @@ func testMultiDomainXdsConfigUpdate(snapCache cache.SnapshotCache, providerEvent
 						Descriptors: []*rls_config.RateLimitDescriptor{
 							{
 								Key:   "k1",
-								Value: "k2",
+								Value: "v2",
 								RateLimit: &rls_config.RateLimitPolicy{
 									Unit:            "minute",
 									RequestsPerUnit: 10,
@@ -139,7 +139,7 @@ func testMultiDomainXdsConfigUpdate(snapCache cache.SnapshotCache, providerEvent
 						Descriptors: []*rls_config.RateLimitDescriptor{
 							{
 								Key:   "k1",
-								Value: "k2",
+								Value: "v2",
 								RateLimit: &rls_config.RateLimitPolicy{
 									Unit:            "minute",
 									RequestsPerUnit: 100,
@@ -150,16 +150,16 @@ func testMultiDomainXdsConfigUpdate(snapCache cache.SnapshotCache, providerEvent
 				},
 			},
 		)
-		setSnapshot(t, snapCache, snapshot)
+		setSnapshotFunc(snapshot)
 
 		configEvent := <-providerEventChan
 		assert.NotNil(configEvent)
 
 		config, err := configEvent.GetConfig()
 		assert.Nil(err)
-		assert.Equal([]string{
-			"foo.k1_k2: unit=MINUTE requests_per_unit=10, shadow_mode: false",
-			"bar.k1_k2: unit=MINUTE requests_per_unit=100, shadow_mode: false",
+		assert.ElementsMatch([]string{
+			"foo.k1_v2: unit=MINUTE requests_per_unit=10, shadow_mode: false",
+			"bar.k1_v2: unit=MINUTE requests_per_unit=100, shadow_mode: false",
 		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
 	}
 }

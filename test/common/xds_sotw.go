@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/server/v3"
@@ -18,7 +19,9 @@ type XdsServerConfig struct {
 	NodeId string
 }
 
-func StartXdsSotwServer(t *testing.T, config *XdsServerConfig, initSnapshot *cache.Snapshot) (cache.SnapshotCache, context.CancelFunc) {
+type SetSnapshotFunc func(*cache.Snapshot)
+
+func StartXdsSotwServer(t *testing.T, config *XdsServerConfig, initSnapshot *cache.Snapshot) (SetSnapshotFunc, context.CancelFunc) {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -45,8 +48,23 @@ func StartXdsSotwServer(t *testing.T, config *XdsServerConfig, initSnapshot *cac
 		}
 	}()
 
-	return snapCache, func() {
+	// HACK: Wait for the server to come up. Make a hook that we can wait on.
+	WaitForTcpPort(context.Background(), config.Port, 1*time.Second)
+
+	cancelFunc := func() {
 		cancel()
 		grpcServer.Stop()
+	}
+	return setSnapshotFunc(t, snapCache, config.NodeId), cancelFunc
+}
+
+func setSnapshotFunc(t *testing.T, snapCache cache.SnapshotCache, nodeId string) SetSnapshotFunc {
+	return func(snapshot *cache.Snapshot) {
+		if err := snapshot.Consistent(); err != nil {
+			t.Errorf("snapshot inconsistency: %+v\n%+v", snapshot, err)
+		}
+		if err := snapCache.SetSnapshot(context.Background(), nodeId, snapshot); err != nil {
+			t.Errorf("snapshot error %q for %+v", err, snapshot)
+		}
 	}
 }
