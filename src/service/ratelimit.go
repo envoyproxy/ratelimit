@@ -228,7 +228,10 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	// If there is a global shadow_mode, it should always return OK
-	if finalCode == pb.RateLimitResponse_OVER_LIMIT && this.globalShadowMode {
+	this.configLock.RLock()
+	globalShadowMode := this.globalShadowMode
+	this.configLock.RUnlock()
+	if finalCode == pb.RateLimitResponse_OVER_LIMIT && globalShadowMode {
 		finalCode = pb.RateLimitResponse_OK
 		this.stats.GlobalShadowMode.Inc()
 	}
