@@ -7,7 +7,8 @@
   - [API Deprecation History](#api-deprecation-history)
 - [Building and Testing](#building-and-testing)
   - [Docker-compose setup](#docker-compose-setup)
-  - [Full test environment](#full-test-environment)
+  - [Full test environment - Configure rate limits through files](#full-test-environment---configure-rate-limits-through-files)
+  - [Full test environment - Configure rate limits through xDS-Server](#full-test-environment---configure-rate-limits-through-xds-server)
   - [Self-contained end-to-end integration test](#self-contained-end-to-end-integration-test)
 - [Configuration](#configuration)
   - [The configuration format](#the-configuration-format)
@@ -129,11 +130,12 @@ If you want to run with [two redis instances](#two-redis-instances), you will ne
 the docker-compose.yml file to run a second redis container, and change the environment variables
 as explained in the [two redis instances](#two-redis-instances) section.
 
-## Full test environment
+## Full test environment - Configure rate limits through files
 
 To run a fully configured environment to demo Envoy based rate limiting, run:
 
 ```bash
+export CONFIG_TYPE=FILE
 docker-compose -f docker-compose-example.yml up --build --remove-orphans
 ```
 
@@ -152,6 +154,36 @@ curl localhost:8888/twoheader -H "foo: foo" -H "baz: not-so-shady" # This is sub
 Edit `examples/ratelimit/config/example.yaml` to test different rate limit configs. Hot reloading is enabled.
 
 The descriptors in `example.yaml` and the actions in `examples/envoy/proxy.yaml` should give you a good idea on how to configure rate limits.
+
+To see the metrics in the example
+
+```bash
+# The metrics for the shadow_mode keys
+curl http://localhost:9102/metrics | grep -i shadow
+```
+
+## Full test environment - Configure rate limits through xDS-Server
+
+To run a fully configured environment to demo Envoy based rate limiting, run:
+
+```bash
+export CONFIG_TYPE=GRPC_XDS_SOTW
+docker-compose -f docker-compose-example.yml --profile xds-config up --build --remove-orphans
+```
+
+This will run in `xds-config` docker-compose profile which will run example xDS-Server, ratelimit, redis, prom-statsd-exporter and two Envoy containers such that you can demo rate limiting by hitting the below endpoints.
+
+```bash
+curl localhost:8888/test
+curl localhost:8888/header -H "foo: foo" # Header based
+curl localhost:8888/twoheader -H "foo: foo" -H "bar: bar" # Two headers
+curl localhost:8888/twoheader -H "foo: foo" -H "baz: baz"  # This will be rate limited
+curl localhost:8888/twoheader -H "foo: foo" -H "bar: banned" # Ban a particular header value
+curl localhost:8888/twoheader -H "foo: foo" -H "baz: shady" # This will never be ratelimited since "baz" with value "shady" is in shadow_mode
+curl localhost:8888/twoheader -H "foo: foo" -H "baz: not-so-shady" # This is subject to rate-limiting because the it's now in shadow_mode
+```
+
+Edit[ `examples/xds-sotw-config-server/resource.go`](examples/xds-sotw-config-server/resource.go) to test different rate limit configs.
 
 To see the metrics in the example
 

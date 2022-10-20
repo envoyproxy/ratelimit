@@ -1,14 +1,14 @@
 ---
-domain: foo
+domain: rl
 descriptors:
-  - key: k1
-    value: v1
-    descriptors:
-      - key: k2
-        value: v2
-        rate_limit:
-          unit: minute
-          requests_per_unit: 4
+  - key: category
+    value: account
+    rate_limit:
+      replaces:
+        - name: bkthomps
+        - name: fake_name
+      unit: minute
+      requests_per_unit: 4
   - key: source_cluster
     value: proxy
     descriptors:

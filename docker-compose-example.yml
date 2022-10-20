@@ -49,6 +49,22 @@ services:
       - RUNTIME_ROOT=/data
       - RUNTIME_SUBDIRECTORY=ratelimit
       - RUNTIME_WATCH_ROOT=false
+      - CONFIG_TYPE=${CONFIG_TYPE:-FILE}
+      - CONFIG_GRPC_XDS_NODE_ID=test-node-id
+      - CONFIG_GRPC_XDS_SERVER_URL=ratelimit-xds-config-server:18000
+
+  ratelimit-xds-config-server:
+    image: ratelimit-xds-config-server:latest
+    build:
+      context: examples/xds-sotw-config-server
+      dockerfile: Dockerfile
+    command: ["-nodeID", "test-node-id", "-port", "18000", "-debug", "true"]
+    expose:
+      - 18000
+    networks:
+      - ratelimit-network
+    profiles:
+      - xds-config
 
   envoy-proxy:
     image: envoyproxy/envoy-dev:latest
