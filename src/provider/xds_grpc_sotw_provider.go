@@ -13,6 +13,7 @@ import (
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -155,12 +156,24 @@ func (p *XdsGrpcSotwProvider) getGrpcConnection() (*grpc.ClientConn, error) {
 	logger.Infof("Dialing xDS Configuration Server: '%s'", p.settings.ConfigGrpcXdsServerUrl)
 	return grpc.Dial(
 		p.settings.ConfigGrpcXdsServerUrl,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		// grpc.WithTransportCredentials(generateTLSCredentialsForXdsClient()),
+		p.getGrpcTransportCredentials(),
 		grpc.WithBlock(),
 		grpc.WithStreamInterceptor(
 			grpc_retry.StreamClientInterceptor(grpc_retry.WithBackoff(backOff)),
 		))
+}
+
+func (p *XdsGrpcSotwProvider) getGrpcTransportCredentials() grpc.DialOption {
+	if !p.settings.ConfigGrpcXdsServerUseTls {
+		return grpc.WithTransportCredentials(insecure.NewCredentials())
+	}
+
+	configGrpcXdsTlsConfig := p.settings.ConfigGrpcXdsTlsConfig
+	if p.settings.ConfigGrpcXdsServerTlsSAN != "" {
+		logger.Infof("ServerName used for xDS configuration service hostname verification is %s", p.settings.ConfigGrpcXdsServerTlsSAN)
+		configGrpcXdsTlsConfig.ServerName = p.settings.ConfigGrpcXdsServerTlsSAN
+	}
+	return grpc.WithTransportCredentials(credentials.NewTLS(configGrpcXdsTlsConfig))
 }
 
 func (p *XdsGrpcSotwProvider) sendConfigs(resources []*any.Any) {

@@ -102,7 +102,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 
 	testSpanExporter.Reset()
 
-	svc := ratelimit.NewService(this.cache, this.configProvider, this.statsManager, MockClock{now: int64(2222)}, false)
+	svc := ratelimit.NewService(this.cache, this.configProvider, this.statsManager, MockClock{now: int64(2222)}, false, false)
 	barrier.wait() // wait for initial config load
 	return svc
 }
@@ -528,7 +528,7 @@ func TestInitialLoadError(test *testing.T) {
 		return nil, config.RateLimitConfigError("load error")
 	})
 	go func() { t.configUpdateEventChan <- t.configUpdateEvent }() // initial config update from provider
-	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, t.mockClock, false)
+	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, t.mockClock, false, false)
 	barrier.wait()
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)

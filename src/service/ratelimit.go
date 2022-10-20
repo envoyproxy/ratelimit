@@ -300,7 +300,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 }
 
 func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
-	clock utils.TimeSource, shadowMode bool) RateLimitServiceServer {
+	clock utils.TimeSource, shadowMode, forceStart bool) RateLimitServiceServer {
 
 	newService := &service{
 		configLock:        sync.RWMutex{},
@@ -312,12 +312,17 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 		customHeaderClock: clock,
 	}
 
-	newService.reloadConfig(<-newService.configUpdateEvent)
+	if !forceStart {
+		logger.Info("Waiting for initial ratelimit config update event")
+		newService.reloadConfig(<-newService.configUpdateEvent)
+		logger.Info("Successfully loaded the initial ratelimit configs")
+	}
+
 	go func() {
 		for {
-			logger.Debugf("waiting for config update")
+			logger.Debug("Waiting for config update")
 			updateEvent := <-newService.configUpdateEvent
-			logger.Debugf("got config update and reloading config")
+			logger.Debug("Got config update and reloading config")
 			newService.reloadConfig(updateEvent)
 		}
 	}()

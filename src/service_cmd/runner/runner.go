@@ -121,6 +121,7 @@ func (runner *Runner) Run() {
 		runner.statsManager,
 		utils.NewTimeSourceImpl(),
 		s.GlobalShadowMode,
+		s.ForceStartWithoutInitialConfig,
 	)
 
 	srv.AddDebugHttpEndpoint(
