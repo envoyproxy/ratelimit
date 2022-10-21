@@ -59,7 +59,8 @@ func (p *FileProvider) sendEvent() {
 			continue
 		}
 
-		files = append(files, config.RateLimitConfigToLoad{Name: key, FileBytes: snapshot.Get(key)})
+		configYaml := config.ConfigFileContentToYaml(key, snapshot.Get(key))
+		files = append(files, config.RateLimitConfigToLoad{Name: key, ConfigYaml: configYaml})
 	}
 
 	rlSettings := settings.NewSettings()

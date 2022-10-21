@@ -3,11 +3,9 @@ package provider
 import (
 	"context"
 	"io"
-	"strconv"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/ghodss/yaml"
 	"github.com/golang/protobuf/ptypes/any"
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	logger "github.com/sirupsen/logrus"
@@ -178,7 +176,7 @@ func (p *XdsGrpcSotwProvider) getGrpcTransportCredentials() grpc.DialOption {
 
 func (p *XdsGrpcSotwProvider) sendConfigs(resources []*any.Any) {
 	conf := make([]config.RateLimitConfigToLoad, 0, len(resources))
-	for i, res := range resources {
+	for _, res := range resources {
 		confPb := &rls_conf_v3.RateLimitConfig{}
 		err := anypb.UnmarshalTo(res, confPb, proto.UnmarshalOptions{}) // err := ptypes.UnmarshalAny(res, config)
 		if err != nil {
@@ -189,12 +187,8 @@ func (p *XdsGrpcSotwProvider) sendConfigs(resources []*any.Any) {
 
 		logger.Infof("RENUKA TEST: %v", confPb)
 
-		byteConf, err := yaml.Marshal(confPb)
-		if err != nil {
-			logger.Errorf("Error config: %s", err.Error())
-		}
-		// TODO: (renuka) This is temp, have to pass the Yaml instead of string
-		conf = append(conf, config.RateLimitConfigToLoad{Name: confPb.Domain + strconv.Itoa(i), FileBytes: string(byteConf)})
+		configYaml := config.ConfigXdsProtoToYaml(confPb)
+		conf = append(conf, config.RateLimitConfigToLoad{Name: confPb.Domain, ConfigYaml: configYaml})
 	}
 	rlSettings := settings.NewSettings()
 	rlsConf := p.loader.Load(conf, p.statsManager, rlSettings.MergeDomainConfigurations)

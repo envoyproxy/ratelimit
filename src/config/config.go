@@ -41,8 +41,8 @@ type RateLimitConfig interface {
 
 // Information for a config file to load into the aggregate config.
 type RateLimitConfigToLoad struct {
-	Name      string
-	FileBytes string
+	Name       string
+	ConfigYaml *yamlRoot
 }
 
 // Interface for loading a configuration from a list of YAML files.

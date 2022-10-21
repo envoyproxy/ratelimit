@@ -235,7 +235,7 @@ func validateYamlKeys(fileName string, config_map map[interface{}]interface{}) {
 // Load a single YAML config file into the global config.
 // @param config specifies the file contents to load.
 func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
-	root := ConfigFileContentToYaml(config.Name, config.FileBytes)
+	root := config.ConfigYaml
 
 	if root.Domain == "" {
 		panic(newRateLimitConfigError(config.Name, "config file cannot have empty domain"))
