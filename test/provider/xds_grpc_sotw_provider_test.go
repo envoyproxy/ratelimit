@@ -1,8 +1,8 @@
 package provider_test
 
 import (
-	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -32,13 +32,14 @@ func TestXdsProvider(t *testing.T) {
 		map[resource.Type][]types.Resource{
 			resource.RateLimitConfigType: {
 				&rls_config.RateLimitConfig{
+					Name:   "foo",
 					Domain: "foo",
 					Descriptors: []*rls_config.RateLimitDescriptor{
 						{
 							Key:   "k1",
 							Value: "v1",
 							RateLimit: &rls_config.RateLimitPolicy{
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 3,
 							},
 						},
@@ -62,12 +63,22 @@ func TestXdsProvider(t *testing.T) {
 	defer p.Stop()
 	providerEventChan := p.ConfigUpdateEvent()
 
-	t.Run("Test initial xDS config", testInitialXdsConfig(setSnapshotFunc, providerEventChan))
-	t.Run("Test new (after initial) xDS config update", testNewXdsConfigUpdate(setSnapshotFunc, providerEventChan))
-	t.Run("Test multi domain xDS config update", testMultiDomainXdsConfigUpdate(setSnapshotFunc, providerEventChan))
+	snapVersion := 1
+	t.Run("Test initial xDS config", testInitialXdsConfig(&snapVersion, setSnapshotFunc, providerEventChan))
+	t.Run("Test new (after initial) xDS config update", testNewXdsConfigUpdate(&snapVersion, setSnapshotFunc, providerEventChan))
+	t.Run("Test multi domain xDS config update", testMultiDomainXdsConfigUpdate(&snapVersion, setSnapshotFunc, providerEventChan))
+	t.Run("Test limits with deeper xDS config update", testDeeperLimitsXdsConfigUpdate(&snapVersion, setSnapshotFunc, providerEventChan))
+
+	err := os.Setenv("MERGE_DOMAIN_CONFIG", "true")
+	defer os.Unsetenv("MERGE_DOMAIN_CONFIG")
+	if err != nil {
+		t.Error("Error setting 'MERGE_DOMAIN_CONFIG' environment variable", err)
+	}
+	t.Run("Test same domain multiple times xDS config update", testSameDomainMultipleXdsConfigUpdate(setSnapshotFunc, providerEventChan))
 }
 
-func testInitialXdsConfig(setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+func testInitialXdsConfig(snapVersion *int, setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+	*snapVersion += 1
 	return func(t *testing.T) {
 		assert := assert.New(t)
 
@@ -80,21 +91,23 @@ func testInitialXdsConfig(setSnapshotFunc common.SetSnapshotFunc, providerEventC
 	}
 }
 
-func testNewXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+func testNewXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+	*snapVersion += 1
 	return func(t *testing.T) {
 		assert := assert.New(t)
 
-		snapshot, _ := cache.NewSnapshot("2",
+		snapshot, _ := cache.NewSnapshot(fmt.Sprint(*snapVersion),
 			map[resource.Type][]types.Resource{
 				resource.RateLimitConfigType: {
 					&rls_config.RateLimitConfig{
+						Name:   "foo",
 						Domain: "foo",
 						Descriptors: []*rls_config.RateLimitDescriptor{
 							{
 								Key:   "k2",
 								Value: "v2",
 								RateLimit: &rls_config.RateLimitPolicy{
-									Unit:            "minute",
+									Unit:            rls_config.RateLimitUnit_MINUTE,
 									RequestsPerUnit: 5,
 								},
 							},
@@ -114,34 +127,37 @@ func testNewXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFunc, providerEven
 	}
 }
 
-func testMultiDomainXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+func testMultiDomainXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+	*snapVersion += 1
 	return func(t *testing.T) {
 		assert := assert.New(t)
 
-		snapshot, _ := cache.NewSnapshot("3",
+		snapshot, _ := cache.NewSnapshot(fmt.Sprint(*snapVersion),
 			map[resource.Type][]types.Resource{
 				resource.RateLimitConfigType: {
 					&rls_config.RateLimitConfig{
+						Name:   "foo",
 						Domain: "foo",
 						Descriptors: []*rls_config.RateLimitDescriptor{
 							{
 								Key:   "k1",
-								Value: "v2",
+								Value: "v1",
 								RateLimit: &rls_config.RateLimitPolicy{
-									Unit:            "minute",
+									Unit:            rls_config.RateLimitUnit_MINUTE,
 									RequestsPerUnit: 10,
 								},
 							},
 						},
 					},
 					&rls_config.RateLimitConfig{
+						Name:   "bar",
 						Domain: "bar",
 						Descriptors: []*rls_config.RateLimitDescriptor{
 							{
 								Key:   "k1",
-								Value: "v2",
+								Value: "v1",
 								RateLimit: &rls_config.RateLimitPolicy{
-									Unit:            "minute",
+									Unit:            rls_config.RateLimitUnit_MINUTE,
 									RequestsPerUnit: 100,
 								},
 							},
@@ -158,18 +174,158 @@ func testMultiDomainXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFunc, prov
 		config, err := configEvent.GetConfig()
 		assert.Nil(err)
 		assert.ElementsMatch([]string{
-			"foo.k1_v2: unit=MINUTE requests_per_unit=10, shadow_mode: false",
-			"bar.k1_v2: unit=MINUTE requests_per_unit=100, shadow_mode: false",
+			"foo.k1_v1: unit=MINUTE requests_per_unit=10, shadow_mode: false",
+			"bar.k1_v1: unit=MINUTE requests_per_unit=100, shadow_mode: false",
 		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
 	}
 }
 
-func setSnapshot(t *testing.T, snapCache cache.SnapshotCache, snapshot *cache.Snapshot) {
-	t.Helper()
-	if err := snapshot.Consistent(); err != nil {
-		t.Errorf("snapshot inconsistency: %+v\n%+v", snapshot, err)
+func testDeeperLimitsXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+	*snapVersion += 1
+	return func(t *testing.T) {
+		assert := assert.New(t)
+
+		snapshot, _ := cache.NewSnapshot(fmt.Sprint(*snapVersion),
+			map[resource.Type][]types.Resource{
+				resource.RateLimitConfigType: {
+					&rls_config.RateLimitConfig{
+						Name:   "foo",
+						Domain: "foo",
+						Descriptors: []*rls_config.RateLimitDescriptor{
+							{
+								Key:   "k1",
+								Value: "v1",
+								RateLimit: &rls_config.RateLimitPolicy{
+									Unit:            rls_config.RateLimitUnit_MINUTE,
+									RequestsPerUnit: 10,
+								},
+								Descriptors: []*rls_config.RateLimitDescriptor{
+									{
+										Key: "k2",
+										RateLimit: &rls_config.RateLimitPolicy{
+											Unlimited: true,
+										},
+									},
+									{
+										Key:   "k2",
+										Value: "v2",
+										RateLimit: &rls_config.RateLimitPolicy{
+											Unit:            rls_config.RateLimitUnit_HOUR,
+											RequestsPerUnit: 15,
+										},
+									},
+								},
+							},
+							{
+								Key:   "j1",
+								Value: "v2",
+								RateLimit: &rls_config.RateLimitPolicy{
+									Unlimited: true,
+								},
+								Descriptors: []*rls_config.RateLimitDescriptor{
+									{
+										Key: "j2",
+										RateLimit: &rls_config.RateLimitPolicy{
+											Unlimited: true,
+										},
+									},
+									{
+										Key:   "j2",
+										Value: "v2",
+										RateLimit: &rls_config.RateLimitPolicy{
+											Unit:            rls_config.RateLimitUnit_DAY,
+											RequestsPerUnit: 15,
+										},
+										ShadowMode: true,
+									},
+								},
+							},
+						},
+					},
+					&rls_config.RateLimitConfig{
+						Name:   "bar",
+						Domain: "bar",
+						Descriptors: []*rls_config.RateLimitDescriptor{
+							{
+								Key:   "k1",
+								Value: "v1",
+								RateLimit: &rls_config.RateLimitPolicy{
+									Unit:            rls_config.RateLimitUnit_MINUTE,
+									RequestsPerUnit: 100,
+								},
+							},
+						},
+					},
+				},
+			},
+		)
+		setSnapshotFunc(snapshot)
+
+		configEvent := <-providerEventChan
+		assert.NotNil(configEvent)
+
+		config, err := configEvent.GetConfig()
+		assert.Nil(err)
+		assert.ElementsMatch([]string{
+			"foo.k1_v1: unit=MINUTE requests_per_unit=10, shadow_mode: false",
+			"foo.k1_v1.k2: unit=UNKNOWN requests_per_unit=0, shadow_mode: false",
+			"foo.k1_v1.k2_v2: unit=HOUR requests_per_unit=15, shadow_mode: false",
+			"foo.j1_v2: unit=UNKNOWN requests_per_unit=0, shadow_mode: false",
+			"foo.j1_v2.j2: unit=UNKNOWN requests_per_unit=0, shadow_mode: false",
+			"foo.j1_v2.j2_v2: unit=DAY requests_per_unit=15, shadow_mode: true",
+			"bar.k1_v1: unit=MINUTE requests_per_unit=100, shadow_mode: false",
+		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
 	}
-	if err := snapCache.SetSnapshot(context.Background(), "test-node", snapshot); err != nil {
-		t.Errorf("snapshot error %q for %+v", err, snapshot)
+}
+
+func testSameDomainMultipleXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+	return func(t *testing.T) {
+		assert := assert.New(t)
+
+		snapshot, _ := cache.NewSnapshot("3",
+			map[resource.Type][]types.Resource{
+				resource.RateLimitConfigType: {
+					&rls_config.RateLimitConfig{
+						Name:   "foo-1",
+						Domain: "foo",
+						Descriptors: []*rls_config.RateLimitDescriptor{
+							{
+								Key:   "k1",
+								Value: "v1",
+								RateLimit: &rls_config.RateLimitPolicy{
+									Unit:            rls_config.RateLimitUnit_MINUTE,
+									RequestsPerUnit: 10,
+								},
+							},
+						},
+					},
+					&rls_config.RateLimitConfig{
+						Name:   "foo-2",
+						Domain: "foo",
+						Descriptors: []*rls_config.RateLimitDescriptor{
+							{
+								Key:   "k1",
+								Value: "v2",
+								RateLimit: &rls_config.RateLimitPolicy{
+									Unit:            rls_config.RateLimitUnit_MINUTE,
+									RequestsPerUnit: 100,
+								},
+							},
+						},
+					},
+				},
+			},
+		)
+		setSnapshotFunc(snapshot)
+
+		configEvent := <-providerEventChan
+		assert.NotNil(configEvent)
+
+		config, err := configEvent.GetConfig()
+		assert.Nil(err)
+		assert.ElementsMatch([]string{
+			"foo.k1_v2: unit=MINUTE requests_per_unit=100, shadow_mode: false",
+			"foo.k1_v1: unit=MINUTE requests_per_unit=10, shadow_mode: false",
+		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
 	}
 }

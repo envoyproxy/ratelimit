@@ -195,7 +195,7 @@ func (p *XdsGrpcSotwProvider) sendConfigs(resources []*any.Any) {
 		logger.Infof("RENUKA TEST: %v", confPb)
 
 		configYaml := config.ConfigXdsProtoToYaml(confPb)
-		conf = append(conf, config.RateLimitConfigToLoad{Name: confPb.Domain, ConfigYaml: configYaml})
+		conf = append(conf, config.RateLimitConfigToLoad{Name: confPb.Name, ConfigYaml: configYaml})
 	}
 	rlSettings := settings.NewSettings()
 	rlsConf := p.loader.Load(conf, p.statsManager, rlSettings.MergeDomainConfigurations)
