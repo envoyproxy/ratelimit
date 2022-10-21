@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -175,6 +176,12 @@ func (p *XdsGrpcSotwProvider) getGrpcTransportCredentials() grpc.DialOption {
 }
 
 func (p *XdsGrpcSotwProvider) sendConfigs(resources []*any.Any) {
+	defer func() {
+		err := recover()
+		logger.Errorf("Error applying xDS configuration: %v", err)
+		p.nack(fmt.Sprint(err))
+	}()
+
 	conf := make([]config.RateLimitConfigToLoad, 0, len(resources))
 	for _, res := range resources {
 		confPb := &rls_conf_v3.RateLimitConfig{}

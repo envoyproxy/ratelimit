@@ -2,15 +2,15 @@ module github.com/envoyproxy/ratelimit
 
 go 1.18
 
-// replace github.com/envoyproxy/go-control-plane => /Users/renuka/git/go-control-plane
-replace github.com/envoyproxy/go-control-plane => github.com/renuka-fernando/go-control-plane v0.0.1
+replace github.com/envoyproxy/go-control-plane => /Users/renuka/git/go-control-plane
+
+// replace github.com/envoyproxy/go-control-plane => github.com/renuka-fernando/go-control-plane v0.0.1
 
 require (
 	github.com/alicebob/miniredis/v2 v2.23.0
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
 	github.com/coocood/freecache v1.1.0
 	github.com/envoyproxy/go-control-plane v0.10.1
-	github.com/ghodss/yaml v1.0.0
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/mux v1.7.4-0.20191121170500-49c01487a141

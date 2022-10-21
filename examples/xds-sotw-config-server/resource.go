@@ -29,7 +29,7 @@ func makeRlsConfig() []types.Resource {
 					Key:   "database",
 					Value: "users",
 					RateLimit: &rls_config.RateLimitPolicy{
-						Unit:            "second",
+						Unit:            rls_config.RateLimitUnit_SECOND,
 						RequestsPerUnit: 500,
 					},
 				},
@@ -37,7 +37,7 @@ func makeRlsConfig() []types.Resource {
 					Key:   "database",
 					Value: "default",
 					RateLimit: &rls_config.RateLimitPolicy{
-						Unit:            "second",
+						Unit:            rls_config.RateLimitUnit_SECOND,
 						RequestsPerUnit: 500,
 					},
 				},
@@ -51,7 +51,7 @@ func makeRlsConfig() []types.Resource {
 					Value: "account",
 					RateLimit: &rls_config.RateLimitPolicy{
 						Replaces:        []*rls_config.RateLimitReplace{{Name: "bkthomps"}, {Name: "fake_name"}},
-						Unit:            "minute",
+						Unit:            rls_config.RateLimitUnit_MINUTE,
 						RequestsPerUnit: 4,
 					},
 				},
@@ -64,7 +64,7 @@ func makeRlsConfig() []types.Resource {
 							Value: "bkthomps",
 							RateLimit: &rls_config.RateLimitPolicy{
 								Replaces:        []*rls_config.RateLimitReplace{{Name: "bkthomps"}},
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 2,
 							},
 						},
@@ -72,7 +72,7 @@ func makeRlsConfig() []types.Resource {
 							Key:   "destination_cluster",
 							Value: "mock",
 							RateLimit: &rls_config.RateLimitPolicy{
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 1,
 							},
 						},
@@ -81,7 +81,7 @@ func makeRlsConfig() []types.Resource {
 							Value: "override",
 							RateLimit: &rls_config.RateLimitPolicy{
 								Replaces:        []*rls_config.RateLimitReplace{{Name: "banned_limit"}},
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 2,
 							},
 						},
@@ -90,7 +90,7 @@ func makeRlsConfig() []types.Resource {
 							Value: "fake",
 							RateLimit: &rls_config.RateLimitPolicy{
 								Name:            "fake_name",
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 2,
 							},
 						},
@@ -99,14 +99,14 @@ func makeRlsConfig() []types.Resource {
 				{
 					Key: "foo",
 					RateLimit: &rls_config.RateLimitPolicy{
-						Unit:            "minute",
+						Unit:            rls_config.RateLimitUnit_MINUTE,
 						RequestsPerUnit: 2,
 					},
 					Descriptors: []*rls_config.RateLimitDescriptor{
 						{
 							Key: "bar",
 							RateLimit: &rls_config.RateLimitPolicy{
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 3,
 							},
 						},
@@ -115,7 +115,7 @@ func makeRlsConfig() []types.Resource {
 							Value: "bkthomps",
 							RateLimit: &rls_config.RateLimitPolicy{
 								Name:            "bkthomps",
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 1,
 							},
 						},
@@ -124,14 +124,14 @@ func makeRlsConfig() []types.Resource {
 							Value: "banned",
 							RateLimit: &rls_config.RateLimitPolicy{
 								Name:            "banned_limit",
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 0,
 							},
 						},
 						{
 							Key: "baz",
 							RateLimit: &rls_config.RateLimitPolicy{
-								Unit:            "second",
+								Unit:            rls_config.RateLimitUnit_SECOND,
 								RequestsPerUnit: 1,
 							},
 						},
@@ -139,7 +139,7 @@ func makeRlsConfig() []types.Resource {
 							Key:   "baz",
 							Value: "not-so-shady",
 							RateLimit: &rls_config.RateLimitPolicy{
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 3,
 							},
 						},
@@ -147,7 +147,7 @@ func makeRlsConfig() []types.Resource {
 							Key:   "baz",
 							Value: "shady",
 							RateLimit: &rls_config.RateLimitPolicy{
-								Unit:            "minute",
+								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 3,
 							},
 							ShadowMode: true,
