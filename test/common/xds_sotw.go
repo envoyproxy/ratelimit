@@ -26,7 +26,7 @@ func StartXdsSotwServer(t *testing.T, config *XdsServerConfig, initSnapshot *cac
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	snapCache := cache.NewSnapshotCache(true, cache.IDHash{}, nil) // TODO: marked as true
+	snapCache := cache.NewSnapshotCache(true, cache.IDHash{}, nil)
 	if err := initSnapshot.Consistent(); err != nil {
 		t.Errorf("Error checking consistency in initial snapshot: %v", err)
 	}

@@ -232,8 +232,8 @@ func validateYamlKeys(fileName string, config_map map[interface{}]interface{}) {
 	}
 }
 
-// Load a single YAML config file into the global config.
-// @param config specifies the file contents to load.
+// Load a single YAML config into the global config.
+// @param config specifies the yamlRoot struct to load.
 func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	root := config.ConfigYaml
 
@@ -341,6 +341,9 @@ func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) str
 	return domain + "." + rateLimitKey
 }
 
+// ConfigFileContentToYaml converts a single YAML (string content) into yamlRoot struct with validating yaml keys.
+// @param fileName specifies the name of the file.
+// @param content specifies the string content of the yaml file.
 func ConfigFileContentToYaml(fileName, content string) *yamlRoot {
 	// validate keys in config with generic map
 	any := map[interface{}]interface{}{}

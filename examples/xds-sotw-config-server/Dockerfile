@@ -1,10 +1,6 @@
 FROM golang:1.18 AS build
 WORKDIR /xds-server
 
-# ENV GOPROXY=https://proxy.golang.org
-# COPY go.mod go.sum /xds-server/
-# RUN go mod download
-
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /go/bin/xds-server -v main/main.go

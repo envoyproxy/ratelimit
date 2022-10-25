@@ -48,73 +48,75 @@ func initialXdsBasicConfig() map[resource.Type][]types.Resource {
 	return map[resource.Type][]types.Resource{
 		resource.RateLimitConfigType: {
 			&rls_config.RateLimitConfig{
+				Name:   "basic",
 				Domain: "basic",
 				Descriptors: []*rls_config.RateLimitDescriptor{
 					{
 						Key: "key1",
 						RateLimit: &rls_config.RateLimitPolicy{
-							Unit:            "second",
+							Unit:            rls_config.RateLimitUnit_SECOND,
 							RequestsPerUnit: 50,
 						},
 					},
 					{
 						Key: "key1_local",
 						RateLimit: &rls_config.RateLimitPolicy{
-							Unit:            "second",
+							Unit:            rls_config.RateLimitUnit_SECOND,
 							RequestsPerUnit: 50,
 						},
 					},
 					{
 						Key: "one_per_minute",
 						RateLimit: &rls_config.RateLimitPolicy{
-							Unit:            "minute",
+							Unit:            rls_config.RateLimitUnit_MINUTE,
 							RequestsPerUnit: 1,
 						},
 					},
 				},
 			},
 			&rls_config.RateLimitConfig{
+				Name:   "another",
 				Domain: "another",
 				Descriptors: []*rls_config.RateLimitDescriptor{
 					{
 						Key: "key2",
 						RateLimit: &rls_config.RateLimitPolicy{
-							Unit:            "minute",
+							Unit:            rls_config.RateLimitUnit_MINUTE,
 							RequestsPerUnit: 20,
 						},
 					},
 					{
 						Key: "key3",
 						RateLimit: &rls_config.RateLimitPolicy{
-							Unit:            "hour",
+							Unit:            rls_config.RateLimitUnit_HOUR,
 							RequestsPerUnit: 10,
 						},
 					},
 					{
 						Key: "key2_local",
 						RateLimit: &rls_config.RateLimitPolicy{
-							Unit:            "minute",
+							Unit:            rls_config.RateLimitUnit_MINUTE,
 							RequestsPerUnit: 20,
 						},
 					},
 					{
 						Key: "key3_local",
 						RateLimit: &rls_config.RateLimitPolicy{
-							Unit:            "hour",
+							Unit:            rls_config.RateLimitUnit_HOUR,
 							RequestsPerUnit: 10,
 						},
 					},
 					{
 						Key: "key4",
 						RateLimit: &rls_config.RateLimitPolicy{
-							Unit:            "day",
+							Unit:            rls_config.RateLimitUnit_DAY,
 							RequestsPerUnit: 20,
 						},
 					},
 					{
 						Key: "key4_local",
 						RateLimit: &rls_config.RateLimitPolicy{
-							Unit:            "day",
+							Unit:            rls_config.RateLimitUnit_DAY,
 							RequestsPerUnit: 20,
 						},
 					},
@@ -128,26 +130,27 @@ func newConfigWithXdsConfigProvider(setSnapshotFunc common.SetSnapshotFunc) func
 	initConfig := initialXdsBasicConfig()
 	rlsConf := initConfig[resource.RateLimitConfigType]
 	newRlsConf := append(rlsConf, &rls_config.RateLimitConfig{
+		Name:   "reload",
 		Domain: "reload",
 		Descriptors: []*rls_config.RateLimitDescriptor{
 			{
 				Key: "key1",
 				RateLimit: &rls_config.RateLimitPolicy{
-					Unit:            "second",
+					Unit:            rls_config.RateLimitUnit_SECOND,
 					RequestsPerUnit: 50,
 				},
 			},
 			{
 				Key: "block",
 				RateLimit: &rls_config.RateLimitPolicy{
-					Unit:            "second",
+					Unit:            rls_config.RateLimitUnit_SECOND,
 					RequestsPerUnit: 0,
 				},
 			},
 			{
 				Key: "one_per_minute",
 				RateLimit: &rls_config.RateLimitPolicy{
-					Unit:            "minute",
+					Unit:            rls_config.RateLimitUnit_MINUTE,
 					RequestsPerUnit: 1,
 				},
 			},

@@ -3,12 +3,11 @@ module github.com/envoyproxy/ratelimit/examples/xds-sotw-config-server
 go 1.18
 
 // TODO: (renuka) Remove this replace once, https://github.com/envoyproxy/go-control-plane/pull/598 is merged
-replace github.com/envoyproxy/go-control-plane => github.com/renuka-fernando/go-control-plane v0.0.1
+replace github.com/envoyproxy/go-control-plane => github.com/renuka-fernando/go-control-plane v0.0.2
 
 require (
 	github.com/envoyproxy/go-control-plane v0.10.1
 	google.golang.org/grpc v1.45.0
-	google.golang.org/protobuf v1.28.0
 )
 
 require (
@@ -20,4 +19,5 @@ require (
 	golang.org/x/sys v0.0.0-20210816183151-1e6c022a8912 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/genproto v0.0.0-20220329172620-7be39ac1afc7 // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 )

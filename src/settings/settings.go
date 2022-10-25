@@ -57,7 +57,6 @@ type Settings struct {
 	ConfigGrpcXdsNodeId                     string        `envconfig:"CONFIG_GRPC_XDS_NODE_ID" default:"default"`
 	ConfigGrpcXdsServerUrl                  string        `envconfig:"CONFIG_GRPC_XDS_SERVER_URL" default:"localhost:18000"`
 	ConfigGrpcXdsServerConnectRetryInterval time.Duration `envconfig:"CONFIG_GRPC_XDS_SERVER_CONNECT_RETRY_INTERVAL" default:"3s"`
-	ConfigGrpcXdsServerConnectTimeout       time.Duration `envconfig:"CONFIG_GRPC_XDS_SERVER_CONNECT_TIMEOUT" default:"3s"`
 
 	// xDS config server TLS configurations
 	ConfigGrpcXdsTlsConfig       *tls.Config

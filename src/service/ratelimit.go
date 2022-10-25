@@ -49,7 +49,7 @@ type service struct {
 	globalShadowMode            bool
 }
 
-func (this *service) reloadConfig(updateEvent provider.ConfigUpdateEvent) {
+func (this *service) setConfig(updateEvent provider.ConfigUpdateEvent) {
 	newConfig, err := updateEvent.GetConfig()
 	if err != nil {
 		configError, ok := err.(config.RateLimitConfigError)
@@ -58,7 +58,7 @@ func (this *service) reloadConfig(updateEvent provider.ConfigUpdateEvent) {
 		}
 
 		this.stats.ConfigLoadError.Inc()
-		logger.Errorf("error loading new configuration from runtime: %s", configError.Error())
+		logger.Errorf("Error loading new configuration: %s", configError.Error())
 		return
 	}
 
@@ -80,6 +80,7 @@ func (this *service) reloadConfig(updateEvent provider.ConfigUpdateEvent) {
 		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
 	}
 	this.configLock.Unlock()
+	logger.Info("Successfully loaded new configuration")
 }
 
 type serviceError string
@@ -314,31 +315,18 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 
 	if !forceStart {
 		logger.Info("Waiting for initial ratelimit config update event")
-		newService.reloadConfig(<-newService.configUpdateEvent)
+		newService.setConfig(<-newService.configUpdateEvent)
 		logger.Info("Successfully loaded the initial ratelimit configs")
 	}
 
 	go func() {
 		for {
-			logger.Debug("Waiting for config update")
+			logger.Debug("Waiting for config update event")
 			updateEvent := <-newService.configUpdateEvent
-			logger.Debug("Got config update and reloading config")
-			newService.reloadConfig(updateEvent)
+			logger.Debug("Setting config retrieved from config provider")
+			newService.setConfig(updateEvent)
 		}
 	}()
-
-	// runtime.AddUpdateCallback(newService.runtimeUpdateEvent)
-
-	// newService.reloadConfig(statsManager)
-	// go func() {
-	// 	// No exit right now.
-	// 	for {
-	// 		logger.Debugf("waiting for runtime update")
-	// 		<-newService.runtimeUpdateEvent
-	// 		logger.Debugf("got runtime update and reloading config")
-	// 		newService.reloadConfig(statsManager)
-	// 	}
-	// }()
 
 	return newService
 }

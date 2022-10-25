@@ -19,7 +19,6 @@ import (
 	"github.com/envoyproxy/ratelimit/test/mocks/stats"
 
 	rls_config "github.com/envoyproxy/go-control-plane/ratelimit/config/ratelimit/v3"
-	// ratelimitservice "github.com/envoyproxy/go-control-plane/ratelimit/service/ratelimit/v3"
 )
 
 const (

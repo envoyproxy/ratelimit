@@ -8,7 +8,7 @@
 - [Building and Testing](#building-and-testing)
   - [Docker-compose setup](#docker-compose-setup)
   - [Full test environment - Configure rate limits through files](#full-test-environment---configure-rate-limits-through-files)
-  - [Full test environment - Configure rate limits through xDS-Server](#full-test-environment---configure-rate-limits-through-xds-server)
+  - [Full test environment - Configure rate limits through an xDS Management Server](#full-test-environment---configure-rate-limits-through-an-xds-management-server)
   - [Self-contained end-to-end integration test](#self-contained-end-to-end-integration-test)
 - [Configuration](#configuration)
   - [The configuration format](#the-configuration-format)
@@ -26,6 +26,8 @@
       - [Example 6](#example-6)
       - [Example 7](#example-7)
   - [Loading Configuration](#loading-configuration)
+    - [File Based Configuration Loading](#file-based-configuration-loading)
+    - [xDS Management Server Based Configuration Loading](#xds-management-server-based-configuration-loading)
   - [Log Format](#log-format)
   - [GRPC Keepalive](#grpc-keepalive)
 - [Request Fields](#request-fields)
@@ -162,7 +164,7 @@ To see the metrics in the example
 curl http://localhost:9102/metrics | grep -i shadow
 ```
 
-## Full test environment - Configure rate limits through xDS-Server
+## Full test environment - Configure rate limits through an xDS Management Server
 
 To run a fully configured environment to demo Envoy based rate limiting, run:
 
@@ -183,7 +185,7 @@ curl localhost:8888/twoheader -H "foo: foo" -H "baz: shady" # This will never be
 curl localhost:8888/twoheader -H "foo: foo" -H "baz: not-so-shady" # This is subject to rate-limiting because the it's now in shadow_mode
 ```
 
-Edit[ `examples/xds-sotw-config-server/resource.go`](examples/xds-sotw-config-server/resource.go) to test different rate limit configs.
+Edit[`examples/xds-sotw-config-server/resource.go`](examples/xds-sotw-config-server/resource.go) to test different rate limit configs.
 
 To see the metrics in the example
 
@@ -524,6 +526,18 @@ descriptors:
 
 ## Loading Configuration
 
+Rate limit service supports following configuration loading methods. You can define which methods to use by configuring environment variable `CONFIG_TYPE`.
+
+| Config Loading Method                                                             | Value for Environment Variable `CONFIG_TYPE` |
+| --------------------------------------------------------------------------------- | -------------------------------------------- |
+| [File Based Configuration Loading](#file-based-configuration-loading)             | `FILE` (Default)                             |
+| [xDS Server Based Configuration Loading](#xds-server-based-configuration-loading) | `GRPC_XDS_SOTW`                              |
+
+When the environment variable `FORCE_START_WITHOUT_INITIAL_CONFIG` set to `false`, the Rate limit service will wait for initial rate limit configuration before
+starting the server (gRPC, Rest server endpoints). When set to `true` the server will start even without initial configuration.
+
+### File Based Configuration Loading
+
 The Ratelimit service uses a library written by Lyft called [goruntime](https://github.com/lyft/goruntime) to do configuration loading. Goruntime monitors
 a designated path, and watches for symlink swaps to files in the directory tree to reload configuration files.
 
@@ -556,6 +570,31 @@ For more information on how runtime works you can read its [README](https://gith
 
 By default it is not possible to define multiple configuration files within `RUNTIME_SUBDIRECTORY` referencing the same domain.
 To enable this behavior set `MERGE_DOMAIN_CONFIG` to `true`.
+
+### xDS Management Server Based Configuration Loading
+
+xDS Management Server is a gRPC server which implements the [Aggregated Discovery Service (ADS)](https://github.com/envoyproxy/data-plane-api/blob/97b6dae39046f7da1331a4dc57830d20e842fc26/envoy/service/discovery/v3/ads.proto).
+The xDS Management server serves [Discovery Response](https://github.com/envoyproxy/data-plane-api/blob/97b6dae39046f7da1331a4dc57830d20e842fc26/envoy/service/discovery/v3/discovery.proto#L69) with [Ratelimit Configuration Resources](api/ratelimit/config/ratelimit/v3/rls_conf.proto)
+and with Type URL `"type.googleapis.com/ratelimit.config.ratelimit.v3.RateLimitConfig"`.
+The xDS client in the Rate limit service configure Rate limit service with the provided configuration.
+For more information on xDS protocol please refer to the [envoy proxy documentation](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol).
+
+You can refer to [the sample xDS configuration management server](examples/xds-sotw-config-server/README.md).
+
+The xDS server for listening for configuration can be set via [settings](https://github.com/envoyproxy/ratelimit/blob/master/src/settings/settings.go)
+package with the following environment variables:
+
+```
+CONFIG_GRPC_XDS_NODE_ID default:"default"
+CONFIG_GRPC_XDS_SERVER_URL default:"localhost:18000"
+CONFIG_GRPC_XDS_SERVER_CONNECT_RETRY_INTERVAL default:"3s"
+```
+
+As well Ratelimit supports TLS connections, these can be configured using the following environment variables:
+
+1. `CONFIG_GRPC_XDS_SERVER_USE_TLS`: set to `"true"` to enable a TLS connection with the xDS configuration management server.
+2. `CONFIG_GRPC_XDS_CLIENT_TLS_CERT`, `CONFIG_GRPC_XDS_CLIENT_TLS_KEY`, and `CONFIG_GRPC_XDS_SERVER_TLS_CACERT` to provides files to specify a TLS connection configuration to the xDS configuration management server.
+3. `GRPC_CLIENT_TLS_SAN`: Override the SAN value to validate from the server certificate.
 
 ## Log Format
 

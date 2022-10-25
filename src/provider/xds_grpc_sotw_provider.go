@@ -25,39 +25,45 @@ import (
 	grpcStatus "google.golang.org/grpc/status"
 
 	rls_conf_v3 "github.com/envoyproxy/go-control-plane/ratelimit/config/ratelimit/v3"
-	// rls_svc_v3 "github.com/envoyproxy/go-control-plane/ratelimit/service/ratelimit/v3"
 )
 
 const (
 	configTypeURL string = "type.googleapis.com/ratelimit.config.ratelimit.v3.RateLimitConfig"
 )
 
+// XdsGrpcSotwProvider is the xDS provider which implements `RateLimitConfigProvider` interface.
 type XdsGrpcSotwProvider struct {
 	settings              settings.Settings
 	loader                config.RateLimitConfigLoader
 	configUpdateEventChan chan ConfigUpdateEvent
 	statsManager          stats.Manager
-	// xdsStream             rls_svc_v3.RateLimitConfigDiscoveryService_StreamRlsConfigsClient
-	xdsStream         discovery.AggregatedDiscoveryService_StreamAggregatedResourcesClient
+	ctx                   context.Context
+	// xdsStream is the ADS stream client
+	xdsStream discovery.AggregatedDiscoveryService_StreamAggregatedResourcesClient
+	// lastAckedResponse is the last response acked by the rate limit service
 	lastAckedResponse *discovery.DiscoveryResponse
-	// TODO: (renuka) lastAckedResponse and lastReceivedResponse are equal
+	// lastReceivedResponse is the last response received from xDS server
 	lastReceivedResponse *discovery.DiscoveryResponse
-	// If a connection error occurs, true event would be returned
+	// connectionRetryChannel is the channel which trigger true for connection issues
 	connectionRetryChannel chan bool
 }
 
+// NewXdsGrpcSotwProvider initializes xDS listener and returns the xDS provider.
 func NewXdsGrpcSotwProvider(settings settings.Settings, statsManager stats.Manager) RateLimitConfigProvider {
-	return &XdsGrpcSotwProvider{
+	p := &XdsGrpcSotwProvider{
 		settings:               settings,
 		statsManager:           statsManager,
+		ctx:                    context.Background(),
 		configUpdateEventChan:  make(chan ConfigUpdateEvent),
 		connectionRetryChannel: make(chan bool),
 		loader:                 config.NewRateLimitConfigLoaderImpl(),
 	}
+	go p.initXdsClient()
+	return p
 }
 
+// ConfigUpdateEvent returns config provider channel
 func (p *XdsGrpcSotwProvider) ConfigUpdateEvent() <-chan ConfigUpdateEvent {
-	go p.initXdsClient()
 	return p.configUpdateEventChan
 }
 
@@ -84,14 +90,13 @@ func (p *XdsGrpcSotwProvider) initializeAndWatch() *grpc.ClientConn {
 	conn, err := p.initConnection()
 	if err != nil {
 		p.connectionRetryChannel <- true
-		return conn
+		return nil
 	}
 	go p.watchConfigs()
 
-	// TODO: (renuka) check this, no nil for all cases
 	var lastAppliedVersion string
 	if p.lastAckedResponse != nil {
-		// If the connection is interrupted in the middle, we need to apply if the version remains same
+		// If the connection is interrupted in the middle, apply the previously applied version
 		lastAppliedVersion = p.lastAckedResponse.VersionInfo
 	} else {
 		lastAppliedVersion = ""
@@ -177,9 +182,10 @@ func (p *XdsGrpcSotwProvider) getGrpcTransportCredentials() grpc.DialOption {
 
 func (p *XdsGrpcSotwProvider) sendConfigs(resources []*any.Any) {
 	defer func() {
-		err := recover()
-		logger.Errorf("Error applying xDS configuration: %v", err)
-		p.nack(fmt.Sprint(err))
+		if e := recover(); e != nil {
+			p.configUpdateEventChan <- &ConfigUpdateEventImpl{err: e}
+			p.nack(fmt.Sprint(e))
+		}
 	}()
 
 	conf := make([]config.RateLimitConfigToLoad, 0, len(resources))
@@ -191,8 +197,6 @@ func (p *XdsGrpcSotwProvider) sendConfigs(resources []*any.Any) {
 			p.nack(err.Error())
 			return
 		}
-
-		logger.Infof("RENUKA TEST: %v", confPb)
 
 		configYaml := config.ConfigXdsProtoToYaml(confPb)
 		conf = append(conf, config.RateLimitConfigToLoad{Name: confPb.Name, ConfigYaml: configYaml})

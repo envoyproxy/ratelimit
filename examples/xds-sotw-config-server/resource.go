@@ -23,6 +23,7 @@ import (
 func makeRlsConfig() []types.Resource {
 	return []types.Resource{
 		&rls_config.RateLimitConfig{
+			Name:   "mongo_cps",
 			Domain: "mongo_cps",
 			Descriptors: []*rls_config.RateLimitDescriptor{
 				{
@@ -44,6 +45,7 @@ func makeRlsConfig() []types.Resource {
 			},
 		},
 		&rls_config.RateLimitConfig{
+			Name:   "rl",
 			Domain: "rl",
 			Descriptors: []*rls_config.RateLimitDescriptor{
 				{
