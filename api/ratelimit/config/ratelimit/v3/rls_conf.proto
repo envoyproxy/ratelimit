@@ -8,6 +8,11 @@ option java_multiple_files = true;
 option go_package = "github.com/envoyproxy/go-control-plane/ratelimit/config/ratelimit/v3;ratelimitv3";
 
 // [#protodoc-title: Rate limit service configuration]
+// A management server which supports ADS (Aggregated Discovery Service - SotW or delta protocol) can apply
+// rate limit service configuration using the message type RateLimitConfig. The ADS client within the rate limit service
+// will stream Discovery Request with the resource type URL "type.googleapis.com/ratelimit.config.ratelimit.v3.RateLimitConfig".
+// The ADS management server should respond stream of Discovery Response with the same type URL and array of RateLimitConfigs
+// within resources of the Discovery Response.
 
 // Rate limit configuration for a single domain.
 message RateLimitConfig {
