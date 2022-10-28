@@ -3,7 +3,7 @@ module github.com/envoyproxy/ratelimit
 go 1.18
 
 // TODO: (renuka) Remove this replace once, https://github.com/envoyproxy/go-control-plane/pull/598 is merged
-replace github.com/envoyproxy/go-control-plane => github.com/renuka-fernando/go-control-plane v0.0.2
+replace github.com/envoyproxy/go-control-plane => github.com/renuka-fernando/go-control-plane v0.0.3
 
 require (
 	github.com/alicebob/miniredis/v2 v2.23.0
@@ -22,7 +22,6 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.7.1
 	golang.org/x/net v0.0.0-20220909164309-bea034e7d591
-	google.golang.org/genproto v0.0.0-20220329172620-7be39ac1afc7
 	google.golang.org/grpc v1.45.0
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v2 v2.3.0
@@ -37,6 +36,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.6.3 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	google.golang.org/genproto v0.0.0-20220329172620-7be39ac1afc7 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 )
 
