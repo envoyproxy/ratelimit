@@ -49,12 +49,11 @@ func TestServerStringsFromSevWhenSrvIsWellFormedButNotLookupable(t *testing.T) {
 }
 
 func TestServerStrings(t *testing.T) {
-	// it seems reasonable to think _xmpp-server._tcp.gmail.com will be available for a long time!
 	srvResolver := srv.DnsSrvResolver{}
-	servers, err := srvResolver.ServerStringsFromSrv("_xmpp-server._tcp.gmail.com.")
+	servers, err := srvResolver.ServerStringsFromSrv("_imaps._tcp.gmail.com.")
+	assert.Nil(t, err)
 	assert.True(t, len(servers) > 0)
 	for _, s := range servers {
-		assert.Regexp(t, `^.*xmpp-server.*google.com.:\d+$`, s)
+		assert.Regexp(t, `^.*imap.*gmail.com.:\d+$`, s)
 	}
-	assert.Nil(t, err)
 }
