@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/reflection"
 
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
@@ -220,6 +221,9 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		grpcOptions = append(grpcOptions, grpc.Creds(credentials.NewTLS(grpcServerTlsConfig)))
 	}
 	ret.grpcServer = grpc.NewServer(grpcOptions...)
+
+	// register the grpc reflection
+	reflection.Register(ret.grpcServer)
 
 	// setup listen addresses
 	ret.httpAddress = net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
