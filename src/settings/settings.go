@@ -65,7 +65,7 @@ type Settings struct {
 	ConfigGrpcXdsClientTlsKey    string `envconfig:"CONFIG_GRPC_XDS_CLIENT_TLS_KEY" default:""`
 	ConfigGrpcXdsServerTlsCACert string `envconfig:"CONFIG_GRPC_XDS_SERVER_TLS_CACERT" default:""`
 	// GrpcClientTlsSAN is the SAN to validate from the client cert during mTLS auth
-	ConfigGrpcXdsServerTlsSAN string `envconfig:"GRPC_CLIENT_TLS_SAN" default:""`
+	ConfigGrpcXdsServerTlsSAN string `envconfig:"CONFIG_GRPC_XDS_SERVER_TLS_SAN" default:""`
 
 	// Stats-related settings
 	UseStatsd  bool              `envconfig:"USE_STATSD" default:"true"`

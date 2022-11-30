@@ -594,7 +594,7 @@ As well Ratelimit supports TLS connections, these can be configured using the fo
 
 1. `CONFIG_GRPC_XDS_SERVER_USE_TLS`: set to `"true"` to enable a TLS connection with the xDS configuration management server.
 2. `CONFIG_GRPC_XDS_CLIENT_TLS_CERT`, `CONFIG_GRPC_XDS_CLIENT_TLS_KEY`, and `CONFIG_GRPC_XDS_SERVER_TLS_CACERT` to provides files to specify a TLS connection configuration to the xDS configuration management server.
-3. `GRPC_CLIENT_TLS_SAN`: Override the SAN value to validate from the server certificate.
+3. `CONFIG_GRPC_XDS_SERVER_TLS_SAN`: (Optional) Override the SAN value to validate from the server certificate.
 
 ## Log Format
 
