@@ -48,8 +48,21 @@ type service struct {
 	customHeaderLimitHeader     string
 	customHeaderRemainingHeader string
 	customHeaderResetHeader     string
+	customHeaderPolicyHeader    string
 	customHeaderClock           utils.TimeSource
 	globalShadowMode            bool
+}
+
+var ratelimitUnitToSeconds = map[pb.RateLimitResponse_RateLimit_Unit]string{
+	pb.RateLimitResponse_RateLimit_UNKNOWN: intToString(0),
+	pb.RateLimitResponse_RateLimit_SECOND:  intToString(1),
+	pb.RateLimitResponse_RateLimit_MINUTE:  intToString(60),
+	pb.RateLimitResponse_RateLimit_HOUR:    intToString(60 * 60),
+	pb.RateLimitResponse_RateLimit_DAY:     intToString(60 * 60 * 24),
+}
+
+func intToString(i uint32) string {
+	return strconv.FormatUint(uint64(i), 10)
 }
 
 func (this *service) reloadConfig(statsManager stats.Manager) {
@@ -91,6 +104,8 @@ func (this *service) reloadConfig(statsManager stats.Manager) {
 		this.customHeaderRemainingHeader = rlSettings.HeaderRatelimitRemaining
 
 		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
+
+		this.customHeaderPolicyHeader = rlSettings.HeaderRatelimitPolicy
 	}
 	this.configLock.Unlock()
 }
@@ -193,13 +208,22 @@ func (this *service) shouldRateLimitWorker(
 	minLimitRemaining := MaxUint32
 	var minimumDescriptor *pb.RateLimitResponse_DescriptorStatus = nil
 
+	// summary of the rate limit policy, e.g. RateLimit-Policy: 10;w=1, 50;w=60, 1000;w=3600, 5000;w=86400
+	var policyHeaderSB strings.Builder
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		// Keep track of the descriptor closest to hit the ratelimit
 		if this.customHeadersEnabled &&
-			descriptorStatus.CurrentLimit != nil &&
-			descriptorStatus.LimitRemaining < minLimitRemaining {
-			minimumDescriptor = descriptorStatus
-			minLimitRemaining = descriptorStatus.LimitRemaining
+			descriptorStatus.CurrentLimit != nil {
+			if descriptorStatus.LimitRemaining < minLimitRemaining {
+				minimumDescriptor = descriptorStatus
+				minLimitRemaining = descriptorStatus.LimitRemaining
+			}
+			if i > 0 {
+				policyHeaderSB.WriteString(", ")
+			}
+			policyHeaderSB.WriteString(intToString(descriptorStatus.CurrentLimit.RequestsPerUnit))
+			policyHeaderSB.WriteByte(';')
+			policyHeaderSB.WriteString(this.unitToSeconds(descriptorStatus.CurrentLimit.Unit))
 		}
 
 		if isUnlimited[i] {
@@ -224,6 +248,7 @@ func (this *service) shouldRateLimitWorker(
 			this.rateLimitLimitHeader(minimumDescriptor),
 			this.rateLimitRemainingHeader(minimumDescriptor),
 			this.rateLimitResetHeader(minimumDescriptor),
+			this.rateLimitPolicyHeader(policyHeaderSB),
 		}
 	}
 
@@ -260,6 +285,13 @@ func (this *service) rateLimitResetHeader(
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
 		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
+	}
+}
+
+func (this *service) rateLimitPolicyHeader(sb strings.Builder) *core.HeaderValue {
+	return &core.HeaderValue{
+		Key:   this.customHeaderPolicyHeader,
+		Value: sb.String(),
 	}
 }
 
@@ -310,6 +342,10 @@ func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool) {
 	this.configLock.RLock()
 	defer this.configLock.RUnlock()
 	return this.config, this.globalShadowMode
+}
+
+func (this *service) unitToSeconds(unit pb.RateLimitResponse_RateLimit_Unit) string {
+	return ratelimitUnitToSeconds[unit]
 }
 
 func NewService(runtime loader.IFace, cache limiter.RateLimitCache,

@@ -823,6 +823,7 @@ The following environment variables control the custom response feature:
 1. `LIMIT_LIMIT_HEADER` - The default value is "RateLimit-Limit", setting the environment variable will specify an alternative header name
 1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
 1. `LIMIT_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
+1. `LIMIT_RESET_POLICY` - The default value is "RateLimit-Policy", setting the environment variable will specify an alternative header name
 
 You may use the following commands to quickly setup a openTelemetry collector together with a Jaeger all-in-one binary for quickstart:
 

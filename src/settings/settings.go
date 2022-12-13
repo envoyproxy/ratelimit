@@ -73,6 +73,8 @@ type Settings struct {
 	HeaderRatelimitRemaining string `envconfig:"LIMIT_REMAINING_HEADER" default:"RateLimit-Remaining"`
 	// value: remaining seconds
 	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:"RateLimit-Reset"`
+	// value: rate limit policy summary
+	HeaderRatelimitPolicy string `envconfig:"LIMIT_POLICY_HEADER" default:"RateLimit-Policy"`
 
 	// Redis settings
 	RedisSocketType string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`

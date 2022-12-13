@@ -343,11 +343,13 @@ func TestServiceWithCustomRatelimitHeaders(test *testing.T) {
 	os.Setenv("LIMIT_LIMIT_HEADER", "A-Ratelimit-Limit")
 	os.Setenv("LIMIT_REMAINING_HEADER", "A-Ratelimit-Remaining")
 	os.Setenv("LIMIT_RESET_HEADER", "A-Ratelimit-Reset")
+	os.Setenv("LIMIT_POLICY_HEADER", "A-Ratelimit-Policy")
 	defer func() {
 		os.Unsetenv("LIMIT_RESPONSE_HEADERS_ENABLED")
 		os.Unsetenv("LIMIT_LIMIT_HEADER")
 		os.Unsetenv("LIMIT_REMAINING_HEADER")
 		os.Unsetenv("LIMIT_RESET_HEADER")
+		os.Unsetenv("LIMIT_POLICY_HEADER")
 	}()
 
 	t := commonSetup(test)
@@ -390,6 +392,7 @@ func TestServiceWithCustomRatelimitHeaders(test *testing.T) {
 				{Key: "A-Ratelimit-Limit", Value: "10"},
 				{Key: "A-Ratelimit-Remaining", Value: "0"},
 				{Key: "A-Ratelimit-Reset", Value: "58"},
+				{Key: "A-Ratelimit-Policy", Value: "10;60"},
 			},
 		},
 		response)
@@ -442,6 +445,7 @@ func TestServiceWithDefaultRatelimitHeaders(test *testing.T) {
 				{Key: "RateLimit-Limit", Value: "10"},
 				{Key: "RateLimit-Remaining", Value: "0"},
 				{Key: "RateLimit-Reset", Value: "58"},
+				{Key: "RateLimit-Policy", Value: "10;60"},
 			},
 		},
 		response)
