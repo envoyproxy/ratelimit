@@ -32,7 +32,7 @@ var tracer = otel.Tracer("ratelimit")
 
 type RateLimitServiceServer interface {
 	pb.RateLimitServiceServer
-	GetCurrentConfig() config.RateLimitConfig
+	GetCurrentConfig() (config.RateLimitConfig, bool)
 }
 
 type service struct {
@@ -95,8 +95,7 @@ func checkServiceErr(something bool, msg string) {
 	}
 }
 
-func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx context.Context) ([]*config.RateLimit, []bool) {
-	snappedConfig := this.GetCurrentConfig()
+func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx context.Context, snappedConfig config.RateLimitConfig) ([]*config.RateLimit, []bool) {
 	checkServiceErr(snappedConfig != nil, "no rate limit configuration loaded")
 
 	limitsToCheck := make([]*config.RateLimit, len(request.Descriptors))
@@ -168,7 +167,8 @@ func (this *service) shouldRateLimitWorker(
 	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
 	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
 
-	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx)
+	snappedConfig, globalShadowMode := this.GetCurrentConfig()
+	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx, snappedConfig)
 
 	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
@@ -216,7 +216,7 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	// If there is a global shadow_mode, it should always return OK
-	if finalCode == pb.RateLimitResponse_OVER_LIMIT && this.globalShadowMode {
+	if finalCode == pb.RateLimitResponse_OVER_LIMIT && globalShadowMode {
 		finalCode = pb.RateLimitResponse_OK
 		this.stats.GlobalShadowMode.Inc()
 	}
@@ -294,10 +294,10 @@ func (this *service) ShouldRateLimit(
 	return response, nil
 }
 
-func (this *service) GetCurrentConfig() config.RateLimitConfig {
+func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool) {
 	this.configLock.RLock()
 	defer this.configLock.RUnlock()
-	return this.config
+	return this.config, this.globalShadowMode
 }
 
 func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
