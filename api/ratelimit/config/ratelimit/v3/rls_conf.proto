@@ -89,3 +89,16 @@ enum RateLimitUnit {
   // The time unit representing a day.
   DAY = 4;
 }
+
+// [#protodoc-title: Rate Limit Config Discovery Service (RLS Conf DS)]
+
+// Return list of all rate limit configs that rate limit service should be configured with.
+service RateLimitConfigDiscoveryService {
+  rpc StreamRlsConfigs(stream envoy.service.discovery.v3.DiscoveryRequest)
+      returns (stream envoy.service.discovery.v3.DiscoveryResponse) {
+  }
+
+  rpc FetchRlsConfigs(envoy.service.discovery.v3.DiscoveryRequest)
+      returns (envoy.service.discovery.v3.DiscoveryResponse) {
+  }
+}
