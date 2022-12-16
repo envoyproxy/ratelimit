@@ -7,7 +7,7 @@ require (
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
 	github.com/coocood/freecache v1.1.0
 	github.com/envoyproxy/go-control-plane v0.10.1
-	github.com/golang/mock v1.4.4
+	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/mux v1.7.4-0.20191121170500-49c01487a141
 	github.com/kavu/go_reuseport v1.2.0
