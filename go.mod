@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/alicebob/miniredis/v2 v2.23.1
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
-	github.com/coocood/freecache v1.1.0
+	github.com/coocood/freecache v1.2.3
 	github.com/envoyproxy/go-control-plane v0.10.2-0.20220325020618-49ff273808a1
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
@@ -33,7 +33,7 @@ require (
 require (
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
 	github.com/cenkalti/backoff/v4 v4.2.0 // indirect
-	github.com/cespare/xxhash v1.1.0 // indirect
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/envoyproxy/protoc-gen-validate v0.1.0 // indirect
