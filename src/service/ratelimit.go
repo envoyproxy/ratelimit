@@ -124,7 +124,7 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 					fmt.Sprintf("(%s=%s)", descriptorEntry.Key, descriptorEntry.Value),
 				)
 			}
-			logger.Debugf("got descriptor: %s", strings.Join(descriptorEntryStrings, ","))
+			logger.Debugf("got descriptor: %s %s", request.Domain, strings.Join(descriptorEntryStrings, ","))
 		}
 		limitsToCheck[i] = snappedConfig.GetLimit(ctx, request.Domain, descriptor)
 		if logger.IsLevelEnabled(logger.DebugLevel) {
