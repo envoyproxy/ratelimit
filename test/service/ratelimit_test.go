@@ -260,7 +260,7 @@ func TestServiceGlobalShadowMode(test *testing.T) {
 	t.assert.Nil(err)
 
 	t.assert.EqualValues(1, t.statStore.NewCounter("global_shadow_mode").Value())
-	t.assert.EqualValues(2, t.statStore.NewCounter("config_load_success").Value())
+	t.assert.EqualValues(uint64(2), t.statStore.NewCounter("config_load_success").Value())
 	t.assert.EqualValues(0, t.statStore.NewCounter("config_load_error").Value())
 }
 
