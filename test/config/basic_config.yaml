@@ -60,3 +60,11 @@ descriptors:
   - key: key6
     rate_limit:
       unlimited: true
+
+  # Top level key only with default rate limit.
+
+  - key: key7
+    detailed_metric: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 70

@@ -149,3 +149,12 @@ static_resources:
                                   - request_headers:
                                       header_name: "category"
                                       descriptor_key: "category"
+                        - match:
+                            prefix: /unspec
+                          route:
+                            cluster: mock
+                            rate_limits:
+                              - actions:
+                                  - request_headers:
+                                      header_name: "unspec"
+                                      descriptor_key: "unspec"

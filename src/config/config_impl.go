@@ -26,11 +26,12 @@ type YamlRateLimit struct {
 }
 
 type YamlDescriptor struct {
-	Key         string
-	Value       string
-	RateLimit   *YamlRateLimit `yaml:"rate_limit"`
-	Descriptors []YamlDescriptor
-	ShadowMode  bool `yaml:"shadow_mode"`
+	Key                               string
+	Value                             string
+	RateLimit                         *YamlRateLimit `yaml:"rate_limit"`
+	Descriptors                       []YamlDescriptor
+	ShadowMode                        bool `yaml:"shadow_mode"`
+	IncludeMetricsForUnspecifiedValue bool `yaml:"detailed_metric"`
 }
 
 type YamlRoot struct {
@@ -65,6 +66,7 @@ var validKeys = map[string]bool{
 	"shadow_mode":       true,
 	"name":              true,
 	"replaces":          true,
+	"detailed_metric":   true,
 }
 
 // Create a new rate limit config entry.
@@ -74,7 +76,7 @@ var validKeys = map[string]bool{
 // @param unlimited supplies whether the rate limit is unlimited
 // @return the new config entry.
 func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats,
-	unlimited bool, shadowMode bool, name string, replaces []string) *RateLimit {
+	unlimited bool, shadowMode bool, name string, replaces []string, includeValueInMetricWhenNotSpecified bool) *RateLimit {
 
 	return &RateLimit{
 		FullKey: rlStats.GetKey(),
@@ -83,10 +85,11 @@ func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Un
 			RequestsPerUnit: requestsPerUnit,
 			Unit:            unit,
 		},
-		Unlimited:  unlimited,
-		ShadowMode: shadowMode,
-		Name:       name,
-		Replaces:   replaces,
+		Unlimited:                            unlimited,
+		ShadowMode:                           shadowMode,
+		Name:                                 name,
+		Replaces:                             replaces,
+		IncludeValueInMetricWhenNotSpecified: includeValueInMetricWhenNotSpecified,
 	}
 }
 
@@ -163,7 +166,7 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			rateLimit = NewRateLimit(
 				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value),
 				statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode,
-				descriptorConfig.RateLimit.Name, replaces,
+				descriptorConfig.RateLimit.Name, replaces, descriptorConfig.IncludeMetricsForUnspecifiedValue,
 			)
 			rateLimitDebugString = fmt.Sprintf(
 				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t}", rateLimit.Limit.RequestsPerUnit,
@@ -306,6 +309,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 			false,
 			"",
 			[]string{},
+			false,
 		)
 		return rateLimit
 	}
@@ -325,6 +329,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 		if nextDescriptor != nil && nextDescriptor.limit != nil {
 			logger.Debugf("found rate limit: %s", finalKey)
+
 			if i == len(descriptor.Entries)-1 {
 				rateLimit = nextDescriptor.limit
 			} else {
@@ -336,6 +341,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 			logger.Debugf("iterating to next level")
 			descriptorsMap = nextDescriptor.descriptors
 		} else {
+			if rateLimit != nil && rateLimit.IncludeValueInMetricWhenNotSpecified {
+				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey+"_"+entry.Value), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, false)
+			}
+
 			break
 		}
 	}
