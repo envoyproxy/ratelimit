@@ -501,7 +501,7 @@ descriptors:
 
 #### Example 8
 
-In this example there of where the extended metrics for a key where there will be detailed metrics even for the unknown values.
+In this example we demonstrate how a descriptor without a specified value is configured to override the default behavior and include the matched-value in the metrics.
 
 Rate limting configuration and tracking works as normally
 
