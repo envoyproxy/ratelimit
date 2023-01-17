@@ -177,6 +177,42 @@ func TestBasicConfig(t *testing.T) {
 	assert.True(rl.Unlimited)
 	assert.EqualValues(1, stats.NewCounter("test-domain.key6.total_hits").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key6.within_limit").Value())
+
+	// A value for the key with detailed_metric: true
+	// should also generate a stat with the value included
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key7", Value: "unspecified_value"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
+	assert.EqualValues(70, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key7_unspecified_value.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key7_unspecified_value.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key7_unspecified_value.near_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key7_unspecified_value.within_limit").Value())
+
+	// Another value for the key with detailed_metric: true
+	// should also generate a stat with the value included
+	rl = rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key7", Value: "another_value"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
+	assert.EqualValues(70, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key7_another_value.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key7_another_value.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key7_another_value.near_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key7_another_value.within_limit").Value())
 }
 
 func TestDomainMerge(t *testing.T) {

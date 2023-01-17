@@ -76,6 +76,11 @@ descriptors:
       - key: bay
         rate_limit:
           unlimited: true
+  - key: unspec
+    detailed_metric: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 2
   - key: qux
     rate_limit:
       unlimited: true
