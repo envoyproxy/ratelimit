@@ -55,6 +55,7 @@ type Settings struct {
 	// xDS rate limit configuration
 	// ConfigGrpcXdsNodeId is the Node ID. xDS server should set snapshots to this Node ID
 	ConfigGrpcXdsNodeId                     string        `envconfig:"CONFIG_GRPC_XDS_NODE_ID" default:"default"`
+	ConfigGrpcXdsNodeMetadata               string        `envconfig:"CONFIG_GRPC_XDS_NODE_METADATA" default:""` // eg: "key1:val1,key2=val2"
 	ConfigGrpcXdsServerUrl                  string        `envconfig:"CONFIG_GRPC_XDS_SERVER_URL" default:"localhost:18000"`
 	ConfigGrpcXdsServerConnectRetryInterval time.Duration `envconfig:"CONFIG_GRPC_XDS_SERVER_CONNECT_RETRY_INTERVAL" default:"3s"`
 

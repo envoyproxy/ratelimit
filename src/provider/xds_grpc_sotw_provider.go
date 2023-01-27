@@ -3,7 +3,9 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/golang/protobuf/ptypes/any"
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
@@ -13,12 +15,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/stats"
 
-	"github.com/envoyproxy/go-control-plane/pkg/adsclient/sotw/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/client/sotw/v3"
 	rls_conf_v3 "github.com/envoyproxy/go-control-plane/ratelimit/config/ratelimit/v3"
 )
 
@@ -29,7 +32,7 @@ type XdsGrpcSotwProvider struct {
 	configUpdateEventChan chan ConfigUpdateEvent
 	statsManager          stats.Manager
 	ctx                   context.Context
-	adsClient             sotw.AdsClient
+	adsClient             sotw.ADSClient
 	// connectionRetryChannel is the channel which trigger true for connection issues
 	connectionRetryChannel chan bool
 }
@@ -44,7 +47,7 @@ func NewXdsGrpcSotwProvider(settings settings.Settings, statsManager stats.Manag
 		configUpdateEventChan:  make(chan ConfigUpdateEvent),
 		connectionRetryChannel: make(chan bool),
 		loader:                 config.NewRateLimitConfigLoaderImpl(),
-		adsClient:              sotw.NewAdsClient(ctx, settings.ConfigGrpcXdsNodeId, resource.RateLimitConfigType),
+		adsClient:              sotw.NewADSClient(ctx, getClientNode(settings), resource.RateLimitConfigType),
 	}
 	go p.initXdsClient()
 	return p
@@ -160,4 +163,20 @@ func (p *XdsGrpcSotwProvider) sendConfigs(resources []*any.Any) {
 
 func (p *XdsGrpcSotwProvider) retryGrpcConn() {
 	p.connectionRetryChannel <- true
+}
+
+func getClientNode(s settings.Settings) *corev3.Node {
+	// setting metadata for node
+	metadataMap := make(map[string]*structpb.Value)
+	for _, entry := range strings.Split(s.ConfigGrpcXdsNodeMetadata, ",") {
+		keyValPair := strings.SplitN(entry, "=", 2)
+		if len(keyValPair) == 2 {
+			metadataMap[keyValPair[0]] = structpb.NewStringValue(keyValPair[1])
+		}
+	}
+
+	return &corev3.Node{
+		Id:       s.ConfigGrpcXdsNodeId,
+		Metadata: &structpb.Struct{Fields: metadataMap},
+	}
 }
