@@ -21,7 +21,8 @@ func loadFile(path string) []config.RateLimitConfigToLoad {
 	if err != nil {
 		panic(err)
 	}
-	return []config.RateLimitConfigToLoad{{path, string(contents)}}
+	configYaml := config.ConfigFileContentToYaml(path, string(contents))
+	return []config.RateLimitConfigToLoad{{Name: path, ConfigYaml: configYaml}}
 }
 
 func TestBasicConfig(t *testing.T) {

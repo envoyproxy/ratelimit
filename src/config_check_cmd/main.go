@@ -51,7 +51,8 @@ func main() {
 			fmt.Printf("error reading file %s: %s\n", finalPath, err.Error())
 			os.Exit(1)
 		}
-		allConfigs = append(allConfigs, config.RateLimitConfigToLoad{finalPath, string(bytes)})
+		configYaml := config.ConfigFileContentToYaml(finalPath, string(bytes))
+		allConfigs = append(allConfigs, config.RateLimitConfigToLoad{Name: finalPath, ConfigYaml: configYaml})
 	}
 
 	loadConfigs(allConfigs, *mergeDomainConfigs)
