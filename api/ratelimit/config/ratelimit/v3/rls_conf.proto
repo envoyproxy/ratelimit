@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package ratelimit.config.ratelimit.v3;
+
+option java_package = "io.envoyproxy.ratelimit.config.ratelimit.v3";
+option java_outer_classname = "RlsConfigProto";
+option java_multiple_files = true;
+option go_package = "github.com/envoyproxy/go-control-plane/ratelimit/config/ratelimit/v3;ratelimitv3";
+
+// [#protodoc-title: Rate limit service configuration]
+// A management server which supports ADS (Aggregated Discovery Service - SotW or delta protocol) can apply
+// rate limit service configuration using the message type RateLimitConfig. The ADS client within the rate limit service
+// will stream Discovery Request with the resource type URL "type.googleapis.com/ratelimit.config.ratelimit.v3.RateLimitConfig".
+// The ADS management server should respond stream of Discovery Response with the same type URL and array of RateLimitConfigs
+// within resources of the Discovery Response.
+
+// Rate limit configuration for a single domain.
+message RateLimitConfig {
+  // Name of the rate limit configuration. This should be unique for each configuration.
+  string name = 1;
+
+  // Domain name for the rate limit configuration.
+  string domain = 2;
+
+  // List of rate limit configuration descriptors.
+  repeated RateLimitDescriptor descriptors = 3;
+}
+
+// Rate limit configuration descriptor.
+message RateLimitDescriptor {
+  // Key of the descriptor.
+  string key = 1;
+
+  // Optional value of the descriptor.
+  string value = 2;
+
+  // Rate limit policy of the descriptor.
+  RateLimitPolicy rate_limit = 3;
+
+  // List of sub rate limit descriptors.
+  repeated RateLimitDescriptor descriptors = 4;
+
+  // Mark the descriptor as shadow. When the values is true, rate limit service allow requests to the backend.
+  bool shadow_mode = 5;
+}
+
+// Rate-limit policy.
+message RateLimitPolicy {
+  // Unit of time for the rate limit.
+  RateLimitUnit unit = 1;
+
+  // Number of requests allowed in the policy within `unit` time.
+  uint32 requests_per_unit = 2;
+
+  // Mark the rate limit policy as unlimited. All requests are allowed to the backend.
+  bool unlimited = 3;
+
+  // Optional name for the rate limit policy. Name the policy, if it should be replaced (dropped evaluation) by
+  // another policy.
+  string name = 4;
+
+  // List of rate limit policies, this rate limit policy will replace (drop evaluation)
+  // For more information: https://github.com/envoyproxy/ratelimit/tree/0b2f4d5fb04bf55e1873e2c5e2bb28da67c0643f#replaces
+  // Example: https://github.com/envoyproxy/ratelimit/tree/0b2f4d5fb04bf55e1873e2c5e2bb28da67c0643f#example-7
+  repeated RateLimitReplace replaces = 5;
+}
+
+// Replace specifies the rate limit policy that should be replaced (dropped evaluation).
+// For more information: https://github.com/envoyproxy/ratelimit/tree/0b2f4d5fb04bf55e1873e2c5e2bb28da67c0643f#replaces
+message RateLimitReplace {
+  // Name of the rate limit policy, that is being replaced (dropped evaluation).
+  string name = 1;
+}
+
+// Identifies the unit of of time for rate limit.
+enum RateLimitUnit {
+  // The time unit is not known.
+  UNKNOWN = 0;
+
+  // The time unit representing a second.
+  SECOND = 1;
+
+  // The time unit representing a minute.
+  MINUTE = 2;
+
+  // The time unit representing an hour.
+  HOUR = 3;
+
+  // The time unit representing a day.
+  DAY = 4;
+}
+
+// [#protodoc-title: Rate Limit Config Discovery Service (RLS Conf DS)]
+
+// Return list of all rate limit configs that rate limit service should be configured with.
+service RateLimitConfigDiscoveryService {
+  rpc StreamRlsConfigs(stream envoy.service.discovery.v3.DiscoveryRequest)
+      returns (stream envoy.service.discovery.v3.DiscoveryResponse) {
+  }
+
+  rpc FetchRlsConfigs(envoy.service.discovery.v3.DiscoveryRequest)
+      returns (envoy.service.discovery.v3.DiscoveryResponse) {
+  }
+}
