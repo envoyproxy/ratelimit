@@ -48,6 +48,7 @@ func defaultSettings() settings.Settings {
 	// Set some convenient defaults for all integration tests.
 	s.RuntimePath = "runtime/current"
 	s.RuntimeSubdirectory = "ratelimit"
+	s.RuntimeAppDirectory = "config"
 	s.RedisPerSecondSocketType = "tcp"
 	s.RedisSocketType = "tcp"
 	s.DebugPort = 8084

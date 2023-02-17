@@ -55,7 +55,7 @@ func (p *FileProvider) sendEvent() {
 	files := []config.RateLimitConfigToLoad{}
 	snapshot := p.runtime.Snapshot()
 	for _, key := range snapshot.Keys() {
-		if p.runtimeWatchRoot && !strings.HasPrefix(key, "config.") {
+		if p.runtimeWatchRoot && !strings.HasPrefix(key, p.settings.RuntimeAppDirectory+".") {
 			continue
 		}
 
@@ -91,7 +91,7 @@ func (p *FileProvider) setupRuntime() {
 
 		p.runtime, err = loader.New2(
 			filepath.Join(p.settings.RuntimePath, p.settings.RuntimeSubdirectory),
-			"config",
+			p.settings.RuntimeAppDirectory,
 			p.rootStore.ScopeWithTags("runtime", p.settings.ExtraTags),
 			directoryRefresher,
 			loaderOpts...)
