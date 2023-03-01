@@ -116,7 +116,7 @@ Support for [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/mas
   ```
 - To run the server locally using some sensible default settings you can do this (this will setup the server to read the configuration files from the path you specify):
   ```bash
-  USE_STATSD=false LOG_LEVEL=debug REDIS_SOCKET_TYPE=tcp REDIS_URL=localhost:6379 RUNTIME_ROOT=/home/user/src/runtime/data RUNTIME_SUBDIRECTORY=ratelimit
+  USE_STATSD=false LOG_LEVEL=debug REDIS_SOCKET_TYPE=tcp REDIS_URL=localhost:6379 RUNTIME_ROOT=/home/user/src/runtime/data RUNTIME_SUBDIRECTORY=ratelimit RUNTIME_APPDIRECTORY=config
   ```
 
 ## Docker-compose setup
@@ -593,19 +593,20 @@ package with the following environment variables:
 ```
 RUNTIME_ROOT default:"/srv/runtime_data/current"
 RUNTIME_SUBDIRECTORY
+RUNTIME_APPDIRECTORY default:"config"
 RUNTIME_IGNOREDOTFILES default:"false"
 ```
 
-**Configuration files are loaded from RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/\*.yaml**
+**Configuration files are loaded from RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/RUNTIME_APPDIRECTORY/\*.yaml**
 
 There are two methods for triggering a configuration reload:
 
 1. Symlink RUNTIME_ROOT to a different directory.
-2. Update the contents inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` directly.
+2. Update the contents inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/RUNTIME_APPDIRECTORY/` directly.
 
 The former is the default behavior. To use the latter method, set the `RUNTIME_WATCH_ROOT` environment variable to `false`.
 
-The following filesystem operations on configuration files inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/config/` will force a reload of all config files:
+The following filesystem operations on configuration files inside `RUNTIME_ROOT/RUNTIME_SUBDIRECTORY/RUNTIME_APPDIRECTORY/` will force a reload of all config files:
 
 - Write
 - Create
