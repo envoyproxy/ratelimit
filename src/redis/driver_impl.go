@@ -36,7 +36,10 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 				ps.connectionTotal.Add(1)
 				ps.connectionActive.Add(1)
 				if healthCheckActiveConnection && srv != nil {
-					srv.HealthCheckOK()
+					err := srv.HealthChecker().Ok(server.RedisHealthComponentName)
+					if err != nil {
+						logger.Errorf("Unable to update health status: %s", err)
+					}
 				}
 			} else {
 				fmt.Println("creating redis connection error :", newConn.Err)
@@ -46,7 +49,10 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 			ps.connectionActive.Sub(1)
 			ps.connectionClose.Add(1)
 			if healthCheckActiveConnection && srv != nil && ps.connectionActive.Value() == 0 {
-				srv.HealthCheckFail()
+				err := srv.HealthChecker().Fail(server.RedisHealthComponentName)
+				if err != nil {
+					logger.Errorf("Unable to update health status: %s", err)
+				}
 			}
 		},
 	}

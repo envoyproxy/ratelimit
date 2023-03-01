@@ -26,6 +26,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/server"
 )
 
 var tracer = otel.Tracer("ratelimit")
@@ -41,6 +42,7 @@ type service struct {
 	config                      config.RateLimitConfig
 	cache                       limiter.RateLimitCache
 	stats                       stats.ServiceStats
+	health                      *server.HealthChecker
 	customHeadersEnabled        bool
 	customHeaderLimitHeader     string
 	customHeaderRemainingHeader string
@@ -49,7 +51,7 @@ type service struct {
 	globalShadowMode            bool
 }
 
-func (this *service) setConfig(updateEvent provider.ConfigUpdateEvent) {
+func (this *service) setConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
 	newConfig, err := updateEvent.GetConfig()
 	if err != nil {
 		configError, ok := err.(config.RateLimitConfigError)
@@ -60,6 +62,18 @@ func (this *service) setConfig(updateEvent provider.ConfigUpdateEvent) {
 		this.stats.ConfigLoadError.Inc()
 		logger.Errorf("Error loading new configuration: %s", configError.Error())
 		return
+	}
+
+	if healthyWithAtLeastOneConfigLoad {
+		err = nil
+		if !newConfig.IsEmptyDomains() {
+			err = this.health.Ok(server.ConfigHealthComponentName)
+		} else {
+			err = this.health.Fail(server.ConfigHealthComponentName)
+		}
+		if err != nil {
+			logger.Errorf("Unable to update health status: %s", err)
+		}
 	}
 
 	this.stats.ConfigLoadSuccess.Inc()
@@ -301,7 +315,7 @@ func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool) {
 }
 
 func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
-	clock utils.TimeSource, shadowMode, forceStart bool) RateLimitServiceServer {
+	health *server.HealthChecker, clock utils.TimeSource, shadowMode, forceStart bool, healthyWithAtLeastOneConfigLoad bool) RateLimitServiceServer {
 
 	newService := &service{
 		configLock:        sync.RWMutex{},
@@ -309,13 +323,14 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 		config:            nil,
 		cache:             cache,
 		stats:             statsManager.NewServiceStats(),
+		health:            health,
 		globalShadowMode:  shadowMode,
 		customHeaderClock: clock,
 	}
 
 	if !forceStart {
 		logger.Info("Waiting for initial ratelimit config update event")
-		newService.setConfig(<-newService.configUpdateEvent)
+		newService.setConfig(<-newService.configUpdateEvent, healthyWithAtLeastOneConfigLoad)
 		logger.Info("Successfully loaded the initial ratelimit configs")
 	}
 
@@ -324,7 +339,7 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 			logger.Debug("Waiting for config update event")
 			updateEvent := <-newService.configUpdateEvent
 			logger.Debug("Setting config retrieved from config provider")
-			newService.setConfig(updateEvent)
+			newService.setConfig(updateEvent, healthyWithAtLeastOneConfigLoad)
 		}
 	}()
 

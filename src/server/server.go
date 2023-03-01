@@ -36,6 +36,11 @@ type Server interface {
 	GrpcServer() *grpc.Server
 
 	/**
+	* Returns the health checker for the server.
+	 */
+	HealthChecker() *HealthChecker
+
+	/**
 	 * Returns the configuration provider for the server.
 	 */
 	Provider() provider.RateLimitConfigProvider
@@ -44,7 +49,4 @@ type Server interface {
 	 *  Stops serving the grpc port (for integration testing).
 	 */
 	Stop()
-
-	HealthCheckFail()
-	HealthCheckOK()
 }

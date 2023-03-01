@@ -336,6 +336,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 	return rateLimit
 }
 
+func (this *rateLimitConfigImpl) IsEmptyDomains() bool {
+	return len(this.domains) == 0
+}
+
 func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
 	rateLimitKey := ""
 	for _, entry := range descriptor.Entries {

@@ -30,6 +30,7 @@ func TestBasicConfig(t *testing.T) {
 	stats := stats.NewStore(stats.NewNullSink(), false)
 	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), mockstats.NewMockStatManager(stats), false)
 	rlConfig.Dump()
+	assert.Equal(rlConfig.IsEmptyDomains(), false)
 	assert.Nil(rlConfig.GetLimit(nil, "foo_domain", &pb_struct.RateLimitDescriptor{}))
 	assert.Nil(rlConfig.GetLimit(nil, "test-domain", &pb_struct.RateLimitDescriptor{}))
 

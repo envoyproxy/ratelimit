@@ -38,6 +38,9 @@ type RateLimitConfig interface {
 	// @param descriptor supplies the descriptor to look up.
 	// @return a rate limit to apply or nil if no rate limit is configured for the descriptor.
 	GetLimit(ctx context.Context, domain string, descriptor *pb_struct.RateLimitDescriptor) *RateLimit
+
+	// Check if the domains is empty which corresponds to no config loaded.
+	IsEmptyDomains() bool
 }
 
 // Information for a config file to load into the aggregate config.

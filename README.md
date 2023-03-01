@@ -686,6 +686,14 @@ The behavior can be fixed by configuring the following env variables for the rat
 - `GRPC_MAX_CONNECTION_AGE`: a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway. A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
 - `GRPC_MAX_CONNECTION_AGE_GRACE`: an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 
+## Health check configurations
+
+Health check can be configured to check if rate-limit configurations are loaded using the following environment variable.
+
+```
+HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED default:"false"`
+```
+
 # Request Fields
 
 For information on the fields of a Ratelimit gRPC request please read the information

@@ -254,7 +254,7 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	ret.router = mux.NewRouter()
 
 	// setup healthcheck path
-	ret.health = NewHealthChecker(health.NewServer(), "ratelimit")
+	ret.health = NewHealthChecker(health.NewServer(), "ratelimit", s.HealthyWithAtLeastOneConfigLoaded)
 	ret.router.Path("/healthcheck").Handler(ret.health)
 	healthpb.RegisterHealthServer(ret.grpcServer, ret.health.Server())
 
@@ -339,10 +339,6 @@ func (server *server) handleGracefulShutdown() {
 	}()
 }
 
-func (server *server) HealthCheckFail() {
-	server.health.Fail()
-}
-
-func (server *server) HealthCheckOK() {
-	server.health.Ok()
+func (server *server) HealthChecker() *HealthChecker {
+	return server.health
 }
