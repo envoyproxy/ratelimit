@@ -32,6 +32,7 @@
     - [xDS Management Server Based Configuration Loading](#xds-management-server-based-configuration-loading)
   - [Log Format](#log-format)
   - [GRPC Keepalive](#grpc-keepalive)
+  - [Health check configurations](#health-check-configurations)
 - [Request Fields](#request-fields)
 - [GRPC Client](#grpc-client)
   - [Commandline flags](#commandline-flags)
