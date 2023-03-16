@@ -695,6 +695,9 @@ Health check can be configured to check if rate-limit configurations are loaded 
 HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED default:"false"`
 ```
 
+If `HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED` is enabled then health check will start as unhealthy and becomes healthy if
+it detects at least one domain is loaded with the config. If it detects no config again then it will change to unhealthy.
+
 # Request Fields
 
 For information on the fields of a Ratelimit gRPC request please read the information
