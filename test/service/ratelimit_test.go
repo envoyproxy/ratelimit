@@ -641,11 +641,13 @@ func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 	}
 
 	// Force a config load - config event from config provider.
-	t.config.EXPECT().IsEmptyDomains().Return(false).Times(1)
 	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
-		barrier.signal()
 		return t.config, nil
 	})
+	t.config.EXPECT().IsEmptyDomains().DoAndReturn(func() bool {
+		barrier.signal()
+		return false
+	}).Times(1)
 	t.configUpdateEventChan <- t.configUpdateEvent
 	barrier.wait()
 
@@ -656,11 +658,13 @@ func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 	}
 
 	// Force reload of an invalid config with no domains - config event from config provider.
-	t.config.EXPECT().IsEmptyDomains().Return(true).Times(1)
 	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
-		barrier.signal()
 		return t.config, nil
 	})
+	t.config.EXPECT().IsEmptyDomains().DoAndReturn(func() bool {
+		barrier.signal()
+		return true
+	}).Times(1)
 	t.configUpdateEventChan <- t.configUpdateEvent
 	barrier.wait()
 
