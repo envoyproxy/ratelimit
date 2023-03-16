@@ -568,7 +568,7 @@ func TestShadowModeConfig(t *testing.T) {
 func TestWildcardConfig(t *testing.T) {
 	assert := assert.New(t)
 	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("wildcard.yaml"), mockstats.NewMockStatManager(stats))
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("wildcard.yaml"), mockstats.NewMockStatManager(stats), false)
 	rlConfig.Dump()
 
 	// Baseline to show wildcard works like no value
@@ -582,6 +582,7 @@ func TestWildcardConfig(t *testing.T) {
 		&pb_struct.RateLimitDescriptor{
 			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "noVal", Value: "foo2"}},
 		})
+	assert.NotNil(withoutVal1)
 	assert.Equal(withoutVal1, withoutVal2)
 
 	// Matches multiple wildcard values and results are equal
@@ -596,7 +597,6 @@ func TestWildcardConfig(t *testing.T) {
 			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo2"}},
 		})
 	assert.NotNil(wildcard1)
-	assert.NotNil(wildcard2)
 	assert.Equal(wildcard1, wildcard2)
 
 	// Doesn't match non-matching values
@@ -614,4 +614,12 @@ func TestWildcardConfig(t *testing.T) {
 			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "noWild", Value: "foo1"}},
 		})
 	assert.Nil(eager)
+
+	// Wildcard in the middle of value is not supported.
+	midWildcard := rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWildcard", Value: "barab"}},
+		})
+	assert.Nil(midWildcard)
 }

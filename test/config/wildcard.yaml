@@ -15,3 +15,8 @@ descriptors:
     rate_limit:
       unit: minute
       requests_per_unit: 20
+  - key: midWild
+    value: bar*b
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
