@@ -687,7 +687,21 @@ The behavior can be fixed by configuring the following env variables for the rat
 - `GRPC_MAX_CONNECTION_AGE`: a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway. A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
 - `GRPC_MAX_CONNECTION_AGE_GRACE`: an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 
-## Health check configurations
+## Health-check
+
+Health check status is determined internally by individual components.
+Currently, we have three components that determine the overall health status of the rate limit service.
+Each of the individual component's health needs to be healthy for the overall to report healthy.
+Some components may be turned OFF via configurations so overall health is not effected by that component's health status.
+
+- Redis health (Turned ON. Defaults to healthy)
+- Configuration status (Turned OFF unless configured to be ON via `HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED` see below section. Defaults to unhealthy)
+  - If the environment variable is enabled then, it will start in an unhealthy state and become healthy when at least one config is loaded. If we later fail to load any configs, it will go unhealthy again.
+- Sigterm (Turned ON. Defaults to healthy)
+  - Turns unhealthy if receives sigterm signal
+    All components needs to be healthy for overall health to be healthy.
+
+### Health-check configurations
 
 Health check can be configured to check if rate-limit configurations are loaded using the following environment variable.
 
