@@ -97,6 +97,9 @@ type Settings struct {
 	// value: remaining seconds
 	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:"RateLimit-Reset"`
 
+	// Health-check settings
+	HealthyWithAtLeastOneConfigLoaded bool `envconfig:"HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED" default:"false"`
+
 	// Redis settings
 	RedisSocketType string `envconfig:"REDIS_SOCKET_TYPE" default:"unix"`
 	RedisType       string `envconfig:"REDIS_TYPE" default:"SINGLE"`

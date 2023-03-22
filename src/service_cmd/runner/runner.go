@@ -119,9 +119,11 @@ func (runner *Runner) Run() {
 		createLimiter(srv, s, localCache, runner.statsManager),
 		srv.Provider(),
 		runner.statsManager,
+		srv.HealthChecker(),
 		utils.NewTimeSourceImpl(),
 		s.GlobalShadowMode,
 		s.ForceStartWithoutInitialConfig,
+		s.HealthyWithAtLeastOneConfigLoaded,
 	)
 
 	srv.AddDebugHttpEndpoint(

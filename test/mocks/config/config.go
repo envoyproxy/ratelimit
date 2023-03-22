@@ -66,6 +66,20 @@ func (mr *MockRateLimitConfigMockRecorder) GetLimit(arg0, arg1, arg2 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLimit", reflect.TypeOf((*MockRateLimitConfig)(nil).GetLimit), arg0, arg1, arg2)
 }
 
+// IsEmptyDomains mocks base method
+func (m *MockRateLimitConfig) IsEmptyDomains() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsEmptyDomains")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsEmptyDomains indicates an expected call of IsEmptyDomains
+func (mr *MockRateLimitConfigMockRecorder) IsEmptyDomains() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsEmptyDomains", reflect.TypeOf((*MockRateLimitConfig)(nil).IsEmptyDomains))
+}
+
 // MockRateLimitConfigLoader is a mock of RateLimitConfigLoader interface
 type MockRateLimitConfigLoader struct {
 	ctrl     *gomock.Controller

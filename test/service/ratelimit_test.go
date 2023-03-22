@@ -3,7 +3,9 @@ package ratelimit_test
 import (
 	"math"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/envoyproxy/ratelimit/src/provider"
@@ -17,11 +19,15 @@ import (
 	gostats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/envoyproxy/ratelimit/src/trace"
 
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/redis"
+	server "github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_config "github.com/envoyproxy/ratelimit/test/mocks/config"
@@ -65,6 +71,7 @@ type rateLimitServiceTestSuite struct {
 	configUpdateEventChan chan provider.ConfigUpdateEvent
 	configUpdateEvent     *mock_provider.MockConfigUpdateEvent
 	config                *mock_config.MockRateLimitConfig
+	health                *server.HealthChecker
 	statsManager          stats.Manager
 	statStore             gostats.Store
 	mockClock             utils.TimeSource
@@ -88,12 +95,14 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret.config = mock_config.NewMockRateLimitConfig(ret.controller)
 	ret.statStore = gostats.NewStore(gostats.NewNullSink(), false)
 	ret.statsManager = mock_stats.NewMockStatManager(ret.statStore)
+	ret.health = server.NewHealthChecker(health.NewServer(), "ratelimit", false)
 	return ret
 }
 
 func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitServiceServer {
 	barrier := newBarrier()
 	this.configProvider.EXPECT().ConfigUpdateEvent().Return(this.configUpdateEventChan).Times(1)
+	this.config.EXPECT().IsEmptyDomains().Return(false).AnyTimes()
 	this.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
 		barrier.signal()
 		return this.config, nil
@@ -102,7 +111,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 
 	testSpanExporter.Reset()
 
-	svc := ratelimit.NewService(this.cache, this.configProvider, this.statsManager, MockClock{now: int64(2222)}, false, false)
+	svc := ratelimit.NewService(this.cache, this.configProvider, this.statsManager, this.health, MockClock{now: int64(2222)}, false, false, false)
 	barrier.wait() // wait for initial config load
 	return svc
 }
@@ -502,7 +511,7 @@ func TestInitialLoadError(test *testing.T) {
 		return nil, config.RateLimitConfigError("load error")
 	})
 	go func() { t.configUpdateEventChan <- t.configUpdateEvent }() // initial config update from provider
-	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, t.mockClock, false, false)
+	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, t.health, t.mockClock, false, false, false)
 	barrier.wait()
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
@@ -577,4 +586,91 @@ func TestServiceTracer(test *testing.T) {
 	t.assert.NotNil(spanStubs)
 	t.assert.Len(spanStubs, 1)
 	t.assert.Equal(spanStubs[0].Name, "ShouldRateLimit Execution")
+}
+
+func TestServiceHealthStatus(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	defer signal.Reset(syscall.SIGTERM)
+
+	healthyWithAtLeastOneConfigLoaded := false
+	grpcHealthServer := health.NewServer()
+	hc := server.NewHealthChecker(grpcHealthServer, "ratelimit", healthyWithAtLeastOneConfigLoaded)
+	healthpb.RegisterHealthServer(grpc.NewServer(), grpcHealthServer)
+
+	// Set up the service
+	t.configProvider.EXPECT().ConfigUpdateEvent().Return(t.configUpdateEventChan).Times(1)
+	_ = ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded)
+
+	// Health check request
+	req := &healthpb.HealthCheckRequest{
+		Service: "ratelimit",
+	}
+
+	// Service should report healthy at start.
+	res, _ := grpcHealthServer.Check(context.Background(), req)
+	if healthpb.HealthCheckResponse_SERVING != res.Status {
+		test.Errorf("expected status SERVING actual %v", res.Status)
+	}
+}
+
+func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
+	t := commonSetup(test)
+	barrier := newBarrier()
+	defer t.controller.Finish()
+	defer signal.Reset(syscall.SIGTERM)
+
+	healthyWithAtLeastOneConfigLoaded := true
+	grpcHealthServer := health.NewServer()
+	hc := server.NewHealthChecker(grpcHealthServer, "ratelimit", healthyWithAtLeastOneConfigLoaded)
+	healthpb.RegisterHealthServer(grpc.NewServer(), grpcHealthServer)
+
+	// Set up the service
+	t.configProvider.EXPECT().ConfigUpdateEvent().Return(t.configUpdateEventChan).Times(1)
+	_ = ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded)
+
+	// Health check request
+	req := &healthpb.HealthCheckRequest{
+		Service: "ratelimit",
+	}
+
+	// Service should report unhealthy since no config loaded at start
+	res, _ := grpcHealthServer.Check(context.Background(), req)
+	if healthpb.HealthCheckResponse_NOT_SERVING != res.Status {
+		test.Errorf("expected status NOT_SERVING actual %v", res.Status)
+	}
+
+	// Force a config load - config event from config provider.
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		return t.config, nil
+	})
+	t.config.EXPECT().IsEmptyDomains().DoAndReturn(func() bool {
+		barrier.signal()
+		return false
+	}).Times(1)
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Service should report healthy since config loaded
+	res, _ = grpcHealthServer.Check(context.Background(), req)
+	if healthpb.HealthCheckResponse_SERVING != res.Status {
+		test.Errorf("expected status SERVING actual %v", res.Status)
+	}
+
+	// Force reload of an invalid config with no domains - config event from config provider.
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		return t.config, nil
+	})
+	t.config.EXPECT().IsEmptyDomains().DoAndReturn(func() bool {
+		barrier.signal()
+		return true
+	}).Times(1)
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Service should report unhealthy since no config loaded at start
+	res, _ = grpcHealthServer.Check(context.Background(), req)
+	if healthpb.HealthCheckResponse_NOT_SERVING != res.Status {
+		test.Errorf("expected status NOT_SERVING actual %v", res.Status)
+	}
 }
