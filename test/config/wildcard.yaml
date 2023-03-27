@@ -1,0 +1,22 @@
+# Basic configuration for testing.
+domain: test-domain
+descriptors:
+  - key: wild
+    value: foo*
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
+  - key: noWild
+    value: foo
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
+  - key: noVal
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
+  - key: midWild
+    value: bar*b
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20

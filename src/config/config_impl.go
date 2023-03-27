@@ -40,8 +40,9 @@ type YamlRoot struct {
 }
 
 type rateLimitDescriptor struct {
-	descriptors map[string]*rateLimitDescriptor
-	limit       *RateLimit
+	descriptors  map[string]*rateLimitDescriptor
+	limit        *RateLimit
+	wildcardKeys []string
 }
 
 type rateLimitDomain struct {
@@ -184,9 +185,14 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 
 		logger.Debugf(
 			"loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
-		newDescriptor := &rateLimitDescriptor{map[string]*rateLimitDescriptor{}, rateLimit}
+		newDescriptor := &rateLimitDescriptor{map[string]*rateLimitDescriptor{}, rateLimit, nil}
 		newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, statsManager)
 		this.descriptors[finalKey] = newDescriptor
+
+		// Preload keys ending with "*" symbol.
+		if finalKey[len(finalKey)-1:] == "*" {
+			this.wildcardKeys = append(this.wildcardKeys, finalKey)
+		}
 	}
 }
 
@@ -256,7 +262,7 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	}
 
 	logger.Debugf("loading domain: %s", root.Domain)
-	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil}}
+	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil, nil}}
 	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsManager)
 	this.domains[root.Domain] = newDomain
 }
@@ -305,6 +311,16 @@ func (this *rateLimitConfigImpl) GetLimit(
 		finalKey := entry.Key + "_" + entry.Value
 		logger.Debugf("looking up key: %s", finalKey)
 		nextDescriptor := descriptorsMap[finalKey]
+
+		if nextDescriptor == nil && len(value.wildcardKeys) > 0 {
+			for _, wildcardKey := range value.wildcardKeys {
+				if strings.HasPrefix(finalKey, strings.TrimSuffix(wildcardKey, "*")) {
+					nextDescriptor = descriptorsMap[wildcardKey]
+					break
+				}
+			}
+		}
+
 		if nextDescriptor == nil {
 			finalKey = entry.Key
 			logger.Debugf("looking up key: %s", finalKey)

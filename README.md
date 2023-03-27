@@ -27,6 +27,7 @@
       - [Example 6](#example-6)
       - [Example 7](#example-7)
       - [Example 8](#example-8)
+      - [Example 9](#example-9)
   - [Loading Configuration](#loading-configuration)
     - [File Based Configuration Loading](#file-based-configuration-loading)
     - [xDS Management Server Based Configuration Loading](#xds-management-server-based-configuration-loading)
@@ -571,6 +572,25 @@ The metrics keys will be the following:
 rather than the normal
 "key1"
 "key1_value1"
+
+#### Example 9
+
+Value supports wildcard matching to apply rate-limit for nested endpoints:
+
+```
+(key_1, value_1): 20 / sec
+(key_1, value_2): 20 / sec
+```
+
+```yaml
+domain: example9
+descriptors:
+  - key: key1
+    value: value*
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
+```
 
 ## Loading Configuration
 
