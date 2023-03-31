@@ -125,8 +125,8 @@ docker_tests:
 	docker run $$(tty -s && echo "-it" || echo) $(INTEGRATION_IMAGE):$(VERSION)
 
 .PHONY: docker_image
-docker_image: docker_tests
-	docker build . -t $(IMAGE):$(VERSION)
+docker_image:
+	docker build --platform linux/amd64 . -t $(IMAGE):$(VERSION)
 
 .PHONY: docker_push
 docker_push: docker_image

@@ -7,9 +7,9 @@ import (
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-
 	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/utils"
+	logger "github.com/sirupsen/logrus"
 )
 
 type CacheKeyGenerator struct {
@@ -39,7 +39,7 @@ func isPerSecondLimit(unit pb.RateLimitResponse_RateLimit_Unit) bool {
 	return unit == pb.RateLimitResponse_RateLimit_SECOND
 }
 
-// Generate a cache key for a limit lookup.
+// GenerateCacheKey a cache key for a limit lookup.
 // @param domain supplies the cache key domain.
 // @param descriptor supplies the descriptor to generate the key for.
 // @param limit supplies the rate limit to generate the key for (may be nil).
@@ -71,7 +71,23 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 	}
 
 	divider := utils.UnitToDivider(limit.Limit.Unit)
-	b.WriteString(strconv.FormatInt((now/divider)*divider, 10))
+
+	// The key needs to be the same within the time unit. If we change the function,
+	// then we need to make sure the key is always the same within the time unit, so it
+	// can be picked up on the next lookup.
+	// This code section handles the MONTH time unit.
+	if limit.Limit.Unit == pb.RateLimitResponse_RateLimit_MONTH {
+		// get the first day of the current month as unix time
+		y, m, _ := utils.CurrentTime(now).Date()
+		first, _ := utils.MonthInterval(y, m)
+
+		logger.Debugf("calculating cacke key for time unit: %v, the cache key is %v", limit.Limit.Unit, first.Unix())
+		b.WriteString(strconv.FormatInt(first.Unix(), 10))
+	} else {
+		// This code section handles can handle all time units except for MONTH and YEAR
+		logger.Debugf("calculating cache key for time unit: %v, the cache key is %v", limit.Limit.Unit, (now/divider)*divider)
+		b.WriteString(strconv.FormatInt((now/divider)*divider, 10))
+	}
 
 	return CacheKey{
 		Key:       b.String(),
