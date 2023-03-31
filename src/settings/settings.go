@@ -68,6 +68,9 @@ type Settings struct {
 	// GrpcClientTlsSAN is the SAN to validate from the client cert during mTLS auth
 	ConfigGrpcXdsServerTlsSAN string `envconfig:"CONFIG_GRPC_XDS_SERVER_TLS_SAN" default:""`
 
+	// xDS grpc client configuration
+	ConfigGrpcXdsClientAdditionalHeaders map[string]string `envconfig:"CONFIG_GRPC_XDS_CLIENT_ADDITIONAL_HEADERS"`
+
 	// Stats-related settings
 	UseStatsd  bool              `envconfig:"USE_STATSD" default:"true"`
 	StatsdHost string            `envconfig:"STATSD_HOST" default:"localhost"`

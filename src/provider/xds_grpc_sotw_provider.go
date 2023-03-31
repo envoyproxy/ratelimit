@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/grpc/metadata"
+
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/golang/protobuf/ptypes/any"
@@ -39,7 +41,7 @@ type XdsGrpcSotwProvider struct {
 
 // NewXdsGrpcSotwProvider initializes xDS listener and returns the xDS provider.
 func NewXdsGrpcSotwProvider(settings settings.Settings, statsManager stats.Manager) RateLimitConfigProvider {
-	ctx := context.Background()
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.New(settings.ConfigGrpcXdsClientAdditionalHeaders))
 	p := &XdsGrpcSotwProvider{
 		settings:               settings,
 		statsManager:           statsManager,
