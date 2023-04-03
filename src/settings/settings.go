@@ -54,10 +54,11 @@ type Settings struct {
 
 	// xDS rate limit configuration
 	// ConfigGrpcXdsNodeId is the Node ID. xDS server should set snapshots to this Node ID
-	ConfigGrpcXdsNodeId                     string        `envconfig:"CONFIG_GRPC_XDS_NODE_ID" default:"default"`
-	ConfigGrpcXdsNodeMetadata               string        `envconfig:"CONFIG_GRPC_XDS_NODE_METADATA" default:""` // eg: "key1:val1,key2=val2"
-	ConfigGrpcXdsServerUrl                  string        `envconfig:"CONFIG_GRPC_XDS_SERVER_URL" default:"localhost:18000"`
-	ConfigGrpcXdsServerConnectRetryInterval time.Duration `envconfig:"CONFIG_GRPC_XDS_SERVER_CONNECT_RETRY_INTERVAL" default:"3s"`
+	ConfigGrpcXdsNodeId                     string            `envconfig:"CONFIG_GRPC_XDS_NODE_ID" default:"default"`
+	ConfigGrpcXdsNodeMetadata               string            `envconfig:"CONFIG_GRPC_XDS_NODE_METADATA" default:""` // eg: "key1:val1,key2=val2"
+	ConfigGrpcXdsServerUrl                  string            `envconfig:"CONFIG_GRPC_XDS_SERVER_URL" default:"localhost:18000"`
+	ConfigGrpcXdsServerConnectRetryInterval time.Duration     `envconfig:"CONFIG_GRPC_XDS_SERVER_CONNECT_RETRY_INTERVAL" default:"3s"`
+	ConfigGrpcXdsClientAdditionalHeaders    map[string]string `envconfig:"CONFIG_GRPC_XDS_CLIENT_ADDITIONAL_HEADERS" default:""`
 
 	// xDS config server TLS configurations
 	ConfigGrpcXdsTlsConfig       *tls.Config
@@ -67,9 +68,6 @@ type Settings struct {
 	ConfigGrpcXdsServerTlsCACert string `envconfig:"CONFIG_GRPC_XDS_SERVER_TLS_CACERT" default:""`
 	// GrpcClientTlsSAN is the SAN to validate from the client cert during mTLS auth
 	ConfigGrpcXdsServerTlsSAN string `envconfig:"CONFIG_GRPC_XDS_SERVER_TLS_SAN" default:""`
-
-	// xDS grpc client configuration
-	ConfigGrpcXdsClientAdditionalHeaders map[string]string `envconfig:"CONFIG_GRPC_XDS_CLIENT_ADDITIONAL_HEADERS"`
 
 	// Stats-related settings
 	UseStatsd  bool              `envconfig:"USE_STATSD" default:"true"`
