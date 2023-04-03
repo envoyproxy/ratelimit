@@ -665,6 +665,11 @@ As well Ratelimit supports TLS connections, these can be configured using the fo
 2. `CONFIG_GRPC_XDS_CLIENT_TLS_CERT`, `CONFIG_GRPC_XDS_CLIENT_TLS_KEY`, and `CONFIG_GRPC_XDS_SERVER_TLS_CACERT` to provides files to specify a TLS connection configuration to the xDS configuration management server.
 3. `CONFIG_GRPC_XDS_SERVER_TLS_SAN`: (Optional) Override the SAN value to validate from the server certificate.
 
+When using xDS you can configure extra headers that will be added to GRPC requests to the xDS Management server.
+Extra headers can be useful for providing additional authorization information. This can be configured using the following environment variable:
+
+`CONFIG_GRPC_XDS_CLIENT_ADDITIONAL_HEADERS` - set to `"<k1:v1>,<k2:v2>"` to add multiple headers to GRPC requests.
+
 ## Log Format
 
 A centralized log collection system works better with logs in json format. JSON format avoids the need for custom parsing rules.
