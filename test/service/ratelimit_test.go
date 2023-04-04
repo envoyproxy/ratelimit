@@ -616,7 +616,6 @@ func TestServiceHealthStatus(test *testing.T) {
 
 func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 	t := commonSetup(test)
-	barrier := newBarrier()
 	defer t.controller.Finish()
 	defer signal.Reset(syscall.SIGTERM)
 
@@ -627,8 +626,10 @@ func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 
 	// Set up the service
 	t.configProvider.EXPECT().ConfigUpdateEvent().Return(t.configUpdateEventChan).Times(1)
-	_ = ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded)
-
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		return t.config, nil
+	}).Times(2)
+	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded)
 	// Health check request
 	req := &healthpb.HealthCheckRequest{
 		Service: "ratelimit",
@@ -641,15 +642,10 @@ func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 	}
 
 	// Force a config load - config event from config provider.
-	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
-		return t.config, nil
-	})
 	t.config.EXPECT().IsEmptyDomains().DoAndReturn(func() bool {
-		barrier.signal()
 		return false
 	}).Times(1)
-	t.configUpdateEventChan <- t.configUpdateEvent
-	barrier.wait()
+	service.SetConfig(t.configUpdateEvent, healthyWithAtLeastOneConfigLoaded)
 
 	// Service should report healthy since config loaded
 	res, _ = grpcHealthServer.Check(context.Background(), req)
@@ -658,15 +654,10 @@ func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 	}
 
 	// Force reload of an invalid config with no domains - config event from config provider.
-	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
-		return t.config, nil
-	})
 	t.config.EXPECT().IsEmptyDomains().DoAndReturn(func() bool {
-		barrier.signal()
 		return true
 	}).Times(1)
-	t.configUpdateEventChan <- t.configUpdateEvent
-	barrier.wait()
+	service.SetConfig(t.configUpdateEvent, healthyWithAtLeastOneConfigLoaded)
 
 	// Service should report unhealthy since no config loaded at start
 	res, _ = grpcHealthServer.Check(context.Background(), req)

@@ -34,6 +34,7 @@ var tracer = otel.Tracer("ratelimit")
 type RateLimitServiceServer interface {
 	pb.RateLimitServiceServer
 	GetCurrentConfig() (config.RateLimitConfig, bool)
+	SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool)
 }
 
 type service struct {
@@ -51,7 +52,7 @@ type service struct {
 	globalShadowMode            bool
 }
 
-func (this *service) setConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
+func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
 	newConfig, err := updateEvent.GetConfig()
 	if err != nil {
 		configError, ok := err.(config.RateLimitConfigError)
@@ -330,7 +331,7 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 
 	if !forceStart {
 		logger.Info("Waiting for initial ratelimit config update event")
-		newService.setConfig(<-newService.configUpdateEvent, healthyWithAtLeastOneConfigLoad)
+		newService.SetConfig(<-newService.configUpdateEvent, healthyWithAtLeastOneConfigLoad)
 		logger.Info("Successfully loaded the initial ratelimit configs")
 	}
 
@@ -339,7 +340,7 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 			logger.Debug("Waiting for config update event")
 			updateEvent := <-newService.configUpdateEvent
 			logger.Debug("Setting config retrieved from config provider")
-			newService.setConfig(updateEvent, healthyWithAtLeastOneConfigLoad)
+			newService.SetConfig(updateEvent, healthyWithAtLeastOneConfigLoad)
 		}
 	}()
 
