@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -15,8 +16,35 @@ const (
 )
 
 // TlsConfigFromFiles sets the TLS config from the provided files.
-func TlsConfigFromFiles(certFile, keyFile, caCertFile string, caType CAType) *tls.Config {
-	config := &tls.Config{}
+func TlsConfigFromFiles(certFile, keyFile, caCertFile string, caType CAType, skipHostnameVerification bool) *tls.Config {
+	config := &tls.Config{
+		InsecureSkipVerify: skipHostnameVerification,
+	}
+	if skipHostnameVerification {
+		// Based upon https://github.com/golang/go/blob/d67d044310bc5cc1c26b60caf23a58602e9a1946/src/crypto/tls/example_test.go#L187
+		config.VerifyPeerCertificate = func(certificates [][]byte, verifiedChains [][]*x509.Certificate) error {
+			certs := make([]*x509.Certificate, len(certificates))
+			for i, asn1Data := range certificates {
+				cert, err := x509.ParseCertificate(asn1Data)
+				if err != nil {
+					return errors.New("tls: failed to parse certificate from server: " + err.Error())
+				}
+				certs[i] = cert
+			}
+
+			opts := x509.VerifyOptions{
+				Roots:         config.RootCAs,
+				DNSName:       "",
+				Intermediates: x509.NewCertPool(),
+			}
+			for _, cert := range certs[1:] {
+				opts.Intermediates.AddCert(cert)
+			}
+			_, err := certs[0].Verify(opts)
+			return err
+		}
+	}
+
 	if certFile != "" && keyFile != "" {
 		tlsKeyPair, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
@@ -40,6 +68,7 @@ func TlsConfigFromFiles(certFile, keyFile, caCertFile string, caType CAType) *tl
 			config.RootCAs = certPool
 		}
 	}
+
 	return config
 }
 

@@ -261,6 +261,7 @@ func Test_mTLS(t *testing.T) {
 	s.RedisTlsConfig = &tls.Config{}
 	s.RedisAuth = "password123"
 	s.RedisTls = true
+	s.RedisTlsSkipHostnameVerification = false
 	s.RedisPerSecondAuth = "password123"
 	s.RedisPerSecondTls = true
 	assert := assert.New(t)
@@ -276,7 +277,7 @@ func Test_mTLS(t *testing.T) {
 	settings.GrpcServerTlsConfig()(&s)
 	runner := startTestRunner(t, s)
 	defer runner.Stop()
-	clientTlsConfig := utils.TlsConfigFromFiles(clientCertFile, clientCertKey, serverCAFile, utils.ServerCA)
+	clientTlsConfig := utils.TlsConfigFromFiles(clientCertFile, clientCertKey, serverCAFile, utils.ServerCA, false)
 	conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", s.GrpcPort), grpc.WithTransportCredentials(credentials.NewTLS(clientTlsConfig)))
 	assert.NoError(err)
 	defer conn.Close()
