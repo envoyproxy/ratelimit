@@ -92,7 +92,7 @@ func main() {
 		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()),
 	}
 	if *grpcUseTLS {
-		tlsConfig := utils.TlsConfigFromFiles(*grpcTlsCertFile, *grpcTlsKeyFile, *grpcServerTlsCACert, utils.ServerCA)
+		tlsConfig := utils.TlsConfigFromFiles(*grpcTlsCertFile, *grpcTlsKeyFile, *grpcServerTlsCACert, utils.ServerCA, false)
 		dialOptions = append(dialOptions, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	} else {
 		dialOptions = append(dialOptions, grpc.WithInsecure())

@@ -111,9 +111,10 @@ type Settings struct {
 	// TODO: Make this setting configurable out of the box instead of having to provide it through code.
 	RedisTlsConfig *tls.Config
 	// Allow to set the client certificate and key for TLS connections.
-	RedisTlsClientCert string `envconfig:"REDIS_TLS_CLIENT_CERT" default:""`
-	RedisTlsClientKey  string `envconfig:"REDIS_TLS_CLIENT_KEY" default:""`
-	RedisTlsCACert     string `envconfig:"REDIS_TLS_CACERT" default:""`
+	RedisTlsClientCert               string `envconfig:"REDIS_TLS_CLIENT_CERT" default:""`
+	RedisTlsClientKey                string `envconfig:"REDIS_TLS_CLIENT_KEY" default:""`
+	RedisTlsCACert                   string `envconfig:"REDIS_TLS_CACERT" default:""`
+	RedisTlsSkipHostnameVerification bool   `envconfig:"REDIS_TLS_SKIP_HOSTNAME_VERIFICATION" default:"false"`
 
 	// RedisPipelineWindow sets the duration after which internal pipelines will be flushed.
 	// If window is zero then implicit pipelining will be disabled. Radix use 150us for the
@@ -187,7 +188,7 @@ func RedisTlsConfig(redisTls bool) Option {
 		// so let's just initialize to what we want the correct value to be.
 		s.RedisTlsConfig = &tls.Config{}
 		if redisTls {
-			s.RedisTlsConfig = utils.TlsConfigFromFiles(s.RedisTlsClientCert, s.RedisTlsClientKey, s.RedisTlsCACert, utils.ServerCA)
+			s.RedisTlsConfig = utils.TlsConfigFromFiles(s.RedisTlsClientCert, s.RedisTlsClientKey, s.RedisTlsCACert, utils.ServerCA, s.RedisTlsSkipHostnameVerification)
 		}
 	}
 }
@@ -195,7 +196,7 @@ func RedisTlsConfig(redisTls bool) Option {
 func GrpcServerTlsConfig() Option {
 	return func(s *Settings) {
 		if s.GrpcServerUseTLS {
-			grpcServerTlsConfig := utils.TlsConfigFromFiles(s.GrpcServerTlsCert, s.GrpcServerTlsKey, s.GrpcClientTlsCACert, utils.ClientCA)
+			grpcServerTlsConfig := utils.TlsConfigFromFiles(s.GrpcServerTlsCert, s.GrpcServerTlsKey, s.GrpcClientTlsCACert, utils.ClientCA, false)
 			if s.GrpcClientTlsCACert != "" {
 				grpcServerTlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 			} else {
@@ -209,7 +210,7 @@ func GrpcServerTlsConfig() Option {
 func ConfigGrpcXdsServerTlsConfig() Option {
 	return func(s *Settings) {
 		if s.ConfigGrpcXdsServerUseTls {
-			configGrpcXdsServerTlsConfig := utils.TlsConfigFromFiles(s.ConfigGrpcXdsClientTlsCert, s.ConfigGrpcXdsClientTlsKey, s.ConfigGrpcXdsServerTlsCACert, utils.ServerCA)
+			configGrpcXdsServerTlsConfig := utils.TlsConfigFromFiles(s.ConfigGrpcXdsClientTlsCert, s.ConfigGrpcXdsClientTlsKey, s.ConfigGrpcXdsServerTlsCACert, utils.ServerCA, false)
 			if s.ConfigGrpcXdsServerTlsCACert != "" {
 				configGrpcXdsServerTlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 			} else {
