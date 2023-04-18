@@ -18,7 +18,7 @@ require (
 	github.com/mediocregopher/radix/v3 v3.8.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.8.1
-	golang.org/x/net v0.4.0
+	golang.org/x/net v0.7.0
 	google.golang.org/grpc v1.52.0
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v2 v2.3.0
@@ -59,5 +59,3 @@ require (
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 )
-
-replace golang.org/x/net => golang.org/x/net v0.7.0
