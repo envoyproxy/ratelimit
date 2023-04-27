@@ -19,7 +19,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
-var tracer = otel.Tracer("redis.fixedCacaheImpl")
+var tracer = otel.Tracer("redis.fixedCacheImpl")
 
 type fixedRateLimitCacheImpl struct {
 	client Client
