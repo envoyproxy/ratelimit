@@ -597,8 +597,14 @@ func TestWildcardConfig(t *testing.T) {
 		&pb_struct.RateLimitDescriptor{
 			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo2"}},
 		})
+	wildcard3 := rlConfig.GetLimit(
+		nil, "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "nestedWild", Value: "val1"}, {Key: "wild", Value: "goo2"}},
+		})
 	assert.NotNil(wildcard1)
 	assert.Equal(wildcard1, wildcard2)
+	assert.NotNil(wildcard3)
 
 	// Doesn't match non-matching values
 	noMatch := rlConfig.GetLimit(
