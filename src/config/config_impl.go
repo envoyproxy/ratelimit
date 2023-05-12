@@ -305,6 +305,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	descriptorsMap := value.descriptors
+	prevDescriptor := &value.rateLimitDescriptor
 	for i, entry := range descriptor.Entries {
 		// First see if key_value is in the map. If that isn't in the map we look for just key
 		// to check for a default value.
@@ -312,8 +313,8 @@ func (this *rateLimitConfigImpl) GetLimit(
 		logger.Debugf("looking up key: %s", finalKey)
 		nextDescriptor := descriptorsMap[finalKey]
 
-		if nextDescriptor == nil && len(value.wildcardKeys) > 0 {
-			for _, wildcardKey := range value.wildcardKeys {
+		if nextDescriptor == nil && len(prevDescriptor.wildcardKeys) > 0 {
+			for _, wildcardKey := range prevDescriptor.wildcardKeys {
 				if strings.HasPrefix(finalKey, strings.TrimSuffix(wildcardKey, "*")) {
 					nextDescriptor = descriptorsMap[wildcardKey]
 					break
@@ -347,6 +348,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 			break
 		}
+		prevDescriptor = nextDescriptor
 	}
 
 	return rateLimit
