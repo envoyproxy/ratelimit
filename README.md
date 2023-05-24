@@ -295,7 +295,7 @@ There is also a Global Shadow Mode
 
 ### Including detailed metrics for unspecified values
 
-Setting the `detailed_metric: true` for a descriptor will extend the metrics that are produced. Normally a desriptor that matches a value that is not explicitly listed in the configuration will from a metrics point-of-view be rolled-up into the base entry. This can be probelmatic if you want to have those details available for analysis.
+Setting the `detailed_metric: true` for a descriptor will extend the metrics that are produced. Normally a descriptor that matches a value that is not explicitly listed in the configuration will from a metrics point-of-view be rolled-up into the base entry. This can be problematic if you want to have those details available for analysis.
 
 NB! This should only be enabled in situations where the potentially large cardinality of metrics that this can lead to is acceptable.
 
@@ -540,7 +540,7 @@ descriptors:
 
 In this example we demonstrate how a descriptor without a specified value is configured to override the default behavior and include the matched-value in the metrics.
 
-Rate limting configuration and tracking works as normally
+Rate limiting configuration and tracking works as normally
 
 ```
 (key_1, unspecified_value): 10 / sec
