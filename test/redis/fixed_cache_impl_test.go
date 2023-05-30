@@ -564,6 +564,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(1), limits[0].Stats.ShadowMode.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
@@ -579,15 +580,17 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	// The result should be OK since limit is in ShadowMode
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
 		cache.DoLimit(context.Background(), request, limits))
-	// TODO: How should we handle statistics? Should there be a separate ShadowMode statistics?  Should the other Stats remain as if they were unaffected by shadowmode?
+
+	// Even if you hit the local cache, other metrics should increase normally.
 	assert.Equal(uint64(4), limits[0].Stats.TotalHits.Value())
-	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
-	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(2), limits[0].Stats.ShadowMode.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
-	assert.Equal(uint64(3), limits[0].Stats.WithinLimit.Value())
+	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
 	testLocalCacheStats(localCacheStats, statsStore, sink, 1, 3, 4, 0, 1)

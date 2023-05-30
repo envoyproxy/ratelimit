@@ -61,14 +61,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		// Check if key is over the limit in local cache.
 		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
-
 			if limits[i].ShadowMode {
 				logger.Debugf("Cache key %s would be rate limited but shadow mode is enabled on this rule", cacheKey.Key)
 			} else {
 				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
-				isOverLimitWithLocalCache[i] = true
 			}
-
+			isOverLimitWithLocalCache[i] = true
 			continue
 		}
 

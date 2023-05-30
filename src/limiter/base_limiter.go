@@ -80,9 +80,9 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 			nil, 0)
 	}
 	var responseDescriptorStatus *pb.RateLimitResponse_DescriptorStatus
-	over_limit := false
+	isOverLimit := false
 	if isOverLimitWithLocalCache {
-		over_limit = true
+		isOverLimit = true
 		limitInfo.limit.Stats.OverLimit.Add(uint64(hitsAddend))
 		limitInfo.limit.Stats.OverLimitWithLocalCache.Add(uint64(hitsAddend))
 		responseDescriptorStatus = this.generateResponseDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT,
@@ -94,7 +94,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 		limitInfo.nearLimitThreshold = uint32(math.Floor(float64(float32(limitInfo.overLimitThreshold) * this.nearLimitRatio)))
 		logger.Debugf("cache key: %s current: %d", key, limitInfo.limitAfterIncrease)
 		if limitInfo.limitAfterIncrease > limitInfo.overLimitThreshold {
-			over_limit = true
+			isOverLimit = true
 			responseDescriptorStatus = this.generateResponseDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT,
 				limitInfo.limit.Limit, 0)
 
@@ -124,11 +124,11 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 	}
 
 	// If the limit is in ShadowMode, it should be always return OK
-	// We only want to increase stats if the limit was actually over the limit
-	if over_limit && limitInfo.limit.ShadowMode {
+	if isOverLimit && limitInfo.limit.ShadowMode {
 		logger.Debugf("Limit with key %s, is in shadow_mode", limitInfo.limit.FullKey)
 		responseDescriptorStatus.Code = pb.RateLimitResponse_OK
-		limitInfo.limit.Stats.ShadowMode.Add(uint64(hitsAddend))
+		// Increase shadow mode stats if the limit was actually over the limit
+		this.increaseShadowModeStats(isOverLimitWithLocalCache, limitInfo, hitsAddend)
 	}
 
 	return responseDescriptorStatus
@@ -175,6 +175,16 @@ func (this *BaseRateLimiter) checkNearLimitThreshold(limitInfo *LimitInfo, hitsA
 		} else {
 			limitInfo.limit.Stats.NearLimit.Add(uint64(limitInfo.limitAfterIncrease - limitInfo.nearLimitThreshold))
 		}
+	}
+}
+
+func (this *BaseRateLimiter) increaseShadowModeStats(isOverLimitWithLocalCache bool, limitInfo *LimitInfo, hitsAddend uint32) {
+	// Increase shadow mode statistics. For the same reason as over limit stats,
+	// if the limit value before adding the N hits over the limit, then all N hits were over limit.
+	if isOverLimitWithLocalCache || limitInfo.limitBeforeIncrease >= limitInfo.overLimitThreshold {
+		limitInfo.limit.Stats.ShadowMode.Add(uint64(hitsAddend))
+	} else {
+		limitInfo.limit.Stats.ShadowMode.Add(uint64(limitInfo.limitAfterIncrease - limitInfo.overLimitThreshold))
 	}
 }
 
