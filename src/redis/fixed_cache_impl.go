@@ -53,6 +53,18 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	results := make([]uint32, len(request.Descriptors))
 	var pipeline, perSecondPipeline Pipeline
 
+	for _, cacheKey := range cacheKeys {
+		if cacheKey.Key == "" {
+			continue
+		}
+
+		// Check if any of the descriptors are over limit in local cache.
+		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
+			hitsAddend = 0
+			break
+		}
+	}
+
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
