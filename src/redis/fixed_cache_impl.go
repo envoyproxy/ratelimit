@@ -53,32 +53,27 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	results := make([]uint32, len(request.Descriptors))
 	var pipeline, perSecondPipeline Pipeline
 
-	for _, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" {
-			continue
-		}
-
-		// Check if any of the descriptors are over limit in local cache.
-		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
-			hitsAddend = 0
-			break
-		}
-	}
-
-	// Now, actually setup the pipeline, skipping empty cache keys.
-	for i, cacheKey := range cacheKeys {
+	for j, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
 			continue
 		}
 
 		// Check if key is over the limit in local cache.
 		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
-			if limits[i].ShadowMode {
+			hitsAddend = 0
+			if limits[j].ShadowMode {
 				logger.Debugf("Cache key %s would be rate limited but shadow mode is enabled on this rule", cacheKey.Key)
 			} else {
 				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
 			}
-			isOverLimitWithLocalCache[i] = true
+			isOverLimitWithLocalCache[j] = true
+			continue
+		}
+	}
+
+	// Now, actually setup the pipeline, skipping empty cache keys.
+	for i, cacheKey := range cacheKeys {
+		if cacheKey.Key == "" {
 			continue
 		}
 
