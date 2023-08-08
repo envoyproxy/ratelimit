@@ -53,27 +53,29 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	results := make([]uint32, len(request.Descriptors))
 	var pipeline, perSecondPipeline Pipeline
 
-	for j, cacheKey := range cacheKeys {
+	hitAddendForRedis := hitsAddend
+	overlimitIndex := -1
+	// Now, actually setup the pipeline, skipping empty cache keys.
+	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
 			continue
 		}
 
 		// Check if key is over the limit in local cache.
 		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
-			hitsAddend = 0
-			if limits[j].ShadowMode {
+			if limits[i].ShadowMode {
 				logger.Debugf("Cache key %s would be rate limited but shadow mode is enabled on this rule", cacheKey.Key)
 			} else {
 				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
 			}
-			isOverLimitWithLocalCache[j] = true
+			isOverLimitWithLocalCache[i] = true
+			hitAddendForRedis = 0
+			overlimitIndex = i
 			continue
 		}
 	}
-
-	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" {
+		if cacheKey.Key == "" || overlimitIndex == i {
 			continue
 		}
 
@@ -89,12 +91,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			if perSecondPipeline == nil {
 				perSecondPipeline = Pipeline{}
 			}
-			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitAddendForRedis, &results[i], expirationSeconds)
 		} else {
 			if pipeline == nil {
 				pipeline = Pipeline{}
 			}
-			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitAddendForRedis, &results[i], expirationSeconds)
 		}
 	}
 
