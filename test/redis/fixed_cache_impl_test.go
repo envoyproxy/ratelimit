@@ -274,8 +274,8 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 		},
 		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(4), limits[0].Stats.TotalHits.Value())
-	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
-	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.OverLimitWithLocalCache.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
@@ -586,9 +586,9 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 
 	// Even if you hit the local cache, other metrics should increase normally.
 	assert.Equal(uint64(4), limits[0].Stats.TotalHits.Value())
-	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
-	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
-	assert.Equal(uint64(1), limits[0].Stats.ShadowMode.Value())
+	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(1), limits[0].Stats.OverLimitWithLocalCache.Value())
+	assert.Equal(uint64(2), limits[0].Stats.ShadowMode.Value())
 	assert.Equal(uint64(1), limits[0].Stats.NearLimit.Value())
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 

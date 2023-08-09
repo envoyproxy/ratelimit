@@ -592,6 +592,11 @@ func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 			if i >= 10 {
 				status = pb.RateLimitResponse_OVER_LIMIT
 				limitRemaining2 = 0
+				// Ceased incrementing cached keys upon exceeding the overall rate limit in the Redis cache flow.
+				// Consequently, the remaining limit should remain unaltered.
+				if enable_local_cache && s.BackendType != "memcache" {
+					limitRemaining1 = 9
+				}
 			}
 			durRemaining1 := response.GetStatuses()[0].DurationUntilReset
 			durRemaining2 := response.GetStatuses()[1].DurationUntilReset
