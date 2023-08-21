@@ -71,7 +71,7 @@ func (this *BaseRateLimiter) IsOverLimitWithLocalCache(key string) bool {
 	return false
 }
 
-func (this *BaseRateLimiter) IsOverLimitThresholdReached(limitInfo *LimitInfo, hitsAddend uint32) bool {
+func (this *BaseRateLimiter) IsOverLimitThresholdReached(limitInfo *LimitInfo) bool {
 	limitInfo.overLimitThreshold = limitInfo.limit.Limit.RequestsPerUnit
 	if limitInfo.limitAfterIncrease > limitInfo.overLimitThreshold {
 		return true

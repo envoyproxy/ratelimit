@@ -37,10 +37,11 @@ func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend ui
 }
 
 func doCmdGet(client Client, key string, result *uint32) {
-    err := client.DoCmd(result, "GET", key)
-    if err != nil {
-        return
-    }
+	err := client.DoCmd(result, "GET", key)
+	if err != nil {
+		logger.Debugf("error occured while fetching the cache key %s counter", key)
+		return
+	}
 }
 
 func (this *fixedRateLimitCacheImpl) DoLimit(
@@ -79,7 +80,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
-		if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo, hitsAddend) {
+		if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo) {
 			hitsAddendForRedis = 0
 			overlimitIndex = i
 			break
@@ -119,7 +120,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 			}
 			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
-			} else {
+		} else {
 			if pipeline == nil {
 				pipeline = Pipeline{}
 			}
