@@ -36,6 +36,13 @@ func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend ui
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
+func doCmdGet(client Client, key string, result *uint32) {
+    err := client.DoCmd(result, "GET", key)
+    if err != nil {
+        return
+    }
+}
+
 func (this *fixedRateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
@@ -53,8 +60,32 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	results := make([]uint32, len(request.Descriptors))
 	var pipeline, perSecondPipeline Pipeline
 
-	hitAddendForRedis := hitsAddend
+	hitsAddendForRedis := hitsAddend
 	overlimitIndex := -1
+	// Check if any of the keys are reaching to the over limit in redis cache.
+	for i, cacheKey := range cacheKeys {
+		if cacheKey.Key == "" {
+			continue
+		}
+
+		if this.perSecondClient != nil && cacheKey.PerSecond {
+			doCmdGet(this.perSecondClient, cacheKey.Key, &results[i])
+		} else {
+			doCmdGet(this.client, cacheKey.Key, &results[i])
+		}
+
+		limitBeforeIncrease := results[i]
+		limitAfterIncrease := limitBeforeIncrease + hitsAddend
+
+		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
+
+		if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo, hitsAddend) {
+			hitsAddendForRedis = 0
+			overlimitIndex = i
+			break
+		}
+	}
+
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
@@ -69,13 +100,6 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
 			}
 			isOverLimitWithLocalCache[i] = true
-			hitAddendForRedis = 0
-			overlimitIndex = i
-			continue
-		}
-	}
-	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" || overlimitIndex == i {
 			continue
 		}
 
@@ -91,12 +115,18 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			if perSecondPipeline == nil {
 				perSecondPipeline = Pipeline{}
 			}
-			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitAddendForRedis, &results[i], expirationSeconds)
-		} else {
+			if overlimitIndex == i {
+				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			}
+			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
+			} else {
 			if pipeline == nil {
 				pipeline = Pipeline{}
 			}
-			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitAddendForRedis, &results[i], expirationSeconds)
+			if overlimitIndex == i {
+				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			}
+			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
 		}
 	}
 
