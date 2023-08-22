@@ -63,31 +63,9 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 	hitsAddendForRedis := hitsAddend
 	overlimitIndex := -1
+	nearlimitIndex := -1
+	isCacheKeyOverlimit := false
 	// Check if any of the keys are reaching to the over limit in redis cache.
-	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" {
-			continue
-		}
-
-		if this.perSecondClient != nil && cacheKey.PerSecond {
-			doCmdGet(this.perSecondClient, cacheKey.Key, &results[i])
-		} else {
-			doCmdGet(this.client, cacheKey.Key, &results[i])
-		}
-
-		limitBeforeIncrease := results[i]
-		limitAfterIncrease := limitBeforeIncrease + hitsAddend
-
-		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
-
-		if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo) {
-			hitsAddendForRedis = 0
-			overlimitIndex = i
-			break
-		}
-	}
-
-	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" {
 			continue
@@ -101,6 +79,35 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
 			}
 			isOverLimitWithLocalCache[i] = true
+			hitsAddendForRedis = 0
+			overlimitIndex = i
+			isCacheKeyOverlimit = true
+			continue
+		} else {
+			// Only if none of the cache key is over limit, call redis to check whether it is getting overlimited.
+			if !isCacheKeyOverlimit {
+				if this.perSecondClient != nil && cacheKey.PerSecond {
+					doCmdGet(this.perSecondClient, cacheKey.Key, &results[i])
+				} else {
+					doCmdGet(this.client, cacheKey.Key, &results[i])
+				}
+
+				limitBeforeIncrease := results[i]
+				limitAfterIncrease := limitBeforeIncrease + hitsAddend
+
+				limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
+
+				if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo) {
+					hitsAddendForRedis = 0
+					nearlimitIndex = i
+				}
+			}
+		}
+	}
+
+	// Now, actually setup the pipeline, skipping empty cache keys.
+	for i, cacheKey := range cacheKeys {
+		if cacheKey.Key == "" || overlimitIndex == i {
 			continue
 		}
 
@@ -116,18 +123,20 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			if perSecondPipeline == nil {
 				perSecondPipeline = Pipeline{}
 			}
-			if overlimitIndex == i {
+			if nearlimitIndex == i {
 				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			} else {
+				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
 			}
-			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
 		} else {
 			if pipeline == nil {
 				pipeline = Pipeline{}
 			}
-			if overlimitIndex == i {
+			if nearlimitIndex == i {
 				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+			} else {
+				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
 			}
-			pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
 		}
 	}
 

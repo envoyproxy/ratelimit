@@ -271,7 +271,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	// Test Over limit stats with local cache
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().DoCmd(gomock.Any(), "GET", "domain_key4_value4_997200").Return(nil)
+	client.EXPECT().DoCmd(gomock.Any(), "GET", "domain_key4_value4_997200").Return(nil).Times(0)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600)).Times(0)
@@ -593,7 +593,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 
 	// Test Over limit stats with local cache
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().DoCmd(gomock.Any(), "GET", "domain_key4_value4_997200").Return(nil)
+	client.EXPECT().DoCmd(gomock.Any(), "GET", "domain_key4_value4_997200").Return(nil).Times(0)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600)).Times(0)
