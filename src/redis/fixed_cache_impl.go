@@ -36,12 +36,8 @@ func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend ui
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
-func doCmdGet(client Client, key string, result *uint32) {
-	err := client.DoCmd(result, "GET", key)
-	if err != nil {
-		logger.Debugf("error occured while fetching the cache key %s counter", key)
-		return
-	}
+func pipelineAppendtoGet(client Client, pipeline *Pipeline, key string, result *uint32) {
+	*pipeline = client.PipeAppend(*pipeline, result, "GET", key)
 }
 
 func (this *fixedRateLimitCacheImpl) DoLimit(
@@ -59,7 +55,8 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	results := make([]uint32, len(request.Descriptors))
-	var pipeline, perSecondPipeline Pipeline
+	currentCount := make([]uint32, len(request.Descriptors))
+	var pipeline, perSecondPipeline, pipelineToGet, perSecondPipelineToGet Pipeline
 
 	hitsAddendForRedis := hitsAddend
 	overlimitIndex := -1
@@ -84,23 +81,43 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			isCacheKeyOverlimit = true
 			continue
 		} else {
-			// Only if none of the cache key is over limit, call redis to check whether it is getting overlimited.
-			if !isCacheKeyOverlimit {
-				if this.perSecondClient != nil && cacheKey.PerSecond {
-					doCmdGet(this.perSecondClient, cacheKey.Key, &results[i])
-				} else {
-					doCmdGet(this.client, cacheKey.Key, &results[i])
+			if this.perSecondClient != nil && cacheKey.PerSecond {
+				if perSecondPipelineToGet == nil {
+					perSecondPipelineToGet = Pipeline{}
 				}
-
-				limitBeforeIncrease := results[i]
-				limitAfterIncrease := limitBeforeIncrease + hitsAddend
-
-				limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
-
-				if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo) {
-					hitsAddendForRedis = 0
-					nearlimitIndex = i
+				pipelineAppendtoGet(this.perSecondClient, &perSecondPipelineToGet, cacheKey.Key, &currentCount[i])
+			} else {
+				if pipelineToGet == nil {
+					pipelineToGet = Pipeline{}
 				}
+				pipelineAppendtoGet(this.client, &pipelineToGet, cacheKey.Key, &currentCount[i])
+			}
+		}
+	}
+
+	// Only if none of the cache keys are over the limit, call Redis to check whether cache keys are getting overlimited.
+	if len(cacheKeys) > 1 && !isCacheKeyOverlimit {
+		if pipelineToGet != nil {
+			checkError(this.client.PipeDo(pipelineToGet))
+		}
+		if perSecondPipelineToGet != nil {
+			checkError(this.perSecondClient.PipeDo(perSecondPipelineToGet))
+		}
+
+		for i, cacheKey := range cacheKeys {
+			if cacheKey.Key == "" {
+				continue
+			}
+
+			limitBeforeIncrease := currentCount[i]
+			limitAfterIncrease := limitBeforeIncrease + hitsAddend
+
+			limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
+
+			if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo) {
+				hitsAddendForRedis = 0
+				nearlimitIndex = i
+				break
 			}
 		}
 	}
