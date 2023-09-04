@@ -594,7 +594,7 @@ func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 				limitRemaining2 = 0
 				// Ceased incrementing cached keys upon exceeding the overall rate limit in the Redis cache flow.
 				// Consequently, the remaining limit should remain unaltered.
-				if s.BackendType != "memcache" {
+				if s.StopCacheKeyIncrementWhenOverlimit && s.BackendType != "memcache" {
 					limitRemaining1 = 10
 				}
 			}

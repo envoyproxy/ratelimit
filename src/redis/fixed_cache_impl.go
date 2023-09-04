@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
@@ -19,7 +20,10 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
-var tracer = otel.Tracer("redis.fixedCacheImpl")
+var (
+	tracer     = otel.Tracer("redis.fixedCacheImpl")
+	rlSettings = settings.NewSettings()
+)
 
 type fixedRateLimitCacheImpl struct {
 	client Client
@@ -62,62 +66,84 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	overlimitIndex := -1
 	nearlimitIndex := -1
 	isCacheKeyOverlimit := false
-	// Check if any of the keys are reaching to the over limit in redis cache.
-	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" {
-			continue
-		}
 
-		// Check if key is over the limit in local cache.
-		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
-			if limits[i].ShadowMode {
-				logger.Debugf("Cache key %s would be rate limited but shadow mode is enabled on this rule", cacheKey.Key)
-			} else {
-				logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
-			}
-			isOverLimitWithLocalCache[i] = true
-			hitsAddendForRedis = 0
-			overlimitIndex = i
-			isCacheKeyOverlimit = true
-			continue
-		} else {
-			if this.perSecondClient != nil && cacheKey.PerSecond {
-				if perSecondPipelineToGet == nil {
-					perSecondPipelineToGet = Pipeline{}
-				}
-				pipelineAppendtoGet(this.perSecondClient, &perSecondPipelineToGet, cacheKey.Key, &currentCount[i])
-			} else {
-				if pipelineToGet == nil {
-					pipelineToGet = Pipeline{}
-				}
-				pipelineAppendtoGet(this.client, &pipelineToGet, cacheKey.Key, &currentCount[i])
-			}
-		}
-	}
-
-	// Only if none of the cache keys are over the limit, call Redis to check whether cache keys are getting overlimited.
-	if len(cacheKeys) > 1 && !isCacheKeyOverlimit {
-		if pipelineToGet != nil {
-			checkError(this.client.PipeDo(pipelineToGet))
-		}
-		if perSecondPipelineToGet != nil {
-			checkError(this.perSecondClient.PipeDo(perSecondPipelineToGet))
-		}
-
+	if rlSettings.StopCacheKeyIncrementWhenOverlimit {
+		// Check if any of the keys are reaching to the over limit in redis cache.
 		for i, cacheKey := range cacheKeys {
 			if cacheKey.Key == "" {
 				continue
 			}
 
-			limitBeforeIncrease := currentCount[i]
-			limitAfterIncrease := limitBeforeIncrease + hitsAddend
-
-			limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
-
-			if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo) {
+			// Check if key is over the limit in local cache.
+			if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
+				if limits[i].ShadowMode {
+					logger.Debugf("Cache key %s would be rate limited but shadow mode is enabled on this rule", cacheKey.Key)
+				} else {
+					logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
+				}
+				isOverLimitWithLocalCache[i] = true
 				hitsAddendForRedis = 0
-				nearlimitIndex = i
-				break
+				overlimitIndex = i
+				isCacheKeyOverlimit = true
+				continue
+			} else {
+				if this.perSecondClient != nil && cacheKey.PerSecond {
+					if perSecondPipelineToGet == nil {
+						perSecondPipelineToGet = Pipeline{}
+					}
+					pipelineAppendtoGet(this.perSecondClient, &perSecondPipelineToGet, cacheKey.Key, &currentCount[i])
+				} else {
+					if pipelineToGet == nil {
+						pipelineToGet = Pipeline{}
+					}
+					pipelineAppendtoGet(this.client, &pipelineToGet, cacheKey.Key, &currentCount[i])
+				}
+			}
+		}
+
+		// Only if none of the cache keys are over the limit, call Redis to check whether cache keys are getting overlimited.
+		if len(cacheKeys) > 1 && !isCacheKeyOverlimit {
+			if pipelineToGet != nil {
+				checkError(this.client.PipeDo(pipelineToGet))
+			}
+			if perSecondPipelineToGet != nil {
+				checkError(this.perSecondClient.PipeDo(perSecondPipelineToGet))
+			}
+
+			for i, cacheKey := range cacheKeys {
+				if cacheKey.Key == "" {
+					continue
+				}
+				// Now fetch the pipeline.
+				limitBeforeIncrease := currentCount[i]
+				limitAfterIncrease := limitBeforeIncrease + hitsAddend
+
+				limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
+
+				if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo) {
+					hitsAddendForRedis = 0
+					nearlimitIndex = i
+					break
+				}
+			}
+		}
+	} else {
+		// Check if any of the keys are reaching to the over limit in redis cache.
+		for i, cacheKey := range cacheKeys {
+			if cacheKey.Key == "" {
+				continue
+			}
+
+			// Check if key is over the limit in local cache.
+			if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
+				if limits[i].ShadowMode {
+					logger.Debugf("Cache key %s would be rate limited but shadow mode is enabled on this rule", cacheKey.Key)
+				} else {
+					logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
+				}
+				isOverLimitWithLocalCache[i] = true
+				overlimitIndex = i
+				continue
 			}
 		}
 	}
