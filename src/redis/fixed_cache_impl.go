@@ -7,7 +7,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
@@ -20,10 +19,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
-var (
-	tracer     = otel.Tracer("redis.fixedCacheImpl")
-	rlSettings = settings.NewSettings()
-)
+var tracer = otel.Tracer("redis.fixedCacheImpl")
 
 type fixedRateLimitCacheImpl struct {
 	client Client
@@ -31,8 +27,9 @@ type fixedRateLimitCacheImpl struct {
 	// If this client is nil, then the Cache will use the client for all
 	// limits regardless of unit. If this client is not nil, then it
 	// is used for limits that have a SECOND unit.
-	perSecondClient Client
-	baseRateLimiter *limiter.BaseRateLimiter
+	perSecondClient                    Client
+	stopCacheKeyIncrementWhenOverlimit bool
+	baseRateLimiter                    *limiter.BaseRateLimiter
 }
 
 func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) {
@@ -67,7 +64,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	nearlimitIndexes := make([]bool, len(request.Descriptors))
 	isCacheKeyOverlimit := false
 
-	if rlSettings.StopCacheKeyIncrementWhenOverlimit {
+	if this.stopCacheKeyIncrementWhenOverlimit {
 		// Check if any of the keys are reaching to the over limit in redis cache.
 		for i, cacheKey := range cacheKeys {
 			if cacheKey.Key == "" {
@@ -220,10 +217,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 func (this *fixedRateLimitCacheImpl) Flush() {}
 
 func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSource utils.TimeSource,
-	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager) limiter.RateLimitCache {
+	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
+	stopCacheKeyIncrementWhenOverlimit bool) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
-		client:          client,
-		perSecondClient: perSecondClient,
-		baseRateLimiter: limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager),
+		client:                             client,
+		perSecondClient:                    perSecondClient,
+		stopCacheKeyIncrementWhenOverlimit: stopCacheKeyIncrementWhenOverlimit,
+		baseRateLimiter:                    limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager),
 	}
 }
