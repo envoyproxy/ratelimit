@@ -63,8 +63,8 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	var pipeline, perSecondPipeline, pipelineToGet, perSecondPipelineToGet Pipeline
 
 	hitsAddendForRedis := hitsAddend
-	overlimitIndex := -1
-	nearlimitIndex := -1
+	overlimitIndexes := make([]bool, len(request.Descriptors))
+	nearlimitIndexes := make([]bool, len(request.Descriptors))
 	isCacheKeyOverlimit := false
 
 	if rlSettings.StopCacheKeyIncrementWhenOverlimit {
@@ -83,7 +83,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 				}
 				isOverLimitWithLocalCache[i] = true
 				hitsAddendForRedis = 0
-				overlimitIndex = i
+				overlimitIndexes[i] = true
 				isCacheKeyOverlimit = true
 				continue
 			} else {
@@ -122,8 +122,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 				if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo) {
 					hitsAddendForRedis = 0
-					nearlimitIndex = i
-					break
+					nearlimitIndexes[i] = true
 				}
 			}
 		}
@@ -142,7 +141,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 					logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
 				}
 				isOverLimitWithLocalCache[i] = true
-				overlimitIndex = i
+				overlimitIndexes[i] = true
 				continue
 			}
 		}
@@ -150,7 +149,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 	// Now, actually setup the pipeline, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" || overlimitIndex == i {
+		if cacheKey.Key == "" || overlimitIndexes[i] {
 			continue
 		}
 
@@ -166,7 +165,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			if perSecondPipeline == nil {
 				perSecondPipeline = Pipeline{}
 			}
-			if nearlimitIndex == i {
+			if nearlimitIndexes[i] {
 				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 			} else {
 				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
@@ -175,7 +174,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			if pipeline == nil {
 				pipeline = Pipeline{}
 			}
-			if nearlimitIndex == i {
+			if nearlimitIndexes[i] {
 				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
 			} else {
 				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
