@@ -904,6 +904,12 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"username:password"` to enable username-password authentication to the redis host.
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
+For controlling the behavior of cache key incrementation when any of them is already over the limit, you can use the following configuration:
+
+1. `STOP_CACHE_KEY_INCREMENT_WHEN_OVERLIMIT`: Set this configuration to `true` to disallow key incrementation when one of the keys is already over the limit.
+
+`STOP_CACHE_KEY_INCREMENT_WHEN_OVERLIMIT` is useful when multiple descriptors are included in a single request. Setting this to `true` can prevent the incrementation of other descriptors' counters if any of the descriptors is already over the limit.
+
 ## Redis type
 
 Ratelimit supports different types of redis deployments:

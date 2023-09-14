@@ -81,6 +81,13 @@ func makeSimpleRedisSettings(redisPort int, perSecondPort int, perSecond bool, l
 	return s
 }
 
+func makeSimpleRedisSettingsWithStopCacheKeyIncrementWhenOverlimit(redisPort int, perSecondPort int, perSecond bool, localCacheSize int) settings.Settings {
+	s := makeSimpleRedisSettings(redisPort, perSecondPort, perSecond, localCacheSize)
+
+	s.StopCacheKeyIncrementWhenOverlimit = true
+	return s
+}
+
 func TestBasicConfig(t *testing.T) {
 	common.WithMultiRedis(t, []common.RedisConfig{
 		{Port: 6383},
@@ -93,6 +100,10 @@ func TestBasicConfig(t *testing.T) {
 		cacheSettings := makeSimpleRedisSettings(6383, 6380, false, 0)
 		cacheSettings.CacheKeyPrefix = "prefix:"
 		t.Run("WithoutPerSecondRedisWithCachePrefix", testBasicConfig(cacheSettings))
+		t.Run("WithoutPerSecondRedisWithstopCacheKeyIncrementWhenOverlimitConfig", testBasicConfig(makeSimpleRedisSettingsWithStopCacheKeyIncrementWhenOverlimit(6383, 6380, false, 0)))
+		t.Run("WithPerSecondRedisWithstopCacheKeyIncrementWhenOverlimitConfig", testBasicConfig(makeSimpleRedisSettingsWithStopCacheKeyIncrementWhenOverlimit(6383, 6380, true, 0)))
+		t.Run("WithoutPerSecondRedisWithLocalCacheAndstopCacheKeyIncrementWhenOverlimitConfig", testBasicConfig(makeSimpleRedisSettingsWithStopCacheKeyIncrementWhenOverlimit(6383, 6380, false, 1000)))
+		t.Run("WithPerSecondRedisWithLocalCacheAndstopCacheKeyIncrementWhenOverlimitConfig", testBasicConfig(makeSimpleRedisSettingsWithStopCacheKeyIncrementWhenOverlimit(6383, 6380, true, 1000)))
 	})
 }
 
@@ -594,8 +605,8 @@ func testBasicBaseConfig(s settings.Settings) func(*testing.T) {
 				limitRemaining2 = 0
 				// Ceased incrementing cached keys upon exceeding the overall rate limit in the Redis cache flow.
 				// Consequently, the remaining limit should remain unaltered.
-				if enable_local_cache && s.BackendType != "memcache" {
-					limitRemaining1 = 9
+				if s.StopCacheKeyIncrementWhenOverlimit && s.BackendType != "memcache" {
+					limitRemaining1 = 10
 				}
 			}
 			durRemaining1 := response.GetStatuses()[0].DurationUntilReset

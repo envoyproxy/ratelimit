@@ -83,11 +83,12 @@ type Settings struct {
 	RuntimeWatchRoot      bool   `envconfig:"RUNTIME_WATCH_ROOT" default:"true"`
 
 	// Settings for all cache types
-	ExpirationJitterMaxSeconds int64   `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
-	LocalCacheSizeInBytes      int     `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
-	NearLimitRatio             float32 `envconfig:"NEAR_LIMIT_RATIO" default:"0.8"`
-	CacheKeyPrefix             string  `envconfig:"CACHE_KEY_PREFIX" default:""`
-	BackendType                string  `envconfig:"BACKEND_TYPE" default:"redis"`
+	ExpirationJitterMaxSeconds         int64   `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
+	LocalCacheSizeInBytes              int     `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
+	NearLimitRatio                     float32 `envconfig:"NEAR_LIMIT_RATIO" default:"0.8"`
+	CacheKeyPrefix                     string  `envconfig:"CACHE_KEY_PREFIX" default:""`
+	BackendType                        string  `envconfig:"BACKEND_TYPE" default:"redis"`
+	StopCacheKeyIncrementWhenOverlimit bool    `envconfig:"STOP_CACHE_KEY_INCREMENT_WHEN_OVERLIMIT" default:"false"`
 
 	// Settings for optional returning of custom headers
 	RateLimitResponseHeadersEnabled bool `envconfig:"LIMIT_RESPONSE_HEADERS_ENABLED" default:"false"`
