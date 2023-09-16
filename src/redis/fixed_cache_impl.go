@@ -98,7 +98,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			}
 		}
 
-		// Only if none of the cache keys are over the limit, call Redis to check whether cache keys are getting overlimited.
+		// Only if none of the cache keys exceed the limit, call Redis to check whether the cache keys are becoming overlimited.
 		if len(cacheKeys) > 1 && !isCacheKeyOverlimit {
 			if pipelineToGet != nil {
 				checkError(this.client.PipeDo(pipelineToGet))
