@@ -1,4 +1,4 @@
-FROM golang:1.20.7 AS build
+FROM golang:1.20.8 AS build
 WORKDIR /ratelimit
 
 ENV GOPROXY=https://proxy.golang.org
