@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -38,18 +39,20 @@ type RateLimitServiceServer interface {
 }
 
 type service struct {
-	configLock                  sync.RWMutex
-	configUpdateEvent           <-chan provider.ConfigUpdateEvent
-	config                      config.RateLimitConfig
-	cache                       limiter.RateLimitCache
-	stats                       stats.ServiceStats
-	health                      *server.HealthChecker
-	customHeadersEnabled        bool
-	customHeaderLimitHeader     string
-	customHeaderRemainingHeader string
-	customHeaderResetHeader     string
-	customHeaderClock           utils.TimeSource
-	globalShadowMode            bool
+	configLock                              sync.RWMutex
+	configUpdateEvent                       <-chan provider.ConfigUpdateEvent
+	config                                  config.RateLimitConfig
+	cache                                   limiter.RateLimitCache
+	stats                                   stats.ServiceStats
+	health                                  *server.HealthChecker
+	customHeadersEnabled                    bool
+	customHeaderLimitHeader                 string
+	customHeaderRemainingHeader             string
+	customHeaderResetHeader                 string
+	customHeaderResetTimestampHeaderEnabled bool
+	customHeaderResetTimestampHeader        string
+	customHeaderClock                       utils.TimeSource
+	globalShadowMode                        bool
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -93,7 +96,12 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 		this.customHeaderRemainingHeader = rlSettings.HeaderRatelimitRemaining
 
 		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
+		if rlSettings.RateLimitResponseHeaderResetTimestampEnabled {
+			this.customHeaderResetTimestampHeaderEnabled = true
+			this.customHeaderResetTimestampHeader = rlSettings.HeaderRatelimitResetTimestamp
+		}
 	}
+
 	this.configLock.Unlock()
 	logger.Info("Successfully loaded new configuration")
 }
@@ -177,8 +185,8 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 const MaxUint32 = uint32(1<<32 - 1)
 
 func (this *service) shouldRateLimitWorker(
-	ctx context.Context, request *pb.RateLimitRequest) *pb.RateLimitResponse {
-
+	ctx context.Context, request *pb.RateLimitRequest,
+) *pb.RateLimitResponse {
 	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
 	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
 
@@ -228,6 +236,10 @@ func (this *service) shouldRateLimitWorker(
 			this.rateLimitRemainingHeader(minimumDescriptor),
 			this.rateLimitResetHeader(minimumDescriptor),
 		}
+
+		if this.customHeaderResetTimestampHeaderEnabled {
+			response.ResponseHeadersToAdd = append(response.ResponseHeadersToAdd, this.rateLimitResetTimestampHeader(minimumDescriptor))
+		}
 	}
 
 	// If there is a global shadow_mode, it should always return OK
@@ -258,18 +270,27 @@ func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_D
 }
 
 func (this *service) rateLimitResetHeader(
-	descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
-
+	descriptor *pb.RateLimitResponse_DescriptorStatus,
+) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
 		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
 	}
 }
 
+func (this *service) rateLimitResetTimestampHeader(
+	descriptor *pb.RateLimitResponse_DescriptorStatus,
+) *core.HeaderValue {
+	return &core.HeaderValue{
+		Key:   this.customHeaderResetTimestampHeader,
+		Value: strconv.FormatInt(time.Now().Unix()+utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
+	}
+}
+
 func (this *service) ShouldRateLimit(
 	ctx context.Context,
-	request *pb.RateLimitRequest) (finalResponse *pb.RateLimitResponse, finalError error) {
-
+	request *pb.RateLimitRequest,
+) (finalResponse *pb.RateLimitResponse, finalError error) {
 	// Generate trace
 	_, span := tracer.Start(ctx, "ShouldRateLimit Execution",
 		trace.WithAttributes(
@@ -316,8 +337,8 @@ func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool) {
 }
 
 func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
-	health *server.HealthChecker, clock utils.TimeSource, shadowMode, forceStart bool, healthyWithAtLeastOneConfigLoad bool) RateLimitServiceServer {
-
+	health *server.HealthChecker, clock utils.TimeSource, shadowMode, forceStart bool, healthyWithAtLeastOneConfigLoad bool,
+) RateLimitServiceServer {
 	newService := &service{
 		configLock:        sync.RWMutex{},
 		configUpdateEvent: configProvider.ConfigUpdateEvent(),

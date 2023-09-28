@@ -1003,6 +1003,15 @@ The following environment variables control the custom response feature:
 1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
 1. `LIMIT_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
 
+## Optional custom headers (mimicking Github API behavior)
+
+Some services such as Github add another header containing the timestamp on which the rate-limit clears. This can be configured using the following options:
+
+1. `LIMIT_RESET_TIMESTAMP_HEADER_ENABLED` - Enables the additional timestamp response header
+1. `LIMIT_RESET_TIMESTAMP_HEADER` - THe default value is "X-RateLimit-Reset" and defines the time at which the current rate limit window resets in UTC epoch seconds
+
+# Tracing
+
 You may use the following commands to quickly setup a openTelemetry collector together with a Jaeger all-in-one binary for quickstart:
 
 ```bash
@@ -1011,8 +1020,6 @@ otelcol-contrib --config examples/otlp-collector/config.yaml
 
 docker run -d --name jaeger -p 16686:16686 -p 14250:14250 jaegertracing/all-in-one:1.33
 ```
-
-# Tracing
 
 Ratelimit service supports exporting spans in OLTP format. See [OpenTelemetry](https://opentelemetry.io/) for more information.
 

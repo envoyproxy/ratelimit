@@ -1,12 +1,14 @@
 package ratelimit_test
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/stats"
@@ -451,6 +453,122 @@ func TestServiceWithDefaultRatelimitHeaders(test *testing.T) {
 				{Key: "RateLimit-Limit", Value: "10"},
 				{Key: "RateLimit-Remaining", Value: "0"},
 				{Key: "RateLimit-Reset", Value: "58"},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestServiceWithAdditionalRatelimitResetTimestampCustomHeader(test *testing.T) {
+	const customHeaderName = "X-MyCustomResetTimestamp"
+
+	os.Setenv("LIMIT_RESPONSE_HEADERS_ENABLED", "true")
+	os.Setenv("LIMIT_RESET_TIMESTAMP_HEADER_ENABLED", "true")
+	os.Setenv("LIMIT_RESET_TIMESTAMP_HEADER", customHeaderName)
+	defer func() {
+		os.Unsetenv("LIMIT_RESPONSE_HEADERS_ENABLED")
+		os.Unsetenv("LIMIT_RESET_TIMESTAMP_HEADER_ENABLED")
+		os.Unsetenv("LIMIT_RESET_TIMESTAMP_HEADER")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Make request
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "", nil, false),
+		nil,
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+			},
+			ResponseHeadersToAdd: []*core.HeaderValue{
+				{Key: "RateLimit-Limit", Value: "10"},
+				{Key: "RateLimit-Remaining", Value: "0"},
+				{Key: "RateLimit-Reset", Value: "58"},
+				{Key: customHeaderName, Value: fmt.Sprint(time.Now().Add(time.Second * 58).Unix())},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestServiceWithAdditionalRatelimitResetTimestampHeader(test *testing.T) {
+	os.Setenv("LIMIT_RESPONSE_HEADERS_ENABLED", "true")
+	os.Setenv("LIMIT_RESET_TIMESTAMP_HEADER_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("LIMIT_RESPONSE_HEADERS_ENABLED")
+		os.Unsetenv("LIMIT_RESET_TIMESTAMP_HEADER_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Make request
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "", nil, false),
+		nil,
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+			},
+			ResponseHeadersToAdd: []*core.HeaderValue{
+				{Key: "RateLimit-Limit", Value: "10"},
+				{Key: "RateLimit-Remaining", Value: "0"},
+				{Key: "RateLimit-Reset", Value: "58"},
+				{Key: "X-RateLimit-Reset", Value: fmt.Sprint(time.Now().Add(time.Second * 58).Unix())},
 			},
 		},
 		response)

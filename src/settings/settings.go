@@ -98,6 +98,10 @@ type Settings struct {
 	HeaderRatelimitRemaining string `envconfig:"LIMIT_REMAINING_HEADER" default:"RateLimit-Remaining"`
 	// value: remaining seconds
 	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:"RateLimit-Reset"`
+	// value: remaining seconds
+	RateLimitResponseHeaderResetTimestampEnabled bool `envconfig:"LIMIT_RESET_TIMESTAMP_HEADER_ENABLED" default:"false"`
+	// value: current rate limit window reset in UTC epoch seconds
+	HeaderRatelimitResetTimestamp string `envconfig:"LIMIT_RESET_TIMESTAMP_HEADER" default:"X-RateLimit-Reset"`
 
 	// Health-check settings
 	HealthyWithAtLeastOneConfigLoaded bool `envconfig:"HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED" default:"false"`
