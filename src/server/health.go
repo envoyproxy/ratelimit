@@ -33,7 +33,7 @@ const (
 func areAllComponentsHealthy(healthMap map[string]bool) bool {
 	allComponentsHealthy := true
 	for _, value := range healthMap {
-		if value == false {
+		if !value {
 			allComponentsHealthy = false
 			break
 		}

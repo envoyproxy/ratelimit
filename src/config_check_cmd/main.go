@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -36,7 +35,7 @@ func main() {
 	fmt.Printf("checking rate limit configs...\n")
 	fmt.Printf("loading config directory: %s\n", *configDirectory)
 
-	files, err := ioutil.ReadDir(*configDirectory)
+	files, err := os.ReadDir(*configDirectory)
 	if err != nil {
 		fmt.Printf("error opening directory %s: %s\n", *configDirectory, err.Error())
 		os.Exit(1)
@@ -46,7 +45,7 @@ func main() {
 	for _, file := range files {
 		finalPath := filepath.Join(*configDirectory, file.Name())
 		fmt.Printf("opening config file: %s\n", finalPath)
-		bytes, err := ioutil.ReadFile(finalPath)
+		bytes, err := os.ReadFile(finalPath)
 		if err != nil {
 			fmt.Printf("error reading file %s: %s\n", finalPath, err.Error())
 			os.Exit(1)

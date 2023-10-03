@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -111,7 +111,7 @@ func startCacheProcess(ctx context.Context, command string, args []string, port 
 
 	if err1 != nil || err2 != nil {
 		cancel()
-		return nil, fmt.Errorf("Problem starting %s subprocess: %v / %v", command, err1, err2)
+		return nil, fmt.Errorf("problem starting %s subprocess: %v / %v", command, err1, err2)
 	}
 
 	// You'd think cmd.Stdout = os.Stdout would make more sense here, but
@@ -127,13 +127,13 @@ func startCacheProcess(ctx context.Context, command string, args []string, port 
 	err := cmd.Start()
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("Problem starting %s subprocess: %v", command, err)
+		return nil, fmt.Errorf("problem starting %s subprocess: %v", command, err)
 	}
 
 	err = WaitForTcpPort(ctx, port, 1*time.Second)
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("Timed out waiting for %s to start up and accept connections: %v", command, err)
+		return nil, fmt.Errorf("timed out waiting for %s to start up and accept connections: %v", command, err)
 	}
 
 	return func() {

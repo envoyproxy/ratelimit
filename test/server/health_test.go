@@ -25,11 +25,11 @@ func TestHealthCheck(t *testing.T) {
 	r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
 	hc.ServeHTTP(recorder, r)
 
-	if 200 != recorder.Code {
+	if recorder.Code != 200 {
 		t.Errorf("expected code 200 actual %d", recorder.Code)
 	}
 
-	if "OK" != recorder.Body.String() {
+	if recorder.Body.String() != "OK" {
 		t.Errorf("expected body 'OK', got '%s'", recorder.Body.String())
 	}
 
@@ -43,7 +43,7 @@ func TestHealthCheck(t *testing.T) {
 	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
 	hc.ServeHTTP(recorder, r)
 
-	if 500 != recorder.Code {
+	if recorder.Code != 500 {
 		t.Errorf("expected code 500 actual %d", recorder.Code)
 	}
 
@@ -57,11 +57,11 @@ func TestHealthCheck(t *testing.T) {
 	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
 	hc.ServeHTTP(recorder, r)
 
-	if 200 != recorder.Code {
+	if recorder.Code != 200 {
 		t.Errorf("expected code 200 actual %d", recorder.Code)
 	}
 
-	if "OK" != recorder.Body.String() {
+	if recorder.Body.String() != "OK" {
 		t.Errorf("expected body 'OK', got '%s'", recorder.Body.String())
 	}
 }
@@ -76,7 +76,7 @@ func TestHealthyWithAtLeastOneConfigLoaded(t *testing.T) {
 	r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
 	hc.ServeHTTP(recorder, r)
 
-	if 500 != recorder.Code {
+	if recorder.Code != 500 {
 		t.Errorf("expected code 500 actual %d", recorder.Code)
 	}
 
@@ -90,11 +90,11 @@ func TestHealthyWithAtLeastOneConfigLoaded(t *testing.T) {
 	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
 	hc.ServeHTTP(recorder, r)
 
-	if 200 != recorder.Code {
+	if recorder.Code != 200 {
 		t.Errorf("expected code 200 actual %d", recorder.Code)
 	}
 
-	if "OK" != recorder.Body.String() {
+	if recorder.Body.String() != "OK" {
 		t.Errorf("expected body 'OK', got '%s'", recorder.Body.String())
 	}
 
@@ -108,7 +108,7 @@ func TestHealthyWithAtLeastOneConfigLoaded(t *testing.T) {
 	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
 	hc.ServeHTTP(recorder, r)
 
-	if 500 != recorder.Code {
+	if recorder.Code != 500 {
 		t.Errorf("expected code 500 actual %d", recorder.Code)
 	}
 
@@ -122,11 +122,11 @@ func TestHealthyWithAtLeastOneConfigLoaded(t *testing.T) {
 	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
 	hc.ServeHTTP(recorder, r)
 
-	if 200 != recorder.Code {
+	if recorder.Code != 200 {
 		t.Errorf("expected code 200 actual %d", recorder.Code)
 	}
 
-	if "OK" != recorder.Body.String() {
+	if recorder.Body.String() != "OK" {
 		t.Errorf("expected body 'OK', got '%s'", recorder.Body.String())
 	}
 }

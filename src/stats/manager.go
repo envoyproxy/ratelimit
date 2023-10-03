@@ -2,7 +2,6 @@ package stats
 
 import (
 	gostats "github.com/lyft/gostats"
-	stats "github.com/lyft/gostats"
 )
 
 // Manager is the interface that wraps initialization of stat structures.
@@ -17,7 +16,7 @@ type Manager interface {
 	// Multiple calls to this method are idempotent.
 	NewServiceStats() ServiceStats
 	// Returns the stats.Store wrapped by the Manager.
-	GetStatsStore() stats.Store
+	GetStatsStore() gostats.Store
 }
 
 type ManagerImpl struct {

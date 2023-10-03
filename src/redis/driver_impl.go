@@ -119,7 +119,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		client, err = poolFunc(redisSocketType, url)
 	case "cluster":
 		urls := strings.Split(url, ",")
-		if implicitPipelining == false {
+		if !implicitPipelining {
 			panic(RedisError("Implicit Pipelining must be enabled to work with Redis Cluster Mode. Set values for REDIS_PIPELINE_WINDOW or REDIS_PIPELINE_LIMIT to enable implicit pipelining"))
 		}
 		logger.Warnf("Creating cluster with urls %v", urls)

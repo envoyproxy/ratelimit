@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/envoyproxy/ratelimit/src/utils"
 
@@ -95,7 +96,7 @@ func main() {
 		tlsConfig := utils.TlsConfigFromFiles(*grpcTlsCertFile, *grpcTlsKeyFile, *grpcServerTlsCACert, utils.ServerCA, false)
 		dialOptions = append(dialOptions, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	} else {
-		dialOptions = append(dialOptions, grpc.WithInsecure())
+		dialOptions = append(dialOptions, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	conn, err := grpc.Dial(*dialString, dialOptions...)
 	if err != nil {
@@ -106,9 +107,8 @@ func main() {
 	defer conn.Close()
 	c := pb.NewRateLimitServiceClient(conn)
 	desc := make([]*pb_struct.RateLimitDescriptor, len(descriptorsValue.descriptors))
-	for i, v := range descriptorsValue.descriptors {
-		desc[i] = v
-	}
+	copy(desc, descriptorsValue.descriptors)
+
 	response, err := c.ShouldRateLimit(
 		context.Background(),
 		&pb.RateLimitRequest{

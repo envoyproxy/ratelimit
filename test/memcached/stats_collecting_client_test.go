@@ -135,7 +135,7 @@ func TestStats_Increment(t *testing.T) {
 	expectedErr := errors.New("expectedError")
 	fakeSink.Reset()
 	client.EXPECT().Increment("foo", uint64(5)).Return(uint64(0), expectedErr)
-	newValue, err = sc.Increment("foo", 5)
+	_, err = sc.Increment("foo", 5)
 	statsStore.Flush()
 
 	assert.Equal(expectedErr, err)
@@ -145,7 +145,7 @@ func TestStats_Increment(t *testing.T) {
 
 	fakeSink.Reset()
 	client.EXPECT().Increment("foo", uint64(5)).Return(uint64(0), memcache.ErrCacheMiss)
-	newValue, err = sc.Increment("foo", 5)
+	_, err = sc.Increment("foo", 5)
 	statsStore.Flush()
 
 	assert.Equal(memcache.ErrCacheMiss, err)

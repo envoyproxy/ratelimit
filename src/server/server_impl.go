@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"expvar"
 	"fmt"
@@ -18,13 +17,13 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/stats"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/gorilla/mux"
 	reuseport "github.com/kavu/go_reuseport"
 	"github.com/lyft/goruntime/loader"
@@ -79,24 +78,28 @@ func (server *server) AddDebugHttpEndpoint(path string, help string, handler htt
 // example usage from cURL with domain "dummy" and descriptor "perday":
 // echo '{"domain": "dummy", "descriptors": [{"entries": [{"key": "perday"}]}]}' | curl -vvvXPOST --data @/dev/stdin localhost:8080/json
 func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *http.Request) {
-	// Default options include enums as strings and no identation.
-	m := &jsonpb.Marshaler{}
-
 	return func(writer http.ResponseWriter, request *http.Request) {
 		var req pb.RateLimitRequest
 
 		ctx := context.Background()
 
-		if err := jsonpb.Unmarshal(request.Body, &req); err != nil {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
 			logger.Warnf("error: %s", err.Error())
-			http.Error(writer, err.Error(), http.StatusBadRequest)
+			writeHttpStatus(writer, http.StatusBadRequest)
+			return
+		}
+
+		if err := protojson.Unmarshal(body, &req); err != nil {
+			logger.Warnf("error: %s", err.Error())
+			writeHttpStatus(writer, http.StatusBadRequest)
 			return
 		}
 
 		resp, err := svc.ShouldRateLimit(ctx, &req)
 		if err != nil {
 			logger.Warnf("error: %s", err.Error())
-			http.Error(writer, err.Error(), http.StatusBadRequest)
+			writeHttpStatus(writer, http.StatusBadRequest)
 			return
 		}
 
@@ -109,12 +112,16 @@ func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *ht
 		defer span.End()
 
 		logger.Debugf("resp:%s", resp)
+		if resp == nil {
+			logger.Error("nil response")
+			writeHttpStatus(writer, http.StatusInternalServerError)
+			return
+		}
 
-		buf := bytes.NewBuffer(nil)
-		err = m.Marshal(buf, resp)
+		jsonResp, err := protojson.Marshal(resp)
 		if err != nil {
 			logger.Errorf("error marshaling proto3 to json: %s", err.Error())
-			http.Error(writer, "error marshaling proto3 to json: "+err.Error(), http.StatusInternalServerError)
+			writeHttpStatus(writer, http.StatusInternalServerError)
 			return
 		}
 
@@ -124,8 +131,12 @@ func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *ht
 		} else if resp.OverallCode == pb.RateLimitResponse_OVER_LIMIT {
 			writer.WriteHeader(http.StatusTooManyRequests)
 		}
-		writer.Write(buf.Bytes())
+		writer.Write(jsonResp)
 	}
+}
+
+func writeHttpStatus(writer http.ResponseWriter, code int) {
+	http.Error(writer, http.StatusText(code), code)
 }
 
 func getProviderImpl(s settings.Settings, statsManager stats.Manager, rootStore gostats.Store) provider.RateLimitConfigProvider {
