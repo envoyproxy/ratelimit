@@ -55,6 +55,7 @@
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
+  - [Optional custom headers (mimicking Github API behavior)](#optional-custom-headers-mimicking-github-api-behavior)
 - [Tracing](#tracing)
 - [mTLS](#mtls)
 - [Contact](#contact)
