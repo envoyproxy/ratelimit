@@ -151,7 +151,7 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 				if validUnit {
 					panic(newRateLimitConfigError(
 						config.Name,
-						fmt.Sprintf("should not specify rate limit unit when unlimited")))
+						"should not specify rate limit unit when unlimited"))
 				}
 			} else if !validUnit {
 				panic(newRateLimitConfigError(
@@ -234,7 +234,7 @@ func validateYamlKeys(fileName string, config_map map[interface{}]interface{}) {
 		// the yaml's keys we don't panic here.
 		case nil:
 		default:
-			errorText := fmt.Sprintf("error checking config")
+			errorText := "error checking config"
 			logger.Debugf(errorText)
 			panic(newRateLimitConfigError(fileName, errorText))
 		}
