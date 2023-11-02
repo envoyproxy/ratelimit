@@ -7,7 +7,7 @@ We welcome contributions from the community. Here are some guidelines.
 # Submitting a PR
 
 - Fork the repo.
-- Before commiting any code, install the pre-commits by:
+- Before committing any code, install the pre-commits by:
 
 ```bash
 make precommit_install
