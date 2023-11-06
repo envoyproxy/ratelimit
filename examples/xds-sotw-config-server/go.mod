@@ -1,6 +1,6 @@
 module github.com/envoyproxy/ratelimit/examples/xds-sotw-config-server
 
-go 1.20
+go 1.21.3
 
 require (
 	github.com/envoyproxy/go-control-plane v0.10.3-0.20230127155013-72157d335c8f
@@ -14,7 +14,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
-	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	google.golang.org/genproto v0.0.0-20221118155620-16455021b5e6 // indirect

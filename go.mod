@@ -1,6 +1,6 @@
 module github.com/envoyproxy/ratelimit
 
-go 1.20
+go 1.21.3
 
 require (
 	github.com/alicebob/miniredis/v2 v2.23.0
@@ -18,7 +18,7 @@ require (
 	github.com/mediocregopher/radix/v3 v3.8.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.8.1
-	golang.org/x/net v0.15.0
+	golang.org/x/net v0.17.0
 	google.golang.org/grpc v1.52.0
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v2 v2.3.0
@@ -56,6 +56,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.7.0
 	go.opentelemetry.io/otel/trace v1.7.0
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 )
