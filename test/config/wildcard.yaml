@@ -1,8 +1,13 @@
 # Basic configuration for testing.
 domain: test-domain
 descriptors:
-  - key: wild
+  - key: rightWild
     value: foo*
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
+  - key: leftWild
+    value: "*foo"
     rate_limit:
       unit: minute
       requests_per_unit: 20
