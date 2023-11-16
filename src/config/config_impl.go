@@ -315,13 +315,13 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 		if nextDescriptor == nil && len(prevDescriptor.wildcardValues) > 0 {
 			for _, wildcardValue := range prevDescriptor.wildcardValues {
-				finalKey = entry.Key + "_" + wildcardValue
+				wildcardKey := entry.Key + "_" + wildcardValue
 				if strings.HasSuffix(entry.Value, strings.TrimPrefix(wildcardValue, "*")) {
-					nextDescriptor = descriptorsMap[finalKey]
+					nextDescriptor = descriptorsMap[wildcardKey]
 					break
 				}
 				if strings.HasPrefix(entry.Value, strings.TrimSuffix(wildcardValue, "*")) {
-					nextDescriptor = descriptorsMap[finalKey]
+					nextDescriptor = descriptorsMap[wildcardKey]
 					break
 				}
 			}
