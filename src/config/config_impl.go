@@ -189,7 +189,7 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 		newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, statsManager)
 		this.descriptors[finalKey] = newDescriptor
 
-		// Preload keys starting or ending with "*" symbol.
+		// Preload values starting or ending with "*" symbol.
 		if strings.HasPrefix(descriptorConfig.Value, "*") || strings.HasSuffix(descriptorConfig.Value, "*") {
 			this.wildcardValues = append(this.wildcardValues, descriptorConfig.Value)
 		}
@@ -315,12 +315,13 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 		if nextDescriptor == nil && len(prevDescriptor.wildcardValues) > 0 {
 			for _, wildcardValue := range prevDescriptor.wildcardValues {
+				finalKey = entry.Key + "_" + wildcardValue
 				if strings.HasSuffix(entry.Value, strings.TrimPrefix(wildcardValue, "*")) {
-					nextDescriptor = descriptorsMap[entry.Key+"_"+wildcardValue]
+					nextDescriptor = descriptorsMap[finalKey]
 					break
 				}
 				if strings.HasPrefix(entry.Value, strings.TrimSuffix(wildcardValue, "*")) {
-					nextDescriptor = descriptorsMap[entry.Key+"_"+wildcardValue]
+					nextDescriptor = descriptorsMap[finalKey]
 					break
 				}
 			}

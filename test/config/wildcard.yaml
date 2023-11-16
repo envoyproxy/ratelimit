@@ -33,3 +33,8 @@ descriptors:
         rate_limit:
           unit: minute
           requests_per_unit: 20
+      - key: wild
+        value: "*goo"
+        rate_limit:
+          unit: minute
+          requests_per_unit: 20
