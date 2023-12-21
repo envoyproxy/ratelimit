@@ -98,6 +98,7 @@ func makeRlsConfig() []types.Resource {
 								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 3,
 							},
+							DetailedMetric: true,
 						},
 						{
 							Key:   "bar",

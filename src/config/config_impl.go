@@ -26,12 +26,12 @@ type YamlRateLimit struct {
 }
 
 type YamlDescriptor struct {
-	Key                               string
-	Value                             string
-	RateLimit                         *YamlRateLimit `yaml:"rate_limit"`
-	Descriptors                       []YamlDescriptor
-	ShadowMode                        bool `yaml:"shadow_mode"`
-	IncludeMetricsForUnspecifiedValue bool `yaml:"detailed_metric"`
+	Key            string
+	Value          string
+	RateLimit      *YamlRateLimit `yaml:"rate_limit"`
+	Descriptors    []YamlDescriptor
+	ShadowMode     bool `yaml:"shadow_mode"`
+	DetailedMetric bool `yaml:"detailed_metric"`
 }
 
 type YamlRoot struct {
@@ -167,7 +167,7 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			rateLimit = NewRateLimit(
 				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value),
 				statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode,
-				descriptorConfig.RateLimit.Name, replaces, descriptorConfig.IncludeMetricsForUnspecifiedValue,
+				descriptorConfig.RateLimit.Name, replaces, descriptorConfig.DetailedMetric,
 			)
 			rateLimitDebugString = fmt.Sprintf(
 				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t}", rateLimit.Limit.RequestsPerUnit,

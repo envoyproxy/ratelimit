@@ -16,11 +16,12 @@ func rateLimitDescriptorsPbToYaml(pb []*rls_conf_v3.RateLimitDescriptor) []YamlD
 	descriptors := make([]YamlDescriptor, len(pb))
 	for i, d := range pb {
 		descriptors[i] = YamlDescriptor{
-			Key:         d.Key,
-			Value:       d.Value,
-			RateLimit:   rateLimitPolicyPbToYaml(d.RateLimit),
-			Descriptors: rateLimitDescriptorsPbToYaml(d.Descriptors),
-			ShadowMode:  d.ShadowMode,
+			Key:            d.Key,
+			Value:          d.Value,
+			RateLimit:      rateLimitPolicyPbToYaml(d.RateLimit),
+			Descriptors:    rateLimitDescriptorsPbToYaml(d.Descriptors),
+			ShadowMode:     d.ShadowMode,
+			DetailedMetric: d.DetailedMetric,
 		}
 	}
 
