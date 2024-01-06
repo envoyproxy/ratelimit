@@ -6,7 +6,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.31.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/coocood/freecache v1.2.4
-	github.com/envoyproxy/go-control-plane v0.11.1
+	github.com/envoyproxy/go-control-plane v0.12.0
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.4.0
@@ -28,7 +28,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.21.0
 	golang.org/x/net v0.19.0
 	google.golang.org/grpc v1.59.0
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.32.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
