@@ -5,6 +5,7 @@ import (
 	logger "github.com/sirupsen/logrus"
 
 	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
 type MockStatManager struct {
@@ -36,6 +37,7 @@ func (m *MockStatManager) NewStats(key string) stats.RateLimitStats {
 	ret := stats.RateLimitStats{}
 	logger.Debugf("outputing test gostats %s", key)
 	ret.Key = key
+	key = utils.SanitizeStatName(key)
 	ret.TotalHits = m.store.NewCounter(key + ".total_hits")
 	ret.OverLimit = m.store.NewCounter(key + ".over_limit")
 	ret.NearLimit = m.store.NewCounter(key + ".near_limit")

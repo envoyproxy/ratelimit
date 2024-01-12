@@ -61,3 +61,9 @@ func MaskCredentialsInUrl(url string) string {
 
 	return strings.Join(urls, ",")
 }
+
+// Remove invalid characters from the stat name.
+func SanitizeStatName(s string) string {
+	r := strings.NewReplacer(":", "_", "|", "_")
+	return r.Replace(s)
+}

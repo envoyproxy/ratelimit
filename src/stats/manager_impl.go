@@ -5,6 +5,7 @@ import (
 	logger "github.com/sirupsen/logrus"
 
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
 func NewStatManager(store gostats.Store, settings settings.Settings) *ManagerImpl {
@@ -28,6 +29,7 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret := RateLimitStats{}
 	logger.Debugf("Creating stats for key: '%s'", key)
 	ret.Key = key
+	key = utils.SanitizeStatName(key)
 	ret.TotalHits = this.rlStatsScope.NewCounter(key + ".total_hits")
 	ret.OverLimit = this.rlStatsScope.NewCounter(key + ".over_limit")
 	ret.NearLimit = this.rlStatsScope.NewCounter(key + ".near_limit")
