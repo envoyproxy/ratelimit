@@ -68,6 +68,8 @@ applications. Applications request a rate limit decision based on a domain and a
 reads the configuration from disk via [runtime](https://github.com/lyft/goruntime), composes a cache key, and talks to the Redis cache. A
 decision is then returned to the caller.
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/envoyproxy/ratelimit/badge)](https://securityscorecards.dev/viewer/?uri=github.com/envoyproxy/ratelimit)
+
 # Docker Image
 
 For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/r/envoyproxy/ratelimit/tags?page=1&ordering=last_updated). There is currently no versioning (post v1.4.0) and tags are based on commit sha.
