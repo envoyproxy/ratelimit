@@ -48,10 +48,11 @@ func (runner *Runner) GetStatsStore() gostats.Store {
 	return runner.statsManager.GetStatsStore()
 }
 
-func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache, statsManager stats.Manager) limiter.RateLimitCache {
+func createLimiter(ctx context.Context, srv server.Server, s settings.Settings, localCache *freecache.Cache, statsManager stats.Manager) limiter.RateLimitCache {
 	switch s.BackendType {
 	case "redis", "":
 		return redis.NewRateLimiterCacheImplFromSettings(
+			ctx,
 			s,
 			localCache,
 			srv,
@@ -116,7 +117,7 @@ func (runner *Runner) Run() {
 	runner.mu.Unlock()
 
 	service := ratelimit.NewService(
-		createLimiter(srv, s, localCache, runner.statsManager),
+		createLimiter(context.Background(), srv, s, localCache, runner.statsManager),
 		srv.Provider(),
 		runner.statsManager,
 		srv.HealthChecker(),

@@ -1,19 +1,26 @@
 package redis
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
-	"strings"
-	"time"
-
 	stats "github.com/lyft/gostats"
-	"github.com/mediocregopher/radix/v3"
-	"github.com/mediocregopher/radix/v3/trace"
+	"github.com/mediocregopher/radix/v4"
+	"github.com/mediocregopher/radix/v4/trace"
 	logger "github.com/sirupsen/logrus"
+	"strings"
 
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
+
+type commonClient interface {
+	// Do performs an Action on a Conn from a primary instance.
+	Do(context.Context, radix.Action) error
+	// Once Close() is called all future method calls on the Client will return
+	// an error
+	Close() error
+}
 
 type poolStats struct {
 	connectionActive stats.Gauge
@@ -59,7 +66,7 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 }
 
 type clientImpl struct {
-	client             radix.Client
+	client             commonClient
 	stats              poolStats
 	implicitPipelining bool
 }
@@ -70,66 +77,51 @@ func checkError(err error) {
 	}
 }
 
-func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
-	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server) Client {
+func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
+	implicitPipelining bool, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
 
-	df := func(network, addr string) (radix.Conn, error) {
-		var dialOpts []radix.DialOpt
-
-		if useTls {
-			dialOpts = append(dialOpts, radix.DialUseTLS(tlsConfig))
-		}
-
-		if auth != "" {
-			user, pass, found := strings.Cut(auth, ":")
-			if found {
-				logger.Warnf("enabling authentication to redis on %s with user %s", maskedUrl, user)
-				dialOpts = append(dialOpts, radix.DialAuthUser(user, pass))
-			} else {
-				logger.Warnf("enabling authentication to redis on %s without user", maskedUrl)
-				dialOpts = append(dialOpts, radix.DialAuthPass(auth))
-			}
-		}
-
-		return radix.Dial(network, addr, dialOpts...)
-	}
-
 	stats := newPoolStats(scope)
 
-	opts := []radix.PoolOpt{radix.PoolConnFunc(df), radix.PoolWithTrace(poolTrace(&stats, healthCheckActiveConnection, srv))}
-
-	implicitPipelining := true
-	if pipelineWindow == 0 && pipelineLimit == 0 {
-		implicitPipelining = false
-	} else {
-		opts = append(opts, radix.PoolPipelineWindow(pipelineWindow, pipelineLimit))
-	}
 	logger.Debugf("Implicit pipelining enabled: %v", implicitPipelining)
 
-	poolFunc := func(network, addr string) (radix.Client, error) {
-		return radix.NewPool(network, addr, poolSize, opts...)
+	poolConfig := radix.PoolConfig{Size: poolSize, Trace: poolTrace(&stats, healthCheckActiveConnection, srv)}
+	if auth != "" {
+		user, pass, found := strings.Cut(auth, ":")
+		if found {
+			logger.Warnf("enabling authentication to redis on %s with user %s", maskedUrl, user)
+		} else {
+			logger.Warnf("enabling authentication to redis on %s without user", maskedUrl)
+			pass = user
+			user = ""
+		}
+
+		poolConfig.Dialer = radix.Dialer{AuthUser: user, AuthPass: pass}
 	}
 
-	var client radix.Client
+	if useTls {
+		poolConfig.Dialer.NetDialer = &tls.Dialer{Config: tlsConfig}
+	}
+
+	var client commonClient
 	var err error
 	switch strings.ToLower(redisType) {
 	case "single":
-		client, err = poolFunc(redisSocketType, url)
+		client, err = poolConfig.New(ctx, redisSocketType, url)
 	case "cluster":
 		urls := strings.Split(url, ",")
 		if !implicitPipelining {
 			panic(RedisError("Implicit Pipelining must be enabled to work with Redis Cluster Mode. Set values for REDIS_PIPELINE_WINDOW or REDIS_PIPELINE_LIMIT to enable implicit pipelining"))
 		}
 		logger.Warnf("Creating cluster with urls %v", urls)
-		client, err = radix.NewCluster(urls, radix.ClusterPoolFunc(poolFunc))
+		client, err = radix.ClusterConfig{PoolConfig: poolConfig}.New(ctx, urls)
 	case "sentinel":
 		urls := strings.Split(url, ",")
 		if len(urls) < 2 {
 			panic(RedisError("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>"))
 		}
-		client, err = radix.NewSentinel(urls[0], urls[1:], radix.SentinelPoolFunc(poolFunc))
+		client, err = radix.SentinelConfig{PoolConfig: poolConfig}.New(ctx, urls[0], urls[1:])
 	default:
 		panic(RedisError("Unrecognized redis type " + redisType))
 	}
@@ -138,7 +130,7 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 
 	// Check if connection is good
 	var pingResponse string
-	checkError(client.Do(radix.Cmd(&pingResponse, "PING")))
+	checkError(client.Do(ctx, radix.Cmd(&pingResponse, "PING")))
 	if pingResponse != "PONG" {
 		checkError(fmt.Errorf("connecting redis error: %s", pingResponse))
 	}
@@ -150,8 +142,8 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 	}
 }
 
-func (c *clientImpl) DoCmd(rcv interface{}, cmd, key string, args ...interface{}) error {
-	return c.client.Do(radix.FlatCmd(rcv, cmd, key, args...))
+func (c *clientImpl) DoCmd(ctx context.Context, rcv interface{}, cmd string, args ...interface{}) error {
+	return c.client.Do(ctx, radix.FlatCmd(rcv, cmd, args...))
 }
 
 func (c *clientImpl) Close() error {
@@ -162,21 +154,26 @@ func (c *clientImpl) NumActiveConns() int {
 	return int(c.stats.connectionActive.Value())
 }
 
-func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd, key string, args ...interface{}) Pipeline {
-	return append(pipeline, radix.FlatCmd(rcv, cmd, key, args...))
+func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd string, args ...interface{}) Pipeline {
+	return append(pipeline, radix.FlatCmd(rcv, cmd, args...))
 }
 
-func (c *clientImpl) PipeDo(pipeline Pipeline) error {
+func (c *clientImpl) PipeDo(ctx context.Context, pipeline Pipeline) error {
 	if c.implicitPipelining {
 		for _, action := range pipeline {
-			if err := c.client.Do(action); err != nil {
+			if err := c.client.Do(ctx, action); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
 
-	return c.client.Do(radix.Pipeline(pipeline...))
+	newPipeline := radix.NewPipeline()
+	for _, action := range pipeline {
+		newPipeline.Append(action)
+	}
+
+	return c.client.Do(ctx, newPipeline)
 }
 
 func (c *clientImpl) ImplicitPipeliningEnabled() bool {

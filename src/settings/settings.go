@@ -117,13 +117,8 @@ type Settings struct {
 	RedisTlsCACert                   string `envconfig:"REDIS_TLS_CACERT" default:""`
 	RedisTlsSkipHostnameVerification bool   `envconfig:"REDIS_TLS_SKIP_HOSTNAME_VERIFICATION" default:"false"`
 
-	// RedisPipelineWindow sets the duration after which internal pipelines will be flushed.
-	// If window is zero then implicit pipelining will be disabled. Radix use 150us for the
-	// default value, see https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L278.
-	RedisPipelineWindow time.Duration `envconfig:"REDIS_PIPELINE_WINDOW" default:"0"`
-	// RedisPipelineLimit sets maximum number of commands that can be pipelined before flushing.
-	// If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
-	RedisPipelineLimit       int    `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
+	// RedisImplicitPipeline if implicit pipelining for redis should be enabled
+	RedisImplicitPipeline    bool   `envconfig:"REDIS_IMPLICIT_PIPELINE" default:"true"`
 	RedisPerSecond           bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
 	RedisPerSecondType       string `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`

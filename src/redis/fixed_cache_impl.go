@@ -101,10 +101,10 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		// Only if none of the cache keys exceed the limit, call Redis to check whether the cache keys are becoming overlimited.
 		if len(cacheKeys) > 1 && !isCacheKeyOverlimit {
 			if pipelineToGet != nil {
-				checkError(this.client.PipeDo(pipelineToGet))
+				checkError(this.client.PipeDo(ctx, pipelineToGet))
 			}
 			if perSecondPipelineToGet != nil {
-				checkError(this.perSecondClient.PipeDo(perSecondPipelineToGet))
+				checkError(this.perSecondClient.PipeDo(ctx, perSecondPipelineToGet))
 			}
 
 			for i, cacheKey := range cacheKeys {
@@ -189,10 +189,10 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	defer span.End()
 
 	if pipeline != nil {
-		checkError(this.client.PipeDo(pipeline))
+		checkError(this.client.PipeDo(ctx, pipeline))
 	}
 	if perSecondPipeline != nil {
-		checkError(this.perSecondClient.PipeDo(perSecondPipeline))
+		checkError(this.perSecondClient.PipeDo(ctx, perSecondPipeline))
 	}
 
 	// Now fetch the pipeline.
