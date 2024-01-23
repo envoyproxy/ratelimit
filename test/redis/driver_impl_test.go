@@ -1,9 +1,9 @@
 package redis_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	stats "github.com/lyft/gostats"
@@ -32,13 +32,13 @@ func expectPanicError(t *testing.T, f assert.PanicTestFunc) (result error) {
 	return
 }
 
-func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) func(t *testing.T) {
+func testNewClientImpl(t *testing.T, implicitPipeline bool) func(t *testing.T) {
 	return func(t *testing.T) {
 		redisAuth := "123"
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 		mkRedisClient := func(auth, addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, auth, "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil)
+			return redis.NewClientImpl(context.Background(), statsStore, false, auth, "tcp", "single", addr, 1, implicitPipeline, nil, false, nil)
 		}
 
 		t.Run("connection refused", func(t *testing.T) {
@@ -65,7 +65,7 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 
 			redisSrv.RequireAuth(redisAuth)
 
-			assert.PanicsWithError(t, "NOAUTH Authentication required.", func() {
+			assert.PanicsWithError(t, "response returned from Conn: NOAUTH Authentication required.", func() {
 				mkRedisClient("", redisSrv.Addr())
 			})
 		})
@@ -102,7 +102,7 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 			redisSrv.RequireUserAuth(user, pass)
 
 			redisAuth := fmt.Sprintf("%s:invalid-password", user)
-			assert.PanicsWithError(t, "WRONGPASS invalid username-password pair", func() {
+			assert.PanicsWithError(t, "response returned from Conn: WRONGPASS invalid username-password pair", func() {
 				mkRedisClient(redisAuth, redisSrv.Addr())
 			})
 		})
@@ -113,25 +113,25 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 
 			client := mkRedisClient("", redisSrv.Addr())
 
-			if pipelineWindow == 0 && pipelineLimit == 0 {
-				assert.False(t, client.ImplicitPipeliningEnabled())
-			} else {
+			if implicitPipeline {
 				assert.True(t, client.ImplicitPipeliningEnabled())
+			} else {
+				assert.False(t, client.ImplicitPipeliningEnabled())
 			}
 		})
 	}
 }
 
 func TestNewClientImpl(t *testing.T) {
-	t.Run("ImplicitPipeliningEnabled", testNewClientImpl(t, 2*time.Millisecond, 2))
-	t.Run("ImplicitPipeliningDisabled", testNewClientImpl(t, 0, 0))
+	t.Run("ImplicitPipeliningEnabled", testNewClientImpl(t, true))
+	t.Run("ImplicitPipeliningDisabled", testNewClientImpl(t, false))
 }
 
 func TestDoCmd(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	mkRedisClient := func(addr string) redis.Client {
-		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil)
+		return redis.NewClientImpl(context.Background(), statsStore, false, "", "tcp", "single", addr, 1, false, nil, false, nil)
 	}
 
 	t.Run("SETGET ok", func(t *testing.T) {
@@ -141,8 +141,8 @@ func TestDoCmd(t *testing.T) {
 		client := mkRedisClient(redisSrv.Addr())
 		var res string
 
-		assert.Nil(t, client.DoCmd(nil, "SET", "foo", "bar"))
-		assert.Nil(t, client.DoCmd(&res, "GET", "foo"))
+		assert.Nil(t, client.DoCmd(context.Background(), nil, "SET", "foo", "bar"))
+		assert.Nil(t, client.DoCmd(context.Background(), &res, "GET", "foo"))
 		assert.Equal(t, "bar", res)
 	})
 
@@ -154,9 +154,9 @@ func TestDoCmd(t *testing.T) {
 		var res uint32
 		hits := uint32(1)
 
-		assert.Nil(t, client.DoCmd(&res, "INCRBY", "a", hits))
+		assert.Nil(t, client.DoCmd(context.Background(), &res, "INCRBY", "a", hits))
 		assert.Equal(t, hits, res)
-		assert.Nil(t, client.DoCmd(&res, "INCRBY", "a", hits))
+		assert.Nil(t, client.DoCmd(context.Background(), &res, "INCRBY", "a", hits))
 		assert.Equal(t, uint32(2), res)
 	})
 
@@ -164,19 +164,19 @@ func TestDoCmd(t *testing.T) {
 		redisSrv := mustNewRedisServer()
 		client := mkRedisClient(redisSrv.Addr())
 
-		assert.Nil(t, client.DoCmd(nil, "SET", "foo", "bar"))
+		assert.Nil(t, client.DoCmd(context.Background(), nil, "SET", "foo", "bar"))
 
 		redisSrv.Close()
-		assert.EqualError(t, client.DoCmd(nil, "GET", "foo"), "EOF")
+		assert.EqualError(t, client.DoCmd(context.Background(), nil, "GET", "foo"), "response returned from Conn: EOF")
 	})
 }
 
-func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) func(t *testing.T) {
+func testPipeDo(t *testing.T, implicitPipeline bool) func(t *testing.T) {
 	return func(t *testing.T) {
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 		mkRedisClient := func(addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil)
+			return redis.NewClientImpl(context.Background(), statsStore, false, "", "tcp", "single", addr, 1, implicitPipeline, nil, false, nil)
 		}
 
 		t.Run("SETGET ok", func(t *testing.T) {
@@ -190,7 +190,7 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 			pipeline = client.PipeAppend(pipeline, nil, "SET", "foo", "bar")
 			pipeline = client.PipeAppend(pipeline, &res, "GET", "foo")
 
-			assert.Nil(t, client.PipeDo(pipeline))
+			assert.Nil(t, client.PipeDo(context.Background(), pipeline))
 			assert.Equal(t, "bar", res)
 		})
 
@@ -202,10 +202,10 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 			var res uint32
 			hits := uint32(1)
 
-			assert.Nil(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
+			assert.Nil(t, client.PipeDo(context.Background(), client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
 			assert.Equal(t, hits, res)
 
-			assert.Nil(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
+			assert.Nil(t, client.PipeDo(context.Background(), client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
 			assert.Equal(t, uint32(2), res)
 		})
 
@@ -213,7 +213,7 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 			redisSrv := mustNewRedisServer()
 			client := mkRedisClient(redisSrv.Addr())
 
-			assert.Nil(t, nil, client.PipeDo(client.PipeAppend(redis.Pipeline{}, nil, "SET", "foo", "bar")))
+			assert.Nil(t, nil, client.PipeDo(context.Background(), client.PipeAppend(redis.Pipeline{}, nil, "SET", "foo", "bar")))
 
 			redisSrv.Close()
 
@@ -222,12 +222,12 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 				assert.Contains(t, err.Error(), "EOF")
 			}
 
-			expectErrContainEOF(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, nil, "GET", "foo")))
+			expectErrContainEOF(t, client.PipeDo(context.Background(), client.PipeAppend(redis.Pipeline{}, nil, "GET", "foo")))
 		})
 	}
 }
 
 func TestPipeDo(t *testing.T) {
-	t.Run("ImplicitPipeliningEnabled", testPipeDo(t, 10*time.Millisecond, 2))
-	t.Run("ImplicitPipeliningDisabled", testPipeDo(t, 0, 0))
+	t.Run("ImplicitPipeliningEnabled", testPipeDo(t, true))
+	t.Run("ImplicitPipeliningDisabled", testPipeDo(t, false))
 }
