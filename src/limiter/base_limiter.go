@@ -15,7 +15,7 @@ import (
 )
 
 type BaseRateLimiter struct {
-	timeSource                 utils.TimeSource
+	TimeSource                 utils.TimeSource
 	JitterRand                 *rand.Rand
 	ExpirationJitterMaxSeconds int64
 	cacheKeyGenerator          CacheKeyGenerator
@@ -46,7 +46,7 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 	limits []*config.RateLimit, hitsAddend uint32) []CacheKey {
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]CacheKey, len(request.Descriptors))
-	now := this.timeSource.UnixNow()
+	now := this.TimeSource.UnixNow()
 	for i := 0; i < len(request.Descriptors); i++ {
 		// generateCacheKey() returns an empty string in the key if there is no limit
 		// so that we can keep the arrays all the same size.
@@ -142,7 +142,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
 	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager) *BaseRateLimiter {
 	return &BaseRateLimiter{
-		timeSource:                 timeSource,
+		TimeSource:                 timeSource,
 		JitterRand:                 jitterRand,
 		ExpirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix),
@@ -200,7 +200,7 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource),
+			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.TimeSource),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{

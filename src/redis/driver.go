@@ -30,6 +30,14 @@ type Client interface {
 	// @param args supplies the additional arguments.
 	PipeAppend(pipeline Pipeline, rcv interface{}, cmd string, args ...interface{}) Pipeline
 
+	// PipeScriptAppend append a script command onto the pipeline queue.
+	//
+	// @param pipeline supplies the queue for pending commands.
+	// @param rcv supplies receiver for the result.
+	// @param script supplies the script to append.
+	// @param args supplies the additional arguments.
+	PipeScriptAppend(pipeline Pipeline, rcv interface{}, script radix.EvalScript, args ...string) Pipeline
+
 	// PipeDo writes multiple commands to a Conn in
 	// a single write, then reads their responses in a single read. This reduces
 	// network delay into a single round-trip.

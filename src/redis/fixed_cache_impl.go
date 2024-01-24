@@ -1,7 +1,10 @@
 package redis
 
 import (
+	"fmt"
 	"math/rand"
+	"strconv"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -11,6 +14,7 @@ import (
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/mediocregopher/radix/v4"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 
@@ -18,6 +22,31 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
+
+var script = `local expires_at = tonumber(redis.call("get", ARGV[2]))
+
+if not expires_at or expires_at < tonumber(ARGV[4]) then
+	-- this is either a brand new window,
+	-- or this window has closed, but redis hasn't cleaned up the key yet
+	-- (redis will clean it up in one more second)
+	-- initialize a new rate limit window
+	redis.call("set", ARGV[1], 0)
+	redis.call("set", ARGV[2], ARGV[3])
+	-- tell Redis to clean this up _one second after_ the expires_at time (clock differences).
+	-- (Redis will only clean up these keys long after the window has passed)
+	redis.call("expireat", ARGV[1], ARGV[3] + 1)
+	redis.call("expireat", ARGV[2], ARGV[3] + 1)
+	-- since the database was updated, return the new value
+	expires_at = ARGV[3]
+end
+
+-- now that the window either already exists or it was freshly initialized,
+-- increment the counter("incrby" returns a number)
+local current = redis.call("incrby", ARGV[1], ARGV[5])
+
+return { current, expires_at }`
+
+var evalScript = radix.NewEvalScript(script)
 
 var tracer = otel.Tracer("redis.fixedCacheImpl")
 
@@ -32,9 +61,13 @@ type fixedRateLimitCacheImpl struct {
 	baseRateLimiter                    *limiter.BaseRateLimiter
 }
 
-func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) {
-	*pipeline = client.PipeAppend(*pipeline, result, "INCRBY", key, hitsAddend)
-	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
+func pipelineAppendScript(client Client, pipeline *Pipeline, key string, hitsAddend uint32, expirationTime, currentTime int64, result *[]int64) {
+	*pipeline = client.PipeScriptAppend(*pipeline, result, evalScript,
+		key,
+		fmt.Sprintf("%s:expires", key),
+		strconv.FormatInt(expirationTime, 10),
+		strconv.FormatInt(currentTime, 10),
+		strconv.FormatInt(int64(hitsAddend), 10))
 }
 
 func pipelineAppendtoGet(client Client, pipeline *Pipeline, key string, result *uint32) {
@@ -55,7 +88,10 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
-	results := make([]uint32, len(request.Descriptors))
+	results := make([][]int64, len(request.Descriptors))
+	for i := range results {
+		results[i] = make([]int64, 2)
+	}
 	currentCount := make([]uint32, len(request.Descriptors))
 	var pipeline, perSecondPipeline, pipelineToGet, perSecondPipelineToGet Pipeline
 
@@ -157,24 +193,26 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			expirationSeconds += this.baseRateLimiter.JitterRand.Int63n(this.baseRateLimiter.ExpirationJitterMaxSeconds)
 		}
 
+		unixTime := this.baseRateLimiter.TimeSource.UnixNow()
+		expirationTime := time.Unix(unixTime, 0).Add(time.Duration(expirationSeconds * int64(time.Second))).Unix()
 		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
 		if this.perSecondClient != nil && cacheKey.PerSecond {
 			if perSecondPipeline == nil {
 				perSecondPipeline = Pipeline{}
 			}
 			if nearlimitIndexes[i] {
-				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+				pipelineAppendScript(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, expirationTime, unixTime, &results[i])
 			} else {
-				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
+				pipelineAppendScript(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddendForRedis, expirationTime, unixTime, &results[i])
 			}
 		} else {
 			if pipeline == nil {
 				pipeline = Pipeline{}
 			}
 			if nearlimitIndexes[i] {
-				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+				pipelineAppendScript(this.client, &pipeline, cacheKey.Key, hitsAddend, expirationTime, unixTime, &results[i])
 			} else {
-				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
+				pipelineAppendScript(this.client, &pipeline, cacheKey.Key, hitsAddendForRedis, expirationTime, unixTime, &results[i])
 			}
 		}
 	}
@@ -200,7 +238,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		len(request.Descriptors))
 	for i, cacheKey := range cacheKeys {
 
-		limitAfterIncrease := results[i]
+		limitAfterIncrease := uint32(results[i][0])
 		limitBeforeIncrease := limitAfterIncrease - hitsAddend
 
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)

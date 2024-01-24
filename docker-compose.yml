@@ -55,11 +55,13 @@ services:
     environment:
       - USE_STATSD=false
       - LOG_LEVEL=debug
+      - REDIS_POOL_SIZE=100
       - REDIS_SOCKET_TYPE=tcp
       - REDIS_URL=redis:6379
       - RUNTIME_ROOT=/data
       - RUNTIME_SUBDIRECTORY=ratelimit
       - MEMCACHE_HOST_PORT=memcached:11211
+      - EXPIRATION_JITTER_MAX_SECONDS=0
 
 networks:
   ratelimit-network:

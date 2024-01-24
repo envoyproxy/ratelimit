@@ -11,6 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 
 	redis "github.com/envoyproxy/ratelimit/src/redis"
+	radix "github.com/mediocregopher/radix/v4"
 )
 
 // MockClient is a mock of Client interface.
@@ -128,4 +129,23 @@ func (m *MockClient) PipeDo(arg0 context.Context, arg1 redis.Pipeline) error {
 func (mr *MockClientMockRecorder) PipeDo(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PipeDo", reflect.TypeOf((*MockClient)(nil).PipeDo), arg0, arg1)
+}
+
+// PipeScriptAppend mocks base method.
+func (m *MockClient) PipeScriptAppend(arg0 redis.Pipeline, arg1 interface{}, arg2 radix.EvalScript, arg3 ...string) redis.Pipeline {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1, arg2}
+	for _, a := range arg3 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PipeScriptAppend", varargs...)
+	ret0, _ := ret[0].(redis.Pipeline)
+	return ret0
+}
+
+// PipeScriptAppend indicates an expected call of PipeScriptAppend.
+func (mr *MockClientMockRecorder) PipeScriptAppend(arg0, arg1, arg2 interface{}, arg3 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1, arg2}, arg3...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PipeScriptAppend", reflect.TypeOf((*MockClient)(nil).PipeScriptAppend), varargs...)
 }

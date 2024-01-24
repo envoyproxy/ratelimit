@@ -38,6 +38,10 @@ func pipeAppend(pipeline redis.Pipeline, rcv interface{}, cmd string, args ...in
 	return append(pipeline, radix.FlatCmd(rcv, cmd, args...))
 }
 
+func pipeScriptAppend(pipeline redis.Pipeline, rcv interface{}, script radix.EvalScript, args ...interface{}) redis.Pipeline {
+	return append(pipeline, script.FlatCmd(rcv, nil, args))
+}
+
 func testRedis(usePerSecondRedis bool) func(*testing.T) {
 	return func(t *testing.T) {
 		assert := assert.New(t)
@@ -56,7 +60,7 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 			cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
 		}
 
-		timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+		timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
 		var clientUsed *mock_redis.MockClient
 		if usePerSecondRedis {
 			clientUsed = perSecondClient
@@ -64,8 +68,8 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 			clientUsed = client
 		}
 
-		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(1, uint32(5)).DoAndReturn(pipeAppend)
-		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(1)).DoAndReturn(pipeAppend)
+		clientUsed.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key_value_1234", "domain_key_value_1234:expires", "1235", "1234",
+			"1").SetArg(1, []int64{5, 1}).DoAndReturn(pipeScriptAppend)
 		clientUsed.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 		request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
@@ -80,10 +84,9 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 		clientUsed = client
-		timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key2_value2_subkey2_subvalue2_1200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
-		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-			"EXPIRE", "domain_key2_value2_subkey2_subvalue2_1200", int64(60)).DoAndReturn(pipeAppend)
+		timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
+		clientUsed.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key2_value2_subkey2_subvalue2_1200", "domain_key2_value2_subkey2_subvalue2_1200:expires", "1294", "1234",
+			"1").SetArg(1, []int64{11, 1}).DoAndReturn(pipeScriptAppend)
 		clientUsed.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 		request = common.NewRateLimitRequest(
@@ -108,13 +111,11 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		assert.Equal(uint64(0), limits[1].Stats.WithinLimit.Value())
 
 		clientUsed = client
-		timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
-		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key3_value3_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
-		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-			"EXPIRE", "domain_key3_value3_997200", int64(3600)).DoAndReturn(pipeAppend)
-		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key3_value3_subkey3_subvalue3_950400", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
-		clientUsed.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-			"EXPIRE", "domain_key3_value3_subkey3_subvalue3_950400", int64(86400)).DoAndReturn(pipeAppend)
+		timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(7)
+		clientUsed.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key3_value3_997200", "domain_key3_value3_997200:expires",
+			"1003600", "1000000", "1").SetArg(1, []int64{11, 1}).DoAndReturn(pipeScriptAppend)
+		clientUsed.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key3_value3_subkey3_subvalue3_950400", "domain_key3_value3_subkey3_subvalue3_950400:expires",
+			"1086400", "1000000", "1").SetArg(1, []int64{13, 1}).DoAndReturn(pipeScriptAppend)
 		clientUsed.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 		request = common.NewRateLimitRequest(
@@ -195,10 +196,8 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{11, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
@@ -222,10 +221,8 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{13, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	assert.Equal(
@@ -244,9 +241,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	// Test Over limit stats
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(16)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{16, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	assert.Equal(
@@ -265,9 +260,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	// Test Over limit stats with local cache
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).Times(0)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").Times(0)
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
@@ -295,10 +288,8 @@ func TestNearLimit(t *testing.T) {
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
 
 	// Test Near Limit Stats. Under Near Limit Ratio
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{11, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
@@ -318,10 +309,8 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{13, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	assert.Equal(
@@ -336,10 +325,8 @@ func TestNearLimit(t *testing.T) {
 
 	// Test Near Limit Stats. We went OVER_LIMIT, but the near_limit counter only increases
 	// when we are near limit, not after we have passed the limit.
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(16)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{16, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	assert.Equal(
@@ -354,9 +341,8 @@ func TestNearLimit(t *testing.T) {
 
 	// Now test hitsAddend that is greater than 1
 	// All of it under limit, under near limit
-	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key5_value5_1234", uint32(3)).SetArg(1, uint32(5)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key5_value5_1234", int64(1)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key5_value5_1234", "domain_key5_value5_1234:expires", "1235", "1234", "3").SetArg(1, []int64{5, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key5", "value5"}}}, 3)
@@ -371,9 +357,8 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(3), limits[0].Stats.WithinLimit.Value())
 
 	// All of it under limit, some over near limit
-	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key6_value6_1234", uint32(2)).SetArg(1, uint32(7)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key6_value6_1234", int64(1)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key6_value6_1234", "domain_key6_value6_1234:expires", "1235", "1234", "2").SetArg(1, []int64{7, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key6", "value6"}}}, 2)
@@ -388,9 +373,8 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// All of it under limit, all of it over near limit
-	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key7_value7_1234", uint32(3)).SetArg(1, uint32(19)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key7_value7_1234", int64(1)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key7_value7_1234", "domain_key7_value7_1234:expires", "1235", "1234", "3").SetArg(1, []int64{19, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key7", "value7"}}}, 3)
@@ -405,9 +389,8 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(3), limits[0].Stats.WithinLimit.Value())
 
 	// Some of it over limit, all of it over near limit
-	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key8_value8_1234", uint32(3)).SetArg(1, uint32(22)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key8_value8_1234", int64(1)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key8_value8_1234", "domain_key8_value8_1234:expires", "1235", "1234", "3").SetArg(1, []int64{22, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key8", "value8"}}}, 3)
@@ -422,9 +405,8 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
 
 	// Some of it in all three places
-	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key9_value9_1234", uint32(7)).SetArg(1, uint32(22)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key9_value9_1234", int64(1)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key9_value9_1234", "domain_key9_value9_1234:expires", "1235", "1234", "7").SetArg(1, []int64{22, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key9", "value9"}}}, 7)
@@ -439,9 +421,8 @@ func TestNearLimit(t *testing.T) {
 	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
 
 	// all of it over limit
-	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key10_value10_1234", uint32(3)).SetArg(1, uint32(30)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key10_value10_1234", int64(1)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key10_value10_1234", "domain_key10_value10_1234:expires", "1235", "1234", "3").SetArg(1, []int64{30, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request = common.NewRateLimitRequest("domain", [][][2]string{{{"key10", "value10"}}}, 3)
@@ -468,10 +449,9 @@ func TestRedisWithJitter(t *testing.T) {
 	sm := stats.NewMockStatManager(statsStore)
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false)
 
-	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
 	jitterSource.EXPECT().Int63().Return(int64(100))
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(1, uint32(5)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(101)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key_value_1234", "domain_key_value_1234:expires", "1335", "1234", "1").SetArg(1, []int64{5, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
@@ -501,10 +481,8 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{11, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}}, 1)
@@ -528,10 +506,8 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{13, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	assert.Equal(
@@ -549,10 +525,8 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
 
 	// Test Over limit stats
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(16)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{16, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	// The result should be OK since limit is in ShadowMode
@@ -572,8 +546,8 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
 
 	// Test Over limit stats with local cache
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).Times(0)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(4)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").Times(0)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600)).Times(0)
 
@@ -611,10 +585,9 @@ func TestRedisTracer(t *testing.T) {
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
 
-	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(4)
 
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key_value_1234", uint32(1)).SetArg(1, uint32(5)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EXPIRE", "domain_key_value_1234", int64(1)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key_value_1234", "domain_key_value_1234:expires", "1235", "1234", "1").SetArg(1, []int64{5, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
@@ -642,17 +615,11 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(7)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key4_value4_997200").SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key5_value5_997200").SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
-
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
-
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key5_value5_997200", uint32(1)).SetArg(1, uint32(11)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key5_value5_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{11, 1}).DoAndReturn(pipeScriptAppend)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key5_value5_997200", "domain_key5_value5_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{11, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key4", "value4"}}, {{"key5", "value5"}}}, 1)
@@ -683,15 +650,11 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(7)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key4_value4_997200").SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key5_value5_997200").SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key5_value5_997200", uint32(1)).SetArg(1, uint32(13)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key5_value5_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{13, 1}).DoAndReturn(pipeScriptAppend)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key5_value5_997200", "domain_key5_value5_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{13, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	assert.Equal(
@@ -715,15 +678,11 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
 
 	// Test one key is reaching to the Overlimit threshold
-	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
+	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(7)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key4_value4_997200").SetArg(1, uint32(14)).DoAndReturn(pipeAppend)
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "GET", "domain_key5_value5_997200").SetArg(1, uint32(14)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key4_value4_997200", uint32(0)).SetArg(1, uint32(14)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "INCRBY", "domain_key5_value5_997200", uint32(1)).SetArg(1, uint32(14)).DoAndReturn(pipeAppend)
-	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
-		"EXPIRE", "domain_key5_value5_997200", int64(3600)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key4_value4_997200", "domain_key4_value4_997200:expires", "1003600", "1000000", "0").SetArg(1, []int64{14, 1}).DoAndReturn(pipeScriptAppend)
+	client.EXPECT().PipeScriptAppend(gomock.Any(), gomock.Any(), gomock.Any(), "domain_key5_value5_997200", "domain_key5_value5_997200:expires", "1003600", "1000000", "1").SetArg(1, []int64{14, 1}).DoAndReturn(pipeScriptAppend)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	assert.Equal(

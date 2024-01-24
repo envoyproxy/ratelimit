@@ -159,6 +159,10 @@ func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd string, 
 	return append(pipeline, radix.FlatCmd(rcv, cmd, args...))
 }
 
+func (c *clientImpl) PipeScriptAppend(pipeline Pipeline, rcv interface{}, script radix.EvalScript, args ...string) Pipeline {
+	return append(pipeline, script.FlatCmd(rcv, nil, args))
+}
+
 func (c *clientImpl) PipeDo(ctx context.Context, pipeline Pipeline) error {
 	if c.implicitPipelining {
 		for _, action := range pipeline {
