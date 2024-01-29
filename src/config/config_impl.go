@@ -77,7 +77,7 @@ var validKeys = map[string]bool{
 // @param unlimited supplies whether the rate limit is unlimited
 // @return the new config entry.
 func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats,
-	unlimited bool, shadowMode bool, name string, replaces []string, includeValueInMetricWhenNotSpecified bool) *RateLimit {
+	unlimited bool, shadowMode bool, name string, replaces []string, detailedMetric bool) *RateLimit {
 
 	return &RateLimit{
 		FullKey: rlStats.GetKey(),
@@ -86,11 +86,11 @@ func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Un
 			RequestsPerUnit: requestsPerUnit,
 			Unit:            unit,
 		},
-		Unlimited:                            unlimited,
-		ShadowMode:                           shadowMode,
-		Name:                                 name,
-		Replaces:                             replaces,
-		IncludeValueInMetricWhenNotSpecified: includeValueInMetricWhenNotSpecified,
+		Unlimited:      unlimited,
+		ShadowMode:     shadowMode,
+		Name:           name,
+		Replaces:       replaces,
+		DetailedMetric: detailedMetric,
 	}
 }
 
@@ -342,7 +342,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 			logger.Debugf("iterating to next level")
 			descriptorsMap = nextDescriptor.descriptors
 		} else {
-			if rateLimit != nil && rateLimit.IncludeValueInMetricWhenNotSpecified {
+			if rateLimit != nil && rateLimit.DetailedMetric {
 				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey+"_"+entry.Value), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, false)
 			}
 

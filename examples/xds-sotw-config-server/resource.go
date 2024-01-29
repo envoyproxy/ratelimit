@@ -93,12 +93,12 @@ func makeRlsConfig() []types.Resource {
 					},
 					Descriptors: []*rls_config.RateLimitDescriptor{
 						{
-							Key: "bar",
+							Key:            "bar",
+							DetailedMetric: true,
 							RateLimit: &rls_config.RateLimitPolicy{
 								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 3,
 							},
-							DetailedMetric: true,
 						},
 						{
 							Key:   "bar",

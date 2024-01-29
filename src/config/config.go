@@ -17,14 +17,14 @@ func (e RateLimitConfigError) Error() string {
 
 // Wrapper for an individual rate limit config entry which includes the defined limit and stats.
 type RateLimit struct {
-	FullKey                              string
-	Stats                                stats.RateLimitStats
-	Limit                                *pb.RateLimitResponse_RateLimit
-	Unlimited                            bool
-	ShadowMode                           bool
-	Name                                 string
-	Replaces                             []string
-	IncludeValueInMetricWhenNotSpecified bool
+	FullKey        string
+	Stats          stats.RateLimitStats
+	Limit          *pb.RateLimitResponse_RateLimit
+	Unlimited      bool
+	ShadowMode     bool
+	Name           string
+	Replaces       []string
+	DetailedMetric bool
 }
 
 // Interface for interacting with a loaded rate limit config.
