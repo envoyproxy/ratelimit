@@ -24,7 +24,7 @@ if [ $? -eq 0 ]; then
 fi
 
 # Sleep a bit to allow the stats to be propagated
-sleep 2
+sleep 5
 
 # Extract the metric for the unspecified value, which shoulb be there due to the "detailed_metric"
 stats=$(curl -f -s statsd:9102/metrics | grep -e ratelimit_service_rate_limit_over_limit | grep unspec_unspecified_value | cut -d} -f2 | sed 's/ //g')
