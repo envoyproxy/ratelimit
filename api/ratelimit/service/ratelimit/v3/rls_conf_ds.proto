@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package ratelimit.service.ratelimit.v3;
+
+import "envoy/service/discovery/v3/discovery.proto";
+
+option java_package = "io.envoyproxy.ratelimit.service.config.v3";
+option java_outer_classname = "RlsConfigProto";
+option java_multiple_files = true;
+option go_package = "github.com/envoyproxy/go-control-plane/ratelimit/service/config/v3;configv3";
+option java_generic_services = true;
+
+// [#protodoc-title: Rate Limit Config Discovery Service (RLS Conf DS)]
+
+// Return list of all rate limit configs that rate limit service should be configured with.
+service RateLimitConfigDiscoveryService {
+
+  rpc StreamRlsConfigs(stream envoy.service.discovery.v3.DiscoveryRequest)
+      returns (stream envoy.service.discovery.v3.DiscoveryResponse) {
+  }
+
+  rpc FetchRlsConfigs(envoy.service.discovery.v3.DiscoveryRequest)
+      returns (envoy.service.discovery.v3.DiscoveryResponse) {
+  }
+}
