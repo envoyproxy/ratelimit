@@ -99,11 +99,8 @@ func (p *XdsGrpcSotwProvider) watchConfigs() {
 		resp, err := p.adsClient.Fetch()
 		if err != nil {
 			logger.Errorf("Failed to receive configuration from xDS Management Server: %s", err.Error())
-			if sotw.IsConnError(err) {
-				p.retryGrpcConn()
-				return
-			}
-			p.adsClient.Nack(err.Error())
+			p.retryGrpcConn()
+			return
 		} else {
 			logger.Tracef("Response received from xDS Management Server: %v", resp)
 			p.sendConfigs(resp.Resources)
