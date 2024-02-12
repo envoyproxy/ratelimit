@@ -1,0 +1,51 @@
+name: Tests
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/tests.yaml'
+      - 'Dockerfile'
+      - 'Dockerfile.integration'
+      - 'go.mod'
+      - 'go.sum'
+      - 'src/**'
+      - 'test/**'
+      - 'scripts/**'
+      - 'api/**'
+      - 'integration-tests/**'
+
+jobs:
+  check_format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: check format
+        run: make check_format
+
+  integration_tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: run integration tests
+        run: make docker_tests
+
+  unit_tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21.5"
+
+      - name: run unit tests
+        run: |
+          make tests_unit

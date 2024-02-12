@@ -99,6 +99,12 @@ type Settings struct {
 	// value: remaining seconds
 	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:"RateLimit-Reset"`
 
+	// Settings for optional returning of custom response body
+	ResponseBody string `envconfig:"RESPONSE_BODY" default:""`
+
+	// Settings for optional returning of custom content-type
+	HeaderContentType string `envconfig:"HEADER_CONTENT_TYPE" default:""`
+
 	// Health-check settings
 	HealthyWithAtLeastOneConfigLoaded bool `envconfig:"HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED" default:"false"`
 

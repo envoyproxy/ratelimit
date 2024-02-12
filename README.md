@@ -55,6 +55,8 @@
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
+- [Response body](#response-body)
+- [Header content-type](#header-content-type)
 - [Tracing](#tracing)
 - [mTLS](#mtls)
 - [Contact](#contact)
@@ -1004,6 +1006,16 @@ The following environment variables control the custom response feature:
 1. `LIMIT_LIMIT_HEADER` - The default value is "RateLimit-Limit", setting the environment variable will specify an alternative header name
 1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
 1. `LIMIT_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
+
+# Response body
+
+Ratelimit service can be configured to return a custom response body with the ratelimit information. It will populate the response_body field as part of the [RateLimitResponse](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ratelimit/v3/rls.proto#service-ratelimit-v3-ratelimitresponse).
+
+1. `RESPONSE_BODY` - Enables the custom response headers
+
+# Header content-type
+
+1. `HEADER_CONTENT_TYPE` - Setting the environment variable will specify an alternative content-type.
 
 # Tracing
 

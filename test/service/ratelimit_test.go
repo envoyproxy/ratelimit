@@ -457,6 +457,60 @@ func TestServiceWithDefaultRatelimitHeaders(test *testing.T) {
 	t.assert.Nil(err)
 }
 
+func TestServiceWithCustomResponseBody(test *testing.T) {
+	os.Setenv("RESPONSE_BODY", `{"foo": "bar"}`)
+	os.Setenv("HEADER_CONTENT_TYPE", "application/json")
+	defer func() {
+		os.Unsetenv("RESPONSE_BODY")
+		os.Unsetenv("HEADER_CONTENT_TYPE")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Make request
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "", nil, false),
+		nil,
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+			},
+			ResponseHeadersToAdd: []*core.HeaderValue{
+				{Key: "content-type", Value: "application/json"},
+			},
+			RawBody: []byte(`{"foo": "bar"}`),
+		},
+		response)
+	t.assert.Nil(err)
+}
+
 func TestEmptyDomain(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()

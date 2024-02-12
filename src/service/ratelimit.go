@@ -50,6 +50,8 @@ type service struct {
 	customHeaderResetHeader     string
 	customHeaderClock           utils.TimeSource
 	globalShadowMode            bool
+	customBodyRaw               []byte
+	customHeaderContentType     string
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -84,6 +86,11 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 
 	rlSettings := settings.NewSettings()
 	this.globalShadowMode = rlSettings.GlobalShadowMode
+	if len(rlSettings.ResponseBody) > 0 {
+		this.customBodyRaw = []byte(rlSettings.ResponseBody)
+	}
+
+	this.customHeaderContentType = rlSettings.HeaderContentType
 
 	if rlSettings.RateLimitResponseHeadersEnabled {
 		this.customHeadersEnabled = true
@@ -217,17 +224,31 @@ func (this *service) shouldRateLimitWorker(
 
 				minimumDescriptor = descriptorStatus
 				minLimitRemaining = 0
+				if this.customBodyRaw != nil {
+					response.RawBody = this.customBodyRaw
+				}
+				if this.customHeaderContentType != "" {
+					response.ResponseHeadersToAdd = []*core.HeaderValue{
+						contentTypeHeader(this.customHeaderContentType),
+					}
+				}
 			}
 		}
 	}
 
 	// Add Headers if requested
 	if this.customHeadersEnabled && minimumDescriptor != nil {
-		response.ResponseHeadersToAdd = []*core.HeaderValue{
+		if response.ResponseHeadersToAdd == nil {
+			response.ResponseHeadersToAdd = []*core.HeaderValue{}
+		}
+
+		headersToAdd := []*core.HeaderValue{
 			this.rateLimitLimitHeader(minimumDescriptor),
 			this.rateLimitRemainingHeader(minimumDescriptor),
 			this.rateLimitResetHeader(minimumDescriptor),
 		}
+
+		response.ResponseHeadersToAdd = append(response.ResponseHeadersToAdd, headersToAdd...)
 	}
 
 	// If there is a global shadow_mode, it should always return OK
@@ -263,6 +284,13 @@ func (this *service) rateLimitResetHeader(
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
 		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
+	}
+}
+
+func contentTypeHeader(contentType string) *core.HeaderValue {
+	return &core.HeaderValue{
+		Key:   "content-type",
+		Value: contentType,
 	}
 }
 

@@ -117,7 +117,7 @@ tests_with_redis: bootstrap_redis_tls tests_unit
 	redis-cli --cluster check -a password123 127.0.0.1:6386
 	redis-cli --cluster check -a password123 127.0.0.1:6389
 
-	go test -race -tags=integration $(MODULE)/...
+	go test -v -race -tags=integration $(MODULE)/...
 
 .PHONY: docker_tests
 docker_tests:
