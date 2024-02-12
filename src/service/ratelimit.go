@@ -51,7 +51,7 @@ type service struct {
 	customHeaderClock           utils.TimeSource
 	globalShadowMode            bool
 	customBodyRaw               []byte
-	customHeaderContentType     string
+	headerContentType           string
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -90,7 +90,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 		this.customBodyRaw = []byte(rlSettings.ResponseBody)
 	}
 
-	this.customHeaderContentType = rlSettings.HeaderContentType
+	this.headerContentType = rlSettings.HeaderContentType
 
 	if rlSettings.RateLimitResponseHeadersEnabled {
 		this.customHeadersEnabled = true
@@ -227,9 +227,9 @@ func (this *service) shouldRateLimitWorker(
 				if this.customBodyRaw != nil {
 					response.RawBody = this.customBodyRaw
 				}
-				if this.customHeaderContentType != "" {
+				if this.headerContentType != "" {
 					response.ResponseHeadersToAdd = []*core.HeaderValue{
-						contentTypeHeader(this.customHeaderContentType),
+						contentTypeHeader(this.headerContentType),
 					}
 				}
 			}
