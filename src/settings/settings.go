@@ -69,6 +69,12 @@ type Settings struct {
 	// GrpcClientTlsSAN is the SAN to validate from the client cert during mTLS auth
 	ConfigGrpcXdsServerTlsSAN string `envconfig:"CONFIG_GRPC_XDS_SERVER_TLS_SAN" default:""`
 
+	// xDS client backoff configuration
+	XdsClientBackoffInitialInterval time.Duration `envconfig:"XDS_CLIENT_BACKOFF_INITIAL_INTERVAL" default:"10s"`
+	XdsClientBackoffMaxInterval     time.Duration `envconfig:"XDS_CLIENT_BACKOFF_MAX_INTERVAL" default:"60s"`
+	XdsClientBackoffRandomFactor    float64       `envconfig:"XDS_CLIENT_BACKOFF_RANDOM_FACTOR" default:"0.5"`
+	XdsClientBackoffJitter          bool          `envconfig:"XDS_CLIENT_BACKOFF_JITTER" default:"true"`
+
 	// Stats-related settings
 	UseStatsd  bool              `envconfig:"USE_STATSD" default:"true"`
 	StatsdHost string            `envconfig:"STATSD_HOST" default:"localhost"`

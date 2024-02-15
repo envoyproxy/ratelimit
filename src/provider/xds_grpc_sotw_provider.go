@@ -69,6 +69,12 @@ func (p *XdsGrpcSotwProvider) Stop() {
 func (p *XdsGrpcSotwProvider) initXdsClient() {
 	logger.Info("Starting xDS client connection for rate limit configurations")
 	conn := p.initializeAndWatch()
+	b := &backoff.Backoff{
+		Min:    p.settings.XdsClientBackoffInitialInterval,
+		Max:    p.settings.XdsClientBackoffMaxInterval,
+		Factor: p.settings.XdsClientBackoffRandomFactor,
+		Jitter: p.settings.XdsClientBackoffJitter,
+	}
 
 	for retryEvent := range p.connectionRetryChannel {
 		if conn != nil {
@@ -78,21 +84,14 @@ func (p *XdsGrpcSotwProvider) initXdsClient() {
 			logger.Info("Stopping xDS client watch for rate limit configurations")
 			break
 		}
-
-		d := p.getJitteredExponentialBackOffDuration()
+		d := p.getJitteredExponentialBackOffDuration(b)
 		logger.Infof("Sleeping for %s using exponential backoff\n", d)
 		time.Sleep(d)
 		conn = p.initializeAndWatch()
 	}
 }
 
-func (p *XdsGrpcSotwProvider) getJitteredExponentialBackOffDuration() time.Duration {
-	b := &backoff.Backoff{
-		Min:    10 * time.Second,
-		Max:    10 * time.Minute,
-		Factor: 0.5,
-		Jitter: true,
-	}
+func (p *XdsGrpcSotwProvider) getJitteredExponentialBackOffDuration(b *backoff.Backoff) time.Duration {
 	logger.Infof("Retry attempt# %f", b.Attempt())
 	return b.Duration()
 }
