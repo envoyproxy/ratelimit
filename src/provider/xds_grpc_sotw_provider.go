@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc/metadata"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/golang/protobuf/ptypes/any"
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	"github.com/jpillora/backoff"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -76,8 +78,23 @@ func (p *XdsGrpcSotwProvider) initXdsClient() {
 			logger.Info("Stopping xDS client watch for rate limit configurations")
 			break
 		}
+
+		d := p.getJitteredExponentialBackOffDuration()
+		logger.Infof("Sleeping for %s using exponential backoff\n", d)
+		time.Sleep(d)
 		conn = p.initializeAndWatch()
 	}
+}
+
+func (p *XdsGrpcSotwProvider) getJitteredExponentialBackOffDuration() time.Duration {
+	b := &backoff.Backoff{
+		Min:    10 * time.Second,
+		Max:    10 * time.Minute,
+		Factor: 0.5,
+		Jitter: true,
+	}
+	logger.Infof("Retry attempt# %f", b.Attempt())
+	return b.Duration()
 }
 
 func (p *XdsGrpcSotwProvider) initializeAndWatch() *grpc.ClientConn {

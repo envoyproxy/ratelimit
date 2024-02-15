@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.4.0
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
+	github.com/jpillora/backoff v1.0.0
 	github.com/kavu/go_reuseport v1.5.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/lyft/goruntime v0.3.0
