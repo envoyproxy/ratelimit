@@ -651,7 +651,10 @@ and with Type URL `"type.googleapis.com/ratelimit.config.ratelimit.v3.RateLimitC
 The xDS client in the Rate limit service configure Rate limit service with the provided configuration.
 In case of connection failures, the xDS Client retries the connection to the xDS server with exponential backoff and the backoff parameters are configurable.
 
-`XDS_CLIENT_BACKOFF_JITTER`: set to `"true"` to add jitter to the exponential backoff.
+1. `XDS_CLIENT_BACKOFF_JITTER`: set to `"true"` to add jitter to the exponential backoff.
+2. `XDS_CLIENT_BACKOFF_INITIAL_INTERVAL`: The base amount of time the xDS client waits before retyring the connection after failure. Default: "10s"
+3. `XDS_CLIENT_BACKOFF_MAX_INTERVAL`: The max backoff interval is the upper limit on the amount of time the xDS client will wait between retries. After reaching the max backoff interval, the next retries will continue using the max interval. Default: "60s"
+4. `XDS_CLIENT_BACKOFF_RANDOM_FACTOR`: This is a factor by which the initial interval is multiplied to calculate the next backoff interval. Default: "0.5"
 
 For more information on xDS protocol please refer to the [envoy proxy documentation](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol).
 
