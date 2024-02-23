@@ -85,14 +85,14 @@ func (p *XdsGrpcSotwProvider) initXdsClient() {
 			break
 		}
 		d := p.getJitteredExponentialBackOffDuration(b)
-		logger.Infof("Sleeping for %s using exponential backoff\n", d)
+		logger.Debugf("Sleeping for %s using exponential backoff\n", d)
 		time.Sleep(d)
 		conn = p.initializeAndWatch()
 	}
 }
 
 func (p *XdsGrpcSotwProvider) getJitteredExponentialBackOffDuration(b *backoff.Backoff) time.Duration {
-	logger.Infof("Retry attempt# %f", b.Attempt())
+	logger.Debugf("Retry attempt# %f", b.Attempt())
 	return b.Duration()
 }
 
