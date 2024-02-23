@@ -647,7 +647,15 @@ To enable this behavior set `MERGE_DOMAIN_CONFIG` to `true`.
 xDS Management Server is a gRPC server which implements the [Aggregated Discovery Service (ADS)](https://github.com/envoyproxy/data-plane-api/blob/97b6dae39046f7da1331a4dc57830d20e842fc26/envoy/service/discovery/v3/ads.proto).
 The xDS Management server serves [Discovery Response](https://github.com/envoyproxy/data-plane-api/blob/97b6dae39046f7da1331a4dc57830d20e842fc26/envoy/service/discovery/v3/discovery.proto#L69) with [Ratelimit Configuration Resources](api/ratelimit/config/ratelimit/v3/rls_conf.proto)
 and with Type URL `"type.googleapis.com/ratelimit.config.ratelimit.v3.RateLimitConfig"`.
+
 The xDS client in the Rate limit service configure Rate limit service with the provided configuration.
+In case of connection failures, the xDS Client retries the connection to the xDS server with exponential backoff and the backoff parameters are configurable.
+
+1. `XDS_CLIENT_BACKOFF_JITTER`: set to `"true"` to add jitter to the exponential backoff.
+2. `XDS_CLIENT_BACKOFF_INITIAL_INTERVAL`: The base amount of time the xDS client waits before retyring the connection after failure. Default: "10s"
+3. `XDS_CLIENT_BACKOFF_MAX_INTERVAL`: The max backoff interval is the upper limit on the amount of time the xDS client will wait between retries. After reaching the max backoff interval, the next retries will continue using the max interval. Default: "60s"
+4. `XDS_CLIENT_BACKOFF_RANDOM_FACTOR`: This is a factor by which the initial interval is multiplied to calculate the next backoff interval. Default: "0.5"
+
 For more information on xDS protocol please refer to the [envoy proxy documentation](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol).
 
 You can refer to [the sample xDS configuration management server](examples/xds-sotw-config-server/README.md).

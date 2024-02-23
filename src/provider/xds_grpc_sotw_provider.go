@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc/metadata"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/golang/protobuf/ptypes/any"
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	"github.com/jpillora/backoff"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -67,6 +69,12 @@ func (p *XdsGrpcSotwProvider) Stop() {
 func (p *XdsGrpcSotwProvider) initXdsClient() {
 	logger.Info("Starting xDS client connection for rate limit configurations")
 	conn := p.initializeAndWatch()
+	b := &backoff.Backoff{
+		Min:    p.settings.XdsClientBackoffInitialInterval,
+		Max:    p.settings.XdsClientBackoffMaxInterval,
+		Factor: p.settings.XdsClientBackoffRandomFactor,
+		Jitter: p.settings.XdsClientBackoffJitter,
+	}
 
 	for retryEvent := range p.connectionRetryChannel {
 		if conn != nil {
@@ -76,8 +84,16 @@ func (p *XdsGrpcSotwProvider) initXdsClient() {
 			logger.Info("Stopping xDS client watch for rate limit configurations")
 			break
 		}
+		d := p.getJitteredExponentialBackOffDuration(b)
+		logger.Debugf("Sleeping for %s using exponential backoff\n", d)
+		time.Sleep(d)
 		conn = p.initializeAndWatch()
 	}
+}
+
+func (p *XdsGrpcSotwProvider) getJitteredExponentialBackOffDuration(b *backoff.Backoff) time.Duration {
+	logger.Debugf("Retry attempt# %f", b.Attempt())
+	return b.Duration()
 }
 
 func (p *XdsGrpcSotwProvider) initializeAndWatch() *grpc.ClientConn {
@@ -99,11 +115,8 @@ func (p *XdsGrpcSotwProvider) watchConfigs() {
 		resp, err := p.adsClient.Fetch()
 		if err != nil {
 			logger.Errorf("Failed to receive configuration from xDS Management Server: %s", err.Error())
-			if sotw.IsConnError(err) {
-				p.retryGrpcConn()
-				return
-			}
-			p.adsClient.Nack(err.Error())
+			p.retryGrpcConn()
+			return
 		} else {
 			logger.Tracef("Response received from xDS Management Server: %v", resp)
 			p.sendConfigs(resp.Resources)
