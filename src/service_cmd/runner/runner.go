@@ -38,8 +38,19 @@ type Runner struct {
 }
 
 func NewRunner(s settings.Settings) Runner {
+
+	var store gostats.Store
+	// use statsd
+	if s.UseStatsd {
+		store = gostats.NewStore(gostats.NewTCPStatsdSink(gostats.WithStatsdHost(s.StatsdHost), gostats.WithStatsdPort(s.StatsdPort)), false)
+	} else {
+		store = gostats.NewStore(gostats.NewNullSink(), false)
+	}
+
+	go store.Start(time.NewTicker(10 * time.Second))
+
 	return Runner{
-		statsManager: stats.NewStatManager(gostats.NewDefaultStore(), s),
+		statsManager: stats.NewStatManager(store, s),
 		settings:     s,
 	}
 }
