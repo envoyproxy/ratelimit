@@ -26,8 +26,8 @@ func assertHttpResponse(t *testing.T,
 	requestBody string,
 	expectedStatusCode int,
 	expectedContentType string,
-	expectedResponseBody string) {
-
+	expectedResponseBody string,
+) {
 	t.Helper()
 	assert := assert.New(t)
 

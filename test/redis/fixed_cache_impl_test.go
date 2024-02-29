@@ -146,7 +146,8 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 
 func testLocalCacheStats(localCacheStats gostats.StatGenerator, statsStore gostats.Store, sink *common.TestStatSink,
 	expectedHitCount int, expectedMissCount int, expectedLookUpCount int, expectedExpiredCount int,
-	expectedEntryCount int) func(*testing.T) {
+	expectedEntryCount int,
+) func(*testing.T) {
 	return func(t *testing.T) {
 		localCacheStats.GenerateStats()
 		statsStore.Flush()
