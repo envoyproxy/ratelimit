@@ -9,7 +9,7 @@ require (
 	github.com/envoyproxy/go-control-plane v0.12.1-0.20240123181358-841e293a220b
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3
-	github.com/google/uuid v1.4.0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/jpillora/backoff v1.0.0
