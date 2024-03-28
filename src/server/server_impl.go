@@ -50,20 +50,28 @@ type serverDebugListener struct {
 	listener  net.Listener
 }
 
+type grpcListenType int
+
+const (
+	tcp              grpcListenType = 0
+	unixDomainSocket grpcListenType = 1
+)
+
 type server struct {
-	httpAddress   string
-	grpcAddress   string
-	debugAddress  string
-	router        *mux.Router
-	grpcServer    *grpc.Server
-	store         gostats.Store
-	scope         gostats.Scope
-	provider      provider.RateLimitConfigProvider
-	runtime       loader.IFace
-	debugListener serverDebugListener
-	httpServer    *http.Server
-	listenerMu    sync.Mutex
-	health        *HealthChecker
+	httpAddress    string
+	grpcAddress    string
+	grpcListenType grpcListenType
+	debugAddress   string
+	router         *mux.Router
+	grpcServer     *grpc.Server
+	store          gostats.Store
+	scope          gostats.Scope
+	provider       provider.RateLimitConfigProvider
+	runtime        loader.IFace
+	debugListener  serverDebugListener
+	httpServer     *http.Server
+	listenerMu     sync.Mutex
+	health         *HealthChecker
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
@@ -197,9 +205,20 @@ func (server *server) Start() {
 
 func (server *server) startGrpc() {
 	logger.Warnf("Listening for gRPC on '%s'", server.grpcAddress)
-	lis, err := reuseport.Listen("tcp", server.grpcAddress)
+	var lis net.Listener
+	var err error
+
+	switch server.grpcListenType {
+	case tcp:
+		lis, err = reuseport.Listen("tcp", server.grpcAddress)
+	case unixDomainSocket:
+		lis, err = net.Listen("unix", server.grpcAddress)
+	default:
+		logger.Fatalf("Invalid gRPC listen type %v", server.grpcListenType)
+	}
+
 	if err != nil {
-		logger.Fatalf("Failed to listen for gRPC: %v", err)
+		logger.Fatalf("Failed to listen for gRPC on '%s': %v", server.grpcAddress, err)
 	}
 	server.grpcServer.Serve(lis)
 }
@@ -247,7 +266,13 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 
 	// setup listen addresses
 	ret.httpAddress = net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
-	ret.grpcAddress = net.JoinHostPort(s.GrpcHost, strconv.Itoa(s.GrpcPort))
+	if s.GrpcUds != "" {
+		ret.grpcAddress = s.GrpcUds
+		ret.grpcListenType = unixDomainSocket
+	} else {
+		ret.grpcAddress = net.JoinHostPort(s.GrpcHost, strconv.Itoa(s.GrpcPort))
+		ret.grpcListenType = tcp
+	}
 	ret.debugAddress = net.JoinHostPort(s.DebugHost, strconv.Itoa(s.DebugPort))
 
 	// setup stats
