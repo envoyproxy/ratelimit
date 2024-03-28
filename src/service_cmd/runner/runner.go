@@ -38,7 +38,6 @@ type Runner struct {
 }
 
 func NewRunner(s settings.Settings) Runner {
-
 	var store gostats.Store
 	// use statsd
 	if s.UseStatsd {
