@@ -12,6 +12,7 @@ import (
 	pb_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/envoyproxy/ratelimit/src/config"
 	mockstats "github.com/envoyproxy/ratelimit/test/mocks/stats"
@@ -630,4 +631,319 @@ func TestWildcardConfig(t *testing.T) {
 			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWildcard", Value: "barab"}},
 		})
 	assert.Nil(midWildcard)
+}
+
+func TestDetailedMetric(t *testing.T) {
+	assert := require.New(t)
+	stats := stats.NewStore(stats.NewNullSink(), false)
+
+	// Descriptor config with a realistic nested setup, that is re-used across
+	// multiple test cases.
+	realisticExampleConfig := &config.YamlRoot{
+		Domain: "nested",
+		Descriptors: []config.YamlDescriptor{
+			{
+				Key: "key_1",
+				RateLimit: &config.YamlRateLimit{
+					RequestsPerUnit: 500,
+					Unit:            "minute",
+				},
+				DetailedMetric: true,
+			},
+			{
+				Key:   "key_1",
+				Value: "some-value-for-key-1",
+				RateLimit: &config.YamlRateLimit{
+					RequestsPerUnit: 500,
+					Unit:            "minute",
+				},
+			},
+			{
+				Key: "key_2",
+				RateLimit: &config.YamlRateLimit{
+					RequestsPerUnit: 5000,
+					Unit:            "minute",
+				},
+				Descriptors: []config.YamlDescriptor{
+					{
+						Key:            "key_3",
+						DetailedMetric: true,
+					},
+					{
+						Key:   "key_3",
+						Value: "requested-key3-value",
+						RateLimit: &config.YamlRateLimit{
+							RequestsPerUnit: 5,
+							Unit:            "minute",
+						},
+						DetailedMetric: true,
+					},
+				},
+				DetailedMetric: true,
+			},
+			{
+				Key:   "key_2",
+				Value: "specific-id",
+				RateLimit: &config.YamlRateLimit{
+					RequestsPerUnit: 50000,
+					Unit:            "minute",
+				},
+				Descriptors: []config.YamlDescriptor{
+					{
+						Key:            "key_3",
+						DetailedMetric: true,
+					},
+					{
+						Key:   "key_3",
+						Value: "requested-key3-value",
+						RateLimit: &config.YamlRateLimit{
+							RequestsPerUnit: 100,
+							Unit:            "minute",
+						},
+						DetailedMetric: true,
+					},
+				},
+				DetailedMetric: true,
+			},
+		},
+	}
+
+	tests := []struct {
+		name             string
+		config           []config.RateLimitConfigToLoad
+		request          *pb_struct.RateLimitDescriptor
+		expectedStatsKey string
+	}{
+		{
+			name: "nested with no values but request only top-level key",
+			config: []config.RateLimitConfigToLoad{
+				{
+					ConfigYaml: &config.YamlRoot{
+						Domain: "nested",
+						Descriptors: []config.YamlDescriptor{
+							{
+								Key: "key-1",
+								RateLimit: &config.YamlRateLimit{
+									RequestsPerUnit: 100,
+									Unit:            "minute",
+								},
+								Descriptors: []config.YamlDescriptor{
+									{
+										Key: "key-2",
+										RateLimit: &config.YamlRateLimit{
+											RequestsPerUnit: 5,
+											Unit:            "minute",
+										},
+									},
+								},
+								DetailedMetric: true,
+							},
+						},
+					},
+				},
+			},
+			request: &pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{
+						Key:   "key-1",
+						Value: "value-1",
+					},
+				},
+			},
+			expectedStatsKey: "nested.key-1_value-1",
+		},
+		{
+			name: "nested with no values but request only top-level key with no detailed metric",
+			config: []config.RateLimitConfigToLoad{
+				{
+					ConfigYaml: &config.YamlRoot{
+						Domain: "nested",
+						Descriptors: []config.YamlDescriptor{
+							{
+								Key: "key-1",
+								RateLimit: &config.YamlRateLimit{
+									RequestsPerUnit: 100,
+									Unit:            "minute",
+								},
+								Descriptors: []config.YamlDescriptor{
+									{
+										Key: "key-2",
+										RateLimit: &config.YamlRateLimit{
+											RequestsPerUnit: 5,
+											Unit:            "minute",
+										},
+									},
+								},
+								DetailedMetric: false,
+							},
+						},
+					},
+				},
+			},
+			request: &pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{
+						Key:   "key-1",
+						Value: "value-1",
+					},
+				},
+			},
+			expectedStatsKey: "nested.key-1",
+		},
+		{
+			name: "nested with no values and request fully nested descriptors",
+			config: []config.RateLimitConfigToLoad{
+				{
+					ConfigYaml: &config.YamlRoot{
+						Domain: "nested",
+						Descriptors: []config.YamlDescriptor{
+							{
+								Key: "key-1",
+								RateLimit: &config.YamlRateLimit{
+									RequestsPerUnit: 100,
+									Unit:            "minute",
+								},
+								Descriptors: []config.YamlDescriptor{
+									{
+										Key: "key-2",
+										RateLimit: &config.YamlRateLimit{
+											RequestsPerUnit: 5,
+											Unit:            "minute",
+										},
+										DetailedMetric: true,
+									},
+								},
+								DetailedMetric: true,
+							},
+						},
+					},
+				},
+			},
+			request: &pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{
+						Key:   "key-1",
+						Value: "value-1",
+					},
+					{
+						Key:   "key-2",
+						Value: "value-2",
+					},
+				},
+			},
+			expectedStatsKey: "nested.key-1_value-1.key-2_value-2",
+		},
+		{
+			name: "nested with no values and request fully nested descriptors with no detailed metric",
+			config: []config.RateLimitConfigToLoad{
+				{
+					ConfigYaml: &config.YamlRoot{
+						Domain: "nested",
+						Descriptors: []config.YamlDescriptor{
+							{
+								Key: "key-1",
+								RateLimit: &config.YamlRateLimit{
+									RequestsPerUnit: 100,
+									Unit:            "minute",
+								},
+								Descriptors: []config.YamlDescriptor{
+									{
+										Key: "key-2",
+										RateLimit: &config.YamlRateLimit{
+											RequestsPerUnit: 5,
+											Unit:            "minute",
+										},
+										DetailedMetric: false,
+									},
+								},
+								DetailedMetric: false,
+							},
+						},
+					},
+				},
+			},
+			request: &pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{
+						Key:   "key-1",
+						Value: "value-1",
+					},
+					{
+						Key:   "key-2",
+						Value: "value-2",
+					},
+				},
+			},
+			expectedStatsKey: "nested.key-1.key-2",
+		},
+		{
+			name: "test nested descriptors with simple request",
+			config: []config.RateLimitConfigToLoad{
+				{
+					ConfigYaml: realisticExampleConfig,
+				},
+			},
+			request: &pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{
+						Key:   "key_1",
+						Value: "value-for-key-1",
+					},
+				},
+			},
+			expectedStatsKey: "nested.key_1_value-for-key-1",
+		},
+		{
+			name: "test nested only second descriptor request not nested",
+			config: []config.RateLimitConfigToLoad{
+				{
+					ConfigYaml: realisticExampleConfig,
+				},
+			},
+			request: &pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{
+						Key:   "key_2",
+						Value: "key-2-value",
+					},
+				},
+			},
+			expectedStatsKey: "nested.key_2_key-2-value",
+		},
+		{
+			name: "test nested descriptors with nested request",
+			config: []config.RateLimitConfigToLoad{
+				{
+					ConfigYaml: realisticExampleConfig,
+				},
+			},
+			request: &pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{
+						Key:   "key_2",
+						Value: "key-2-value",
+					},
+					{
+						Key:   "key_3",
+						Value: "requested-key3-value",
+					},
+				},
+			},
+			expectedStatsKey: "nested.key_2_key-2-value.key_3_requested-key3-value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rlConfig := config.NewRateLimitConfigImpl(tt.config, mockstats.NewMockStatManager(stats), true)
+			rlConfig.Dump()
+
+			rl := rlConfig.GetLimit(
+				context.TODO(), "nested",
+				tt.request,
+			)
+			assert.NotNil(rl)
+			assert.Equal(tt.expectedStatsKey, rl.Stats.Key)
+		})
+	}
 }
