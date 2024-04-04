@@ -76,10 +76,12 @@ type Settings struct {
 	XdsClientBackoffJitter          bool          `envconfig:"XDS_CLIENT_BACKOFF_JITTER" default:"true"`
 
 	// Stats-related settings
-	UseStatsd  bool              `envconfig:"USE_STATSD" default:"true"`
-	StatsdHost string            `envconfig:"STATSD_HOST" default:"localhost"`
-	StatsdPort int               `envconfig:"STATSD_PORT" default:"8125"`
-	ExtraTags  map[string]string `envconfig:"EXTRA_TAGS" default:""`
+	UseStatsd          bool              `envconfig:"USE_STATSD" default:"true"`
+	StatsdHost         string            `envconfig:"STATSD_HOST" default:"localhost"`
+	StatsdPort         int               `envconfig:"STATSD_PORT" default:"8125"`
+	ExtraTags          map[string]string `envconfig:"EXTRA_TAGS" default:""`
+	StatsFlushInterval time.Duration     `envconfig:"STATS_FLUSH_INTERVAL" default:"10s"`
+	DisableStats       bool              `envconfig:"DISABLE_STATS" default:"false"`
 
 	// Settings for rate limit configuration
 	RuntimePath           string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`

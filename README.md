@@ -788,6 +788,14 @@ The rate limit service generates various statistics for each configured rate lim
 users both for visibility and for setting alarms. Ratelimit uses [gostats](https://github.com/lyft/gostats) as its statistics library. Please refer
 to [gostats' documentation](https://godoc.org/github.com/lyft/gostats) for more information on the library.
 
+Statistics default to using [StatsD](https://github.com/statsd/statsd) and configured via the env vars from [gostats](https://github.com/lyft/gostats).
+
+To output statistics to stdout instead, set env var `USE_STATSD` to `false`
+
+Configure statistics output frequency with `STATS_FLUSH_INTERVAL`, where the type is `time.Duration`, e.g. `10s` is the default value.
+
+To disable statistics entirely, set env var `DISABLE_STATS` to `true`
+
 Rate Limit Statistic Path:
 
 ```
