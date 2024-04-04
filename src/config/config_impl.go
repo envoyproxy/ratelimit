@@ -306,10 +306,19 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 	descriptorsMap := value.descriptors
 	prevDescriptor := &value.rateLimitDescriptor
+
+	// Build detailed metric as we traverse the list of descriptors
+	var detailedMetricFullKey strings.Builder
+	detailedMetricFullKey.WriteString(domain)
+
 	for i, entry := range descriptor.Entries {
 		// First see if key_value is in the map. If that isn't in the map we look for just key
 		// to check for a default value.
 		finalKey := entry.Key + "_" + entry.Value
+
+		detailedMetricFullKey.WriteString(".")
+		detailedMetricFullKey.WriteString(finalKey)
+
 		logger.Debugf("looking up key: %s", finalKey)
 		nextDescriptor := descriptorsMap[finalKey]
 
@@ -343,12 +352,17 @@ func (this *rateLimitConfigImpl) GetLimit(
 			descriptorsMap = nextDescriptor.descriptors
 		} else {
 			if rateLimit != nil && rateLimit.DetailedMetric {
-				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey+"_"+entry.Value), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, false)
+				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
 			}
 
 			break
 		}
 		prevDescriptor = nextDescriptor
+	}
+
+	// Replace metric with detailed metric, if leaf descriptor is detailed.
+	if rateLimit != nil && rateLimit.DetailedMetric {
+		rateLimit.Stats = this.statsManager.NewStats(detailedMetricFullKey.String())
 	}
 
 	return rateLimit
