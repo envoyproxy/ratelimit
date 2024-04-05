@@ -39,14 +39,21 @@ type Runner struct {
 
 func NewRunner(s settings.Settings) Runner {
 	var store gostats.Store
-	// use statsd
-	if s.UseStatsd {
+
+	if s.DisableStats {
+		logger.Info("Stats disabled")
+		store = gostats.NewStore(gostats.NewNullSink(), false)
+	} else if s.UseStatsd {
+		logger.Info("Stats initialized for statsd")
 		store = gostats.NewStore(gostats.NewTCPStatsdSink(gostats.WithStatsdHost(s.StatsdHost), gostats.WithStatsdPort(s.StatsdPort)), false)
 	} else {
-		store = gostats.NewStore(gostats.NewNullSink(), false)
+		logger.Info("Stats initialized for stdout")
+		store = gostats.NewStore(gostats.NewLoggingSink(), false)
 	}
 
-	go store.Start(time.NewTicker(10 * time.Second))
+	logger.Infof("Stats flush interval: %s", s.StatsFlushInterval)
+
+	go store.Start(time.NewTicker(s.StatsFlushInterval))
 
 	return Runner{
 		statsManager: stats.NewStatManager(store, s),
