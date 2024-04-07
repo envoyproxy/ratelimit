@@ -14,12 +14,12 @@ import (
 	"time"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/service_cmd/runner"
@@ -59,14 +59,14 @@ func defaultSettings() settings.Settings {
 	return s
 }
 
-func newDescriptorStatus(status pb.RateLimitResponse_Code, requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, limitRemaining uint32, durRemaining *duration.Duration) *pb.RateLimitResponse_DescriptorStatus {
+func newDescriptorStatus(status pb.RateLimitResponse_Code, requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, limitRemaining uint32, durRemaining *durationpb.Duration) *pb.RateLimitResponse_DescriptorStatus {
 	limit := &pb.RateLimitResponse_RateLimit{RequestsPerUnit: requestsPerUnit, Unit: unit}
 
 	return &pb.RateLimitResponse_DescriptorStatus{
 		Code:               status,
 		CurrentLimit:       limit,
 		LimitRemaining:     limitRemaining,
-		DurationUntilReset: &duration.Duration{Seconds: durRemaining.GetSeconds()},
+		DurationUntilReset: &durationpb.Duration{Seconds: durRemaining.GetSeconds()},
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	"github.com/golang/protobuf/ptypes/duration"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 // Interface for a time source.
@@ -31,10 +31,10 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 	panic("should not get here")
 }
 
-func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource) *duration.Duration {
+func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource) *durationpb.Duration {
 	sec := UnitToDivider(*unit)
 	now := timeSource.UnixNow()
-	return &duration.Duration{Seconds: sec - now%sec}
+	return &durationpb.Duration{Seconds: sec - now%sec}
 }
 
 func Max(a uint32, b uint32) uint32 {
