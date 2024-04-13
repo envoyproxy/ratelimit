@@ -35,6 +35,7 @@
   - [GRPC Keepalive](#grpc-keepalive)
   - [Health-check](#health-check)
     - [Health-check configurations](#health-check-configurations)
+  - [GRPC server](#grpc-server)
 - [Request Fields](#request-fields)
 - [GRPC Client](#grpc-client)
   - [Commandline flags](#commandline-flags)
@@ -747,6 +748,13 @@ HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED default:"false"`
 
 If `HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED` is enabled then health check will start as unhealthy and becomes healthy if
 it detects at least one domain is loaded with the config. If it detects no config again then it will change to unhealthy.
+
+## GRPC server
+
+By default the ratelimit gRPC server binds to `0.0.0.0:8081`. To change this set
+`GRPC_HOST` and/or `GRPC_PORT`. If you want to run the server on a unix domain
+socket then set `GRPC_UDS`, e.g. `GRPC_UDS=/<dir>/ratelimit.sock` and leave
+`GRPC_HOST` and `GRPC_PORT` unmodified.
 
 # Request Fields
 
