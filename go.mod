@@ -3,7 +3,7 @@ module github.com/envoyproxy/ratelimit
 go 1.21.5
 
 require (
-	github.com/alicebob/miniredis/v2 v2.31.0
+	github.com/alicebob/miniredis/v2 v2.32.1
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/coocood/freecache v1.2.4
 	github.com/envoyproxy/go-control-plane v0.12.1-0.20240123181358-841e293a220b
