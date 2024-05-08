@@ -58,20 +58,21 @@ const (
 )
 
 type server struct {
-	httpAddress    string
-	grpcAddress    string
-	grpcListenType grpcListenType
-	debugAddress   string
-	router         *mux.Router
-	grpcServer     *grpc.Server
-	store          gostats.Store
-	scope          gostats.Scope
-	provider       provider.RateLimitConfigProvider
-	runtime        loader.IFace
-	debugListener  serverDebugListener
-	httpServer     *http.Server
-	listenerMu     sync.Mutex
-	health         *HealthChecker
+	httpAddress      string
+	grpcAddress      string
+	grpcListenType   grpcListenType
+	debugAddress     string
+	router           *mux.Router
+	grpcServer       *grpc.Server
+	store            gostats.Store
+	scope            gostats.Scope
+	provider         provider.RateLimitConfigProvider
+	runtime          loader.IFace
+	debugListener    serverDebugListener
+	httpServer       *http.Server
+	listenerMu       sync.Mutex
+	health           *HealthChecker
+	grpcCertProvider *provider.CertProvider
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
@@ -242,6 +243,14 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 
 	ret := new(server)
 
+	// setup stats
+	ret.store = statsManager.GetStatsStore()
+	ret.scope = ret.store.ScopeWithTags(name, s.ExtraTags)
+	ret.store.AddStatGenerator(gostats.NewRuntimeStats(ret.scope.Scope("go")))
+	if localCache != nil {
+		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
+	}
+
 	keepaliveOpt := grpc.KeepaliveParams(keepalive.ServerParameters{
 		MaxConnectionAge:      s.GrpcMaxConnectionAge,
 		MaxConnectionAgeGrace: s.GrpcMaxConnectionAgeGrace,
@@ -256,6 +265,10 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	}
 	if s.GrpcServerUseTLS {
 		grpcServerTlsConfig := s.GrpcServerTlsConfig
+		ret.grpcCertProvider = provider.NewCertProvider(s, ret.store, s.GrpcServerTlsCert, s.GrpcServerTlsKey)
+		// Remove the static certificates and use the provider via the GetCertificate function
+		grpcServerTlsConfig.Certificates = nil
+		grpcServerTlsConfig.GetCertificate = ret.grpcCertProvider.GetCertificateFunc()
 		// Verify client SAN if provided
 		if s.GrpcClientTlsSAN != "" {
 			grpcServerTlsConfig.VerifyPeerCertificate = verifyClient(grpcServerTlsConfig.ClientCAs, s.GrpcClientTlsSAN)
@@ -274,14 +287,6 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		ret.grpcListenType = tcp
 	}
 	ret.debugAddress = net.JoinHostPort(s.DebugHost, strconv.Itoa(s.DebugPort))
-
-	// setup stats
-	ret.store = statsManager.GetStatsStore()
-	ret.scope = ret.store.ScopeWithTags(name, s.ExtraTags)
-	ret.store.AddStatGenerator(gostats.NewRuntimeStats(ret.scope.Scope("go")))
-	if localCache != nil {
-		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
-	}
 
 	// setup config provider
 	ret.provider = getProviderImpl(s, statsManager, ret.store)
