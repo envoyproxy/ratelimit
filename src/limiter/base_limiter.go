@@ -33,7 +33,8 @@ type LimitInfo struct {
 }
 
 func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint32, limitAfterIncrease uint32,
-	nearLimitThreshold uint32, overLimitThreshold uint32) *LimitInfo {
+	nearLimitThreshold uint32, overLimitThreshold uint32,
+) *LimitInfo {
 	return &LimitInfo{
 		limit: limit, limitBeforeIncrease: limitBeforeIncrease, limitAfterIncrease: limitAfterIncrease,
 		nearLimitThreshold: nearLimitThreshold, overLimitThreshold: overLimitThreshold,
@@ -43,7 +44,8 @@ func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint32, limit
 // Generates cache keys for given rate limit request. Each cache key is represented by a concatenation of
 // domain, descriptor and current timestamp.
 func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
-	limits []*config.RateLimit, hitsAddend uint32) []CacheKey {
+	limits []*config.RateLimit, hitsAddend uint32,
+) []CacheKey {
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]CacheKey, len(request.Descriptors))
 	now := this.timeSource.UnixNow()
@@ -79,7 +81,8 @@ func (this *BaseRateLimiter) IsOverLimitThresholdReached(limitInfo *LimitInfo) b
 // Generates response descriptor status based on cache key, over the limit with local cache, over the limit and
 // near the limit thresholds. Thresholds are checked in order and are mutually exclusive.
 func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *LimitInfo,
-	isOverLimitWithLocalCache bool, hitsAddend uint32) *pb.RateLimitResponse_DescriptorStatus {
+	isOverLimitWithLocalCache bool, hitsAddend uint32,
+) *pb.RateLimitResponse_DescriptorStatus {
 	if key == "" {
 		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK,
 			nil, 0)
@@ -113,7 +116,8 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
 				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
 				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
-				err := this.localCache.Set([]byte(key), []byte{}, int(utils.UnitToDivider(limitInfo.limit.Limit.Unit)))
+
+				err := this.localCache.Set([]byte(key), []byte{}, int(utils.UnitToDividerWithMultiplier(limitInfo.limit.Limit.Unit, limitInfo.limit.Limit.UnitMultiplier)))
 				if err != nil {
 					logger.Errorf("Failing to set local cache key: %s", key)
 				}
@@ -140,7 +144,8 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 }
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
-	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager) *BaseRateLimiter {
+	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
+) *BaseRateLimiter {
 	return &BaseRateLimiter{
 		timeSource:                 timeSource,
 		JitterRand:                 jitterRand,
@@ -194,13 +199,14 @@ func (this *BaseRateLimiter) increaseShadowModeStats(isOverLimitWithLocalCache b
 }
 
 func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.RateLimitResponse_Code,
-	limit *pb.RateLimitResponse_RateLimit, limitRemaining uint32) *pb.RateLimitResponse_DescriptorStatus {
+	limit *pb.RateLimitResponse_RateLimit, limitRemaining uint32,
+) *pb.RateLimitResponse_DescriptorStatus {
 	if limit != nil {
 		return &pb.RateLimitResponse_DescriptorStatus{
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource),
+			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource, limit.UnitMultiplier),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{

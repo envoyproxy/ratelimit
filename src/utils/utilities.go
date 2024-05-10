@@ -31,8 +31,22 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 	panic("should not get here")
 }
 
-func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource) *durationpb.Duration {
-	sec := UnitToDivider(*unit)
+// Convert a rate limit into a time divider reflecting the unit multiplier.
+// @param unit supplies the unit to convert.
+// @param unitMultiplier supplies the unit multiplier to scale the unit with.
+// @return the scaled divider to use in time computations.
+func UnitToDividerWithMultiplier(unit pb.RateLimitResponse_RateLimit_Unit, unitMultiplier uint32) int64 {
+	// TODO: Should this stay as a safe-guard?
+	// Already validated in rateLimitDescriptor::loadDescriptors, here redundantly to avoid the risk of multiplying with 0
+	if unitMultiplier == 0 {
+		unitMultiplier = 1
+	}
+
+	return UnitToDivider(unit) * int64(unitMultiplier)
+}
+
+func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, unitMultiplier uint32) *durationpb.Duration {
+	sec := UnitToDividerWithMultiplier(*unit, unitMultiplier)
 	now := timeSource.UnixNow()
 	return &durationpb.Duration{Seconds: sec - now%sec}
 }

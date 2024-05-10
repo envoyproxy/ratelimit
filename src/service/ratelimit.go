@@ -138,8 +138,9 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 					logger.Debugf("descriptor is unlimited, not passing to the cache")
 				} else {
 					logger.Debugf(
-						"applying limit: %d requests per %s, shadow_mode: %t",
+						"applying limit: %d requests per %d %s, shadow_mode: %t",
 						limitsToCheck[i].Limit.RequestsPerUnit,
+						limitsToCheck[i].Limit.UnitMultiplier,
 						limitsToCheck[i].Limit.Unit.String(),
 						limitsToCheck[i].ShadowMode,
 					)
@@ -177,8 +178,8 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 const MaxUint32 = uint32(1<<32 - 1)
 
 func (this *service) shouldRateLimitWorker(
-	ctx context.Context, request *pb.RateLimitRequest) *pb.RateLimitResponse {
-
+	ctx context.Context, request *pb.RateLimitRequest,
+) *pb.RateLimitResponse {
 	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
 	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
 
@@ -258,18 +259,18 @@ func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_D
 }
 
 func (this *service) rateLimitResetHeader(
-	descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
-
+	descriptor *pb.RateLimitResponse_DescriptorStatus,
+) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, descriptor.CurrentLimit.UnitMultiplier).GetSeconds(), 10),
 	}
 }
 
 func (this *service) ShouldRateLimit(
 	ctx context.Context,
-	request *pb.RateLimitRequest) (finalResponse *pb.RateLimitResponse, finalError error) {
-
+	request *pb.RateLimitRequest,
+) (finalResponse *pb.RateLimitResponse, finalError error) {
 	// Generate trace
 	_, span := tracer.Start(ctx, "ShouldRateLimit Execution",
 		trace.WithAttributes(
@@ -316,8 +317,8 @@ func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool) {
 }
 
 func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
-	health *server.HealthChecker, clock utils.TimeSource, shadowMode, forceStart bool, healthyWithAtLeastOneConfigLoad bool) RateLimitServiceServer {
-
+	health *server.HealthChecker, clock utils.TimeSource, shadowMode, forceStart bool, healthyWithAtLeastOneConfigLoad bool,
+) RateLimitServiceServer {
 	newService := &service{
 		configLock:        sync.RWMutex{},
 		configUpdateEvent: configProvider.ConfigUpdateEvent(),

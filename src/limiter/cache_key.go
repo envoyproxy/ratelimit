@@ -46,8 +46,8 @@ func isPerSecondLimit(unit pb.RateLimitResponse_RateLimit_Unit) bool {
 // @param now supplies the current unix time.
 // @return CacheKey struct.
 func (this *CacheKeyGenerator) GenerateCacheKey(
-	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64) CacheKey {
-
+	domain string, descriptor *pb_struct.RateLimitDescriptor, limit *config.RateLimit, now int64,
+) CacheKey {
 	if limit == nil {
 		return CacheKey{
 			Key:       "",
@@ -70,7 +70,8 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 		b.WriteByte('_')
 	}
 
-	divider := utils.UnitToDivider(limit.Limit.Unit)
+	divider := utils.UnitToDividerWithMultiplier(limit.Limit.Unit, limit.Limit.UnitMultiplier)
+
 	b.WriteString(strconv.FormatInt((now/divider)*divider, 10))
 
 	return CacheKey{

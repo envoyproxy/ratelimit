@@ -44,8 +44,8 @@ func pipelineAppendtoGet(client Client, pipeline *Pipeline, key string, result *
 func (this *fixedRateLimitCacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
-	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
-
+	limits []*config.RateLimit,
+) []*pb.RateLimitResponse_DescriptorStatus {
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the RateLimit request.
@@ -152,7 +152,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		logger.Debugf("looking up cache key: %s", cacheKey.Key)
 
-		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
+		expirationSeconds := utils.UnitToDividerWithMultiplier(limits[i].Limit.Unit, limits[i].Limit.UnitMultiplier)
 		if this.baseRateLimiter.ExpirationJitterMaxSeconds > 0 {
 			expirationSeconds += this.baseRateLimiter.JitterRand.Int63n(this.baseRateLimiter.ExpirationJitterMaxSeconds)
 		}
@@ -218,7 +218,8 @@ func (this *fixedRateLimitCacheImpl) Flush() {}
 
 func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSource utils.TimeSource,
 	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
-	stopCacheKeyIncrementWhenOverlimit bool) limiter.RateLimitCache {
+	stopCacheKeyIncrementWhenOverlimit bool,
+) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                             client,
 		perSecondClient:                    perSecondClient,

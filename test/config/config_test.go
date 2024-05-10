@@ -947,3 +947,42 @@ func TestDetailedMetric(t *testing.T) {
 		})
 	}
 }
+
+func TestUnitMultiplier(t *testing.T) {
+	assert := assert.New(t)
+	stats := stats.NewStore(stats.NewNullSink(), false)
+
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("unit_multiplier.yaml"), mockstats.NewMockStatManager(stats), false)
+	rlConfig.Dump()
+
+	rl := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1"}},
+		})
+
+	assert.EqualValues(20, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+	assert.EqualValues(5, rl.Limit.UnitMultiplier)
+
+	rl = rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key2"}},
+		})
+
+	assert.EqualValues(25, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+	assert.EqualValues(1, rl.Limit.UnitMultiplier)
+}
+
+func TestZeroUnitMultiplier(t *testing.T) {
+	expectConfigPanic(
+		t,
+		func() {
+			config.NewRateLimitConfigImpl(
+				loadFile("zero_unit_multiplier.yaml"),
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+		},
+		"zero_unit_multiplier.yaml: invalid unit multiplier of 0")
+}

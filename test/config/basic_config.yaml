@@ -68,3 +68,4 @@ descriptors:
     rate_limit:
       unit: minute
       requests_per_unit: 70
+      unit_multiplier: 5
