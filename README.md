@@ -44,6 +44,9 @@
   - [Statistics](#statistics)
 - [Statistics](#statistics-1)
   - [Statistics options](#statistics-options)
+  - [DogStatsD](#dogstatsd)
+    - [Example](#example)
+    - [Continued example:](#continued-example)
 - [HTTP Port](#http-port)
   - [/json endpoint](#json-endpoint)
 - [Debug Port](#debug-port)
@@ -852,13 +855,12 @@ To enable dogstatsd integration set:
 
 1. `USE_DOG_STATSD`: `true` to use [DogStatsD](https://docs.datadoghq.com/developers/dogstatsd/?code-lang=go)
 
-
 dogstatsd also enables so called `mogrifiers` which can
 convert from traditional stats tags into a combination of stat name and tags.
 
 To enable mogrifiers, set a comma-separated list of them in `DOG_STATSD_MOGRIFIERS`.
 
-e.g.  `DOG_STATSD_MOGRIFIERS`: `FOO,BAR`
+e.g. `DOG_STATSD_MOGRIFIERS`: `FOO,BAR`
 
 For each mogrifier, define variables that declare the mogrification
 
@@ -870,10 +872,12 @@ Variables within mogrifiers are strings such as `$1`, `$2`, `$3` which can be us
 a match group from the regex pattern.
 
 ### Example
+
 In the example below we will set mogrifier DOMAIN to adjust
 `some.original.metric.TAG` to `some.original.metric` with tag `domain:TAG`
 
 First enable a single mogrifier:
+
 1. `DOG_STATSD_MOGRIFIERS`: `DOMAIN`
 
 Then, declare the rules for the `DOMAIN` modifier:
