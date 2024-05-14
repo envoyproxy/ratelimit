@@ -860,7 +860,7 @@ convert from traditional stats tags into a combination of stat name and tags.
 
 To enable mogrifiers, set a comma-separated list of them in `DOG_STATSD_MOGRIFIERS`.
 
-e.g. `DOG_STATSD_MOGRIFIERS`: `FOO,BAR`
+e.g. `USE_DOG_STATSD_MOGRIFIERS`: `FOO,BAR`
 
 For each mogrifier, define variables that declare the mogrification
 
@@ -878,7 +878,7 @@ In the example below we will set mogrifier DOMAIN to adjust
 
 First enable a single mogrifier:
 
-1. `DOG_STATSD_MOGRIFIERS`: `DOMAIN`
+1. `USE_DOG_STATSD_MOGRIFIERS`: `DOMAIN`
 
 Then, declare the rules for the `DOMAIN` modifier:
 
@@ -892,7 +892,7 @@ Let's also set another mogrifier which outputs the hits metrics with a domain an
 
 First, enable an extra mogrifier:
 
-1. `DOG_STATSD_MOGRIFIERS`: `DOMAIN,HITS`
+1. `USE_DOG_STATSD_MOGRIFIERS`: `DOMAIN,HITS`
 
 Then, declare additional rules for the `DESCRIPTOR` mogrifier
 
