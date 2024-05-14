@@ -42,15 +42,29 @@ func newMogrifierMapFromEnv(keys []string) (mogrifierMap, error) {
 			return nil, fmt.Errorf("failed to load mogrifier %s: %v", mogrifier, err)
 		}
 
+		if cfg.Pattern == "" {
+			return nil, fmt.Errorf("no PATTERN specified for mogrifier %s", mogrifier)
+		}
+
 		re, err := regexp.Compile(cfg.Pattern)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compile pattern for %s: %s: %v", mogrifier, cfg.Pattern, err)
 		}
 
+		if cfg.Name == "" {
+			return nil, fmt.Errorf("no NAME specified for mogrifier %s", mogrifier)
+		}
+
 		nameHandler := makePatternHandler(cfg.Name)
 		tagHandlers := make(map[string]func([]string) string, len(cfg.Tags))
 		for key, value := range cfg.Tags {
+			if key == "" {
+				return nil, fmt.Errorf("no key specified for tag %s for mogrifier %s", key, mogrifier)
+			}
 			tagHandlers[key] = makePatternHandler(value)
+			if value == "" {
+				return nil, fmt.Errorf("no value specified for tag %s for mogrifier %s", key, mogrifier)
+			}
 		}
 
 		mogrifiers[re] = func(matches []string) (string, []string) {

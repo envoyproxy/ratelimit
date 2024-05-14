@@ -45,7 +45,6 @@ func TestNil(t *testing.T) {
 func TestLoadMogrifiersFromEnv(t *testing.T) {
 	// Test case 1
 	pattern := `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`
-	t.Setenv("DOG_STATSD_MOGRIFIERS", "TAG")
 	t.Setenv("DOG_STATSD_MOGRIFIER_TAG_PATTERN", pattern)
 	t.Setenv("DOG_STATSD_MOGRIFIER_TAG_NAME", "ratelimit.service.rate_limit.$3")
 	t.Setenv("DOG_STATSD_MOGRIFIER_TAG_TAGS", "domain:$1,descriptor:$2")
@@ -57,4 +56,56 @@ func TestLoadMogrifiersFromEnv(t *testing.T) {
 	name, tags := mogrifiers.mogrify("ratelimit.service.rate_limit.mongo_cps.database_users.within_limit")
 	assert.Equal(t, name, "ratelimit.service.rate_limit.within_limit")
 	assert.ElementsMatch(t, []string{"domain:mongo_cps", "descriptor:database_users"}, tags)
+}
+
+func TestValidation(t *testing.T) {
+	t.Run("No settings will fail", func(t *testing.T) {
+		_, err := newMogrifierMapFromEnv([]string{"TAG"})
+		assert.Error(t, err)
+	})
+
+	t.Run("EmptyPattern", func(t *testing.T) {
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_PATTERN", "")
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_NAME", "ratelimit.service.rate_limit.$3")
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_TAGS", "domain:$1,descriptor:$2")
+		_, err := newMogrifierMapFromEnv([]string{"TAG"})
+		assert.Error(t, err)
+	})
+
+	t.Run("EmptyName", func(t *testing.T) {
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_PATTERN", `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`)
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_NAME", "")
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_TAGS", "domain:$1,descriptor:$2")
+		_, err := newMogrifierMapFromEnv([]string{"TAG"})
+		assert.Error(t, err)
+	})
+
+	t.Run("EmptyTagKey", func(t *testing.T) {
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_PATTERN", `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`)
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_NAME", "ratelimit.service.rate_limit.$3")
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_TAGS", ":5")
+		_, err := newMogrifierMapFromEnv([]string{"TAG"})
+		assert.Error(t, err)
+	})
+
+	t.Run("EmptyTagValue", func(t *testing.T) {
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_PATTERN", `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`)
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_NAME", "ratelimit.service.rate_limit.$3")
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_TAGS", "domain:$1,descriptor:")
+		_, err := newMogrifierMapFromEnv([]string{"TAG"})
+		assert.Error(t, err)
+	})
+
+	t.Run("Success w/ No mogrifiers", func(t *testing.T) {
+		_, err := newMogrifierMapFromEnv([]string{})
+		assert.NoError(t, err)
+	})
+
+	t.Run("Success w/ mogrifier", func(t *testing.T) {
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_PATTERN", `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`)
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_NAME", "ratelimit.service.rate_limit.$3")
+		t.Setenv("DOG_STATSD_MOGRIFIER_TAG_TAGS", "domain:$1,descriptor:$2")
+		_, err := newMogrifierMapFromEnv([]string{"TAG"})
+		assert.NoError(t, err)
+	})
 }
