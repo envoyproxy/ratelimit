@@ -9,25 +9,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/envoyproxy/ratelimit/src/godogstats"
-	"github.com/envoyproxy/ratelimit/src/metrics"
-	"github.com/envoyproxy/ratelimit/src/stats"
-	"github.com/envoyproxy/ratelimit/src/trace"
-
-	gostats "github.com/lyft/gostats"
-
 	"github.com/coocood/freecache"
-
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-
+	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 
+	"github.com/envoyproxy/ratelimit/src/godogstats"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/memcached"
+	"github.com/envoyproxy/ratelimit/src/metrics"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/trace"
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
@@ -63,7 +59,7 @@ func NewRunner(s settings.Settings) Runner {
 		store = gostats.NewStore(gostats.NewTCPStatsdSink(gostats.WithStatsdHost(s.StatsdHost), gostats.WithStatsdPort(s.StatsdPort)), false)
 	} else {
 		logger.Info("Stats initialized for stdout")
-		store = gostats.NewStore(gostats.NewLoggingSink(), false)
+		store = gostats.NewStore(stats.NewLoggingSink(), false)
 	}
 
 	logger.Infof("Stats flush interval: %s", s.StatsFlushInterval)
