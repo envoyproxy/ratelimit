@@ -17,7 +17,9 @@ package memcached
 
 import (
 	"context"
+	"crypto/tls"
 	"math/rand"
+	"net"
 	"strconv"
 	"sync"
 	"time"
@@ -221,7 +223,7 @@ func refreshServers(serverList *memcache.ServerList, srv string, resolver srv.Sr
 	return nil
 }
 
-func newMemcachedFromSrv(srv string, d time.Duration, resolver srv.SrvResolver) Client {
+func newMemcachedFromSrv(srv string, d time.Duration, resolver srv.SrvResolver) *memcache.Client {
 	serverList := new(memcache.ServerList)
 	err := refreshServers(serverList, srv, resolver)
 	if err != nil {
@@ -245,13 +247,22 @@ func newMemcacheFromSettings(s settings.Settings) Client {
 	if s.MemcacheSrv != "" && len(s.MemcacheHostPort) > 0 {
 		panic(MemcacheError("Both MEMCADHE_HOST_PORT and MEMCACHE_SRV are set"))
 	}
+	var client *memcache.Client
 	if s.MemcacheSrv != "" {
 		logger.Debugf("Using MEMCACHE_SRV: %v", s.MemcacheSrv)
-		return newMemcachedFromSrv(s.MemcacheSrv, s.MemcacheSrvRefresh, new(srv.DnsSrvResolver))
+		client = newMemcachedFromSrv(s.MemcacheSrv, s.MemcacheSrvRefresh, new(srv.DnsSrvResolver))
+	} else {
+		logger.Debugf("Using MEMCACHE_HOST_PORT: %v", s.MemcacheHostPort)
+		client = memcache.New(s.MemcacheHostPort...)
 	}
-	logger.Debugf("Usng MEMCACHE_HOST_PORT:: %v", s.MemcacheHostPort)
-	client := memcache.New(s.MemcacheHostPort...)
 	client.MaxIdleConns = s.MemcacheMaxIdleConns
+	if s.MemcacheTls {
+		client.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			var td tls.Dialer
+			td.Config = s.MemcacheTlsConfig
+			return td.DialContext(ctx, network, address)
+		}
+	}
 	return client
 }
 

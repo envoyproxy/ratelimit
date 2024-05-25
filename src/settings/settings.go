@@ -157,9 +157,15 @@ type Settings struct {
 	// number of connections to memcache kept idle in pool, if a connection is needed but none
 	// are idle a new connection is opened, used and closed and can be left in a time-wait state
 	// which can result in high CPU usage.
-	MemcacheMaxIdleConns int           `envconfig:"MEMCACHE_MAX_IDLE_CONNS" default:"2"`
-	MemcacheSrv          string        `envconfig:"MEMCACHE_SRV" default:""`
-	MemcacheSrvRefresh   time.Duration `envconfig:"MEMCACHE_SRV_REFRESH" default:"0"`
+	MemcacheMaxIdleConns                int           `envconfig:"MEMCACHE_MAX_IDLE_CONNS" default:"2"`
+	MemcacheSrv                         string        `envconfig:"MEMCACHE_SRV" default:""`
+	MemcacheSrvRefresh                  time.Duration `envconfig:"MEMCACHE_SRV_REFRESH" default:"0"`
+	MemcacheTls                         bool          `envconfig:"MEMCACHE_TLS" default:"false"`
+	MemcacheTlsConfig                   *tls.Config
+	MemcacheTlsClientCert               string `envconfig:"MEMCACHE_TLS_CLIENT_CERT" default:""`
+	MemcacheTlsClientKey                string `envconfig:"MEMCACHE_TLS_CLIENT_KEY" default:""`
+	MemcacheTlsCACert                   string `envconfig:"MEMCACHE_TLS_CACERT" default:""`
+	MemcacheTlsSkipHostnameVerification bool   `envconfig:"MEMCACHE_TLS_SKIP_HOSTNAME_VERIFICATION" default:"false"`
 
 	// Should the ratelimiting be running in Global shadow-mode, ie. never report a ratelimit status, unless a rate was provided from envoy as an override
 	GlobalShadowMode bool `envconfig:"SHADOW_MODE" default:"false"`
@@ -188,6 +194,7 @@ func NewSettings() Settings {
 	}
 	// When we require TLS to connect to Redis, we check if we need to connect using the provided key-pair.
 	RedisTlsConfig(s.RedisTls || s.RedisPerSecondTls)(&s)
+	MemcacheTlsConfig(s.MemcacheTls)(&s)
 	GrpcServerTlsConfig()(&s)
 	ConfigGrpcXdsServerTlsConfig()(&s)
 	return s
@@ -201,6 +208,15 @@ func RedisTlsConfig(redisTls bool) Option {
 		s.RedisTlsConfig = &tls.Config{}
 		if redisTls {
 			s.RedisTlsConfig = utils.TlsConfigFromFiles(s.RedisTlsClientCert, s.RedisTlsClientKey, s.RedisTlsCACert, utils.ServerCA, s.RedisTlsSkipHostnameVerification)
+		}
+	}
+}
+
+func MemcacheTlsConfig(memcacheTls bool) Option {
+	return func(s *Settings) {
+		s.MemcacheTlsConfig = &tls.Config{}
+		if memcacheTls {
+			s.MemcacheTlsConfig = utils.TlsConfigFromFiles(s.MemcacheTlsClientCert, s.MemcacheTlsClientKey, s.MemcacheTlsCACert, utils.ServerCA, s.MemcacheTlsSkipHostnameVerification)
 		}
 	}
 }
