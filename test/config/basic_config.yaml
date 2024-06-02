@@ -42,6 +42,7 @@ descriptors:
 
   - key: key4
     rate_limit:
+      name: key4_rate_limit
       unit: day
       requests_per_unit: 1
 
