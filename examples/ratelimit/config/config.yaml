@@ -4,11 +4,11 @@ descriptors:
   - key: database
     value: users
     rate_limit:
-      unit: second
-      requests_per_unit: 500
+      unit: minute
+      requests_per_unit: 5
 
   - key: database
     value: default
     rate_limit:
-      unit: second
-      requests_per_unit: 500
+      unit: minute
+      requests_per_unit: 5
