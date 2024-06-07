@@ -1009,7 +1009,7 @@ To configure a Memcache instance use the following environment variables instead
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 1. `MEMCACHE_MAX_IDLE_CONNS=2`: the maximum number of idle TCP connections per memcache node, `2` is the default of the underlying library
 1. `MEMCACHE_TLS`: set to `"true"` to connect to the server with TLS.
-1. `MEMCACHE_TLS_CLIENT_CERT`, `MEMCACHE_TLS_CLIENT_KEY`, and `MEMCACHE_TLS_CACERT` to provide files that parameterize the memcache client TLS connection configuration. 
+1. `MEMCACHE_TLS_CLIENT_CERT`, `MEMCACHE_TLS_CLIENT_KEY`, and `MEMCACHE_TLS_CACERT` to provide files that parameterize the memcache client TLS connection configuration.
 1. `MEMCACHE_TLS_SKIP_HOSTNAME_VERIFICATION` set to `"true"` will skip hostname verification in environments where the certificate has an invalid hostname.
 
 With memcache mode increments will happen asynchronously, so it's technically possible for
