@@ -85,6 +85,7 @@ func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Un
 		Limit: &pb.RateLimitResponse_RateLimit{
 			RequestsPerUnit: requestsPerUnit,
 			Unit:            unit,
+			Name:            name,
 		},
 		Unlimited:      unlimited,
 		ShadowMode:     shadowMode,
