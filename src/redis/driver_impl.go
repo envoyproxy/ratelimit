@@ -42,7 +42,7 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 					}
 				}
 			} else {
-				fmt.Println("creating redis connection error :", newConn.Err)
+				logger.Errorf("creating redis connection error : %v", newConn.Err)
 			}
 		},
 		ConnClosed: func(_ trace.PoolConnClosed) {
