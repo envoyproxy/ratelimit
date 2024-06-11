@@ -19,7 +19,13 @@ type mogrifierMap map[*regexp.Regexp]func([]string) (string, []string)
 func makePatternHandler(pattern string) func([]string) string {
 	return func(matches []string) string {
 		return varFinder.ReplaceAllStringFunc(pattern, func(s string) string {
-			i, _ := strconv.Atoi(s[1:])
+			i, err := strconv.Atoi(s[1:])
+			if i >= len(matches) || err != nil {
+				// Return the original placeholder if the index is out of bounds
+				// or the Atoi fails, though given the varFinder regex it should
+				// not be possible.
+				return s
+			}
 			return matches[i]
 		})
 	}

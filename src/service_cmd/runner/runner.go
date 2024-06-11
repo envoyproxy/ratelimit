@@ -45,13 +45,16 @@ func NewRunner(s settings.Settings) Runner {
 		logger.Info("Stats disabled")
 		store = gostats.NewStore(gostats.NewNullSink(), false)
 	} else if s.UseDogStatsd {
+		if s.UseStatsd {
+			logger.Fatalf("Error: unable to use both stats sink at the same time. Set either USE_DOG_STATSD or USE_STATSD but not both.")
+		}
 		var err error
 		sink, err := godogstats.NewSink(
 			godogstats.WithStatsdHost(s.StatsdHost),
 			godogstats.WithStatsdPort(s.StatsdPort),
 			godogstats.WithMogrifierFromEnv(s.UseDogStatsdMogrifiers))
 		if err != nil {
-			logger.Fatalf("Failed to create statsd sink: %v", err)
+			logger.Fatalf("Failed to create dogstatsd sink: %v", err)
 		}
 		logger.Info("Stats initialized for dogstatsd")
 		store = gostats.NewStore(sink, false)

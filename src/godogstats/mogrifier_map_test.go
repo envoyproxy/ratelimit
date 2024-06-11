@@ -43,19 +43,110 @@ func TestNil(t *testing.T) {
 }
 
 func TestLoadMogrifiersFromEnv(t *testing.T) {
-	// Test case 1
-	pattern := `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`
-	t.Setenv("DOG_STATSD_MOGRIFIER_TAG_PATTERN", pattern)
-	t.Setenv("DOG_STATSD_MOGRIFIER_TAG_NAME", "ratelimit.service.rate_limit.$3")
-	t.Setenv("DOG_STATSD_MOGRIFIER_TAG_TAGS", "domain:$1,descriptor:$2")
-	mogrifiers, err := newMogrifierMapFromEnv([]string{"TAG"})
-	assert.NoError(t, err)
-	assert.NotNil(t, mogrifiers)
-	assert.Len(t, mogrifiers, 1)
+	tests := []struct {
+		name         string
+		envVars      map[string]string
+		input        string
+		expectOutput string
+		expectedTags []string
+		keys         []string
+	}{
+		{
+			name: "Simple replacement",
+			envVars: map[string]string{
+				"DOG_STATSD_MOGRIFIER_TAG_PATTERN": `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`,
+				"DOG_STATSD_MOGRIFIER_TAG_NAME":    "ratelimit.service.rate_limit.$3",
+				"DOG_STATSD_MOGRIFIER_TAG_TAGS":    "domain:$1,descriptor:$2",
+			},
+			input:        "ratelimit.service.rate_limit.mongo_cps.database_users.within_limit",
+			expectOutput: "ratelimit.service.rate_limit.within_limit",
+			expectedTags: []string{"domain:mongo_cps", "descriptor:database_users"},
+			keys:         []string{"TAG"},
+		},
+		{
+			name: "Out of bounds index",
+			envVars: map[string]string{
+				"DOG_STATSD_MOGRIFIER_TAG_PATTERN": `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`,
+				"DOG_STATSD_MOGRIFIER_TAG_NAME":    "ratelimit.service.rate_limit.$3",
+				"DOG_STATSD_MOGRIFIER_TAG_TAGS":    "domain:$1,descriptor:$5",
+			},
+			input:        "ratelimit.service.rate_limit.mongo_cps.database_users.within_limit",
+			expectOutput: "ratelimit.service.rate_limit.within_limit",
+			expectedTags: []string{"domain:mongo_cps", "descriptor:$5"},
+			keys:         []string{"TAG"},
+		},
+		{
+			name: "No placeholders in tags",
+			envVars: map[string]string{
+				"DOG_STATSD_MOGRIFIER_TAG_PATTERN": `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`,
+				"DOG_STATSD_MOGRIFIER_TAG_NAME":    "ratelimit.service.rate_limit.$3",
+				"DOG_STATSD_MOGRIFIER_TAG_TAGS":    "domain:mongo_cps,descriptor:database_users",
+			},
+			input:        "ratelimit.service.rate_limit.mongo_cps.database_users.within_limit",
+			expectOutput: "ratelimit.service.rate_limit.within_limit",
+			expectedTags: []string{"domain:mongo_cps", "descriptor:database_users"},
+			keys:         []string{"TAG"},
+		},
+		{
+			name: "No matches",
+			envVars: map[string]string{
+				"DOG_STATSD_MOGRIFIER_TAG_PATTERN": `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`,
+				"DOG_STATSD_MOGRIFIER_TAG_NAME":    "ratelimit.service.rate_limit.$3",
+				"DOG_STATSD_MOGRIFIER_TAG_TAGS":    "domain:$1,descriptor:$4",
+			},
+			input:        "some.unmatched.metric",
+			expectOutput: "some.unmatched.metric",
+			keys:         []string{"TAG"},
+		},
+		{
+			name: "Two mogrifiers: First match",
+			envVars: map[string]string{
+				"DOG_STATSD_MOGRIFIER_SPECIFIC_PATTERN": `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.foo$`,
+				"DOG_STATSD_MOGRIFIER_SPECIFIC_NAME":    "custom.foo",
+				"DOG_STATSD_MOGRIFIER_SPECIFIC_TAGS":    "domain:$1,descriptor:$2",
+				"DOG_STATSD_MOGRIFIER_WILDCARD_PATTERN": `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`,
+				"DOG_STATSD_MOGRIFIER_WILDCARD_NAME":    "ratelimit.service.rate_limit.$3",
+				"DOG_STATSD_MOGRIFIER_WILDCARD_TAGS":    "domain:$1,descriptor:$2",
+			},
+			input:        "ratelimit.service.rate_limit.mongo_cps.database_users.foo",
+			expectOutput: "custom.foo",
+			expectedTags: []string{"domain:mongo_cps", "descriptor:database_users"},
+			keys:         []string{"SPECIFIC", "WILDCARD"},
+		},
+		{
+			name: "Two mogrifiers: second match",
+			envVars: map[string]string{
+				"DOG_STATSD_MOGRIFIER_SPECIFIC_PATTERN": `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.foo$`,
+				"DOG_STATSD_MOGRIFIER_SPECIFIC_NAME":    "custom.foo",
+				"DOG_STATSD_MOGRIFIER_SPECIFIC_TAGS":    "domain:$1,descriptor:$2",
+				"DOG_STATSD_MOGRIFIER_WILDCARD_PATTERN": `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`,
+				"DOG_STATSD_MOGRIFIER_WILDCARD_NAME":    "ratelimit.service.rate_limit.$3",
+				"DOG_STATSD_MOGRIFIER_WILDCARD_TAGS":    "domain:$1,descriptor:$2",
+			},
+			input:        "ratelimit.service.rate_limit.mongo_cps.database_users.within_limit",
+			expectOutput: "ratelimit.service.rate_limit.within_limit",
+			expectedTags: []string{"domain:mongo_cps", "descriptor:database_users"},
+			keys:         []string{"SPECIFIC", "WILDCARD"},
+		},
+	}
 
-	name, tags := mogrifiers.mogrify("ratelimit.service.rate_limit.mongo_cps.database_users.within_limit")
-	assert.Equal(t, name, "ratelimit.service.rate_limit.within_limit")
-	assert.ElementsMatch(t, []string{"domain:mongo_cps", "descriptor:database_users"}, tags)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set environment variables
+			for key, value := range tt.envVars {
+				t.Setenv(key, value)
+			}
+
+			mogrifiers, err := newMogrifierMapFromEnv(tt.keys)
+			assert.NoError(t, err)
+			assert.NotNil(t, mogrifiers)
+			assert.Len(t, mogrifiers, len(tt.keys))
+
+			name, tags := mogrifiers.mogrify(tt.input)
+			assert.Equal(t, tt.expectOutput, name)
+			assert.ElementsMatch(t, tt.expectedTags, tags)
+		})
+	}
 }
 
 func TestValidation(t *testing.T) {
