@@ -626,11 +626,11 @@ func TestWildcardConfig(t *testing.T) {
 		})
 	assert.Nil(eager)
 
-	// Wildcard in the middle of value is not supported.
+	// Wildcard in the middle of value is not supported
 	midWildcard := rlConfig.GetLimit(
 		context.TODO(), "test-domain",
 		&pb_struct.RateLimitDescriptor{
-			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWildcard", Value: "barab"}},
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWild", Value: "barab"}},
 		})
 	assert.Nil(midWildcard)
 }
