@@ -75,7 +75,8 @@ func (g *godogStatsSink) FlushGauge(name string, value uint64) {
 	g.client.Gauge(name, float64(value), tags, 1.0)
 }
 
-func (g *godogStatsSink) FlushTimer(name string, interval float64) {
+func (g *godogStatsSink) FlushTimer(name string, milliseconds float64) {
 	name, tags := g.mogrifier.mogrify(name)
-	g.client.Timing(name, time.Duration(interval), tags, 1.0)
+	duration := time.Duration(milliseconds) * time.Millisecond
+	g.client.Timing(name, duration, tags, 1.0)
 }
