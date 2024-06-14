@@ -3,6 +3,7 @@ module github.com/envoyproxy/ratelimit
 go 1.21.5
 
 require (
+	github.com/DataDog/datadog-go/v5 v5.5.0
 	github.com/alicebob/miniredis/v2 v2.31.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/coocood/freecache v1.2.4
@@ -34,6 +35,7 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	github.com/Microsoft/go-winio v0.5.0 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect

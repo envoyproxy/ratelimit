@@ -44,6 +44,9 @@
   - [Statistics](#statistics)
 - [Statistics](#statistics-1)
   - [Statistics options](#statistics-options)
+  - [DogStatsD](#dogstatsd)
+    - [Example](#example)
+    - [Continued example:](#continued-example)
 - [HTTP Port](#http-port)
   - [/json endpoint](#json-endpoint)
 - [Debug Port](#debug-port)
@@ -845,6 +848,57 @@ ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 ## Statistics options
 
 1. `EXTRA_TAGS`: set to `"<k1:v1>,<k2:v2>"` to tag all emitted stats with the provided tags. You might want to tag build commit or release version, for example.
+
+## DogStatsD
+
+To enable dogstatsd integration set:
+
+1. `USE_DOG_STATSD`: `true` to use [DogStatsD](https://docs.datadoghq.com/developers/dogstatsd/?code-lang=go)
+
+dogstatsd also enables so called `mogrifiers` which can
+convert from traditional stats tags into a combination of stat name and tags.
+
+To enable mogrifiers, set a comma-separated list of them in `DOG_STATSD_MOGRIFIERS`.
+
+e.g. `USE_DOG_STATSD_MOGRIFIERS`: `FOO,BAR`
+
+For each mogrifier, define variables that declare the mogrification
+
+1. `DOG_STATSD_MOGRIFIERS_%s_PATTERN`: The regex pattern to match on
+2. `DOG_STATSD_MOGRIFIERS_%s_NAME`: The name of the metric to emit. Can contain variables.
+3. `DOG_STATSD_MOGRIFIERS_%s_TAGS`: Comma-separated list of tags to emit. Can contain variables.
+
+Variables within mogrifiers are strings such as `$1`, `$2`, `$3` which can be used to reference
+a match group from the regex pattern.
+
+### Example
+
+In the example below we will set mogrifier DOMAIN to adjust
+`some.original.metric.TAG` to `some.original.metric` with tag `domain:TAG`
+
+First enable a single mogrifier:
+
+1. `USE_DOG_STATSD_MOGRIFIERS`: `DOMAIN`
+
+Then, declare the rules for the `DOMAIN` modifier:
+
+1. `DOG_STATSD_MOGRIFIER_DOMAIN_PATTERN`: `^some\.original\.metric\.(.*)$`
+2. `DOG_STATSD_MOGRIFIER_DOMAIN_NAME`: `some.original.metric`
+3. `DOG_STATSD_MOGRIFIER_DOMAIN_TAGS`: `domain:$1`
+
+### Continued example:
+
+Let's also set another mogrifier which outputs the hits metrics with a domain and descriptor tag
+
+First, enable an extra mogrifier:
+
+1. `USE_DOG_STATSD_MOGRIFIERS`: `DOMAIN,HITS`
+
+Then, declare additional rules for the `DESCRIPTOR` mogrifier
+
+1. `DOG_STATSD_MOGRIFIER_HITS_PATTERN`: `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`
+2. `DOG_STATSD_MOGRIFIER_HITS_NAME`: `ratelimit.service.rate_limit.$3`
+3. `DOG_STATSD_MOGRIFIER_HITS_TAGS`: `domain:$1,descriptor:$2`
 
 # HTTP Port
 
