@@ -1052,17 +1052,26 @@ otelcol-contrib --config examples/otlp-collector/config.yaml
 docker run -d --name jaeger -p 16686:16686 -p 14250:14250 jaegertracing/all-in-one:1.33
 ```
 
+# TLS
+
+Ratelimit supports TLS for it's gRPC endpoint.
+
+The following environment variables control the TLS feature:
+
+1. `GRPC_SERVER_USE_TLS` - Enables gRPC connections to server over TLS
+1. `GRPC_SERVER_TLS_CERT` - Path to the file containing the server cert chain
+1. `GRPC_SERVER_TLS_KEY` - Path to the file containing the server private key
+
+Ratelimit uses [goruntime](https://github.com/lyft/goruntime) to watch the TLS certificate and key and will hot reload them on changes.
+
 # mTLS
 
 Ratelimit supports mTLS when Envoy sends requests to the service.
 
-The following environment variables control the mTLS feature:
+TLS must be enabled on the gRPC endpoint in order for mTLS to work see [TLS](#TLS).
 
 The following variables can be set to enable mTLS on the Ratelimit service.
 
-1. `GRPC_SERVER_USE_TLS` - Enables gprc connections to server over TLS
-1. `GRPC_SERVER_TLS_CERT` - Path to the file containing the server cert chain
-1. `GRPC_SERVER_TLS_KEY` - Path to the file containing the server private key
 1. `GRPC_CLIENT_TLS_CACERT` - Path to the file containing the client CA certificate.
 1. `GRPC_CLIENT_TLS_SAN` - (Optional) DNS Name to validate from the client cert during mTLS auth
 
