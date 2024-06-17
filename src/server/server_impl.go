@@ -26,7 +26,6 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/gorilla/mux"
 	reuseport "github.com/kavu/go_reuseport"
-	"github.com/lyft/goruntime/loader"
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -67,7 +66,6 @@ type server struct {
 	store            gostats.Store
 	scope            gostats.Scope
 	provider         provider.RateLimitConfigProvider
-	runtime          loader.IFace
 	debugListener    serverDebugListener
 	httpServer       *http.Server
 	listenerMu       sync.Mutex
