@@ -4,7 +4,7 @@ go 1.21.5
 
 require (
 	github.com/DataDog/datadog-go/v5 v5.5.0
-	github.com/alicebob/miniredis/v2 v2.31.0
+	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/coocood/freecache v1.2.4
 	github.com/envoyproxy/go-control-plane v0.12.1-0.20240123181358-841e293a220b
