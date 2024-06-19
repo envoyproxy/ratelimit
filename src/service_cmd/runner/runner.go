@@ -59,7 +59,7 @@ func NewRunner(s settings.Settings) Runner {
 		store = gostats.NewStore(gostats.NewTCPStatsdSink(gostats.WithStatsdHost(s.StatsdHost), gostats.WithStatsdPort(s.StatsdPort)), false)
 	} else {
 		logger.Info("Stats initialized for stdout")
-		store = gostats.NewStore(stats.NewLoggingSink(), false)
+		store = gostats.NewStore(&stats.LoggingSink{}, false)
 	}
 
 	logger.Infof("Stats flush interval: %s", s.StatsFlushInterval)
