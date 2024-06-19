@@ -896,7 +896,7 @@ First, enable an extra mogrifier:
 
 Then, declare additional rules for the `DESCRIPTOR` mogrifier
 
-1. `DOG_STATSD_MOGRIFIER_HITS_PATTERN`: `^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`
+1. `DOG_STATSD_MOGRIFIER_HITS_PATTERN`: `^ratelimit\.service\.rate_limit\.([^.]+)\.(.*)\.([^.]+)$`
 2. `DOG_STATSD_MOGRIFIER_HITS_NAME`: `ratelimit.service.rate_limit.$3`
 3. `DOG_STATSD_MOGRIFIER_HITS_TAGS`: `domain:$1,descriptor:$2`
 
