@@ -48,6 +48,15 @@ func (m *MockStatManager) NewStats(key string) stats.RateLimitStats {
 	return ret
 }
 
+func (m *MockStatManager) NewDomainStats(key string) stats.DomainStats {
+	ret := stats.DomainStats{}
+	logger.Debugf("outputing test domain stats %s", key)
+	ret.Key = key
+	ret.NotFound = m.store.NewCounter(key + ".domain_not_found")
+
+	return ret
+}
+
 func NewMockStatManager(store gostats.Store) stats.Manager {
 	return &MockStatManager{store: store}
 }
