@@ -33,8 +33,11 @@ func TestBasicConfig(t *testing.T) {
 	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), mockstats.NewMockStatManager(stats), false)
 	rlConfig.Dump()
 	assert.Equal(rlConfig.IsEmptyDomains(), false)
+	assert.EqualValues(0, stats.NewCounter("foo_domain.domain_not_found").Value())
 	assert.Nil(rlConfig.GetLimit(context.TODO(), "foo_domain", &pb_struct.RateLimitDescriptor{}))
+	assert.EqualValues(1, stats.NewCounter("foo_domain.domain_not_found").Value())
 	assert.Nil(rlConfig.GetLimit(context.TODO(), "test-domain", &pb_struct.RateLimitDescriptor{}))
+	assert.EqualValues(0, stats.NewCounter("test-domain.domain_not_found").Value())
 
 	rl := rlConfig.GetLimit(
 		context.TODO(), "test-domain",

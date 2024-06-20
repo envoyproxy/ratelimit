@@ -285,6 +285,8 @@ func (this *rateLimitConfigImpl) GetLimit(
 	value := this.domains[domain]
 	if value == nil {
 		logger.Debugf("unknown domain '%s'", domain)
+		domainStats := this.statsManager.NewDomainStats(domain)
+		domainStats.NotFound.Inc()
 		return rateLimit
 	}
 

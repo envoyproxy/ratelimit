@@ -39,6 +39,13 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	return ret
 }
 
+func (this *ManagerImpl) NewDomainStats(domain string) DomainStats {
+	ret := DomainStats{}
+	domain = utils.SanitizeStatName(domain)
+	ret.NotFound = this.rlStatsScope.NewCounter(domain + ".domain_not_found")
+	return ret
+}
+
 func (this *ManagerImpl) NewShouldRateLimitStats() ShouldRateLimitStats {
 	ret := ShouldRateLimitStats{}
 	ret.RedisError = this.shouldRateLimitScope.NewCounter("redis_error")

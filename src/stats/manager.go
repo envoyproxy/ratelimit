@@ -9,6 +9,9 @@ type Manager interface {
 	// NewStats provides a RateLimitStats structure associated with a given descriptorKey.
 	// Multiple calls with the same descriptorKey argument are guaranteed to be equivalent.
 	NewStats(descriptorKey string) RateLimitStats
+	// Gets stats for a domain (when no descriptors are found)
+	// Multiple calls with the same domain argument are guaranteed to be equivalent.
+	NewDomainStats(domain string) DomainStats
 	// Initializes a ShouldRateLimitStats structure.
 	// Multiple calls to this method are idempotent.
 	NewShouldRateLimitStats() ShouldRateLimitStats
@@ -51,4 +54,10 @@ type RateLimitStats struct {
 	OverLimitWithLocalCache gostats.Counter
 	WithinLimit             gostats.Counter
 	ShadowMode              gostats.Counter
+}
+
+// Stats for a domain entry
+type DomainStats struct {
+	Key      string
+	NotFound gostats.Counter
 }
