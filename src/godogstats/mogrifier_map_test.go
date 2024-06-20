@@ -9,10 +9,13 @@ import (
 
 func testMogrifier() mogrifierMap {
 	return mogrifierMap{
-		regexp.MustCompile(`^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`): func(matches []string) (string, []string) {
-			name := "ratelimit.service.rate_limit." + matches[3]
-			tags := []string{"domain:" + matches[1], "descriptor:" + matches[2]}
-			return name, tags
+		{
+			matcher: regexp.MustCompile(`^ratelimit\.service\.rate_limit\.(.*)\.(.*)\.(.*)$`),
+			handler: func(matches []string) (string, []string) {
+				name := "ratelimit.service.rate_limit." + matches[3]
+				tags := []string{"domain:" + matches[1], "descriptor:" + matches[2]}
+				return name, tags
+			},
 		},
 	}
 }

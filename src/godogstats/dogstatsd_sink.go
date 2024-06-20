@@ -38,9 +38,15 @@ func WithStatsdPort(port int) goDogStatsSinkOption {
 	}
 }
 
+// WithMogrifier adds a mogrifier to the sink. Map iteration order is randomized, to control order call multiple times.
 func WithMogrifier(mogrifiers map[*regexp.Regexp]func([]string) (string, []string)) goDogStatsSinkOption {
 	return func(g *godogStatsSink) {
-		g.mogrifier = mogrifiers
+		for m, h := range mogrifiers {
+			g.mogrifier = append(g.mogrifier, mogrifierEntry{
+				matcher: m,
+				handler: h,
+			})
+		}
 	}
 }
 

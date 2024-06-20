@@ -12,8 +12,13 @@ var varFinder = regexp.MustCompile(`\$\d+`) // matches $0, $1, etc.
 
 const envPrefix = "DOG_STATSD_MOGRIFIER" // prefix for environment variables
 
-// mogrifierMap is a map of regular expressions to functions that mogrify a name and return tags
-type mogrifierMap map[*regexp.Regexp]func([]string) (string, []string)
+type mogrifierEntry struct {
+	matcher *regexp.Regexp                                      // the matcher determines whether a mogrifier should run on a metric at all
+	handler func(matches []string) (name string, tags []string) // the handler takes the list of matches, and returns metric name and list of tags
+}
+
+// mogrifierMap is an ordered map of regular expressions to functions that mogrify a name and return tags
+type mogrifierMap []mogrifierEntry
 
 // makePatternHandler returns a function that replaces $0, $1, etc. in the pattern with the corresponding match
 func makePatternHandler(pattern string) func([]string) string {
@@ -73,32 +78,36 @@ func newMogrifierMapFromEnv(keys []string) (mogrifierMap, error) {
 			}
 		}
 
-		mogrifiers[re] = func(matches []string) (string, []string) {
-			name := nameHandler(matches)
-			tags := make([]string, 0, len(tagHandlers))
-			for tagKey, handler := range tagHandlers {
-				tagValue := handler(matches)
-				tags = append(tags, tagKey+":"+tagValue)
-			}
-			return name, tags
-		}
+		mogrifiers = append(mogrifiers, mogrifierEntry{
+			matcher: re,
+			handler: func(matches []string) (string, []string) {
+				name := nameHandler(matches)
+				tags := make([]string, 0, len(tagHandlers))
+				for tagKey, handler := range tagHandlers {
+					tagValue := handler(matches)
+					tags = append(tags, tagKey+":"+tagValue)
+				}
+				return name, tags
+			},
+		},
+		)
 
 	}
 	return mogrifiers, nil
 }
 
 // mogrify applies the first mogrifier in the map that matches the name
-func (m mogrifierMap) mogrify(name string) (string, []string) {
+func (m *mogrifierMap) mogrify(name string) (string, []string) {
 	if m == nil {
 		return name, nil
 	}
-	for matcher, mogrifier := range m {
-		matches := matcher.FindStringSubmatch(name)
+	for _, mogrifier := range *m {
+		matches := mogrifier.matcher.FindStringSubmatch(name)
 		if len(matches) == 0 {
 			continue
 		}
 
-		mogrifiedName, tags := mogrifier(matches)
+		mogrifiedName, tags := mogrifier.handler(matches)
 		return mogrifiedName, tags
 	}
 
