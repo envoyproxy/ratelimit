@@ -51,8 +51,11 @@ func TestSeparateExtraTags(t *testing.T) {
 func TestSinkMogrify(t *testing.T) {
 	g := &godogStatsSink{
 		mogrifier: mogrifierMap{
-			regexp.MustCompile(`^ratelimit\.(.*)$`): func(matches []string) (string, []string) {
-				return "custom." + matches[1], []string{"tag1:value1", "tag2:value2"}
+			{
+				matcher: regexp.MustCompile(`^ratelimit\.(.*)$`),
+				handler: func(matches []string) (string, []string) {
+					return "custom." + matches[1], []string{"tag1:value1", "tag2:value2"}
+				},
 			},
 		},
 	}
