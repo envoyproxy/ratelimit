@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"math/rand"
@@ -292,6 +293,92 @@ func Test_mTLS(t *testing.T) {
 	conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", s.GrpcPort), grpc.WithTransportCredentials(credentials.NewTLS(clientTlsConfig)))
 	assert.NoError(err)
 	defer conn.Close()
+}
+
+func TestReloadGRPCServerCerts(t *testing.T) {
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6383},
+	}, func() {
+		s := makeSimpleRedisSettings(6383, 6380, false, 0)
+		assert := assert.New(t)
+		// TLS setup initially used to configure the server
+		initialServerCAFile, initialServerCertFile, initialServerCertKey, err := mTLSSetup(utils.ServerCA)
+		assert.NoError(err)
+		// Second TLS setup that will replace the above during test
+		newServerCAFile, newServerCertFile, newServerCertKey, err := mTLSSetup(utils.ServerCA)
+		assert.NoError(err)
+		// Create CertPools and tls.Configs for both CAs
+		initialCaCert, err := os.ReadFile(initialServerCAFile)
+		assert.NoError(err)
+		initialCertPool := x509.NewCertPool()
+		initialCertPool.AppendCertsFromPEM(initialCaCert)
+		initialTlsConfig := &tls.Config{
+			RootCAs: initialCertPool,
+		}
+		newCaCert, err := os.ReadFile(newServerCAFile)
+		assert.NoError(err)
+		newCertPool := x509.NewCertPool()
+		newCertPool.AppendCertsFromPEM(newCaCert)
+		newTlsConfig := &tls.Config{
+			RootCAs: newCertPool,
+		}
+		connStr := fmt.Sprintf("localhost:%v", s.GrpcPort)
+
+		// Set up ratelimit with the initial certificate
+		s.GrpcServerUseTLS = true
+		s.GrpcServerTlsCert = initialServerCertFile
+		s.GrpcServerTlsKey = initialServerCertKey
+		settings.GrpcServerTlsConfig()(&s)
+		runner := startTestRunner(t, s)
+		defer runner.Stop()
+
+		// Ensure TLS validation works with the initial CA in cert pool
+		t.Run("WithInitialCert", func(t *testing.T) {
+			conn, err := tls.Dial("tcp", connStr, initialTlsConfig)
+			assert.NoError(err)
+			conn.Close()
+		})
+
+		// Ensure TLS validation fails with the new CA in cert pool
+		t.Run("WithNewCertFail", func(t *testing.T) {
+			conn, err := tls.Dial("tcp", connStr, newTlsConfig)
+			assert.Error(err)
+			if err == nil {
+				conn.Close()
+			}
+		})
+
+		// Replace the initial certificate with the new one
+		err = os.Rename(newServerCertFile, initialServerCertFile)
+		assert.NoError(err)
+		err = os.Rename(newServerCertKey, initialServerCertKey)
+		assert.NoError(err)
+
+		// Ensure TLS validation works with the new CA in cert pool
+		t.Run("WithNewCertOK", func(t *testing.T) {
+			// If this takes longer than 10s, something is probably wrong
+			wait := 10
+			for i := 0; i < wait; i++ {
+				// Ensure the new certificate is being used
+				conn, err := tls.Dial("tcp", connStr, newTlsConfig)
+				if err == nil {
+					conn.Close()
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+			assert.NoError(err)
+		})
+
+		// Ensure TLS validation fails with the initial CA in cert pool
+		t.Run("WithInitialCertFail", func(t *testing.T) {
+			conn, err := tls.Dial("tcp", connStr, initialTlsConfig)
+			assert.Error(err)
+			if err == nil {
+				conn.Close()
+			}
+		})
+	})
 }
 
 func testBasicConfigAuthTLS(perSecond bool, local_cache_size int) func(*testing.T) {
