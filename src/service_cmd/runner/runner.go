@@ -32,10 +32,11 @@ import (
 )
 
 type Runner struct {
-	statsManager stats.Manager
-	settings     settings.Settings
-	srv          server.Server
-	mu           sync.Mutex
+	statsManager    stats.Manager
+	settings        settings.Settings
+	srv             server.Server
+	mu              sync.Mutex
+	ratelimitCloser io.Closer
 }
 
 func NewRunner(s settings.Settings) Runner {
@@ -80,7 +81,7 @@ func (runner *Runner) GetStatsStore() gostats.Store {
 	return runner.statsManager.GetStatsStore()
 }
 
-func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache, statsManager stats.Manager) limiter.RateLimitCache {
+func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache, statsManager stats.Manager) (limiter.RateLimitCache, io.Closer) {
 	switch s.BackendType {
 	case "redis", "":
 		return redis.NewRateLimiterCacheImplFromSettings(
@@ -99,7 +100,7 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			localCache,
 			srv.Scope(),
-			statsManager)
+			statsManager), &utils.MultiCloser{} // memcache client can't be closed
 	default:
 		logger.Fatalf("Invalid setting for BackendType: %s", s.BackendType)
 		panic("This line should not be reachable")
@@ -147,8 +148,11 @@ func (runner *Runner) Run() {
 	runner.srv = srv
 	runner.mu.Unlock()
 
+	limiter, limiterCloser := createLimiter(srv, s, localCache, runner.statsManager)
+	runner.ratelimitCloser = limiterCloser
+
 	service := ratelimit.NewService(
-		createLimiter(srv, s, localCache, runner.statsManager),
+		limiter,
 		srv.Provider(),
 		runner.statsManager,
 		srv.HealthChecker(),
@@ -183,5 +187,9 @@ func (runner *Runner) Stop() {
 	runner.mu.Unlock()
 	if srv != nil {
 		srv.Stop()
+	}
+
+	if runner.ratelimitCloser != nil {
+		_ = runner.ratelimitCloser.Close()
 	}
 }
