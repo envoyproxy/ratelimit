@@ -9,25 +9,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/envoyproxy/ratelimit/src/godogstats"
-	"github.com/envoyproxy/ratelimit/src/metrics"
-	"github.com/envoyproxy/ratelimit/src/stats"
-	"github.com/envoyproxy/ratelimit/src/trace"
-
-	gostats "github.com/lyft/gostats"
-
 	"github.com/coocood/freecache"
-
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-
+	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 
+	"github.com/envoyproxy/ratelimit/src/godogstats"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/memcached"
+	"github.com/envoyproxy/ratelimit/src/metrics"
+	"github.com/envoyproxy/ratelimit/src/prometheusstats"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/trace"
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
@@ -42,14 +39,14 @@ type Runner struct {
 func NewRunner(s settings.Settings) Runner {
 	var store gostats.Store
 
-	if s.DisableStats {
+	switch {
+	case s.DisableStats:
 		logger.Info("Stats disabled")
 		store = gostats.NewStore(gostats.NewNullSink(), false)
-	} else if s.UseDogStatsd {
-		if s.UseStatsd {
-			logger.Fatalf("Error: unable to use both stats sink at the same time. Set either USE_DOG_STATSD or USE_STATSD but not both.")
+	case s.UseDogStatsd:
+		if s.UseStatsd || s.UsePrometheus {
+			logger.Fatalf("Error: unable to use more than one stats sink at the same time. Set one of USE_DOG_STATSD, USE_STATSD, USE_PROMETHEUS.")
 		}
-		var err error
 		sink, err := godogstats.NewSink(
 			godogstats.WithStatsdHost(s.StatsdHost),
 			godogstats.WithStatsdPort(s.StatsdPort),
@@ -59,10 +56,19 @@ func NewRunner(s settings.Settings) Runner {
 		}
 		logger.Info("Stats initialized for dogstatsd")
 		store = gostats.NewStore(sink, false)
-	} else if s.UseStatsd {
+	case s.UseStatsd:
+		if s.UseDogStatsd || s.UsePrometheus {
+			logger.Fatalf("Error: unable to use more than one stats sink at the same time. Set one of USE_DOG_STATSD, USE_STATSD, USE_PROMETHEUS.")
+		}
 		logger.Info("Stats initialized for statsd")
 		store = gostats.NewStore(gostats.NewTCPStatsdSink(gostats.WithStatsdHost(s.StatsdHost), gostats.WithStatsdPort(s.StatsdPort)), false)
-	} else {
+	case s.UsePrometheus:
+		if s.UseDogStatsd || s.UseStatsd {
+			logger.Fatalf("Error: unable to use more than one stats sink at the same time. Set one of USE_DOG_STATSD, USE_STATSD, USE_PROMETHEUS.")
+		}
+		logger.Info("Stats initialized for Prometheus")
+		store = gostats.NewStore(prometheusstats.NewPrometheusSink(), false)
+	default:
 		logger.Info("Stats initialized for stdout")
 		store = gostats.NewStore(gostats.NewLoggingSink(), false)
 	}
