@@ -8,8 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	s = NewPrometheusSink()
+)
+
 func TestFlushCounter(t *testing.T) {
-	s := NewPrometheusSink()
 	s.FlushCounter("ratelimit.service.call.should_rate_limit.service_error", 1)
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
@@ -26,7 +29,6 @@ func TestFlushCounter(t *testing.T) {
 }
 
 func TestFlushGauge(t *testing.T) {
-	s := NewPrometheusSink()
 	s.FlushGauge("ratelimit.service.rate_limit.domain1.key1.test_gauge", 1)
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
@@ -41,7 +43,6 @@ func TestFlushGauge(t *testing.T) {
 }
 
 func TestFlushTimer(t *testing.T) {
-	s := NewPrometheusSink()
 	s.FlushTimer("ratelimit.service.rate_limit.mongo_cps.database_users.total_hits", 1)
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
