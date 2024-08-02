@@ -102,7 +102,7 @@ func (s *prometheusSink) FlushCounter(name string, value uint64) {
 }
 
 func (s *prometheusSink) FlushGauge(name string, value uint64) {
-	m, labels, present := s.mapper.GetMapping(name, mapper.MetricTypeCounter)
+	m, labels, present := s.mapper.GetMapping(name, mapper.MetricTypeGauge)
 	if present {
 		labelNames := make([]string, 0, len(labels))
 		labelValues := make([]string, 0, len(labels))
@@ -122,7 +122,7 @@ func (s *prometheusSink) FlushGauge(name string, value uint64) {
 }
 
 func (s *prometheusSink) FlushTimer(name string, value float64) {
-	m, labels, present := s.mapper.GetMapping(name, mapper.MetricTypeCounter)
+	m, labels, present := s.mapper.GetMapping(name, mapper.MetricTypeObserver)
 	if present {
 		labelNames := make([]string, 0, len(labels))
 		labelValues := make([]string, 0, len(labels))

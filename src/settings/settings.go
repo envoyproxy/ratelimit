@@ -90,6 +90,7 @@ type Settings struct {
 	UsePrometheus          bool              `envconfig:"USE_PROMETHEUS" default:"false"`
 	PrometheusAddr         string            `envconfig:"PROMETHEUS_ADDR" default:":9090"`
 	PrometheusPath         string            `envconfig:"PROMETHEUS_PATH" default:"/metrics"`
+	PrometheusMapperYaml   string            `envconfig:"PROMETHEUS_MAPPER_YAML" default:""`
 
 	// Settings for rate limit configuration
 	RuntimePath           string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`

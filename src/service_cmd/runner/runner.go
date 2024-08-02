@@ -18,7 +18,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/metrics"
-	"github.com/envoyproxy/ratelimit/src/prometheusstats"
+	promstats "github.com/envoyproxy/ratelimit/src/prometheusstats"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	"github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
@@ -67,7 +67,8 @@ func NewRunner(s settings.Settings) Runner {
 			logger.Fatalf("Error: unable to use more than one stats sink at the same time. Set one of USE_DOG_STATSD, USE_STATSD, USE_PROMETHEUS.")
 		}
 		logger.Info("Stats initialized for Prometheus")
-		store = gostats.NewStore(prometheusstats.NewPrometheusSink(), false)
+		store = gostats.NewStore(promstats.NewPrometheusSink(promstats.WithAddr(s.PrometheusAddr),
+			promstats.WithPath(s.PrometheusPath), promstats.WithMapperYamlPath(s.PrometheusPath)), false)
 	default:
 		logger.Info("Stats initialized for stdout")
 		store = gostats.NewStore(gostats.NewLoggingSink(), false)
