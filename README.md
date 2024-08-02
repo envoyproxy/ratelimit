@@ -47,6 +47,7 @@
   - [DogStatsD](#dogstatsd)
     - [Example](#example)
     - [Continued example:](#continued-example)
+  - [Prometheus](#prometheus)
 - [HTTP Port](#http-port)
   - [/json endpoint](#json-endpoint)
 - [Debug Port](#debug-port)
@@ -60,6 +61,7 @@
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
 - [Tracing](#tracing)
+- [TLS](#tls)
 - [mTLS](#mtls)
 - [Contact](#contact)
 
@@ -899,6 +901,111 @@ Then, declare additional rules for the `DESCRIPTOR` mogrifier
 1. `DOG_STATSD_MOGRIFIER_HITS_PATTERN`: `^ratelimit\.service\.rate_limit\.([^.]+)\.(.*)\.([^.]+)$`
 2. `DOG_STATSD_MOGRIFIER_HITS_NAME`: `ratelimit.service.rate_limit.$3`
 3. `DOG_STATSD_MOGRIFIER_HITS_TAGS`: `domain:$1,descriptor:$2`
+
+
+## Prometheus
+
+To enable Prometheus integration set:
+
+1. `USE_PROMETHEUS`: `true` to use [Prometheus](https://prometheus.io/)
+2. `PROMETHEUS_ADDR`: The port to listen on for Prometheus metrics. Defaults to `:9090`
+3. `PROMETHEUS_PATH`: The path to listen on for Prometheus metrics. Defaults to `/metrics`
+4. `PROMETHEUS_MAPPER_YAML`: The path to the YAML file that defines the mapping from statsd to prometheus metrics.
+
+Define the mapping from statsd to prometheus metrics in a YAML file.
+Find more information about the mapping in the [Metric Mapping and Configuration](https://github.com/prometheus/statsd_exporter?tab=readme-ov-file#metric-mapping-and-configuration).
+The default setting is:
+
+```yaml
+mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
+  - match: "ratelimit.service.rate_limit.*.*.near_limit"
+    name: "ratelimit_service_rate_limit_near_limit"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+  - match: "ratelimit.service.rate_limit.*.*.over_limit"
+    name: "ratelimit_service_rate_limit_over_limit"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+  - match: "ratelimit.service.rate_limit.*.*.total_hits"
+    name: "ratelimit_service_rate_limit_total_hits"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+  - match: "ratelimit.service.rate_limit.*.*.within_limit"
+    name: "ratelimit_service_rate_limit_within_limit"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+
+  - match: "ratelimit.service.rate_limit.*.*.*.near_limit"
+    name: "ratelimit_service_rate_limit_near_limit"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+      key2: "$3"
+  - match: "ratelimit.service.rate_limit.*.*.*.over_limit"
+    name: "ratelimit_service_rate_limit_over_limit"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+      key2: "$3"
+  - match: "ratelimit.service.rate_limit.*.*.*.total_hits"
+    name: "ratelimit_service_rate_limit_total_hits"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+      key2: "$3"
+  - match: "ratelimit.service.rate_limit.*.*.*.within_limit"
+    name: "ratelimit_service_rate_limit_within_limit"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+      key2: "$3"
+
+  - match: "ratelimit.service.call.should_rate_limit.*"
+    name: "ratelimit_service_should_rate_limit_error"
+    match_metric_type: counter
+    labels:
+      err_type: "$1"
+
+  - match: "ratelimit_server.*.total_requests"
+    name: "ratelimit_service_total_requests"
+    match_metric_type: counter
+    labels:
+      grpc_method: "$1"
+
+  - match: "ratelimit_server.*.response_time"
+    name: "ratelimit_service_response_time_seconds"
+    timer_type: histogram
+    labels:
+      grpc_method: "$1"
+
+  - match: "ratelimit.service.config_load_success"
+    name: "ratelimit_service_config_load_success"
+    match_metric_type: counter
+  - match: "ratelimit.service.config_load_error"
+    name: "ratelimit_service_config_load_error"
+    match_metric_type: counter
+
+  - match: "ratelimit.service.rate_limit.*.*.*.shadow_mode"
+    name: "ratelimit_service_rate_limit_shadow_mode"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+      key2: "$3"
+
+```
 
 # HTTP Port
 
