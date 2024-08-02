@@ -183,7 +183,8 @@ func TestMemcachedGetError(t *testing.T) {
 
 func testLocalCacheStats(localCacheStats stats.StatGenerator, statsStore stats.Store, sink *common.TestStatSink,
 	expectedHitCount int, expectedMissCount int, expectedLookUpCount int, expectedExpiredCount int,
-	expectedEntryCount int) func(*testing.T) {
+	expectedEntryCount int,
+) func(*testing.T) {
 	return func(t *testing.T) {
 		localCacheStats.GenerateStats()
 		statsStore.Flush()

@@ -33,7 +33,8 @@ type LimitInfo struct {
 }
 
 func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint32, limitAfterIncrease uint32,
-	nearLimitThreshold uint32, overLimitThreshold uint32) *LimitInfo {
+	nearLimitThreshold uint32, overLimitThreshold uint32,
+) *LimitInfo {
 	return &LimitInfo{
 		limit: limit, limitBeforeIncrease: limitBeforeIncrease, limitAfterIncrease: limitAfterIncrease,
 		nearLimitThreshold: nearLimitThreshold, overLimitThreshold: overLimitThreshold,
@@ -43,7 +44,8 @@ func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint32, limit
 // Generates cache keys for given rate limit request. Each cache key is represented by a concatenation of
 // domain, descriptor and current timestamp.
 func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
-	limits []*config.RateLimit, hitsAddend uint32) []CacheKey {
+	limits []*config.RateLimit, hitsAddend uint32,
+) []CacheKey {
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]CacheKey, len(request.Descriptors))
 	now := this.timeSource.UnixNow()
@@ -79,7 +81,8 @@ func (this *BaseRateLimiter) IsOverLimitThresholdReached(limitInfo *LimitInfo) b
 // Generates response descriptor status based on cache key, over the limit with local cache, over the limit and
 // near the limit thresholds. Thresholds are checked in order and are mutually exclusive.
 func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *LimitInfo,
-	isOverLimitWithLocalCache bool, hitsAddend uint32) *pb.RateLimitResponse_DescriptorStatus {
+	isOverLimitWithLocalCache bool, hitsAddend uint32,
+) *pb.RateLimitResponse_DescriptorStatus {
 	if key == "" {
 		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK,
 			nil, 0)
@@ -140,7 +143,8 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 }
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
-	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager) *BaseRateLimiter {
+	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
+) *BaseRateLimiter {
 	return &BaseRateLimiter{
 		timeSource:                 timeSource,
 		JitterRand:                 jitterRand,
@@ -194,7 +198,8 @@ func (this *BaseRateLimiter) increaseShadowModeStats(isOverLimitWithLocalCache b
 }
 
 func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.RateLimitResponse_Code,
-	limit *pb.RateLimitResponse_RateLimit, limitRemaining uint32) *pb.RateLimitResponse_DescriptorStatus {
+	limit *pb.RateLimitResponse_RateLimit, limitRemaining uint32,
+) *pb.RateLimitResponse_DescriptorStatus {
 	if limit != nil {
 		return &pb.RateLimitResponse_DescriptorStatus{
 			Code:               responseCode,
