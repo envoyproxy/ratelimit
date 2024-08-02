@@ -40,7 +40,7 @@ func (r *ServerReporter) UnaryServerInterceptor() func(ctx context.Context, req 
 		s := newServerMetrics(r.scope, info.FullMethod)
 		s.totalRequests.Inc()
 		resp, err := handler(ctx, req)
-		s.responseTime.AddValue(float64(time.Since(start).Milliseconds()))
+		s.responseTime.AddValue(float64(time.Since(start).Microseconds()))
 		return resp, err
 	}
 }
