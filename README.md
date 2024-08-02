@@ -60,6 +60,7 @@
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
 - [Tracing](#tracing)
+- [TLS](#tls)
 - [mTLS](#mtls)
 - [Contact](#contact)
 
