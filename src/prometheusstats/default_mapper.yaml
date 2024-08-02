@@ -1,4 +1,5 @@
-mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
+# Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
+mappings:
   - match: "ratelimit.service.rate_limit.*.*.near_limit"
     name: "ratelimit_service_rate_limit_near_limit"
     timer_type: "histogram"
@@ -85,9 +86,3 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
       domain: "$1"
       key1: "$2"
       key2: "$3"
-
-  # Enable below in production once you have the metrics you need
-  # - match: "."
-  #   match_type: "regex"
-  #   action: "drop"
-  #   name: "dropped"

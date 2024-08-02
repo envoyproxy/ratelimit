@@ -902,7 +902,6 @@ Then, declare additional rules for the `DESCRIPTOR` mogrifier
 2. `DOG_STATSD_MOGRIFIER_HITS_NAME`: `ratelimit.service.rate_limit.$3`
 3. `DOG_STATSD_MOGRIFIER_HITS_TAGS`: `domain:$1,descriptor:$2`
 
-
 ## Prometheus
 
 To enable Prometheus integration set:
@@ -1004,7 +1003,6 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
       domain: "$1"
       key1: "$2"
       key2: "$3"
-
 ```
 
 # HTTP Port

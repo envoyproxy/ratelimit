@@ -8,9 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	s = NewPrometheusSink()
-)
+var s = NewPrometheusSink()
 
 func TestFlushCounter(t *testing.T) {
 	s.FlushCounter("ratelimit.service.call.should_rate_limit.service_error", 1)
