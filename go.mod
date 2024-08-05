@@ -28,18 +28,19 @@ require (
 	go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/trace v1.28.0
 	golang.org/x/net v0.26.0
-	google.golang.org/grpc v1.64.0
+	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
+	cel.dev/expr v0.15.0 // indirect
 	github.com/Microsoft/go-winio v0.5.0 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/cncf/xds/go v0.0.0-20240318125728-8a4994d93e50 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cncf/xds/go v0.0.0-20240423153145-555b57ec207b // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
