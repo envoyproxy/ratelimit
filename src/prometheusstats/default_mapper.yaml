@@ -75,6 +75,7 @@ mappings:
   - match: "ratelimit.service.config_load_success"
     name: "ratelimit_service_config_load_success"
     match_metric_type: counter
+
   - match: "ratelimit.service.config_load_error"
     name: "ratelimit_service_config_load_error"
     match_metric_type: counter

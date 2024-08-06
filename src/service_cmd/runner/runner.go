@@ -68,7 +68,7 @@ func NewRunner(s settings.Settings) Runner {
 		}
 		logger.Info("Stats initialized for Prometheus")
 		store = gostats.NewStore(promstats.NewPrometheusSink(promstats.WithAddr(s.PrometheusAddr),
-			promstats.WithPath(s.PrometheusPath), promstats.WithMapperYamlPath(s.PrometheusPath)), false)
+			promstats.WithPath(s.PrometheusPath), promstats.WithMapperYamlPath(s.PrometheusMapperYaml)), false)
 	default:
 		logger.Info("Stats initialized for stdout")
 		store = gostats.NewStore(gostats.NewLoggingSink(), false)

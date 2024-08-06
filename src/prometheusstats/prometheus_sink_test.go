@@ -11,7 +11,7 @@ import (
 var s = NewPrometheusSink()
 
 func TestFlushCounter(t *testing.T) {
-	s.FlushCounter("ratelimit.service.call.should_rate_limit.service_error", 1)
+	s.FlushCounter("ratelimit_server.ShouldRateLimit.total_requests", 1)
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
 
@@ -20,7 +20,7 @@ func TestFlushCounter(t *testing.T) {
 		metrics[*metricFamily.Name] = metricFamily
 	}
 
-	m, ok := metrics["ratelimit_service_should_rate_limit_error"]
+	m, ok := metrics["ratelimit_service_total_requests"]
 	require.True(t, ok)
 	require.Len(t, m.Metric, 1)
 	require.Equal(t, 1.0, *m.Metric[0].Counter.Value)

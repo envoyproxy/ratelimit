@@ -98,6 +98,8 @@ func (s *prometheusSink) FlushCounter(name string, value uint64) {
 		}
 		counter := s.counters[metricName]
 		counter.WithLabelValues(labelValues...).Add(float64(value))
+	} else {
+		logrus.Debugf("No mapping found for counter metric %s", name)
 	}
 }
 
@@ -118,6 +120,8 @@ func (s *prometheusSink) FlushGauge(name string, value uint64) {
 
 		gauge := s.gauges[metricName]
 		gauge.WithLabelValues(labelValues...).Set(float64(value))
+	} else {
+		logrus.Debugf("No mapping found for gauge metric %s", name)
 	}
 }
 
@@ -138,5 +142,7 @@ func (s *prometheusSink) FlushTimer(name string, value float64) {
 
 		histogram := s.histograms[metricName]
 		histogram.WithLabelValues(labelValues...).Observe(value)
+	} else {
+		logrus.Debugf("No mapping found for timer metric %s", name)
 	}
 }
