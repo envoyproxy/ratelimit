@@ -80,7 +80,6 @@ func (p *CertProvider) setupRuntime() {
 		p.rootStore.ScopeWithTags("certs", p.settings.ExtraTags),
 		&loader.DirectoryRefresher{},
 		loader.IgnoreDotFiles)
-
 	if err != nil {
 		logger.Fatalf("Failed to set up goruntime loader: %v", err)
 	}

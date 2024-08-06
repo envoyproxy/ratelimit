@@ -66,8 +66,8 @@ var _ limiter.RateLimitCache = (*rateLimitMemcacheImpl)(nil)
 func (this *rateLimitMemcacheImpl) DoLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
-	limits []*config.RateLimit) []*pb.RateLimitResponse_DescriptorStatus {
-
+	limits []*config.RateLimit,
+) []*pb.RateLimitResponse_DescriptorStatus {
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
@@ -150,7 +150,8 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 }
 
 func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, isOverLimitWithLocalCache []bool,
-	limits []*config.RateLimit, hitsAddend uint64) {
+	limits []*config.RateLimit, hitsAddend uint64,
+) {
 	defer this.waitGroup.Done()
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] {
@@ -301,7 +302,8 @@ func runAsync(task func()) {
 }
 
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, statsManager stats.Manager, nearLimitRatio float32, cacheKeyPrefix string) limiter.RateLimitCache {
+	expirationJitterMaxSeconds int64, localCache *freecache.Cache, statsManager stats.Manager, nearLimitRatio float32, cacheKeyPrefix string,
+) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
 		timeSource:                 timeSource,
@@ -314,7 +316,8 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 }
 
 func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	localCache *freecache.Cache, scope gostats.Scope, statsManager stats.Manager) limiter.RateLimitCache {
+	localCache *freecache.Cache, scope gostats.Scope, statsManager stats.Manager,
+) limiter.RateLimitCache {
 	return NewRateLimitCacheImpl(
 		CollectStats(newMemcacheFromSettings(s), scope.Scope("memcache")),
 		timeSource,

@@ -77,8 +77,8 @@ var validKeys = map[string]bool{
 // @param unlimited supplies whether the rate limit is unlimited
 // @return the new config entry.
 func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats,
-	unlimited bool, shadowMode bool, name string, replaces []string, detailedMetric bool) *RateLimit {
-
+	unlimited bool, shadowMode bool, name string, replaces []string, detailedMetric bool,
+) *RateLimit {
 	return &RateLimit{
 		FullKey: rlStats.GetKey(),
 		Stats:   rlStats,
@@ -144,8 +144,7 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 		if descriptorConfig.RateLimit != nil {
 			unlimited := descriptorConfig.RateLimit.Unlimited
 
-			value, present :=
-				pb.RateLimitResponse_RateLimit_Unit_value[strings.ToUpper(descriptorConfig.RateLimit.Unit)]
+			value, present := pb.RateLimitResponse_RateLimit_Unit_value[strings.ToUpper(descriptorConfig.RateLimit.Unit)]
 			validUnit := present && value != int32(pb.RateLimitResponse_RateLimit_UNKNOWN)
 
 			if unlimited {
@@ -278,8 +277,8 @@ func (this *rateLimitConfigImpl) Dump() string {
 }
 
 func (this *rateLimitConfigImpl) GetLimit(
-	ctx context.Context, domain string, descriptor *pb_struct.RateLimitDescriptor) *RateLimit {
-
+	ctx context.Context, domain string, descriptor *pb_struct.RateLimitDescriptor,
+) *RateLimit {
 	logger.Debugf("starting get limit lookup")
 	var rateLimit *RateLimit = nil
 	value := this.domains[domain]
@@ -420,8 +419,8 @@ func ConfigFileContentToYaml(fileName, content string) *YamlRoot {
 // @param mergeDomainConfigs defines whether multiple configurations referencing the same domain will be merged or rejected throwing an error.
 // @return a new config.
 func NewRateLimitConfigImpl(
-	configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool) RateLimitConfig {
-
+	configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool,
+) RateLimitConfig {
 	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsManager, mergeDomainConfigs}
 	for _, config := range configs {
 		ret.loadConfig(config)
@@ -433,8 +432,8 @@ func NewRateLimitConfigImpl(
 type rateLimitConfigLoaderImpl struct{}
 
 func (this *rateLimitConfigLoaderImpl) Load(
-	configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool) RateLimitConfig {
-
+	configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool,
+) RateLimitConfig {
 	return NewRateLimitConfigImpl(configs, statsManager, mergeDomainConfigs)
 }
 

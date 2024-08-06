@@ -71,7 +71,8 @@ func checkError(err error) {
 }
 
 func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
-	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server) Client {
+	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
+) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
 
