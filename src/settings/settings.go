@@ -87,6 +87,10 @@ type Settings struct {
 	ExtraTags              map[string]string `envconfig:"EXTRA_TAGS" default:""`
 	StatsFlushInterval     time.Duration     `envconfig:"STATS_FLUSH_INTERVAL" default:"10s"`
 	DisableStats           bool              `envconfig:"DISABLE_STATS" default:"false"`
+	UsePrometheus          bool              `envconfig:"USE_PROMETHEUS" default:"false"`
+	PrometheusAddr         string            `envconfig:"PROMETHEUS_ADDR" default:":9090"`
+	PrometheusPath         string            `envconfig:"PROMETHEUS_PATH" default:"/metrics"`
+	PrometheusMapperYaml   string            `envconfig:"PROMETHEUS_MAPPER_YAML" default:""`
 
 	// Settings for rate limit configuration
 	RuntimePath           string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`
