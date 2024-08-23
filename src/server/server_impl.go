@@ -244,7 +244,9 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	// setup stats
 	ret.store = statsManager.GetStatsStore()
 	ret.scope = ret.store.ScopeWithTags(name, s.ExtraTags)
-	ret.store.AddStatGenerator(gostats.NewRuntimeStats(ret.scope.Scope("go")))
+	if !s.DisableRuntimeStats {
+		ret.store.AddStatGenerator(gostats.NewRuntimeStats(ret.scope.Scope("go")))
+	}
 	if localCache != nil {
 		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
 	}
