@@ -2,7 +2,7 @@ name: api-ratelimit
 description: Kentik envoy rate limiter fork
 version: TAG
 target:
-  build: unset GOPATH && make -f Makefile.kentik all install
+  build: make -f Makefile.kentik all install
   test: kbt go-mod-tests
 nomad:
   - config_dir: apigw-ratelimit
