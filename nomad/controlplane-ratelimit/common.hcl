@@ -45,7 +45,7 @@ env_vars = [
   {
     key = "DEBUG_PORT"
     value = "$${NOMAD_PORT_debug}"
-  }
+  },
   {
     key   = "LOG_LEVEL",
     value = "debug"
