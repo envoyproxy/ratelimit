@@ -35,6 +35,6 @@ jobs:
     uses: kentik/github-workflows/.github/workflows/deploy.yml@main
     if: github.event_name != 'workflow_dispatch'
     with:
-      service_group: apigw-ratelimit
+      service_group: controlplane-ratelimit
       autodeploy_branches: '["kentik"]'
       environment: our1
