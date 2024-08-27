@@ -65,6 +65,10 @@ env_vars = [
   {
     key = "CONFIG_GRPC_XDS_SERVER_URL"
     value = "localhost:9599"
+  },
+  {
+    key = "DISABLE_STATS"
+    value = "true"
   }
 ]
 
