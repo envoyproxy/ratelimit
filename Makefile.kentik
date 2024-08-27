@@ -1,0 +1,8 @@
+.PHONY: all
+all:
+	go build -o bin/ratelimit-server ./src/service_cmd
+
+.PHONY: install
+install:
+	install -m 0755 -d $(DESTDIR)/usr/bin
+	install -m 0755 ./bin/ratelimit-server $(DESTDIR)/usr/bin
