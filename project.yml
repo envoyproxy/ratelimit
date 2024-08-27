@@ -1,0 +1,18 @@
+name: api-ratelimit
+description: Kentik envoy rate limiter fork
+version: TAG
+target:
+  build: unset GOPATH && make -f Makefile.kentik all install
+  test: kbt go-mod-tests
+nomad:
+  - config_dir: apigw-ratelimit
+    pack: service
+    branch: main
+  - config_dir: controlplane-ratelimit
+    pack: service
+    branch: main
+docker:
+  build:
+    base: kt-build-generic-bullseye:master
+  run:
+    base: kt-run-generic-bullseye:master

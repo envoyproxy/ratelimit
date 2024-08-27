@@ -1,0 +1,40 @@
+name: Deploy
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Deploy code from which branch? To pick a specific build, append the jenkins build number. E.g: master.21'
+        required: true
+      environment:
+        description: Environment name
+        required: true
+        default: our1
+        options: ["production", "fra1", "our1", "dfw1", "jp1", "yyz1", "hrd1", "hnd1", "bct1", "buf1", "nez1", "nrt1"]
+        type: choice
+      service_group:
+        description: 'Service Group'
+        required: true
+        default: 'apigw-ratelimit' 
+        type: string
+
+jobs:
+  manual_deploy:
+    uses: kentik/github-workflows/.github/workflows/deploy_manually.yml@main
+    if: github.event_name == 'workflow_dispatch'
+    with:
+      service_group: ${{ github.event.inputs.service_group }}
+      branch: ${{ github.event.inputs.branch }}
+      environment: ${{ github.event.inputs.environment }}
+      skip-maint: ${{ github.event.inputs.skip-maint }}
+      skip-restart: ${{ github.event.inputs.skip-restart }}
+      host: ${{ github.event.inputs.host }}
+
+  deploy:
+    uses: kentik/github-workflows/.github/workflows/deploy.yml@main
+    if: github.event_name != 'workflow_dispatch'
+    with:
+      service_group: apigw-ratelimit
+      autodeploy_branches: '["kentik"]'
+      environment: our1

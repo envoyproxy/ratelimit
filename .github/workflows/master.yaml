@@ -1,9 +1,9 @@
-name: Build and push :release image
+name: Build and push :master image
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - master
 
 jobs:
   check:
@@ -20,7 +20,8 @@ jobs:
       - name: build and push docker image
         run: |
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-          make docker_push
+          VERSION=master make docker_push     # Push image tagged with "master"
+          make docker_push                    # Push image tagged with git sha
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
