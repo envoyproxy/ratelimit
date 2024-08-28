@@ -68,8 +68,8 @@ env_vars = [
   },
   {
     key = "DISABLE_STATS"
-    value = "true"
-  }
+    value = "false"
+  },
 ]
 
 env_secrets = [
