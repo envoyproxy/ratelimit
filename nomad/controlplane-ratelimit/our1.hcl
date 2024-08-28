@@ -13,7 +13,7 @@ env_vars = [
   {
     key = "TRACING_SERVICE_INSTANCE_ID"
     value = "$${NOMAD_ALLOC_ID}"
-  }
+  },
   {
     key = "TRACING_EXPORTER_PROTOCOL"
     value = "grpc"
