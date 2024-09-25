@@ -63,12 +63,10 @@ func MaskCredentialsInUrl(url string) string {
 	return strings.Join(urls, ",")
 }
 
-var (
-	// remoteAddressRegex is used to replace remote addresses in stat names with a sanitized version.
-	// 1. replace masked_remote_address_1.2.3.4/32 with masked_remote_address_1_2_3_4_32
-	// 2. replace remote_address_1.2.3.4 with remote_address_1_2_3_4
-	remoteAddressRegex = regexp.MustCompile(`remote_address_\d+\.\d+\.\d+\.\d+`)
-)
+// remoteAddressRegex is used to replace remote addresses in stat names with a sanitized version.
+// 1. replace masked_remote_address_1.2.3.4/32 with masked_remote_address_1_2_3_4_32
+// 2. replace remote_address_1.2.3.4 with remote_address_1_2_3_4
+var remoteAddressRegex = regexp.MustCompile(`remote_address_\d+\.\d+\.\d+\.\d+`)
 
 // SanitizeStatName remove invalid characters from the stat name.
 func SanitizeStatName(s string) string {
