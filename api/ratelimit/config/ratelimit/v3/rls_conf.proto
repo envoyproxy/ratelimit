@@ -66,6 +66,10 @@ message RateLimitPolicy {
   // For more information: https://github.com/envoyproxy/ratelimit/tree/0b2f4d5fb04bf55e1873e2c5e2bb28da67c0643f#replaces
   // Example: https://github.com/envoyproxy/ratelimit/tree/0b2f4d5fb04bf55e1873e2c5e2bb28da67c0643f#example-7
   repeated RateLimitReplace replaces = 5;
+
+  // Multiplier for the unit of time for the rate limit.
+  // Used to create custom periods e.g. 10 seconds or 5 minutes.
+  optional uint32 unit_multiplier = 6;
 }
 
 // Replace specifies the rate limit policy that should be replaced (dropped evaluation).
