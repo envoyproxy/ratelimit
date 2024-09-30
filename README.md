@@ -251,6 +251,7 @@ descriptors:
        - name: (optional)
       unit: <see below: required>
       requests_per_unit: <see below: required>
+      unit_multiplier: <see below: optional>
     shadow_mode: (optional)
     detailed_metric: (optional)
     descriptors: (optional block)
@@ -268,11 +269,15 @@ effectively whitelisted. Otherwise, nested descriptors allow more complex matchi
 rate_limit:
   unit: <second, minute, hour, day>
   requests_per_unit: <uint>
+  unit_multiplier: <uint>
 ```
 
 The rate limit block specifies the actual rate limit that will be used when there is a match.
 Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
 future based on user demand.
+The `unit_multiplier` allows for creating custom rate limit durations in combination with `unit`.
+This allows for rate limit durations such as 30 seconds or 5 minutes.
+A `unit_multiplier` of 0 is invalid and leaving out the field means the duration is equal to the unit (e.g. 1 minute).
 
 ### Replaces
 
