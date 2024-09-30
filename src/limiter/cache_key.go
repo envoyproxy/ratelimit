@@ -70,7 +70,8 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 		b.WriteByte('_')
 	}
 
-	divider := utils.UnitToDivider(limit.Limit.Unit)
+	divider := utils.UnitToDividerWithMultiplier(limit.Limit.Unit, limit.Limit.UnitMultiplier)
+
 	b.WriteString(strconv.FormatInt((now/divider)*divider, 10))
 
 	return CacheKey{

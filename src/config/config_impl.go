@@ -20,7 +20,8 @@ type yamlReplaces struct {
 type YamlRateLimit struct {
 	RequestsPerUnit uint32 `yaml:"requests_per_unit"`
 	Unit            string
-	Unlimited       bool `yaml:"unlimited"`
+	UnitMultiplier  *uint32 `yaml:"unit_multiplier"`
+	Unlimited       bool    `yaml:"unlimited"`
 	Name            string
 	Replaces        []yamlReplaces
 }
@@ -68,16 +69,18 @@ var validKeys = map[string]bool{
 	"name":              true,
 	"replaces":          true,
 	"detailed_metric":   true,
+	"unit_multiplier":   true,
 }
 
 // Create a new rate limit config entry.
 // @param requestsPerUnit supplies the requests per unit of time for the entry.
 // @param unit supplies the unit of time for the entry.
+// @param unitMultiplier supplies the multiplier for the unit of time for the entry.
 // @param rlStats supplies the stats structure associated with the RateLimit
 // @param unlimited supplies whether the rate limit is unlimited
 // @return the new config entry.
 func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats,
-	unlimited bool, shadowMode bool, name string, replaces []string, detailedMetric bool,
+	unlimited bool, shadowMode bool, name string, replaces []string, detailedMetric bool, unitMultiplier uint32,
 ) *RateLimit {
 	return &RateLimit{
 		FullKey: rlStats.GetKey(),
@@ -86,6 +89,7 @@ func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Un
 			RequestsPerUnit: requestsPerUnit,
 			Unit:            unit,
 			Name:            name,
+			UnitMultiplier:  unitMultiplier,
 		},
 		Unlimited:      unlimited,
 		ShadowMode:     shadowMode,
@@ -100,8 +104,8 @@ func (this *rateLimitDescriptor) dump() string {
 	ret := ""
 	if this.limit != nil {
 		ret += fmt.Sprintf(
-			"%s: unit=%s requests_per_unit=%d, shadow_mode: %t\n", this.limit.FullKey,
-			this.limit.Limit.Unit.String(), this.limit.Limit.RequestsPerUnit, this.limit.ShadowMode)
+			"%s: unit=%s, unit_multiplier=%d, requests_per_unit=%d, shadow_mode: %t\n", this.limit.FullKey,
+			this.limit.Limit.Unit.String(), this.limit.Limit.UnitMultiplier, this.limit.Limit.RequestsPerUnit, this.limit.ShadowMode)
 	}
 	for _, descriptor := range this.descriptors {
 		ret += descriptor.dump()
@@ -159,6 +163,18 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 					fmt.Sprintf("invalid rate limit unit '%s'", descriptorConfig.RateLimit.Unit)))
 			}
 
+			var unitMultiplier uint32
+			if descriptorConfig.RateLimit.UnitMultiplier == nil {
+				unitMultiplier = 1
+			} else {
+				unitMultiplier = *descriptorConfig.RateLimit.UnitMultiplier
+				if unitMultiplier == 0 {
+					panic(newRateLimitConfigError(
+						config.Name,
+						"invalid unit multiplier of 0"))
+				}
+			}
+
 			replaces := make([]string, len(descriptorConfig.RateLimit.Replaces))
 			for i, e := range descriptorConfig.RateLimit.Replaces {
 				replaces[i] = e.Name
@@ -168,10 +184,12 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value),
 				statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode,
 				descriptorConfig.RateLimit.Name, replaces, descriptorConfig.DetailedMetric,
+				unitMultiplier,
 			)
+
 			rateLimitDebugString = fmt.Sprintf(
-				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t}", rateLimit.Limit.RequestsPerUnit,
-				rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode)
+				" ratelimit={requests_per_unit=%d, unit=%s, unit_multiplier=%d, unlimited=%t, shadow_mode=%t}", rateLimit.Limit.RequestsPerUnit,
+				rateLimit.Limit.Unit.String(), unitMultiplier, rateLimit.Unlimited, rateLimit.ShadowMode)
 
 			for _, replaces := range descriptorConfig.RateLimit.Replaces {
 				if replaces.Name == "" {
@@ -302,6 +320,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 			"",
 			[]string{},
 			false,
+			1,
 		)
 		return rateLimit
 	}
@@ -354,7 +373,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 			descriptorsMap = nextDescriptor.descriptors
 		} else {
 			if rateLimit != nil && rateLimit.DetailedMetric {
-				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
+				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit,
+					this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited,
+					rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces,
+					rateLimit.DetailedMetric, rateLimit.Limit.UnitMultiplier)
 			}
 
 			break
