@@ -116,10 +116,24 @@ func NewPrometheusSink(opts ...prometheusSinkOption) gostats.Sink {
 		logrus.Infof("Starting prometheus sink on %s%s", sink.config.addr, sink.config.path)
 		_ = http.ListenAndServe(sink.config.addr, nil)
 	}()
-	if sink.config.mapperYamlPath != "" {
-		_ = sink.mapper.InitFromFile(sink.config.mapperYamlPath)
-	} else {
-		_ = sink.mapper.InitFromYAMLString(defaultMapper)
+
+	useDefaultMapper := sink.config.mapperYamlPath == ""
+	if !useDefaultMapper {
+		err := sink.mapper.InitFromFile(sink.config.mapperYamlPath)
+		if err != nil {
+			logrus.Errorf("Failed parsing metric mapper from path %s", sink.config.mapperYamlPath)
+
+			// Fallback to using the default mapper
+			useDefaultMapper = true
+		}
+	}
+
+	if useDefaultMapper {
+		logrus.Infof("Using default metric mapper")
+		err := sink.mapper.InitFromYAMLString(defaultMapper)
+		if err != nil {
+			logrus.Error("Failed parsing default metric mapper")
+		}
 	}
 
 	sink.exp = exporter.NewExporter(promRegistry,

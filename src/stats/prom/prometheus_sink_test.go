@@ -109,3 +109,28 @@ func TestFlushTimer(t *testing.T) {
 		return true
 	}, time.Second, time.Millisecond)
 }
+
+func TestPrometheusSinkMetricMapperDefaultHandling(t *testing.T) {
+	// Pass a metric mapper that doesn't exist
+	s := NewPrometheusSink(WithMapperYamlPath("file_not_found.yaml"), WithPath("/otherMetrics"))
+
+	s.FlushTimer("ratelimit.service.rate_limit.rds.database_users.within_limit", 1)
+	assert.Eventually(t, func() bool {
+		metricFamilies, err := prometheus.DefaultGatherer.Gather()
+		require.NoError(t, err)
+
+		metrics := make(map[string]*dto.MetricFamily)
+		for _, metricFamily := range metricFamilies {
+			metrics[*metricFamily.Name] = metricFamily
+		}
+
+		m, ok := metrics["ratelimit_service_rate_limit_within_limit"]
+		require.True(t, ok)
+		require.Len(t, m.Metric, 1)
+		require.Equal(t, map[string]string{
+			"domain": "rds",
+			"key1":   "database_users",
+		}, toMap(m.Metric[0].Label))
+		return true
+	}, time.Second, time.Millisecond)
+}
