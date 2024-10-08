@@ -856,6 +856,7 @@ ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 To enable dogstatsd integration set:
 
 1. `USE_DOG_STATSD`: `true` to use [DogStatsD](https://docs.datadoghq.com/developers/dogstatsd/?code-lang=go)
+2. `USE_STATSD`: `false` to disable StatsD (both cannot be enabled at the same time)
 
 dogstatsd also enables so called `mogrifiers` which can
 convert from traditional stats tags into a combination of stat name and tags.
@@ -907,9 +908,10 @@ Then, declare additional rules for the `DESCRIPTOR` mogrifier
 To enable Prometheus integration set:
 
 1. `USE_PROMETHEUS`: `true` to use [Prometheus](https://prometheus.io/)
-2. `PROMETHEUS_ADDR`: The port to listen on for Prometheus metrics. Defaults to `:9090`
-3. `PROMETHEUS_PATH`: The path to listen on for Prometheus metrics. Defaults to `/metrics`
-4. `PROMETHEUS_MAPPER_YAML`: The path to the YAML file that defines the mapping from statsd to prometheus metrics.
+2. `USE_STATSD`: `false` to disable StatsD (both cannot be enabled at the same time)
+3. `PROMETHEUS_ADDR`: The port to listen on for Prometheus metrics. Defaults to `:9090`
+4. `PROMETHEUS_PATH`: The path to listen on for Prometheus metrics. Defaults to `/metrics`
+5. `PROMETHEUS_MAPPER_YAML`: The path to the YAML file that defines the mapping from statsd to prometheus metrics.
 
 Define the mapping from statsd to prometheus metrics in a YAML file.
 Find more information about the mapping in the [Metric Mapping and Configuration](https://github.com/prometheus/statsd_exporter?tab=readme-ov-file#metric-mapping-and-configuration).
