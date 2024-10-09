@@ -51,9 +51,9 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		timeSource := mock_utils.NewMockTimeSource(controller)
 		var cache limiter.RateLimitCache
 		if usePerSecondRedis {
-			cache = redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
+			cache = redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, 1)
 		} else {
-			cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
+			cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, 1)
 		}
 
 		timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -191,7 +191,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	localCache := freecache.NewCache(100)
 	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false, 1)
 	sink := &common.TestStatSink{}
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
@@ -293,7 +293,7 @@ func TestNearLimit(t *testing.T) {
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, 1)
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -467,7 +467,7 @@ func TestRedisWithJitter(t *testing.T) {
 	jitterSource := mock_utils.NewMockJitterRandSource(controller)
 	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false, 1)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	jitterSource.EXPECT().Int63().Return(int64(100))
@@ -497,7 +497,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	localCache := freecache.NewCache(100)
 	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false, 1)
 	sink := &common.TestStatSink{}
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
@@ -610,7 +610,7 @@ func TestRedisTracer(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, 1)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 
@@ -638,7 +638,7 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	localCache := freecache.NewCache(100)
 	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, true)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, true, 1)
 	sink := &common.TestStatSink{}
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 

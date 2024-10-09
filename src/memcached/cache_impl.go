@@ -71,7 +71,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
-	hitsAddend := utils.Max(1, request.HitsAddend)
+	hitsAddend := utils.Max(this.baseRateLimiter.HitsAddendMinValue, request.HitsAddend)
 
 	// First build a list of all cache keys that we are actually going to hit.
 	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
@@ -302,7 +302,7 @@ func runAsync(task func()) {
 }
 
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
-	expirationJitterMaxSeconds int64, localCache *freecache.Cache, statsManager stats.Manager, nearLimitRatio float32, cacheKeyPrefix string,
+	expirationJitterMaxSeconds int64, localCache *freecache.Cache, statsManager stats.Manager, nearLimitRatio float32, cacheKeyPrefix string, hitsAddendMinValue uint32,
 ) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
@@ -311,7 +311,7 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager),
+		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, hitsAddendMinValue),
 	}
 }
 
@@ -327,5 +327,6 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 		statsManager,
 		s.NearLimitRatio,
 		s.CacheKeyPrefix,
+		s.HitsAddendMinValue,
 	)
 }

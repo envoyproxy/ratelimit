@@ -49,7 +49,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the RateLimit request.
-	hitsAddend := utils.Max(1, request.HitsAddend)
+	hitsAddend := utils.Max(this.baseRateLimiter.HitsAddendMinValue, request.HitsAddend)
 
 	// First build a list of all cache keys that we are actually going to hit.
 	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
@@ -218,12 +218,12 @@ func (this *fixedRateLimitCacheImpl) Flush() {}
 
 func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSource utils.TimeSource,
 	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
-	stopCacheKeyIncrementWhenOverlimit bool,
+	stopCacheKeyIncrementWhenOverlimit bool, hitsAddendMinValue uint32,
 ) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                             client,
 		perSecondClient:                    perSecondClient,
 		stopCacheKeyIncrementWhenOverlimit: stopCacheKeyIncrementWhenOverlimit,
-		baseRateLimiter:                    limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager),
+		baseRateLimiter:                    limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, hitsAddendMinValue),
 	}
 }
