@@ -37,5 +37,6 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 		s.CacheKeyPrefix,
 		statsManager,
 		s.StopCacheKeyIncrementWhenOverlimit,
+		s.HitsAddendMinValue,
 	), closer
 }

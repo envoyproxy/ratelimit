@@ -106,6 +106,7 @@ type Settings struct {
 	CacheKeyPrefix                     string  `envconfig:"CACHE_KEY_PREFIX" default:""`
 	BackendType                        string  `envconfig:"BACKEND_TYPE" default:"redis"`
 	StopCacheKeyIncrementWhenOverlimit bool    `envconfig:"STOP_CACHE_KEY_INCREMENT_WHEN_OVERLIMIT" default:"false"`
+	HitsAddendMinValue                 uint32  `envconfig:"DEFAULT_HITS_ADDEND_MIN_VALUE" default:"1"`
 
 	// Settings for optional returning of custom headers
 	RateLimitResponseHeadersEnabled bool `envconfig:"LIMIT_RESPONSE_HEADERS_ENABLED" default:"false"`
