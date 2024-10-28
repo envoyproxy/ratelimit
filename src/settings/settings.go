@@ -11,6 +11,7 @@ import (
 )
 
 type Settings struct {
+	Proto string `envconfig:"PROTO" default:"tcp"`
 	// runtime options
 	// This value shall be imported into unary server interceptor in order to enable chaining
 	GrpcUnaryInterceptor grpc.UnaryServerInterceptor
