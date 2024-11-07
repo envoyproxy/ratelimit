@@ -189,6 +189,11 @@ type Settings struct {
 	// detailed setting of exporter should refer to https://opentelemetry.io/docs/reference/specification/protocol/exporter/, e.g. OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_CERTIFICATE, OTEL_EXPORTER_OTLP_TIMEOUT
 	// TracingSamplingRate defaults to 1 which amounts to using the `AlwaysSample` sampler
 	TracingSamplingRate float64 `envconfig:"TRACING_SAMPLING_RATE" default:"1"`
+
+	// ReturnDescriptorsInResponse enables returning descriptors in the `response.DynamicMetadata`.
+	// By default, the descriptors encoded in json format.
+	// This is useful for Envoy to set dynamic metadata in `envoy.filters.http.ratelimit`.
+	ReturnDescriptorsInResponse bool `envconfig:"RETURN_DESCRIPTORS_IN_RESPONSE" default:"false"`
 }
 
 type Option func(*Settings)
