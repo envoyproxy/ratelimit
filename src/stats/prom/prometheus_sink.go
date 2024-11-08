@@ -136,6 +136,7 @@ func NewPrometheusSink(opts ...prometheusSinkOption) gostats.Sink {
 }
 
 func (s *prometheusSink) FlushCounter(name string, value uint64) {
+	logrus.Debugf("FlushCounter: %s %d", name, value)
 	s.events <- event.Events{&event.CounterEvent{
 		CMetricName: name,
 		CValue:      float64(value),
@@ -144,6 +145,7 @@ func (s *prometheusSink) FlushCounter(name string, value uint64) {
 }
 
 func (s *prometheusSink) FlushGauge(name string, value uint64) {
+	logrus.Debugf("FlushGauge: %s %d", name, value)
 	s.events <- event.Events{&event.GaugeEvent{
 		GMetricName: name,
 		GValue:      float64(value),
@@ -152,6 +154,7 @@ func (s *prometheusSink) FlushGauge(name string, value uint64) {
 }
 
 func (s *prometheusSink) FlushTimer(name string, value float64) {
+	logrus.Debugf("FlushTimer: %s %v", name, value)
 	s.events <- event.Events{&event.ObserverEvent{
 		OMetricName: name,
 		OValue:      value,
