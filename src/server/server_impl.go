@@ -57,6 +57,7 @@ const (
 )
 
 type server struct {
+	proto            string
 	httpAddress      string
 	grpcAddress      string
 	grpcListenType   grpcListenType
@@ -171,7 +172,7 @@ func (server *server) Start() {
 		logger.Warnf("Listening for debug on '%s'", server.debugAddress)
 		var err error
 		server.listenerMu.Lock()
-		server.debugListener.listener, err = reuseport.Listen("tcp", server.debugAddress)
+		server.debugListener.listener, err = reuseport.Listen(server.proto, server.debugAddress)
 		server.listenerMu.Unlock()
 
 		if err != nil {
@@ -187,7 +188,7 @@ func (server *server) Start() {
 	server.handleGracefulShutdown()
 
 	logger.Warnf("Listening for HTTP on '%s'", server.httpAddress)
-	list, err := reuseport.Listen("tcp", server.httpAddress)
+	list, err := reuseport.Listen(server.proto, server.httpAddress)
 	if err != nil {
 		logger.Fatalf("Failed to open HTTP listener: '%+v'", err)
 	}
@@ -209,7 +210,7 @@ func (server *server) startGrpc() {
 
 	switch server.grpcListenType {
 	case tcp:
-		lis, err = reuseport.Listen("tcp", server.grpcAddress)
+		lis, err = reuseport.Listen(server.proto, server.grpcAddress)
 	case unixDomainSocket:
 		lis, err = net.Listen("unix", server.grpcAddress)
 	default:
@@ -240,7 +241,7 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	}
 
 	ret := new(server)
-
+	ret.proto = s.Proto
 	// setup stats
 	ret.store = statsManager.GetStatsStore()
 	ret.scope = ret.store.ScopeWithTags(name, s.ExtraTags)
