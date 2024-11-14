@@ -86,7 +86,7 @@ type Settings struct {
 	StatsdPort             int               `envconfig:"STATSD_PORT" default:"8125"`
 	ExtraTags              map[string]string `envconfig:"EXTRA_TAGS" default:""`
 	StatsFlushInterval     time.Duration     `envconfig:"STATS_FLUSH_INTERVAL" default:"10s"`
-	DisableStats           bool              `envconfig:"DISABLE_STATS" default:"false"`
+	DisableStats           bool              `envconfig:"DISABLE_STATS" default:"true"`
 	UsePrometheus          bool              `envconfig:"USE_PROMETHEUS" default:"false"`
 	PrometheusAddr         string            `envconfig:"PROMETHEUS_ADDR" default:":9090"`
 	PrometheusPath         string            `envconfig:"PROMETHEUS_PATH" default:"/metrics"`
