@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"regexp"
 	"strings"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -62,8 +63,12 @@ func MaskCredentialsInUrl(url string) string {
 	return strings.Join(urls, ",")
 }
 
+var ipv4Regex = regexp.MustCompile(`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`)
+
 // Remove invalid characters from the stat name.
 func SanitizeStatName(s string) string {
 	r := strings.NewReplacer(":", "_", "|", "_")
-	return r.Replace(s)
+	return ipv4Regex.ReplaceAllStringFunc(r.Replace(s), func(ip string) string {
+		return strings.ReplaceAll(ip, ".", "_")
+	})
 }
