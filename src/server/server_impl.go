@@ -25,7 +25,7 @@ import (
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/gorilla/mux"
-	reuseport "github.com/kavu/go_reuseport"
+	"github.com/libp2p/go-reuseport"
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
