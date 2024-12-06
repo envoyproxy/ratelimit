@@ -127,9 +127,9 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			panic(newRateLimitConfigError(config.Name, "descriptor has empty key"))
 		}
 
-		// Value is optional, so the final key for the map is either the key only or key_value.
+		// Value is optional, so the final key for the map is either the key only or key_value if value differs from key.
 		finalKey := descriptorConfig.Key
-		if descriptorConfig.Value != "" {
+		if descriptorConfig.Value != "" && descriptorConfig.Value != descriptorConfig.Key {
 			finalKey += "_" + descriptorConfig.Value
 		}
 
