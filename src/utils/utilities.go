@@ -29,7 +29,7 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 	case pb.RateLimitResponse_RateLimit_MONTH:
 		return 60 * 60 * 24 * 30
 	case pb.RateLimitResponse_RateLimit_YEAR:
-		return 60 * 60 * 24 * 356
+		return 60 * 60 * 24 * 365
 	}
 
 	panic("should not get here")
