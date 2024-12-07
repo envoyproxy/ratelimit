@@ -116,7 +116,8 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
 				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
 				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
-				err := this.localCache.Set([]byte(key), []byte{}, int(utils.UnitToDivider(limitInfo.limit.Limit.Unit)))
+
+				err := this.localCache.Set([]byte(key), []byte{}, int(utils.UnitToDividerWithMultiplier(limitInfo.limit.Limit.Unit, limitInfo.limit.Limit.UnitMultiplier)))
 				if err != nil {
 					logger.Errorf("Failing to set local cache key: %s", key)
 				}
@@ -205,7 +206,7 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource),
+			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource, limit.UnitMultiplier),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{

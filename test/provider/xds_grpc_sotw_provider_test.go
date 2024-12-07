@@ -13,6 +13,7 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 
+	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/test/common"
@@ -27,6 +28,7 @@ const (
 )
 
 func TestXdsProvider(t *testing.T) {
+	var unitMultiplier uint32 = 4
 	intSnapshot, _ := cache.NewSnapshot("1",
 		map[resource.Type][]types.Resource{
 			resource.RateLimitConfigType: {
@@ -40,6 +42,7 @@ func TestXdsProvider(t *testing.T) {
 							RateLimit: &rls_config.RateLimitPolicy{
 								Unit:            rls_config.RateLimitUnit_MINUTE,
 								RequestsPerUnit: 3,
+								UnitMultiplier:  &unitMultiplier,
 							},
 						},
 					},
@@ -73,7 +76,9 @@ func TestXdsProvider(t *testing.T) {
 	if err != nil {
 		t.Error("Error setting 'MERGE_DOMAIN_CONFIG' environment variable", err)
 	}
-	t.Run("Test same domain multiple times xDS config update", testSameDomainMultipleXdsConfigUpdate(setSnapshotFunc, providerEventChan))
+	t.Run("Test same domain multiple times xDS config update", testSameDomainMultipleXdsConfigUpdate(&snapVersion, setSnapshotFunc, providerEventChan))
+
+	t.Run("Test setting unit multiplier to 0", testZeroUnitMultiplier(&snapVersion, setSnapshotFunc, providerEventChan))
 }
 
 func testInitialXdsConfig(snapVersion *int, setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
@@ -86,7 +91,7 @@ func testInitialXdsConfig(snapVersion *int, setSnapshotFunc common.SetSnapshotFu
 
 		config, err := configEvent.GetConfig()
 		assert.Nil(err)
-		assert.Equal("foo.k1_v1: unit=MINUTE requests_per_unit=3, shadow_mode: false\n", config.Dump())
+		assert.Equal("foo.k1_v1: unit=MINUTE, unit_multiplier=4, requests_per_unit=3, shadow_mode: false\n", config.Dump())
 	}
 }
 
@@ -122,7 +127,7 @@ func testNewXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.SetSnapshot
 
 		config, err := configEvent.GetConfig()
 		assert.Nil(err)
-		assert.Equal("foo.k2_v2: unit=MINUTE requests_per_unit=5, shadow_mode: false\n", config.Dump())
+		assert.Equal("foo.k2_v2: unit=MINUTE, unit_multiplier=1, requests_per_unit=5, shadow_mode: false\n", config.Dump())
 	}
 }
 
@@ -173,8 +178,8 @@ func testMultiDomainXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.Set
 		config, err := configEvent.GetConfig()
 		assert.Nil(err)
 		assert.ElementsMatch([]string{
-			"foo.k1_v1: unit=MINUTE requests_per_unit=10, shadow_mode: false",
-			"bar.k1_v1: unit=MINUTE requests_per_unit=100, shadow_mode: false",
+			"foo.k1_v1: unit=MINUTE, unit_multiplier=1, requests_per_unit=10, shadow_mode: false",
+			"bar.k1_v1: unit=MINUTE, unit_multiplier=1, requests_per_unit=100, shadow_mode: false",
 		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
 	}
 }
@@ -266,22 +271,23 @@ func testDeeperLimitsXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.Se
 		config, err := configEvent.GetConfig()
 		assert.Nil(err)
 		assert.ElementsMatch([]string{
-			"foo.k1_v1: unit=MINUTE requests_per_unit=10, shadow_mode: false",
-			"foo.k1_v1.k2: unit=UNKNOWN requests_per_unit=0, shadow_mode: false",
-			"foo.k1_v1.k2_v2: unit=HOUR requests_per_unit=15, shadow_mode: false",
-			"foo.j1_v2: unit=UNKNOWN requests_per_unit=0, shadow_mode: false",
-			"foo.j1_v2.j2: unit=UNKNOWN requests_per_unit=0, shadow_mode: false",
-			"foo.j1_v2.j2_v2: unit=DAY requests_per_unit=15, shadow_mode: true",
-			"bar.k1_v1: unit=MINUTE requests_per_unit=100, shadow_mode: false",
+			"foo.k1_v1: unit=MINUTE, unit_multiplier=1, requests_per_unit=10, shadow_mode: false",
+			"foo.k1_v1.k2: unit=UNKNOWN, unit_multiplier=1, requests_per_unit=0, shadow_mode: false",
+			"foo.k1_v1.k2_v2: unit=HOUR, unit_multiplier=1, requests_per_unit=15, shadow_mode: false",
+			"foo.j1_v2: unit=UNKNOWN, unit_multiplier=1, requests_per_unit=0, shadow_mode: false",
+			"foo.j1_v2.j2: unit=UNKNOWN, unit_multiplier=1, requests_per_unit=0, shadow_mode: false",
+			"foo.j1_v2.j2_v2: unit=DAY, unit_multiplier=1, requests_per_unit=15, shadow_mode: true",
+			"bar.k1_v1: unit=MINUTE, unit_multiplier=1, requests_per_unit=100, shadow_mode: false",
 		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
 	}
 }
 
-func testSameDomainMultipleXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+func testSameDomainMultipleXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+	*snapVersion += 1
 	return func(t *testing.T) {
 		assert := assert.New(t)
 
-		snapshot, _ := cache.NewSnapshot("3",
+		snapshot, _ := cache.NewSnapshot(fmt.Sprint(*snapVersion),
 			map[resource.Type][]types.Resource{
 				resource.RateLimitConfigType: {
 					&rls_config.RateLimitConfig{
@@ -323,8 +329,45 @@ func testSameDomainMultipleXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFun
 		config, err := configEvent.GetConfig()
 		assert.Nil(err)
 		assert.ElementsMatch([]string{
-			"foo.k1_v2: unit=MINUTE requests_per_unit=100, shadow_mode: false",
-			"foo.k1_v1: unit=MINUTE requests_per_unit=10, shadow_mode: false",
+			"foo.k1_v2: unit=MINUTE, unit_multiplier=1, requests_per_unit=100, shadow_mode: false",
+			"foo.k1_v1: unit=MINUTE, unit_multiplier=1, requests_per_unit=10, shadow_mode: false",
 		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
+	}
+}
+
+func testZeroUnitMultiplier(snapVersion *int, setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+	*snapVersion += 1
+	return func(t *testing.T) {
+		assert := assert.New(t)
+
+		snapshot, _ := cache.NewSnapshot(fmt.Sprint(*snapVersion),
+			map[resource.Type][]types.Resource{
+				resource.RateLimitConfigType: {
+					&rls_config.RateLimitConfig{
+						Name:   "foo-1",
+						Domain: "foo",
+						Descriptors: []*rls_config.RateLimitDescriptor{
+							{
+								Key:   "k1",
+								Value: "v1",
+								RateLimit: &rls_config.RateLimitPolicy{
+									Unit:            rls_config.RateLimitUnit_MINUTE,
+									RequestsPerUnit: 10,
+									UnitMultiplier:  new(uint32),
+								},
+							},
+						},
+					},
+				},
+			},
+		)
+		setSnapshotFunc(snapshot)
+
+		configEvent := <-providerEventChan
+		assert.NotNil(configEvent)
+
+		_, err := configEvent.GetConfig()
+		configError, _ := err.(config.RateLimitConfigError)
+		assert.Equal("foo-1: invalid unit multiplier of 0", configError.Error())
 	}
 }
