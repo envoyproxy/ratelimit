@@ -47,6 +47,27 @@ static_resources:
                 codec_type: AUTO
                 stat_prefix: ingress
                 http_filters:
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      inline_code: |
+                        function envoy_on_request(request_handle)
+                          local account_id = request_handle:headers():get("account_id")
+
+                          if account_id == "1111"
+                          then
+                            request_handle:headers():add("plan", "team")
+                          elseif account_id == "2222"
+                          then
+                            request_handle:headers():add("plan", "professional")
+                          elseif account_id == "3333"
+                          then
+                            request_handle:headers():add("plan", "enterprise")
+                          elseif account_id == "4444"
+                          then
+                            request_handle:headers():add("plan", "api_boost")
+                          end
+                        end
                   - name: envoy.filters.http.ratelimit
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit
