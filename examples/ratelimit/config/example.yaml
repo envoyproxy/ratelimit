@@ -1,14 +1,35 @@
 ---
 domain: rl
 descriptors:
-  - key: foo
-    value: foo
+  - key: account_id
     rate_limit:
+      name: account_wide_api_requests
       unit: minute
-      requests_per_unit: 5
+      requests_per_unit: 100
     descriptors:
-      - key: bar
-        value: bar
+      - key: plan
+        value: team
         rate_limit:
           unit: minute
           requests_per_unit: 2
+      - key: plan
+        value: professional
+        rate_limit:
+          unit: minute
+          requests_per_unit: 5
+      - key: plan
+        value: enterprise
+        rate_limit:
+          unit: minute
+          requests_per_unit: 10
+      - key: plan
+        value: api_boost
+        rate_limit:
+          unit: minute
+          requests_per_unit: 20
+      - key: plan
+        value: mobile_sdk
+        rate_limit:
+          replaces:
+            - name: account_wide_api_requests
+          unlimited: true

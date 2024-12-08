@@ -78,12 +78,12 @@ static_resources:
                             rate_limits:
                               - actions:
                                   - request_headers:
-                                      header_name: "foo"
-                                      descriptor_key: "foo"
+                                      header_name: "account_id"
+                                      descriptor_key: "account_id"
                               - actions:
                                   - request_headers:
-                                      header_name: "foo"
-                                      descriptor_key: "foo"
+                                      header_name: "account_id"
+                                      descriptor_key: "account_id"
                                   - request_headers:
-                                      header_name: "bar"
-                                      descriptor_key: "bar"
+                                      header_name: "plan"
+                                      descriptor_key: "plan"
