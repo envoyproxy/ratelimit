@@ -52,6 +52,14 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
                       inline_code: |
                         function envoy_on_request(request_handle)
+                          local mobile_token = request_handle:headers():get("mobile_token")
+
+                          if mobile_token
+                          then
+                            request_handle:headers():add("plan", "mobile_sdk")
+                            return
+                          end
+
                           local account_id = request_handle:headers():get("account_id")
 
                           if account_id == "1111"
