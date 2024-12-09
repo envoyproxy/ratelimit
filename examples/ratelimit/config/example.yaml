@@ -1,86 +1,35 @@
 ---
 domain: rl
 descriptors:
-  - key: category
-    value: account
+  - key: account_id
     rate_limit:
-      replaces:
-        - name: bkthomps
-        - name: fake_name
+      name: account_wide_api_requests
       unit: minute
-      requests_per_unit: 4
-  - key: source_cluster
-    value: proxy
+      requests_per_unit: 100
     descriptors:
-      - key: destination_cluster
-        value: bkthomps
+      - key: plan
+        value: team
+        rate_limit:
+          unit: minute
+          requests_per_unit: 2
+      - key: plan
+        value: professional
+        rate_limit:
+          unit: minute
+          requests_per_unit: 5
+      - key: plan
+        value: enterprise
+        rate_limit:
+          unit: minute
+          requests_per_unit: 10
+      - key: plan
+        value: api_boost
+        rate_limit:
+          unit: minute
+          requests_per_unit: 20
+      - key: plan
+        value: mobile_sdk
         rate_limit:
           replaces:
-            - name: bkthomps
-          unit: minute
-          requests_per_unit: 2
-      - key: destination_cluster
-        value: mock
-        rate_limit:
-          unit: minute
-          requests_per_unit: 1
-      - key: destination_cluster
-        value: override
-        rate_limit:
-          replaces:
-            - name: banned_limit
-          unit: minute
-          requests_per_unit: 2
-      - key: destination_cluster
-        value: fake
-        rate_limit:
-          name: fake_name
-          unit: minute
-          requests_per_unit: 2
-  - key: foo
-    rate_limit:
-      unit: minute
-      requests_per_unit: 2
-    descriptors:
-      - key: bar
-        rate_limit:
-          unit: minute
-          requests_per_unit: 3
-      - key: bar
-        value: bkthomps
-        rate_limit:
-          name: bkthomps
-          unit: minute
-          requests_per_unit: 1
-      - key: bar
-        value: banned
-        rate_limit:
-          name: banned_limit
-          unit: minute
-          requests_per_unit: 0
-      - key: baz
-        rate_limit:
-          unit: second
-          requests_per_unit: 1
-      - key: baz
-        value: not-so-shady
-        rate_limit:
-          unit: minute
-          requests_per_unit: 3
-      - key: baz
-        value: shady
-        rate_limit:
-          unit: minute
-          requests_per_unit: 3
-        shadow_mode: true
-      - key: bay
-        rate_limit:
+            - name: account_wide_api_requests
           unlimited: true
-  - key: unspec
-    detailed_metric: true
-    rate_limit:
-      unit: minute
-      requests_per_unit: 2
-  - key: qux
-    rate_limit:
-      unlimited: true
