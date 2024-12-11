@@ -35,6 +35,7 @@ func rateLimitPolicyPbToYaml(pb *rls_conf_v3.RateLimitPolicy) *YamlRateLimit {
 	return &YamlRateLimit{
 		RequestsPerUnit: pb.RequestsPerUnit,
 		Unit:            pb.Unit.String(),
+		UnitMultiplier:  pb.UnitMultiplier,
 		Unlimited:       pb.Unlimited,
 		Name:            pb.Name,
 		Replaces:        rateLimitReplacesPbToYaml(pb.Replaces),

@@ -1,0 +1,14 @@
+domain: test-domain
+descriptors:
+  # some unit_multiplier
+  - key: key1
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
+      unit_multiplier: 5
+
+  # no unit_multiplier
+  - key: key2
+    rate_limit:
+      unit: minute
+      requests_per_unit: 25

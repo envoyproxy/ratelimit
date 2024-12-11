@@ -152,7 +152,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		logger.Debugf("looking up cache key: %s", cacheKey.Key)
 
-		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
+		expirationSeconds := utils.UnitToDividerWithMultiplier(limits[i].Limit.Unit, limits[i].Limit.UnitMultiplier)
 		if this.baseRateLimiter.ExpirationJitterMaxSeconds > 0 {
 			expirationSeconds += this.baseRateLimiter.JitterRand.Int63n(this.baseRateLimiter.ExpirationJitterMaxSeconds)
 		}
