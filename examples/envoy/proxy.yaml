@@ -90,6 +90,23 @@ static_resources:
                           envoy_grpc:
                             cluster_name: ratelimit
                         transport_api_version: V3
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      inline_code: |
+                        function envoy_on_response(response_handle)
+                          local status_code = response_handle:headers():get(":status")
+
+                          if status_code == "429" then
+                            -- Add a custom header
+                            response_handle:headers():add("x-custom-header", "Rate limit triggered")
+
+                            ---- Set a JSON body
+                            response_handle:headers():replace("content-type", "application/json")
+                            local body = '{"error": "rate_limit_exceeded", "retry_after": 60}'
+                            response_handle:body(true):setBytes(body)
+                          end
+                        end
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
