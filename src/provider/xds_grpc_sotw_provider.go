@@ -126,13 +126,24 @@ func (p *XdsGrpcSotwProvider) watchConfigs() {
 func (p *XdsGrpcSotwProvider) getGrpcConnection() (*grpc.ClientConn, error) {
 	backOff := grpc_retry.BackoffLinearWithJitter(p.settings.ConfigGrpcXdsServerConnectRetryInterval, 0.5)
 	logger.Infof("Dialing xDS Management Server: '%s'", p.settings.ConfigGrpcXdsServerUrl)
-	return grpc.Dial(
-		p.settings.ConfigGrpcXdsServerUrl,
+	grpcOptions := []grpc.DialOption{
 		p.getGrpcTransportCredentials(),
 		grpc.WithBlock(),
 		grpc.WithStreamInterceptor(
 			grpc_retry.StreamClientInterceptor(grpc_retry.WithBackoff(backOff)),
-		))
+		),
+	}
+	maxMsgSize := p.settings.XdsGrpcClientOptionsMaxMsgSizeInBytes
+	if maxMsgSize != 0 {
+		logger.Infof("Setting xDS gRPC max message size to %d bytes", maxMsgSize)
+		grpcOptions = append(grpcOptions,
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize),
+				grpc.MaxCallSendMsgSize(maxMsgSize)))
+	}
+	return grpc.Dial(
+		p.settings.ConfigGrpcXdsServerUrl,
+		grpcOptions...,
+	)
 }
 
 func (p *XdsGrpcSotwProvider) getGrpcTransportCredentials() grpc.DialOption {
