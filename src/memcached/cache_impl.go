@@ -71,10 +71,10 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	logger.Debugf("starting cache lookup")
 
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
-	hitsAddend := utils.Max(1, request.HitsAddend)
+	hitsAddends := utils.GetHitsAddends(request)
 
 	// First build a list of all cache keys that we are actually going to hit.
-	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
+	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddends)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 
@@ -121,27 +121,27 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	for i, cacheKey := range cacheKeys {
 
 		rawMemcacheValue, ok := memcacheValues[cacheKey.Key]
-		var limitBeforeIncrease uint32
+		var limitBeforeIncrease uint64
 		if ok {
 			decoded, err := strconv.ParseInt(string(rawMemcacheValue.Value), 10, 32)
 			if err != nil {
 				logger.Errorf("Unexpected non-numeric value in memcached: %v", rawMemcacheValue)
 			} else {
-				limitBeforeIncrease = uint32(decoded)
+				limitBeforeIncrease = uint64(decoded)
 			}
 
 		}
 
-		limitAfterIncrease := limitBeforeIncrease + hitsAddend
+		limitAfterIncrease := limitBeforeIncrease + hitsAddends[i]
 
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
+			limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i])
 	}
 
 	this.waitGroup.Add(1)
-	runAsync(func() { this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, uint64(hitsAddend)) })
+	runAsync(func() { this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, hitsAddends) })
 	if AutoFlushForIntegrationTests {
 		this.Flush()
 	}
@@ -150,7 +150,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 }
 
 func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, isOverLimitWithLocalCache []bool,
-	limits []*config.RateLimit, hitsAddend uint64,
+	limits []*config.RateLimit, hitsAddends []uint64,
 ) {
 	defer this.waitGroup.Done()
 	for i, cacheKey := range cacheKeys {
@@ -158,7 +158,7 @@ func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, i
 			continue
 		}
 
-		_, err := this.client.Increment(cacheKey.Key, hitsAddend)
+		_, err := this.client.Increment(cacheKey.Key, hitsAddends[i])
 		if err == memcache.ErrCacheMiss {
 			expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
 			if this.expirationJitterMaxSeconds > 0 {
@@ -168,13 +168,13 @@ func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, i
 			// Need to add instead of increment.
 			err = this.client.Add(&memcache.Item{
 				Key:        cacheKey.Key,
-				Value:      []byte(strconv.FormatUint(hitsAddend, 10)),
+				Value:      []byte(strconv.FormatUint(hitsAddends[i], 10)),
 				Expiration: int32(expirationSeconds),
 			})
 			if err == memcache.ErrNotStored {
 				// There was a race condition to do this add. We should be able to increment
 				// now instead.
-				_, err := this.client.Increment(cacheKey.Key, hitsAddend)
+				_, err := this.client.Increment(cacheKey.Key, hitsAddends[i])
 				if err != nil {
 					logger.Errorf("Failed to increment key %s after failing to add: %s", cacheKey.Key, err)
 					continue

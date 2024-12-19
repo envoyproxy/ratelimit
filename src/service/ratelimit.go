@@ -185,6 +185,9 @@ func (this *service) shouldRateLimitWorker(
 	snappedConfig, globalShadowMode := this.GetCurrentConfig()
 	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx, snappedConfig)
 
+	assert.Assert(len(limitsToCheck) == len(isUnlimited))
+	assert.Assert(len(limitsToCheck) == len(request.Descriptors))
+
 	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
 

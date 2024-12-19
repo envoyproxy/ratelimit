@@ -41,7 +41,7 @@ func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSo
 	return &durationpb.Duration{Seconds: sec - now%sec}
 }
 
-func Max(a uint32, b uint32) uint32 {
+func Max(a uint64, b uint64) uint64 {
 	if a > b {
 		return a
 	}
@@ -70,4 +70,21 @@ func MaskCredentialsInUrl(url string) string {
 func SanitizeStatName(s string) string {
 	r := strings.NewReplacer(":", "_", "|", "_")
 	return r.Replace(s)
+}
+
+func GetHitsAddends(request *pb.RateLimitRequest) []uint64 {
+	hitsAddends := make([]uint64, len(request.Descriptors))
+
+	for i, descriptor := range request.Descriptors {
+		if descriptor.HitsAddend != nil {
+			// If the per descriptor hits_addend is set, use that. It allows to be zero. The zero value is
+			// means check only by no increment the hits.
+			hitsAddends[i] = descriptor.HitsAddend.Value
+		} else {
+			// If the per descriptor hits_addend is not set, use the request's hits_addend. If the value is
+			// zero (default value if not specified by the caller), use 1 for backward compatibility.
+			hitsAddends[i] = uint64(Max(1, uint64(request.HitsAddend)))
+		}
+	}
+	return hitsAddends
 }

@@ -32,12 +32,12 @@ type fixedRateLimitCacheImpl struct {
 	baseRateLimiter                    *limiter.BaseRateLimiter
 }
 
-func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint32, result *uint32, expirationSeconds int64) {
+func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint64, result *uint64, expirationSeconds int64) {
 	*pipeline = client.PipeAppend(*pipeline, result, "INCRBY", key, hitsAddend)
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
-func pipelineAppendtoGet(client Client, pipeline *Pipeline, key string, result *uint32) {
+func pipelineAppendtoGet(client Client, pipeline *Pipeline, key string, result *uint64) {
 	*pipeline = client.PipeAppend(*pipeline, result, "GET", key)
 }
 
@@ -48,18 +48,17 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 ) []*pb.RateLimitResponse_DescriptorStatus {
 	logger.Debugf("starting cache lookup")
 
-	// request.HitsAddend could be 0 (default value) if not specified by the caller in the RateLimit request.
-	hitsAddend := utils.Max(1, request.HitsAddend)
+	hitsAddends := utils.GetHitsAddends(request)
 
 	// First build a list of all cache keys that we are actually going to hit.
-	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddend)
+	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddends)
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
-	results := make([]uint32, len(request.Descriptors))
-	currentCount := make([]uint32, len(request.Descriptors))
+	results := make([]uint64, len(request.Descriptors))
+	currentCount := make([]uint64, len(request.Descriptors))
 	var pipeline, perSecondPipeline, pipelineToGet, perSecondPipelineToGet Pipeline
 
-	hitsAddendForRedis := hitsAddend
+	hitsAddendsForRedis := append([]uint64{}, hitsAddends...)
 	overlimitIndexes := make([]bool, len(request.Descriptors))
 	nearlimitIndexes := make([]bool, len(request.Descriptors))
 	isCacheKeyOverlimit := false
@@ -79,7 +78,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 					logger.Debugf("cache key is over the limit: %s", cacheKey.Key)
 				}
 				isOverLimitWithLocalCache[i] = true
-				hitsAddendForRedis = 0
+				hitsAddendsForRedis[i] = 0
 				overlimitIndexes[i] = true
 				isCacheKeyOverlimit = true
 				continue
@@ -113,12 +112,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 				}
 				// Now fetch the pipeline.
 				limitBeforeIncrease := currentCount[i]
-				limitAfterIncrease := limitBeforeIncrease + hitsAddend
+				limitAfterIncrease := limitBeforeIncrease + hitsAddends[i]
 
 				limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 				if this.baseRateLimiter.IsOverLimitThresholdReached(limitInfo) {
-					hitsAddendForRedis = 0
+					hitsAddendsForRedis[i] = 0
 					nearlimitIndexes[i] = true
 				}
 			}
@@ -163,18 +162,18 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 				perSecondPipeline = Pipeline{}
 			}
 			if nearlimitIndexes[i] {
-				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddends[i], &results[i], expirationSeconds)
 			} else {
-				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
+				pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, hitsAddendsForRedis[i], &results[i], expirationSeconds)
 			}
 		} else {
 			if pipeline == nil {
 				pipeline = Pipeline{}
 			}
 			if nearlimitIndexes[i] {
-				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddend, &results[i], expirationSeconds)
+				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddends[i], &results[i], expirationSeconds)
 			} else {
-				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddendForRedis, &results[i], expirationSeconds)
+				pipelineAppend(this.client, &pipeline, cacheKey.Key, hitsAddendsForRedis[i], &results[i], expirationSeconds)
 			}
 		}
 	}
@@ -201,12 +200,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	for i, cacheKey := range cacheKeys {
 
 		limitAfterIncrease := results[i]
-		limitBeforeIncrease := limitAfterIncrease - hitsAddend
+		limitBeforeIncrease := limitAfterIncrease - hitsAddends[i]
 
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
+			limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i])
 
 	}
 
