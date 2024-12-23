@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -61,6 +62,15 @@ func NewRateLimitRequest(domain string, descriptors [][][2]string, hitsAddend ui
 		request.Descriptors = append(request.Descriptors, newDescriptor)
 	}
 	request.HitsAddend = hitsAddend
+	return request
+}
+
+func NewRateLimitRequestWithPerDescriptorHitsAddend(domain string, descriptors [][][2]string,
+	hitsAddends []uint64) *pb.RateLimitRequest {
+	request := NewRateLimitRequest(domain, descriptors, 1)
+	for i, hitsAddend := range hitsAddends {
+		request.Descriptors[i].HitsAddend = &wrapperspb.UInt64Value{Value: hitsAddend}
+	}
 	return request
 }
 
