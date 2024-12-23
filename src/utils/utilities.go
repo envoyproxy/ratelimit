@@ -41,13 +41,6 @@ func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSo
 	return &durationpb.Duration{Seconds: sec - now%sec}
 }
 
-func Max(a uint64, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // Mask credentials from a redis connection string like
 // foo,redis://user:pass@redisurl1,redis://user:pass@redisurl2
 // resulting in
@@ -83,7 +76,7 @@ func GetHitsAddends(request *pb.RateLimitRequest) []uint64 {
 		} else {
 			// If the per descriptor hits_addend is not set, use the request's hits_addend. If the value is
 			// zero (default value if not specified by the caller), use 1 for backward compatibility.
-			hitsAddends[i] = uint64(Max(1, uint64(request.HitsAddend)))
+			hitsAddends[i] = uint64(max(1, uint64(request.HitsAddend)))
 		}
 	}
 	return hitsAddends

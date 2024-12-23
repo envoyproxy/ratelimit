@@ -169,7 +169,7 @@ func (this *BaseRateLimiter) checkOverLimitThreshold(limitInfo *LimitInfo, hitsA
 
 		// If the limit before increase was below the over limit value, then some of the hits were
 		// in the near limit range.
-		limitInfo.limit.Stats.NearLimit.Add(limitInfo.overLimitThreshold - utils.Max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease))
+		limitInfo.limit.Stats.NearLimit.Add(limitInfo.overLimitThreshold - max(limitInfo.nearLimitThreshold, limitInfo.limitBeforeIncrease))
 	}
 }
 
