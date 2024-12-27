@@ -102,14 +102,14 @@ func TestMemcached(t *testing.T) {
 		nil,
 	)
 	client.EXPECT().Increment("domain_key3_value3_997200", uint64(1)).Return(uint64(11), nil)
-	client.EXPECT().Increment("domain_key3_value3_subkey3_subvalue3_950400", uint64(1)).Return(uint64(13), nil)
+	client.EXPECT().Increment("domain_key3_value3_subkey3_subvalue3_950400", uint64(2)).Return(uint64(13), nil)
 
-	request = common.NewRateLimitRequest(
+	request = common.NewRateLimitRequestWithPerDescriptorHitsAddend(
 		"domain",
 		[][][2]string{
 			{{"key3", "value3"}},
 			{{"key3", "value3"}, {"subkey3", "subvalue3"}},
-		}, 1)
+		}, []uint64{1, 2})
 	limits = []*config.RateLimit{
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_HOUR, sm.NewStats("key3_value3"), false, false, "", nil, false),
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_DAY, sm.NewStats("key3_value3_subkey3_subvalue3"), false, false, "", nil, false),
@@ -124,10 +124,10 @@ func TestMemcached(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
-	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
-	assert.Equal(uint64(1), limits[0].Stats.OverLimit.Value())
-	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
-	assert.Equal(uint64(0), limits[0].Stats.WithinLimit.Value())
+	assert.Equal(uint64(2), limits[1].Stats.TotalHits.Value())
+	assert.Equal(uint64(2), limits[1].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[1].Stats.NearLimit.Value())
+	assert.Equal(uint64(0), limits[1].Stats.WithinLimit.Value())
 
 	cache.Flush()
 }
