@@ -133,12 +133,11 @@ func (p *XdsGrpcSotwProvider) getGrpcConnection() (*grpc.ClientConn, error) {
 			grpc_retry.StreamClientInterceptor(grpc_retry.WithBackoff(backOff)),
 		),
 	}
-	maxMsgSize := p.settings.XdsGrpcClientOptionsMaxMsgSizeInBytes
-	if maxMsgSize != 0 {
-		logger.Infof("Setting xDS gRPC max message size to %d bytes", maxMsgSize)
+	maxRecvMsgSize := p.settings.XdsClientGrpcOptionsMaxMsgSizeInBytes
+	if maxRecvMsgSize != 0 {
+		logger.Infof("Setting xDS gRPC max receive message size to %d bytes", maxRecvMsgSize)
 		grpcOptions = append(grpcOptions,
-			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize),
-				grpc.MaxCallSendMsgSize(maxMsgSize)))
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxRecvMsgSize)))
 	}
 	return grpc.Dial(
 		p.settings.ConfigGrpcXdsServerUrl,
