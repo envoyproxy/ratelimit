@@ -78,6 +78,9 @@ type Settings struct {
 	XdsClientBackoffRandomFactor    float64       `envconfig:"XDS_CLIENT_BACKOFF_RANDOM_FACTOR" default:"0.5"`
 	XdsClientBackoffJitter          bool          `envconfig:"XDS_CLIENT_BACKOFF_JITTER" default:"true"`
 
+	// xDS client gRPC options
+	XdsClientGrpcOptionsMaxMsgSizeInBytes int `envconfig:"XDS_CLIENT_MAX_MSG_SIZE_IN_BYTES" default:""`
+
 	// Stats-related settings
 	UseDogStatsd           bool              `envconfig:"USE_DOG_STATSD" default:"false"`
 	UseDogStatsdMogrifiers []string          `envconfig:"USE_DOG_STATSD_MOGRIFIERS" default:""`
