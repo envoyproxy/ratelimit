@@ -45,6 +45,8 @@ func toMap(labels []*dto.LabelPair) map[string]string {
 func TestFlushCounterWithDifferentLabels(t *testing.T) {
 	s.FlushCounter("ratelimit.service.rate_limit.domain1.key1_val1.over_limit", 1)
 	s.FlushCounter("ratelimit.service.rate_limit.domain1.key1_val1.key2_val2.over_limit", 2)
+	s.FlushCounter("ratelimit.service.rate_limit.domain1.key3_val3.key4_val4.over_limit", 1)
+	s.FlushCounter("ratelimit.service.rate_limit.domain1.key3_val3.key4_val4.key5_val5.over_limit", 2)
 	assert.Eventually(t, func() bool {
 		metricFamilies, err := prometheus.DefaultGatherer.Gather()
 		require.NoError(t, err)
@@ -56,7 +58,7 @@ func TestFlushCounterWithDifferentLabels(t *testing.T) {
 
 		m, ok := metrics["ratelimit_service_rate_limit_over_limit"]
 		require.True(t, ok)
-		require.Len(t, m.Metric, 2)
+		require.Len(t, m.Metric, 3)
 		require.Equal(t, 1.0, *m.Metric[0].Counter.Value)
 		require.Equal(t, map[string]string{
 			"domain": "domain1",
@@ -68,6 +70,12 @@ func TestFlushCounterWithDifferentLabels(t *testing.T) {
 			"key1":   "key1_val1",
 			"key2":   "key2_val2",
 		}, toMap(m.Metric[1].Label))
+		require.Equal(t, 3.0, *m.Metric[2].Counter.Value)
+		require.Equal(t, map[string]string{
+			"domain": "domain1",
+			"key1":   "key3_val3",
+			"key2":   "key4_val4",
+		}, toMap(m.Metric[2].Label))
 		return true
 	}, time.Second, time.Millisecond)
 }
