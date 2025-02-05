@@ -266,12 +266,12 @@ effectively whitelisted. Otherwise, nested descriptors allow more complex matchi
 
 ```yaml
 rate_limit:
-  unit: <second, minute, hour, day>
+  unit: <second, minute, hour, day, week, month, year>
   requests_per_unit: <uint>
 ```
 
 The rate limit block specifies the actual rate limit that will be used when there is a match.
-Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
+Currently the service supports per second, minute, hour, day, week, month and year limits. More types of limits may be added in the
 future based on user demand.
 
 ### Replaces
