@@ -78,6 +78,19 @@ mappings:
     labels:
       err_type: "$1"
 
+  - match: "ratelimit_server\\.json\\.total_requests\\.__code=([0-9]+)"
+    match_type: regex
+    name: "ratelimit_service_json_total_requests"
+    match_metric_type: counter
+    labels:
+      code: "$1"
+  - match: "ratelimit_server\\.json\\.response_time\\.__code=([0-9]+)"
+    match_type: regex
+    name: "ratelimit_service_json_response_time_seconds"
+    timer_type: histogram
+    labels:
+      code: "$1"
+
   - match: "ratelimit_server.*.total_requests"
     name: "ratelimit_service_total_requests"
     match_metric_type: counter
