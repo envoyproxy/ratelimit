@@ -48,5 +48,5 @@ jobs:
       - if: ${{ failure() }}
         name: Read for resolution steps
         run: |
-          echo "Pre-commits failed! Run 'make precommit_install' then 'pre-commits run -a' to fix."
+          echo "Pre-commits failed! Run 'make precommit_install' then 'pre-commit run -a' to fix."
           exit 1
