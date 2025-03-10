@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/envoyproxy/ratelimit/src/metrics"
 	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/stats"
 
@@ -158,8 +159,8 @@ func getProviderImpl(s settings.Settings, statsManager stats.Manager, rootStore 
 	}
 }
 
-func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer) {
-	server.router.HandleFunc("/json", NewJsonHandler(svc))
+func (server *server) AddJsonHandler(svc pb.RateLimitServiceServer, serverReporter *metrics.ServerReporter) {
+	server.router.HandleFunc("/json", serverReporter.HttpServerMetricsHandler("json", NewJsonHandler(svc)))
 }
 
 func (server *server) GrpcServer() *grpc.Server {
