@@ -370,6 +370,10 @@ The configuration also sets up another rule without a value. This one creates an
 any particular number during a 1 day period. Thus, ("to_number", "2061111111") and ("to_number", "2062222222") both
 get 100 requests per day.
 
+With the out of the box configuration, if the ("message_type", "marketing"),("to_number", "2062222222") gets a 6th call,
+the overall 100 messages a day will still increment. If you want to just deny the 6th marketing call without counting 
+against the overall limit to that number, set `STOP_CACHE_KEY_INCREMENT_WHEN_OVERLIMIT` to `true` as shown in [Redis](#redis)
+
 When calling the rate limit service, the client can specify _multiple descriptors_ to limit on in a single call. This
 limits round trips and allows limiting on aggregate rule definitions. For example, using the preceding configuration,
 the client could send this complete request (in pseudo IDL):
