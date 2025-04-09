@@ -308,7 +308,7 @@ func (this *service) ShouldRateLimit(
 	}()
 
 	response := this.shouldRateLimitWorker(ctx, request)
-	logger.Debugf("returning normal response")
+	logger.Debugf("returning normal response: %+v", response)
 
 	return response, nil
 }
