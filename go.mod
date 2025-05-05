@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.23.3
 
 require (
-	github.com/DataDog/datadog-go/v5 v5.5.0
+	github.com/DataDog/datadog-go/v5 v5.6.0
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/coocood/freecache v1.2.4
