@@ -43,7 +43,7 @@ jobs:
           name: Docker image build
           command: |
             ./ops/docker-login.sh
-            docker build . -t 190066226418.dkr.ecr.us-east-1.amazonaws.com/vault/envoy-ratelimit:latest ratelimit
+            docker build . -t 190066226418.dkr.ecr.us-east-1.amazonaws.com/vault/envoy-ratelimit:latest
             ./ops/docker-save.sh
       - <<: *persist-workspace
 
