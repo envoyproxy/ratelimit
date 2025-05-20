@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-echo "loading docker images for version: [$CIRCLE_TAG]"
+echo "loading docker image"
 docker load -i ratelimit.tar
