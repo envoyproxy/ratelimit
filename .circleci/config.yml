@@ -67,7 +67,7 @@ workflows:
       - build:
           context:
             - circleci
-            - aws-accounts
+            - github
           filters:
             tags:
               only: /.*/
@@ -76,7 +76,7 @@ workflows:
       - deploy:
           context:
             - circleci
-            - aws-accounts
+            - github
           requires:
             - build
           filters:
