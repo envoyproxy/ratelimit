@@ -40,13 +40,10 @@ jobs:
       - checkout
       - <<: *setup-env
       - run:
-          name: Build
-          command: docker-compose run build
-      - run:
           name: Docker image build
           command: |
             ./ops/docker-login.sh
-            docker-compose build ratelimit
+            docker compose build ratelimit
             ./ops/docker-save.sh
       - <<: *persist-workspace
 
