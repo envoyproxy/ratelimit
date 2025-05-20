@@ -70,9 +70,8 @@ workflows:
             - github
           filters:
             tags:
-              only: /.*/
-            branches:
-              only: /.*/
+              only:
+                - /.+/
       - deploy:
           context:
             - circleci
