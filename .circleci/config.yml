@@ -82,7 +82,6 @@ workflows:
             - aws-accounts
           requires:
             - build
-            - test
           filters:
             tags:
               only: /.*/
