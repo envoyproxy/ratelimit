@@ -290,7 +290,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
-		rateLimitKey := descriptorKey(domain, descriptor)
+    //rateLimitKey := domain + "." + this.descriptorToKey(descriptor)
+    // when ip is unique for each request it generates too many stats counters and never cleans them up
+    rateLimitKey := domain + ".override"
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		// When limit override is provided by envoy config, we don't want to enable shadow_mode
 		rateLimit = NewRateLimit(
