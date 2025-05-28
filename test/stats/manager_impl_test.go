@@ -54,3 +54,50 @@ func TestEscapingInvalidChartersInMetricName(t *testing.T) {
 		})
 	}
 }
+
+func TestPerKeyStats(t *testing.T) {
+	t.Run("WithPerKeyStatsEnabled", func(t *testing.T) {
+		mockSink := gostatsMock.NewSink()
+		statsStore := gostats.NewStore(mockSink, false)
+		statsManager := stats.NewStatManager(statsStore, settings.Settings{EnablePerKeyStats: true})
+
+		// Create stats for different keys
+		key1Stats := statsManager.NewStats("domain1.key1")
+		key2Stats := statsManager.NewStats("domain1.key2")
+
+		// Increment counters
+		key1Stats.TotalHits.Inc()
+		key2Stats.TotalHits.Inc()
+
+		// Flush stats
+		statsManager.GetStatsStore().Flush()
+
+		// Each key should have its own counter
+		mockSink.AssertCounterExists(t, "ratelimit.service.rate_limit.domain1.key1.total_hits")
+		mockSink.AssertCounterExists(t, "ratelimit.service.rate_limit.domain1.key2.total_hits")
+	})
+
+	t.Run("WithPerKeyStatsDisabled", func(t *testing.T) {
+		mockSink := gostatsMock.NewSink()
+		statsStore := gostats.NewStore(mockSink, false)
+		statsManager := stats.NewStatManager(statsStore, settings.Settings{EnablePerKeyStats: false})
+
+		// Create stats for different keys
+		key1Stats := statsManager.NewStats("domain1.key1")
+		key2Stats := statsManager.NewStats("domain1.key2")
+
+		// Increment counters
+		key1Stats.TotalHits.Inc()
+		key2Stats.TotalHits.Inc()
+
+		// Flush stats
+		statsManager.GetStatsStore().Flush()
+
+		// All stats should be aggregated under "all"
+		mockSink.AssertCounterEquals(t, "ratelimit.service.rate_limit.all.total_hits", 2)
+		
+		// Original keys should not exist
+		mockSink.AssertCounterNotExists(t, "ratelimit.service.rate_limit.domain1.key1.total_hits")
+		mockSink.AssertCounterNotExists(t, "ratelimit.service.rate_limit.domain1.key2.total_hits")
+	})
+}

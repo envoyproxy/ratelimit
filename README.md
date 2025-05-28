@@ -811,6 +811,8 @@ To output statistics to stdout instead, set env var `USE_STATSD` to `false`
 
 Configure statistics output frequency with `STATS_FLUSH_INTERVAL`, where the type is `time.Duration`, e.g. `10s` is the default value.
 
+To disable per-key statistics tracking, set env var `ENABLE_PER_KEY_STATS` to `false`. When disabled, all stats are aggregated under an "all" key to prevent from unbounded key growth.
+
 To disable statistics entirely, set env var `DISABLE_STATS` to `true`
 
 Rate Limit Statistic Path:
