@@ -85,6 +85,7 @@ type Settings struct {
 	UseDogStatsd           bool              `envconfig:"USE_DOG_STATSD" default:"false"`
 	UseDogStatsdMogrifiers []string          `envconfig:"USE_DOG_STATSD_MOGRIFIERS" default:""`
 	UseStatsd              bool              `envconfig:"USE_STATSD" default:"true"`
+	EnablePerKeyStats      bool              `envconfig:"ENABLE_PER_KEY_STATS" default:"true"`
 	StatsdHost             string            `envconfig:"STATSD_HOST" default:"localhost"`
 	StatsdPort             int               `envconfig:"STATSD_PORT" default:"8125"`
 	ExtraTags              map[string]string `envconfig:"EXTRA_TAGS" default:""`

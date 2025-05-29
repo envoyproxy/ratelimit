@@ -108,6 +108,74 @@ func TestBasicConfig(t *testing.T) {
 	})
 }
 
+func TestPerKeyStats(t *testing.T) {
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6383},
+	}, func() {
+		t.Run("WithPerKeyStatsEnabled", testPerKeyStats(true))
+		t.Run("WithPerKeyStatsDisabled", testPerKeyStats(false))
+	})
+}
+
+func testPerKeyStats(enablePerKeyStats bool) func(*testing.T) {
+	return func(t *testing.T) {
+		s := makeSimpleRedisSettings(6383, 6380, false, 0)
+		s.EnablePerKeyStats = enablePerKeyStats
+		runner := startTestRunner(t, s)
+		defer runner.Stop()
+
+		assert := assert.New(t)
+		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", s.GrpcPort), grpc.WithInsecure())
+		assert.NoError(err)
+		defer conn.Close()
+		c := pb.NewRateLimitServiceClient(conn)
+
+		// Make requests with different keys
+		key1 := "key1"
+		key2 := "key2"
+		domain := "basic"
+
+		// Make requests for both keys
+		_, err = c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest(domain, [][][2]string{{{key1, "foo"}}}, 1))
+		assert.NoError(err)
+
+		_, err = c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest(domain, [][][2]string{{{key2, "bar"}}}, 1))
+		assert.NoError(err)
+
+		// Manually flush the cache for stats
+		runner.GetStatsStore().Flush()
+
+		if enablePerKeyStats {
+			// When per-key stats are enabled, each key should have its own counter
+			key1HitCounter := runner.GetStatsStore().NewCounter(
+				fmt.Sprintf("ratelimit.service.rate_limit.%s.%s.total_hits", domain, key1))
+			key2HitCounter := runner.GetStatsStore().NewCounter(
+				fmt.Sprintf("ratelimit.service.rate_limit.%s.%s.total_hits", domain, key2))
+			
+			assert.Equal(1, int(key1HitCounter.Value()))
+			assert.Equal(1, int(key2HitCounter.Value()))
+		} else {
+			// When per-key stats are disabled, all hits should be aggregated
+			allHitCounter := runner.GetStatsStore().NewCounter(
+				"ratelimit.service.rate_limit.all.total_hits")
+			assert.Equal(2, int(allHitCounter.Value()))
+
+			// Individual key counters should not exist
+			key1HitCounter := runner.GetStatsStore().NewCounter(
+				fmt.Sprintf("ratelimit.service.rate_limit.%s.%s.total_hits", domain, key1))
+			key2HitCounter := runner.GetStatsStore().NewCounter(
+				fmt.Sprintf("ratelimit.service.rate_limit.%s.%s.total_hits", domain, key2))
+			
+			assert.Equal(0, int(key1HitCounter.Value()))
+			assert.Equal(0, int(key2HitCounter.Value()))
+		}
+	}
+}
+
 func TestXdsProviderBasicConfig(t *testing.T) {
 	common.WithMultiRedis(t, []common.RedisConfig{
 		{Port: 6383},
