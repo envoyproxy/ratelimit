@@ -30,11 +30,11 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret := RateLimitStats{}
 	ret.Key = key
 
-	if !this.settings.EnablePerKeyStats {
-		key = "all"
-	} else {
+	if this.settings.EnablePerKeyStats {
 		logger.Debugf("Creating stats for key: '%s'", key)
 		key = utils.SanitizeStatName(key)
+	} else {
+		key = "all"
 	}
 
 	ret.TotalHits = this.rlStatsScope.NewCounter(key + ".total_hits")
