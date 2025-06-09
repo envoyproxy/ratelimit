@@ -4,7 +4,7 @@ go 1.23.9
 
 require (
 	github.com/DataDog/datadog-go/v5 v5.5.0
-	github.com/alicebob/miniredis/v2 v2.33.0
+	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/coocood/freecache v1.2.4
 	github.com/envoyproxy/go-control-plane v0.13.2-0.20241219025321-f011ad88ec17
@@ -40,7 +40,6 @@ require (
 require (
 	cel.dev/expr v0.15.0 // indirect
 	github.com/Microsoft/go-winio v0.5.0 // indirect
-	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
