@@ -47,5 +47,3 @@ jobs:
         uses: github/codeql-action/analyze@f09c1c0a94de965c15400f5634aa42fac8fb8f88 # v3.27.5
         with:
           category: "/language:${{matrix.language}}"
-          # Optional line to avoid PR diff bugs:
-          # use-diff: false
