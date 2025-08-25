@@ -2,6 +2,7 @@ package trace
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
@@ -22,8 +23,8 @@ var (
 	testSpanExporterMu sync.Mutex
 )
 
-func InitProductionTraceProvider(protocol string, serviceName string, serviceNamespace string, serviceInstanceId string, samplingRate float64) *sdktrace.TracerProvider {
-	client := createClient(protocol)
+func InitProductionTraceProvider(protocol string, serviceName string, serviceNamespace string, serviceInstanceId string, samplingRate float64, grpcBalancer string) *sdktrace.TracerProvider {
+	client := createClient(protocol, grpcBalancer)
 	exporter, err := otlptrace.New(context.Background(), client)
 	if err != nil {
 		logger.Fatalf("creating OTLP trace exporter: %v", err)
@@ -63,18 +64,27 @@ func InitProductionTraceProvider(protocol string, serviceName string, serviceNam
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	logger.Infof("TracerProvider initialized with following parameters: protocol: %s, serviceName: %s, serviceNamespace: %s, serviceInstanceId: %s, samplingRate: %f",
-		protocol, serviceName, serviceNamespace, useServiceInstanceId, samplingRate)
+	logger.Infof("TracerProvider initialized with following parameters: protocol: %s, serviceName: %s, serviceNamespace: %s, serviceInstanceId: %s, samplingRate: %f, grpcBalancer: %s",
+		protocol, serviceName, serviceNamespace, useServiceInstanceId, samplingRate, grpcBalancer)
 	return tp
 }
 
-func createClient(protocol string) (client otlptrace.Client) {
+func createClient(protocol string, grpcBalancer string) (client otlptrace.Client) {
 	// endpoint is implicitly set by env variables, refer to https://opentelemetry.io/docs/reference/specification/protocol/exporter/
 	switch protocol {
 	case "http", "":
 		client = otlptracehttp.NewClient()
 	case "grpc":
-		client = otlptracegrpc.NewClient()
+		var opts []otlptracegrpc.Option
+		if grpcBalancer != "" {
+			// Configure gRPC client-side load balancing
+			// The service config format follows the gRPC service config specification:
+			// https://github.com/grpc/grpc/blob/master/doc/service_config.md
+			serviceConfig := fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, grpcBalancer)
+			opts = append(opts, otlptracegrpc.WithServiceConfig(serviceConfig))
+			logger.Infof("Using gRPC load balancer: %s", grpcBalancer)
+		}
+		client = otlptracegrpc.NewClient(opts...)
 	default:
 		logger.Fatalf("Invalid otlptrace client protocol: %s", protocol)
 		panic("Invalid otlptrace client protocol")
