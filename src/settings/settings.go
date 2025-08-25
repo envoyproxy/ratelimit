@@ -189,6 +189,9 @@ type Settings struct {
 	TracingServiceInstanceId string `envconfig:"TRACING_SERVICE_INSTANCE_ID" default:""`
 	// can only be http or gRPC
 	TracingExporterProtocol string `envconfig:"TRACING_EXPORTER_PROTOCOL" default:"http"`
+	// TracingExporterGRPCBalancer specifies the gRPC load balancer to use (e.g., "pick_first", "round_robin")
+	// Only applies when TracingExporterProtocol is "grpc"
+	TracingExporterGRPCBalancer string `envconfig:"TRACING_EXPORTER_GRPC_BALANCER" default:""`
 	// detailed setting of exporter should refer to https://opentelemetry.io/docs/reference/specification/protocol/exporter/, e.g. OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_CERTIFICATE, OTEL_EXPORTER_OTLP_TIMEOUT
 	// TracingSamplingRate defaults to 1 which amounts to using the `AlwaysSample` sampler
 	TracingSamplingRate float64 `envconfig:"TRACING_SAMPLING_RATE" default:"1"`
