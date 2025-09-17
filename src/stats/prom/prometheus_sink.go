@@ -68,9 +68,10 @@ type prometheusSink struct {
 		path           string
 		mapperYamlPath string
 	}
-	mapper *mapper.MetricMapper
-	events chan event.Events
-	exp    *exporter.Exporter
+	mapper   *mapper.MetricMapper
+	events   chan event.Events
+	exp      *exporter.Exporter
+	registry *prometheus.Registry
 }
 
 type prometheusSinkOption func(sink *prometheusSink)
@@ -93,13 +94,26 @@ func WithMapperYamlPath(mapperYamlPath string) prometheusSinkOption {
 	}
 }
 
+func WithoutHTTPServer() prometheusSinkOption {
+	return func(sink *prometheusSink) {
+		sink.config.addr = "disabled"
+	}
+}
+
+func WithRegistry(registry *prometheus.Registry) prometheusSinkOption {
+	return func(sink *prometheusSink) {
+		sink.registry = registry
+		sink.mapper.Registerer = registry
+	}
+}
+
 // NewPrometheusSink returns a Sink that flushes stats to os.StdErr.
 func NewPrometheusSink(opts ...prometheusSinkOption) gostats.Sink {
-	promRegistry := prometheus.DefaultRegisterer
 	sink := &prometheusSink{
-		events: make(chan event.Events),
+		events:   make(chan event.Events),
+		registry: prometheus.DefaultRegisterer.(*prometheus.Registry),
 		mapper: &mapper.MetricMapper{
-			Registerer: promRegistry,
+			Registerer: prometheus.DefaultRegisterer,
 		},
 	}
 	for _, opt := range opts {
@@ -111,18 +125,22 @@ func NewPrometheusSink(opts ...prometheusSinkOption) gostats.Sink {
 	if sink.config.path == "" {
 		sink.config.path = "/metrics"
 	}
-	http.Handle(sink.config.path, promhttp.Handler())
-	go func() {
-		logrus.Infof("Starting prometheus sink on %s%s", sink.config.addr, sink.config.path)
-		_ = http.ListenAndServe(sink.config.addr, nil)
-	}()
+
+	// Only start HTTP server if not disabled (not in test mode)
+	if sink.config.addr != "disabled" {
+		http.Handle(sink.config.path, promhttp.Handler())
+		go func() {
+			logrus.Infof("Starting prometheus sink on %s%s", sink.config.addr, sink.config.path)
+			_ = http.ListenAndServe(sink.config.addr, nil)
+		}()
+	}
 	if sink.config.mapperYamlPath != "" {
 		_ = sink.mapper.InitFromFile(sink.config.mapperYamlPath)
 	} else {
 		_ = sink.mapper.InitFromYAMLString(defaultMapper)
 	}
 
-	sink.exp = exporter.NewExporter(promRegistry,
+	sink.exp = exporter.NewExporter(sink.registry,
 		sink.mapper, log.NewNopLogger(),
 		eventsActions, eventsUnmapped,
 		errorEventStats, eventStats,
@@ -160,4 +178,9 @@ func (s *prometheusSink) FlushTimer(name string, value float64) {
 		OValue:      value,
 		OLabels:     make(map[string]string),
 	}}
+}
+
+// GetRegistry returns the registry for testing
+func (s *prometheusSink) GetRegistry() prometheus.Gatherer {
+	return s.registry
 }

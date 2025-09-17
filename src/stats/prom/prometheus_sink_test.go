@@ -10,12 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var s = NewPrometheusSink()
-
 func TestFlushCounter(t *testing.T) {
+	s := NewPrometheusSink(WithoutHTTPServer(), WithRegistry(prometheus.NewRegistry()))
 	s.FlushCounter("ratelimit_server.ShouldRateLimit.total_requests", 1)
 	assert.Eventually(t, func() bool {
-		metricFamilies, err := prometheus.DefaultGatherer.Gather()
+		metricFamilies, err := s.(*prometheusSink).GetRegistry().Gather()
 		require.NoError(t, err)
 
 		metrics := make(map[string]*dto.MetricFamily)
@@ -43,12 +42,13 @@ func toMap(labels []*dto.LabelPair) map[string]string {
 }
 
 func TestFlushCounterWithDifferentLabels(t *testing.T) {
+	s := NewPrometheusSink(WithoutHTTPServer(), WithRegistry(prometheus.NewRegistry()))
 	s.FlushCounter("ratelimit.service.rate_limit.domain1.key1_val1.over_limit", 1)
 	s.FlushCounter("ratelimit.service.rate_limit.domain1.key1_val1.key2_val2.over_limit", 2)
 	s.FlushCounter("ratelimit.service.rate_limit.domain1.key3_val3.key4_val4.over_limit", 1)
 	s.FlushCounter("ratelimit.service.rate_limit.domain1.key3_val3.key4_val4.key5_val5.over_limit", 2)
 	assert.Eventually(t, func() bool {
-		metricFamilies, err := prometheus.DefaultGatherer.Gather()
+		metricFamilies, err := s.(*prometheusSink).GetRegistry().Gather()
 		require.NoError(t, err)
 
 		metrics := make(map[string]*dto.MetricFamily)
@@ -81,8 +81,9 @@ func TestFlushCounterWithDifferentLabels(t *testing.T) {
 }
 
 func TestFlushGauge(t *testing.T) {
+	s := NewPrometheusSink(WithoutHTTPServer(), WithRegistry(prometheus.NewRegistry()))
 	s.FlushGauge("ratelimit.service.rate_limit.domain1.key1.test_gauge", 1)
-	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	metricFamilies, err := s.(*prometheusSink).GetRegistry().Gather()
 	require.NoError(t, err)
 
 	metrics := make(map[string]*dto.MetricFamily)
@@ -95,9 +96,10 @@ func TestFlushGauge(t *testing.T) {
 }
 
 func TestFlushTimer(t *testing.T) {
+	s := NewPrometheusSink(WithoutHTTPServer(), WithRegistry(prometheus.NewRegistry()))
 	s.FlushTimer("ratelimit.service.rate_limit.mongo_cps.database_users.total_hits", 1)
 	assert.Eventually(t, func() bool {
-		metricFamilies, err := prometheus.DefaultGatherer.Gather()
+		metricFamilies, err := s.(*prometheusSink).GetRegistry().Gather()
 		require.NoError(t, err)
 
 		metrics := make(map[string]*dto.MetricFamily)
