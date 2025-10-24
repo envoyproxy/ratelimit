@@ -54,6 +54,7 @@
 - [Local Cache](#local-cache)
 - [Redis](#redis)
   - [Redis type](#redis-type)
+  - [Connection Timeout](#connection-timeout)
   - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
@@ -1112,6 +1113,13 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 1. "single": Depending on the socket type defined, either a single hostname:port pair or a unix domain socket reference.
 1. "sentinel": A comma separated list with the first string as the master name of the sentinel cluster followed by hostname:port pairs. The list size should be >= 2. The first item is the name of the master and the rest are the sentinels.
 1. "cluster": A comma separated list of hostname:port pairs with all the nodes in the cluster.
+
+## Connection Timeout
+
+Connection timeout controls the maximum duration for Redis connection establishment, read operations, and write operations.
+
+1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
+1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
 
 ## Pipelining
 

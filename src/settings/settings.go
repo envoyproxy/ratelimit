@@ -159,6 +159,10 @@ type Settings struct {
 	RedisPerSecondPipelineLimit int `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
 	RedisHealthCheckActiveConnection bool `envconfig:"REDIS_HEALTH_CHECK_ACTIVE_CONNECTION" default:"false"`
+	// RedisTimeout sets the timeout for Redis connection and I/O operations.
+	RedisTimeout time.Duration `envconfig:"REDIS_TIMEOUT" default:"10s"`
+	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.
+	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
 	// Memcache settings
 	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`
 	// MemcacheMaxIdleConns sets the maximum number of idle TCP connections per memcached node.
