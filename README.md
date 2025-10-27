@@ -85,7 +85,9 @@ For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/
 
 ## Distroless Base Image
 
-The Docker image uses Google's [distroless](https://github.com/GoogleContainerTools/distroless) base image (`gcr.io/distroless/static-debian12`) for enhanced security and minimal attack surface. Distroless images contain only the application and its runtime dependencies, omitting unnecessary OS components like package managers, shells, and other utilities.
+The Docker image uses Google's [distroless](https://github.com/GoogleContainerTools/distroless) base image (`gcr.io/distroless/static-debian12:nonroot`) for enhanced security and minimal attack surface. Distroless images contain only the application and its runtime dependencies, omitting unnecessary OS components like package managers, shells, and other utilities.
+
+The image is pinned to a specific SHA digest for deterministic builds and uses the `nonroot` variant to run as a non-privileged user, following security best practices.
 
 ### Benefits of Distroless:
 
@@ -93,6 +95,8 @@ The Docker image uses Google's [distroless](https://github.com/GoogleContainerTo
 - **Smaller Image Size**: Significantly smaller than traditional base images
 - **Reduced Vulnerabilities**: Fewer components means fewer potential security issues
 - **Better Compliance**: Meets security requirements for minimal base images
+- **Non-root Execution**: Runs as a non-privileged user (UID 65532) for enhanced security
+- **Deterministic Builds**: Pinned to specific SHA digest ensures reproducible builds
 
 ### Debugging with Distroless:
 
