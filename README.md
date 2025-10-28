@@ -3,6 +3,9 @@
 
 - [Overview](#overview)
 - [Docker Image](#docker-image)
+  - [Distroless Base Image](#distroless-base-image)
+    - [Benefits of Distroless:](#benefits-of-distroless)
+    - [Debugging with Distroless:](#debugging-with-distroless)
 - [Supported Envoy APIs](#supported-envoy-apis)
   - [API Deprecation History](#api-deprecation-history)
 - [Building and Testing](#building-and-testing)
@@ -81,6 +84,32 @@ decision is then returned to the caller.
 
 For every main commit, an image is pushed to [Dockerhub](https://hub.docker.com/r/envoyproxy/ratelimit/tags?page=1&ordering=last_updated). There is currently no versioning (post v1.4.0) and tags are based on commit sha.
 
+## Distroless Base Image
+
+The Docker image uses Google's [distroless](https://github.com/GoogleContainerTools/distroless) base image (`gcr.io/distroless/static-debian12:nonroot`) for enhanced security and minimal attack surface. Distroless images contain only the application and its runtime dependencies, omitting unnecessary OS components like package managers, shells, and other utilities.
+
+The image is pinned to a specific SHA digest for deterministic builds and uses the `nonroot` variant to run as a non-privileged user, following security best practices.
+
+### Benefits of Distroless:
+
+- **Enhanced Security**: Minimal attack surface with no unnecessary components
+- **Smaller Image Size**: Significantly smaller than traditional base images
+- **Reduced Vulnerabilities**: Fewer components means fewer potential security issues
+- **Better Compliance**: Meets security requirements for minimal base images
+- **Non-root Execution**: Runs as a non-privileged user (UID 65532) for enhanced security
+- **Deterministic Builds**: Pinned to specific SHA digest ensures reproducible builds
+
+### Debugging with Distroless:
+
+For debugging purposes, you can use the debug variant of the distroless image:
+
+```dockerfile
+FROM gcr.io/distroless/static-debian12:debug
+COPY --from=build /go/bin/ratelimit /bin/ratelimit
+```
+
+This provides shell access and debugging tools while maintaining the security benefits of distroless.
+
 # Supported Envoy APIs
 
 [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/master/envoy/service/ratelimit/v3/rls.proto) is currently supported.
@@ -133,14 +162,13 @@ Support for [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/mas
 
 ## Docker-compose setup
 
-The docker-compose setup has three containers: redis, ratelimit-build, and ratelimit. In order to run the docker-compose setup from the root of the repo, run
+The docker-compose setup uses a distroless-based container for the ratelimit service. In order to run the docker-compose setup from the root of the repo, run
 
 ```bash
 docker-compose up
 ```
 
-The ratelimit-build container will build the ratelimit binary. Then via a shared volume the binary will be shared with the ratelimit container. This dual container setup is used in order to use a
-a minimal container to run the application, rather than the heftier container used to build it.
+The ratelimit service is built using the main Dockerfile which uses Google's distroless base image for enhanced security and minimal attack surface. The distroless image contains only the application and its runtime dependencies, omitting unnecessary OS components like package managers and shells.
 
 If you want to run with [two redis instances](#two-redis-instances), you will need to modify
 the docker-compose.yml file to run a second redis container, and change the environment variables
