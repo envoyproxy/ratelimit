@@ -31,6 +31,7 @@
       - [Example 7](#example-7)
       - [Example 8](#example-8)
       - [Example 9](#example-9)
+      - [Example 10](#example-10)
   - [Loading Configuration](#loading-configuration)
     - [File Based Configuration Loading](#file-based-configuration-loading)
     - [xDS Management Server Based Configuration Loading](#xds-management-server-based-configuration-loading)
@@ -282,6 +283,7 @@ descriptors:
       requests_per_unit: <see below: required>
     shadow_mode: (optional)
     detailed_metric: (optional)
+    value_to_metric: (optional)
     descriptors: (optional block)
       - ... (nested repetition of above)
 ```
@@ -335,6 +337,12 @@ There is also a Global Shadow Mode
 Setting the `detailed_metric: true` for a descriptor will extend the metrics that are produced. Normally a descriptor that matches a value that is not explicitly listed in the configuration will from a metrics point-of-view be rolled-up into the base entry. This can be problematic if you want to have those details available for analysis.
 
 NB! This should only be enabled in situations where the potentially large cardinality of metrics that this can lead to is acceptable.
+
+### Including descriptor values in metrics
+
+Setting `value_to_metric: true` (default: `false`) for a descriptor will include the descriptor's runtime value in the metric key, even when the descriptor value is not explicitly defined in the configuration. This allows you to track metrics per descriptor value when the value comes from the runtime request, providing visibility into different rate limit scenarios without needing to pre-define every possible value.
+
+When combined with wildcard matching, the full runtime value is included in the metric key, not just the wildcard prefix. This feature works independently of `detailed_metric` - when `detailed_metric` is set, it takes precedence and `value_to_metric` is ignored.
 
 ### Examples
 
@@ -628,6 +636,58 @@ descriptors:
       unit: minute
       requests_per_unit: 20
 ```
+
+#### Example 10
+
+Using `value_to_metric: true` to include descriptor values in metrics when values are not explicitly defined in the configuration:
+
+```yaml
+domain: example10
+descriptors:
+  - key: route
+    value_to_metric: true
+    descriptors:
+      - key: http_method
+        value_to_metric: true
+        descriptors:
+          - key: subject_id
+            rate_limit:
+              unit: minute
+              requests_per_unit: 60
+```
+
+With this configuration, requests with different runtime values for `route` and `http_method` will generate separate metrics:
+
+- Request: `route=api`, `http_method=GET`, `subject_id=123`
+- Metric key: `example10.route_api.http_method_GET.subject_id`
+
+- Request: `route=web`, `http_method=POST`, `subject_id=456`
+- Metric key: `example10.route_web.http_method_POST.subject_id`
+
+Without `value_to_metric: true`, both requests would use the same metric key: `example10.route.http_method.subject_id`.
+
+When combined with wildcard matching, the full runtime value is included:
+
+```yaml
+domain: example10_wildcard
+descriptors:
+  - key: user
+    value_to_metric: true
+    descriptors:
+      - key: action
+        value: read*
+        value_to_metric: true
+        descriptors:
+          - key: resource
+            rate_limit:
+              unit: minute
+              requests_per_unit: 100
+```
+
+- Request: `user=alice`, `action=readfile`, `resource=documents`
+- Metric key: `example10_wildcard.user_alice.action_readfile.resource`
+
+Note: When `detailed_metric: true` is set on a descriptor, it takes precedence and `value_to_metric` is ignored for that descriptor.
 
 ## Loading Configuration
 
