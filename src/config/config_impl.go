@@ -32,6 +32,7 @@ type YamlDescriptor struct {
 	Descriptors    []YamlDescriptor
 	ShadowMode     bool `yaml:"shadow_mode"`
 	DetailedMetric bool `yaml:"detailed_metric"`
+    ValueToMetric  bool `yaml:"value_to_metric"`
 }
 
 type YamlRoot struct {
@@ -43,6 +44,7 @@ type rateLimitDescriptor struct {
 	descriptors  map[string]*rateLimitDescriptor
 	limit        *RateLimit
 	wildcardKeys []string
+    valueToMetric bool
 }
 
 type rateLimitDomain struct {
@@ -68,6 +70,7 @@ var validKeys = map[string]bool{
 	"name":              true,
 	"replaces":          true,
 	"detailed_metric":   true,
+    "value_to_metric":   true,
 }
 
 // Create a new rate limit config entry.
@@ -183,10 +186,10 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			}
 		}
 
-		logger.Debugf(
-			"loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
-		newDescriptor := &rateLimitDescriptor{map[string]*rateLimitDescriptor{}, rateLimit, nil}
-		newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, statsManager)
+        logger.Debugf(
+            "loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
+        newDescriptor := &rateLimitDescriptor{map[string]*rateLimitDescriptor{}, rateLimit, nil, descriptorConfig.ValueToMetric}
+        newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, statsManager)
 		this.descriptors[finalKey] = newDescriptor
 
 		// Preload keys ending with "*" symbol.
@@ -262,8 +265,8 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	}
 
 	logger.Debugf("loading domain: %s", root.Domain)
-	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil, nil}}
-	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsManager)
+    newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil, nil, false}}
+    newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsManager)
 	this.domains[root.Domain] = newDomain
 }
 
@@ -313,6 +316,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 	var detailedMetricFullKey strings.Builder
 	detailedMetricFullKey.WriteString(domain)
 
+	// Build value_to_metric-enhanced metric key as we traverse
+	var valueToMetricFullKey strings.Builder
+	valueToMetricFullKey.WriteString(domain)
+
 	for i, entry := range descriptor.Entries {
 		// First see if key_value is in the map. If that isn't in the map we look for just key
 		// to check for a default value.
@@ -323,20 +330,55 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 		logger.Debugf("looking up key: %s", finalKey)
 		nextDescriptor := descriptorsMap[finalKey]
+		matchedViaWildcard := false
 
 		if nextDescriptor == nil && len(prevDescriptor.wildcardKeys) > 0 {
 			for _, wildcardKey := range prevDescriptor.wildcardKeys {
 				if strings.HasPrefix(finalKey, strings.TrimSuffix(wildcardKey, "*")) {
 					nextDescriptor = descriptorsMap[wildcardKey]
+					matchedViaWildcard = true
 					break
 				}
 			}
 		}
 
+		matchedUsingValue := nextDescriptor != nil
 		if nextDescriptor == nil {
 			finalKey = entry.Key
 			logger.Debugf("looking up key: %s", finalKey)
 			nextDescriptor = descriptorsMap[finalKey]
+			matchedUsingValue = false
+		}
+
+		// Build value_to_metric metrics path for this level
+		valueToMetricFullKey.WriteString(".")
+		if nextDescriptor != nil {
+			if matchedViaWildcard {
+				if nextDescriptor.valueToMetric {
+					valueToMetricFullKey.WriteString(entry.Key)
+					valueToMetricFullKey.WriteString("_")
+					valueToMetricFullKey.WriteString(entry.Value)
+				} else {
+					valueToMetricFullKey.WriteString(entry.Key)
+				}
+			} else if matchedUsingValue {
+				// Matched explicit key+value in config
+				valueToMetricFullKey.WriteString(entry.Key)
+				valueToMetricFullKey.WriteString("_")
+				valueToMetricFullKey.WriteString(entry.Value)
+			} else {
+				// Matched default key (no value) in config
+				if nextDescriptor.valueToMetric {
+					valueToMetricFullKey.WriteString(entry.Key)
+					valueToMetricFullKey.WriteString("_")
+					valueToMetricFullKey.WriteString(entry.Value)
+				} else {
+					valueToMetricFullKey.WriteString(entry.Key)
+				}
+			}
+		} else {
+			// No next descriptor found; still append something deterministic
+			valueToMetricFullKey.WriteString(entry.Key)
 		}
 
 		if nextDescriptor != nil && nextDescriptor.limit != nil {
@@ -365,6 +407,17 @@ func (this *rateLimitConfigImpl) GetLimit(
 	// Replace metric with detailed metric, if leaf descriptor is detailed.
 	if rateLimit != nil && rateLimit.DetailedMetric {
 		rateLimit.Stats = this.statsManager.NewStats(detailedMetricFullKey.String())
+	}
+
+	// If not using detailed metric, but any value_to_metric path produced a different key,
+	// override stats to use the value_to_metric-enhanced key
+	if rateLimit != nil && !rateLimit.DetailedMetric {
+		enhancedKey := valueToMetricFullKey.String()
+		if enhancedKey != rateLimit.FullKey {
+			// Recreate to ensure a clean stats struct, then set to enhanced stats
+			rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
+			rateLimit.Stats = this.statsManager.NewStats(enhancedKey)
+		}
 	}
 
 	return rateLimit

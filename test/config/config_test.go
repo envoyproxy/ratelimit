@@ -952,3 +952,404 @@ func TestDetailedMetric(t *testing.T) {
 		})
 	}
 }
+
+func TestValueToMetric_UsesRuntimeValuesInStats(t *testing.T) {
+    asrt := assert.New(t)
+    store := stats.NewStore(stats.NewNullSink(), false)
+
+    cfg := []config.RateLimitConfigToLoad{
+        {
+            Name: "inline",
+            ConfigYaml: &config.YamlRoot{
+                Domain: "domain",
+                Descriptors: []config.YamlDescriptor{
+                    {
+                        Key:           "route",
+                        ValueToMetric: true,
+                        Descriptors: []config.YamlDescriptor{
+                            {
+                                Key:           "http_method",
+                                ValueToMetric: true,
+                                Descriptors: []config.YamlDescriptor{
+                                    {
+                                        Key: "subject_id",
+                                        RateLimit: &config.YamlRateLimit{
+                                            RequestsPerUnit: 60,
+                                            Unit:            "minute",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+
+    rl := rlConfig.GetLimit(
+        context.TODO(), "domain",
+        &pb_struct.RateLimitDescriptor{
+            Entries: []*pb_struct.RateLimitDescriptor_Entry{
+                {Key: "route", Value: "draw"},
+                {Key: "http_method", Value: "GET"},
+                {Key: "subject_id", Value: "123"},
+            },
+        },
+    )
+    asrt.NotNil(rl)
+
+    // Should include actual runtime values for keys that set value_to_metric: true
+    expectedKey := "domain.route_draw.http_method_GET.subject_id"
+    asrt.Equal(expectedKey, rl.Stats.Key)
+
+    // Increment a couple of counters to ensure the key is actually used in stats
+    rl.Stats.TotalHits.Inc()
+    rl.Stats.WithinLimit.Inc()
+
+    asrt.EqualValues(1, store.NewCounter(expectedKey+".total_hits").Value())
+    asrt.EqualValues(1, store.NewCounter(expectedKey+".within_limit").Value())
+}
+
+func TestValueToMetric_DefaultKeyIncludesValueAtThatLevel(t *testing.T) {
+    asrt := assert.New(t)
+    store := stats.NewStore(stats.NewNullSink(), false)
+
+    cfg := []config.RateLimitConfigToLoad{
+        {
+            Name: "inline",
+            ConfigYaml: &config.YamlRoot{
+                Domain: "d",
+                Descriptors: []config.YamlDescriptor{
+                    {
+                        Key:           "k1",
+                        ValueToMetric: true,
+                        Descriptors: []config.YamlDescriptor{
+                            {
+                                Key: "k2",
+                                RateLimit: &config.YamlRateLimit{
+                                    RequestsPerUnit: 1,
+                                    Unit:            "second",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+    rl := rlConfig.GetLimit(
+        context.TODO(), "d",
+        &pb_struct.RateLimitDescriptor{Entries: []*pb_struct.RateLimitDescriptor_Entry{
+            {Key: "k1", Value: "A"},
+            {Key: "k2", Value: "foo"},
+        }},
+    )
+    asrt.NotNil(rl)
+    asrt.Equal("d.k1_A.k2", rl.Stats.Key)
+}
+
+func TestValueToMetric_MidLevelOnly(t *testing.T) {
+    asrt := assert.New(t)
+    store := stats.NewStore(stats.NewNullSink(), false)
+
+    cfg := []config.RateLimitConfigToLoad{
+        {
+            Name: "inline",
+            ConfigYaml: &config.YamlRoot{
+                Domain: "d",
+                Descriptors: []config.YamlDescriptor{
+                    {
+                        Key: "k1",
+                        Descriptors: []config.YamlDescriptor{
+                            {
+                                Key:           "k2",
+                                ValueToMetric: true,
+                                Descriptors: []config.YamlDescriptor{
+                                    {
+                                        Key: "k3",
+                                        RateLimit: &config.YamlRateLimit{RequestsPerUnit: 1, Unit: "second"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+    rl := rlConfig.GetLimit(
+        context.TODO(), "d",
+        &pb_struct.RateLimitDescriptor{Entries: []*pb_struct.RateLimitDescriptor_Entry{
+            {Key: "k1", Value: "X"},
+            {Key: "k2", Value: "Y"},
+            {Key: "k3", Value: "Z"},
+        }},
+    )
+    asrt.NotNil(rl)
+    // k1 has no flag -> just key; k2 has flag -> include value
+    asrt.Equal("d.k1.k2_Y.k3", rl.Stats.Key)
+}
+
+func TestValueToMetric_NoFlag_Unchanged(t *testing.T) {
+    asrt := assert.New(t)
+    store := stats.NewStore(stats.NewNullSink(), false)
+
+    cfg := []config.RateLimitConfigToLoad{
+        {
+            Name: "inline",
+            ConfigYaml: &config.YamlRoot{
+                Domain: "d",
+                Descriptors: []config.YamlDescriptor{
+                    {
+                        Key: "k1",
+                        Descriptors: []config.YamlDescriptor{
+                            {
+                                Key: "k2",
+                                RateLimit: &config.YamlRateLimit{RequestsPerUnit: 1, Unit: "second"},
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+    rl := rlConfig.GetLimit(
+        context.TODO(), "d",
+        &pb_struct.RateLimitDescriptor{Entries: []*pb_struct.RateLimitDescriptor_Entry{
+            {Key: "k1", Value: "X"},
+            {Key: "k2", Value: "Y"},
+        }},
+    )
+    asrt.NotNil(rl)
+    // No flags anywhere -> same as old behavior when default matched at k1
+    asrt.Equal("d.k1.k2", rl.Stats.Key)
+}
+
+func TestValueToMetric_DoesNotOverrideDetailedMetric(t *testing.T) {
+    asrt := assert.New(t)
+    store := stats.NewStore(stats.NewNullSink(), false)
+
+    cfg := []config.RateLimitConfigToLoad{
+        {
+            Name: "inline",
+            ConfigYaml: &config.YamlRoot{
+                Domain: "domain",
+                Descriptors: []config.YamlDescriptor{
+                    {
+                        Key:           "route",
+                        ValueToMetric: true,
+                        Descriptors: []config.YamlDescriptor{
+                            {
+                                Key:           "http_method",
+                                ValueToMetric: true,
+                                Descriptors: []config.YamlDescriptor{
+                                    {
+                                        Key:            "subject_id",
+                                        DetailedMetric: true,
+                                        RateLimit: &config.YamlRateLimit{
+                                            RequestsPerUnit: 60,
+                                            Unit:            "minute",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+
+    rl := rlConfig.GetLimit(
+        context.TODO(), "domain",
+        &pb_struct.RateLimitDescriptor{
+            Entries: []*pb_struct.RateLimitDescriptor_Entry{
+                {Key: "route", Value: "draw"},
+                {Key: "http_method", Value: "GET"},
+                {Key: "subject_id", Value: "123"},
+            },
+        },
+    )
+    asrt.NotNil(rl)
+
+    // With detailed_metric at the leaf, the detailed metric key should be used, regardless of value_to_metric flags
+    expectedKey := "domain.route_draw.http_method_GET.subject_id_123"
+    asrt.Equal(expectedKey, rl.Stats.Key)
+
+    rl.Stats.TotalHits.Inc()
+    asrt.EqualValues(1, store.NewCounter(expectedKey+".total_hits").Value())
+}
+
+func TestValueToMetric_WithConfiguredValues(t *testing.T) {
+    asrt := assert.New(t)
+    store := stats.NewStore(stats.NewNullSink(), false)
+
+    cfg := []config.RateLimitConfigToLoad{
+        {
+            Name: "inline",
+            ConfigYaml: &config.YamlRoot{
+                Domain: "test-domain",
+                Descriptors: []config.YamlDescriptor{
+                    {
+                        Key:           "route",
+                        ValueToMetric: true,
+                        Descriptors: []config.YamlDescriptor{
+                            {
+                                Key:   "http_method",
+                                Value: "GET", // Configured value in descriptor
+                                ValueToMetric: true,
+                                Descriptors: []config.YamlDescriptor{
+                                    {
+                                        Key: "subject_id",
+                                        RateLimit: &config.YamlRateLimit{
+                                            RequestsPerUnit: 60,
+                                            Unit:            "minute",
+                                        },
+                                    },
+                                },
+                            },
+                            {
+                                Key:   "http_method",
+                                Value: "POST", // Another configured value
+                                ValueToMetric: true,
+                                Descriptors: []config.YamlDescriptor{
+                                    {
+                                        Key: "subject_id",
+                                        RateLimit: &config.YamlRateLimit{
+                                            RequestsPerUnit: 30,
+                                            Unit:            "minute",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+
+    // Test GET path - should include runtime value for route, but use configured value for http_method
+    rl := rlConfig.GetLimit(
+        context.TODO(), "test-domain",
+        &pb_struct.RateLimitDescriptor{
+            Entries: []*pb_struct.RateLimitDescriptor_Entry{
+                {Key: "route", Value: "api"},
+                {Key: "http_method", Value: "GET"},
+                {Key: "subject_id", Value: "user123"},
+            },
+        },
+    )
+    asrt.NotNil(rl)
+    asrt.EqualValues(60, rl.Limit.RequestsPerUnit)
+    // route has value_to_metric=true, so includes runtime value; http_method has configured value, so uses that
+    expectedKey := "test-domain.route_api.http_method_GET.subject_id"
+    asrt.Equal(expectedKey, rl.Stats.Key)
+
+    // Test POST path - should include runtime value for route, but use configured value for http_method
+    rl = rlConfig.GetLimit(
+        context.TODO(), "test-domain",
+        &pb_struct.RateLimitDescriptor{
+            Entries: []*pb_struct.RateLimitDescriptor_Entry{
+                {Key: "route", Value: "api"},
+                {Key: "http_method", Value: "POST"},
+                {Key: "subject_id", Value: "user456"},
+            },
+        },
+    )
+    asrt.NotNil(rl)
+    asrt.EqualValues(30, rl.Limit.RequestsPerUnit)
+    expectedKey = "test-domain.route_api.http_method_POST.subject_id"
+    asrt.Equal(expectedKey, rl.Stats.Key)
+
+	// Test that stats are actually created with the correct keys
+	rl.Stats.TotalHits.Inc()
+	asrt.EqualValues(1, store.NewCounter(expectedKey+".total_hits").Value())
+}
+
+func TestValueToMetric_WithWildcard(t *testing.T) {
+	asrt := assert.New(t)
+	store := stats.NewStore(stats.NewNullSink(), false)
+
+	cfg := []config.RateLimitConfigToLoad{
+		{
+			Name: "inline",
+			ConfigYaml: &config.YamlRoot{
+				Domain: "domain",
+				Descriptors: []config.YamlDescriptor{
+					{
+						Key:           "user",
+						ValueToMetric: true,
+						Descriptors: []config.YamlDescriptor{
+							{
+								Key:   "action",
+								Value: "read*", // Wildcard pattern
+								ValueToMetric: true,
+								Descriptors: []config.YamlDescriptor{
+									{
+										Key: "resource",
+										RateLimit: &config.YamlRateLimit{
+											RequestsPerUnit: 100,
+											Unit:            "minute",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+
+	// Test wildcard matching with value_to_metric - should include full runtime value
+	rl := rlConfig.GetLimit(
+		context.TODO(), "domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{
+				{Key: "user", Value: "alice"},
+				{Key: "action", Value: "readfile"}, // Matches "read*" wildcard
+				{Key: "resource", Value: "documents"},
+			},
+		},
+	)
+	asrt.NotNil(rl)
+	asrt.EqualValues(100, rl.Limit.RequestsPerUnit)
+	// Both user and action should include their full runtime values due to value_to_metric
+	expectedKey := "domain.user_alice.action_readfile.resource"
+	asrt.Equal(expectedKey, rl.Stats.Key)
+
+	// Test another wildcard match
+	rl = rlConfig.GetLimit(
+		context.TODO(), "domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{
+				{Key: "user", Value: "bob"},
+				{Key: "action", Value: "readdata"}, // Also matches "read*" wildcard
+				{Key: "resource", Value: "database"},
+			},
+		},
+	)
+	asrt.NotNil(rl)
+	expectedKey = "domain.user_bob.action_readdata.resource"
+	asrt.Equal(expectedKey, rl.Stats.Key)
+
+	// Test that stats are actually created with the correct keys
+	rl.Stats.TotalHits.Inc()
+	asrt.EqualValues(1, store.NewCounter(expectedKey+".total_hits").Value())
+}
