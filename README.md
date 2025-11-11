@@ -21,6 +21,7 @@
     - [Replaces](#replaces)
     - [ShadowMode](#shadowmode)
     - [Including detailed metrics for unspecified values](#including-detailed-metrics-for-unspecified-values)
+    - [Including descriptor values in metrics](#including-descriptor-values-in-metrics)
     - [Examples](#examples)
       - [Example 1](#example-1)
       - [Example 2](#example-2)
