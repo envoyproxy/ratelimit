@@ -32,7 +32,7 @@ type YamlDescriptor struct {
 	Descriptors    []YamlDescriptor
 	ShadowMode     bool `yaml:"shadow_mode"`
 	DetailedMetric bool `yaml:"detailed_metric"`
-    ValueToMetric  bool `yaml:"value_to_metric"`
+	ValueToMetric  bool `yaml:"value_to_metric"`
 }
 
 type YamlRoot struct {
@@ -41,10 +41,10 @@ type YamlRoot struct {
 }
 
 type rateLimitDescriptor struct {
-	descriptors  map[string]*rateLimitDescriptor
-	limit        *RateLimit
-	wildcardKeys []string
-    valueToMetric bool
+	descriptors   map[string]*rateLimitDescriptor
+	limit         *RateLimit
+	wildcardKeys  []string
+	valueToMetric bool
 }
 
 type rateLimitDomain struct {
@@ -70,7 +70,7 @@ var validKeys = map[string]bool{
 	"name":              true,
 	"replaces":          true,
 	"detailed_metric":   true,
-    "value_to_metric":   true,
+	"value_to_metric":   true,
 }
 
 // Create a new rate limit config entry.
@@ -186,10 +186,10 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			}
 		}
 
-        logger.Debugf(
-            "loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
-        newDescriptor := &rateLimitDescriptor{map[string]*rateLimitDescriptor{}, rateLimit, nil, descriptorConfig.ValueToMetric}
-        newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, statsManager)
+		logger.Debugf(
+			"loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
+		newDescriptor := &rateLimitDescriptor{map[string]*rateLimitDescriptor{}, rateLimit, nil, descriptorConfig.ValueToMetric}
+		newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, statsManager)
 		this.descriptors[finalKey] = newDescriptor
 
 		// Preload keys ending with "*" symbol.
@@ -265,8 +265,8 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	}
 
 	logger.Debugf("loading domain: %s", root.Domain)
-    newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil, nil, false}}
-    newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsManager)
+	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil, nil, false}}
+	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsManager)
 	this.domains[root.Domain] = newDomain
 }
 
