@@ -21,32 +21,40 @@ import (
 )
 
 type TestStatSink struct {
-	sync.Mutex
+	mu     sync.Mutex
 	Record map[string]interface{}
 }
 
+func NewTestStatSink() *TestStatSink {
+	return &TestStatSink{
+		mu:     sync.Mutex{},
+		Record: make(map[string]interface{}),
+	}
+}
+
 func (s *TestStatSink) Clear() {
-	s.Lock()
-	s.Record = map[string]interface{}{}
-	s.Unlock()
+	s.mu.Lock()
+	s.Record = make(map[string]interface{})
+	s.mu.Unlock()
 }
 
 func (s *TestStatSink) FlushCounter(name string, value uint64) {
-	s.Lock()
+	s.mu.Lock()
 	s.Record[name] = value
-	s.Unlock()
+	s.mu.Unlock()
 }
 
 func (s *TestStatSink) FlushGauge(name string, value uint64) {
-	s.Lock()
+	s.mu.Lock()
+	fmt.Println("FlushGauge", name, value)
 	s.Record[name] = value
-	s.Unlock()
+	s.mu.Unlock()
 }
 
 func (s *TestStatSink) FlushTimer(name string, value float64) {
-	s.Lock()
+	s.mu.Lock()
 	s.Record[name] = value
-	s.Unlock()
+	s.mu.Unlock()
 }
 
 func NewRateLimitRequest(domain string, descriptors [][][2]string, hitsAddend uint32) *pb.RateLimitRequest {
