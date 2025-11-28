@@ -1253,8 +1253,9 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_TLS` & `REDIS_PERSECOND_TLS`: set to `"true"` to enable a TLS connection for the specific connection type.
 1. `REDIS_TLS_CLIENT_CERT`, `REDIS_TLS_CLIENT_KEY`, and `REDIS_TLS_CACERT` to provides files to specify a TLS connection configuration to Redis server that requires client certificate verification. (This is effective when `REDIS_TLS` or `REDIS_PERSECOND_TLS` is set to to `"true"`).
 1. `REDIS_TLS_SKIP_HOSTNAME_VERIFICATION` set to `"true"` will skip hostname verification in environments where the certificate has an invalid hostname, such as GCP Memorystore.
-1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable password-only authentication to the redis host.
-1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"username:password"` to enable username-password authentication to the redis host.
+1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable password-only authentication to the Redis master/replica nodes.
+1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"username:password"` to enable username-password authentication to the Redis master/replica nodes.
+1. `REDIS_SENTINEL_AUTH` & `REDIS_PERSECOND_SENTINEL_AUTH`: set to `"password"` or `"username:password"` to enable authentication to Redis Sentinel nodes. This is separate from `REDIS_AUTH`/`REDIS_PERSECOND_AUTH` which authenticate to the Redis master/replica nodes. Only used when `REDIS_TYPE` or `REDIS_PERSECOND_TYPE` is set to `"sentinel"`. If not set, no authentication will be attempted when connecting to Sentinel nodes.
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
 For controlling the behavior of cache key incrementation when any of them is already over the limit, you can use the following configuration:

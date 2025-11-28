@@ -72,7 +72,7 @@ func checkError(err error) {
 
 func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
-	timeout time.Duration, poolOnEmptyBehavior string, poolOnEmptyWaitDuration time.Duration,
+	timeout time.Duration, poolOnEmptyBehavior string, poolOnEmptyWaitDuration time.Duration, sentinelAuth string,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
@@ -156,14 +156,16 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 				logger.Warnf("enabling TLS to redis sentinel on %s", addr)
 				dialOpts = append(dialOpts, radix.DialUseTLS(tlsConfig))
 			}
-			if auth != "" {
-				user, pass, found := strings.Cut(auth, ":")
+			// Use sentinelAuth for authenticating to Sentinel nodes, not auth
+			// auth is used for Redis master/replica authentication
+			if sentinelAuth != "" {
+				user, pass, found := strings.Cut(sentinelAuth, ":")
 				if found {
 					logger.Warnf("enabling authentication to redis sentinel on %s with user %s", addr, user)
 					dialOpts = append(dialOpts, radix.DialAuthUser(user, pass))
 				} else {
 					logger.Warnf("enabling authentication to redis sentinel on %s without user", addr)
-					dialOpts = append(dialOpts, radix.DialAuthPass(auth))
+					dialOpts = append(dialOpts, radix.DialAuthPass(sentinelAuth))
 				}
 			}
 			return radix.Dial(network, addr, dialOpts...)
