@@ -148,7 +148,27 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		if len(urls) < 2 {
 			panic(RedisError("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>"))
 		}
-		client, err = radix.NewSentinel(urls[0], urls[1:], radix.SentinelPoolFunc(poolFunc))
+		sentinelDialFunc := func(network, addr string) (radix.Conn, error) {
+			var dialOpts []radix.DialOpt
+			// Always set the dial timeout consistent with the main dial func
+			dialOpts = append(dialOpts, radix.DialTimeout(timeout))
+			if useTls {
+				logger.Warnf("enabling TLS to redis sentinel on %s", addr)
+				dialOpts = append(dialOpts, radix.DialUseTLS(tlsConfig))
+			}
+			if auth != "" {
+				user, pass, found := strings.Cut(auth, ":")
+				if found {
+					logger.Warnf("enabling authentication to redis sentinel on %s with user %s", addr, user)
+					dialOpts = append(dialOpts, radix.DialAuthUser(user, pass))
+				} else {
+					logger.Warnf("enabling authentication to redis sentinel on %s without user", addr)
+					dialOpts = append(dialOpts, radix.DialAuthPass(auth))
+				}
+			}
+			return radix.Dial(network, addr, dialOpts...)
+		}
+		client, err = radix.NewSentinel(urls[0], urls[1:], radix.SentinelConnFunc(sentinelDialFunc), radix.SentinelPoolFunc(poolFunc))
 	default:
 		panic(RedisError("Unrecognized redis type " + redisType))
 	}

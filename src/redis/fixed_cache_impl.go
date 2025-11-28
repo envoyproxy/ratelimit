@@ -42,7 +42,8 @@ func pipelineAppendtoGet(client Client, pipeline *Pipeline, key string, result *
 }
 
 func (this *fixedRateLimitCacheImpl) getHitsAddend(hitsAddend uint64, isCacheKeyOverlimit, isCacheKeyNearlimit,
-	isNearLimt bool) uint64 {
+	isNearLimt bool,
+) uint64 {
 	// If stopCacheKeyIncrementWhenOverlimit is false, then we always increment the cache key.
 	if !this.stopCacheKeyIncrementWhenOverlimit {
 		return hitsAddend
