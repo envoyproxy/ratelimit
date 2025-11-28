@@ -641,10 +641,10 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sink := common.NewTestStatSink()
+	statsStore := gostats.NewStore(sink, false)
 	sm := stats.NewMockStatManager(statsStore)
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, true)
-	sink := &common.TestStatSink{}
 
 	localCacheScopeName := "localcache"
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope(localCacheScopeName))
@@ -688,7 +688,7 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	assert.Equal(uint64(1), limits[1].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
+	t.Run("TestLocalCacheStats", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 2, 2, 0, 0))
 
 	// Test Near Limit Stats. Some hits at Near Limit Ratio, but still OK.
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
@@ -722,7 +722,7 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	assert.Equal(uint64(3), limits[1].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
+	t.Run("TestLocalCacheStats_1", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 4, 4, 0, 0))
 
 	// Test one key is reaching to the Overlimit threshold
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
@@ -754,5 +754,5 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	assert.Equal(uint64(3), limits[1].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
+	t.Run("TestLocalCacheStats_2", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 6, 6, 0, 1))
 }
