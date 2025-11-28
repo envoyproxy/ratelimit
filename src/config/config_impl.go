@@ -356,22 +356,28 @@ func (this *rateLimitConfigImpl) GetLimit(
 			if matchedViaWildcard {
 				if nextDescriptor.valueToMetric {
 					valueToMetricFullKey.WriteString(entry.Key)
-					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(entry.Value)
+					if entry.Value != "" {
+						valueToMetricFullKey.WriteString("_")
+						valueToMetricFullKey.WriteString(entry.Value)
+					}
 				} else {
 					valueToMetricFullKey.WriteString(entry.Key)
 				}
 			} else if matchedUsingValue {
 				// Matched explicit key+value in config
 				valueToMetricFullKey.WriteString(entry.Key)
-				valueToMetricFullKey.WriteString("_")
-				valueToMetricFullKey.WriteString(entry.Value)
+				if entry.Value != "" {
+					valueToMetricFullKey.WriteString("_")
+					valueToMetricFullKey.WriteString(entry.Value)
+				}
 			} else {
 				// Matched default key (no value) in config
 				if nextDescriptor.valueToMetric {
 					valueToMetricFullKey.WriteString(entry.Key)
-					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(entry.Value)
+					if entry.Value != "" {
+						valueToMetricFullKey.WriteString("_")
+						valueToMetricFullKey.WriteString(entry.Value)
+					}
 				} else {
 					valueToMetricFullKey.WriteString(entry.Key)
 				}
@@ -406,7 +412,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 	// Replace metric with detailed metric, if leaf descriptor is detailed.
 	if rateLimit != nil && rateLimit.DetailedMetric {
-		rateLimit.Stats = this.statsManager.NewStats(detailedMetricFullKey.String())
+		detailedKey := detailedMetricFullKey.String()
+		rateLimit.Stats = this.statsManager.NewStats(detailedKey)
+		rateLimit.FullKey = detailedKey
 	}
 
 	// If not using detailed metric, but any value_to_metric path produced a different key,
@@ -417,6 +425,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 			// Recreate to ensure a clean stats struct, then set to enhanced stats
 			rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
 			rateLimit.Stats = this.statsManager.NewStats(enhancedKey)
+			rateLimit.FullKey = enhancedKey
 		}
 	}
 
