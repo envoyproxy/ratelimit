@@ -908,3 +908,82 @@ func waitForConfigReload(runner *runner.Runner, loadCountBefore uint64) (uint64,
 	}
 	return loadCountAfter, reloaded
 }
+
+func TestShareThreshold(t *testing.T) {
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6383},
+		{Port: 6380},
+	}, func() {
+		t.Run("WithoutPerSecondRedis", testShareThreshold(makeSimpleRedisSettings(6383, 6380, false, 0)))
+	})
+}
+
+func testShareThreshold(s settings.Settings) func(*testing.T) {
+	return func(t *testing.T) {
+		runner := startTestRunner(t, s)
+		defer runner.Stop()
+
+		assert := assert.New(t)
+		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", s.GrpcPort), grpc.WithInsecure())
+		assert.NoError(err)
+		defer conn.Close()
+		c := pb.NewRateLimitServiceClient(conn)
+
+		// Use the domain from the config file
+		domain := "share-threshold-test"
+
+		// Test Case 1: share_threshold: true - different values matching files/* should share the same threshold
+		// Make 10 requests with files/a.pdf - can be OK or OVER_LIMIT
+		for i := 0; i < 10; i++ {
+			response, err := c.ShouldRateLimit(
+				context.Background(),
+				common.NewRateLimitRequest(domain, [][][2]string{{{"files", "files/a.pdf"}}}, 1))
+			assert.NoError(err)
+			// Each request can be OK or OVER_LIMIT (depending on when limit is reached)
+			assert.True(response.OverallCode == pb.RateLimitResponse_OK || response.OverallCode == pb.RateLimitResponse_OVER_LIMIT,
+				"Request %d should be OK or OVER_LIMIT, got: %v", i+1, response.OverallCode)
+		}
+
+		// Now make a request with files/b.csv - must be OVER_LIMIT because it shares the threshold
+		response, err := c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest(domain, [][][2]string{{{"files", "files/b.csv"}}}, 1))
+		assert.NoError(err)
+		durRemaining := response.GetStatuses()[0].DurationUntilReset
+		common.AssertProtoEqual(
+			assert,
+			&pb.RateLimitResponse{
+				OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+				Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+					newDescriptorStatus(pb.RateLimitResponse_OVER_LIMIT, 10, pb.RateLimitResponse_RateLimit_HOUR, 0, durRemaining),
+				},
+			},
+			response)
+
+		// Test Case 2: share_threshold: false - different values should have isolated thresholds
+		// Use random values with prefix files_no_share to ensure uniqueness (based on timestamp)
+		// Each value should have its own isolated threshold, so all 10 requests should be OK
+		baseTimestamp := time.Now().UnixNano()
+		r := rand.New(rand.NewSource(baseTimestamp))
+		for i := 0; i < 10; i++ {
+			// Generate unique value using timestamp and random number to avoid collisions
+			uniqueValue := fmt.Sprintf("files_no_share/%d-%d", baseTimestamp, r.Int63())
+			response, err := c.ShouldRateLimit(
+				context.Background(),
+				common.NewRateLimitRequest(domain, [][][2]string{{{"files_no_share", uniqueValue}}}, 1))
+			assert.NoError(err)
+			// Each value has its own isolated threshold, so each request should have remaining = 9 (10 - 1)
+			expectedRemaining := uint32(9)
+			durRemaining := response.GetStatuses()[0].DurationUntilReset
+			common.AssertProtoEqual(
+				assert,
+				&pb.RateLimitResponse{
+					OverallCode: pb.RateLimitResponse_OK,
+					Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+						newDescriptorStatus(pb.RateLimitResponse_OK, 10, pb.RateLimitResponse_RateLimit_HOUR, expectedRemaining, durRemaining),
+					},
+				},
+				response)
+		}
+	}
+}

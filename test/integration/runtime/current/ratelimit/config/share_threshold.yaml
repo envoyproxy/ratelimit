@@ -1,0 +1,15 @@
+domain: share-threshold-test
+descriptors:
+  # Test case 1: share_threshold: true - files/* should share threshold
+  - key: files
+    value: files/*
+    share_threshold: true
+    rate_limit:
+      unit: hour
+      requests_per_unit: 10
+
+  - key: files_no_share
+    value: files_no_share/*
+    rate_limit:
+      unit: hour
+      requests_per_unit: 10

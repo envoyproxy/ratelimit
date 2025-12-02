@@ -25,6 +25,9 @@ type RateLimit struct {
 	Name           string
 	Replaces       []string
 	DetailedMetric bool
+	// ShareThresholdKeyPattern is a slice of wildcard patterns for descriptor entries
+	// The slice index corresponds to the descriptor entry index.
+	ShareThresholdKeyPattern []string
 }
 
 // Interface for interacting with a loaded rate limit config.

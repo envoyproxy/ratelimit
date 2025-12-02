@@ -1592,3 +1592,189 @@ func TestValueToMetric_FullKeyMatchesStatsKey(t *testing.T) {
 	asrt.NotNil(rl3)
 	asrt.Equal(rl3.FullKey, rl3.Stats.Key, "FullKey should match Stats.Key when detailed_metric is enabled")
 }
+
+// TestShareThreshold tests config (ShareThresholdKeyPattern) and metrics (Stats.Key)
+// Cache key generation is tested in base_limiter_test.go
+func TestShareThreshold(t *testing.T) {
+	asrt := assert.New(t)
+	stats := stats.NewStore(stats.NewNullSink(), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("share_threshold.yaml"), mockstats.NewMockStatManager(stats), false)
+
+	// Test Case 1: Basic share_threshold functionality
+	t.Run("Basic share_threshold", func(t *testing.T) {
+		testValues := []string{"files/a.pdf", "files/b.csv", "files/c.txt"}
+		var rateLimits []*config.RateLimit
+
+		for _, value := range testValues {
+			rl := rlConfig.GetLimit(
+				context.TODO(), "test-domain",
+				&pb_struct.RateLimitDescriptor{
+					Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "files", Value: value}},
+				})
+			asrt.NotNil(rl)
+			// Verify config: ShareThresholdKeyPattern is set correctly
+			asrt.Equal("files/*", rl.ShareThresholdKeyPattern[0])
+			asrt.EqualValues(100, rl.Limit.RequestsPerUnit)
+			// Verify stats: All should have the same stats key
+			asrt.Equal("test-domain.files", rl.Stats.Key)
+			rateLimits = append(rateLimits, rl)
+		}
+
+		// Verify all have same stats key
+		for i := 1; i < len(rateLimits); i++ {
+			asrt.Equal(rateLimits[0].Stats.Key, rateLimits[i].Stats.Key, "All values should have same stats key")
+		}
+	})
+
+	// Test Case 2: share_threshold with metrics (value_to_metric and detailed_metric)
+	// Tests that metrics correctly include wildcard prefix when share_threshold is enabled
+	t.Run("share_threshold with metrics", func(t *testing.T) {
+		// Test value_to_metric
+		rl1 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "route", Value: "api/v1"},
+					{Key: "method", Value: "GET"},
+				},
+			})
+		asrt.NotNil(rl1)
+		asrt.Equal("api/*", rl1.ShareThresholdKeyPattern[0])
+		asrt.Equal("test-domain.route_api/.method", rl1.Stats.Key)
+
+		// Test detailed_metric
+		rl2 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "service", Value: "svc/user"},
+					{Key: "endpoint", Value: "get"},
+				},
+			})
+		asrt.NotNil(rl2)
+		asrt.Equal("svc/*", rl2.ShareThresholdKeyPattern[0])
+		asrt.True(rl2.DetailedMetric)
+		asrt.Equal("test-domain.service_svc/.endpoint_get", rl2.Stats.Key)
+	})
+
+	// Test Case 3: Nested wildcards with share_threshold
+	t.Run("Nested wildcards", func(t *testing.T) {
+		// Nested share_threshold
+		rl1 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "nested", Value: "parent"},
+					{Key: "files", Value: "nested/file1.txt"},
+				},
+			})
+		asrt.NotNil(rl1)
+		asrt.Equal("nested/*", rl1.ShareThresholdKeyPattern[1])
+		asrt.EqualValues(200, rl1.Limit.RequestsPerUnit)
+
+		// Multiple wildcards
+		rl2 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "files", Value: "top/file1.txt"},
+					{Key: "files", Value: "nested/file1.txt"},
+				},
+			})
+		asrt.NotNil(rl2)
+		asrt.Equal("top/*", rl2.ShareThresholdKeyPattern[0])
+		asrt.Equal("nested/*", rl2.ShareThresholdKeyPattern[1])
+
+		// Parent has share_threshold, child does not
+		rl3 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "path", Value: "path/foo"},
+					{Key: "file", Value: "file/doc1"},
+					{Key: "type", Value: "pdf"},
+				},
+			})
+		asrt.NotNil(rl3)
+		asrt.Equal("path/*", rl3.ShareThresholdKeyPattern[0])
+		asrt.Equal("", rl3.ShareThresholdKeyPattern[1])
+
+		// Both parent and child have share_threshold
+		rl4 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "user", Value: "user/alice"},
+					{Key: "resource", Value: "res/file1"},
+					{Key: "action", Value: "read"},
+				},
+			})
+		asrt.NotNil(rl4)
+		asrt.Equal("user/*", rl4.ShareThresholdKeyPattern[0])
+		asrt.Equal("res/*", rl4.ShareThresholdKeyPattern[1])
+	})
+
+	// Test Case 4: Explicit value takes precedence over wildcard
+	// Verify: file_test1 uses isolated threshold, file_test2/test23/test123 share threshold
+	t.Run("Explicit value precedence over wildcard", func(t *testing.T) {
+		// Test explicit match: file_test1 should use isolated threshold (50/min)
+		rlTest1 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "file", Value: "test1"},
+				},
+			})
+		asrt.NotNil(rlTest1, "Should find rate limit for file=test1")
+		asrt.EqualValues(50, rlTest1.Limit.RequestsPerUnit, "test1 should have isolated limit of 50")
+		// ShareThresholdKeyPattern is initialized as a slice, but should be empty for explicit matches
+		asrt.NotNil(rlTest1.ShareThresholdKeyPattern, "ShareThresholdKeyPattern should be initialized")
+		asrt.Equal(1, len(rlTest1.ShareThresholdKeyPattern), "Should have one entry")
+		asrt.Equal("", rlTest1.ShareThresholdKeyPattern[0], "test1 should not have share_threshold pattern (explicit match)")
+		// Verify Stats: test1 should have its own stats key
+		asrt.Equal("test-domain.file_test1", rlTest1.Stats.Key, "test1 should have its own stats key")
+
+		// Test wildcard matches: file_test2, file_test23, file_test123 should share threshold (100/min)
+		testWildcardValues := []string{"test2", "test23", "test123"}
+		var rateLimits []*config.RateLimit
+
+		for _, value := range testWildcardValues {
+			rl := rlConfig.GetLimit(
+				context.TODO(), "test-domain",
+				&pb_struct.RateLimitDescriptor{
+					Entries: []*pb_struct.RateLimitDescriptor_Entry{
+						{Key: "file", Value: value},
+					},
+				})
+			asrt.NotNil(rl, "Should find rate limit for file=%s", value)
+
+			// Verify RateLimitConfig: Should have share_threshold pattern
+			asrt.NotNil(rl.ShareThresholdKeyPattern, "ShareThresholdKeyPattern should be set for %s", value)
+			asrt.Equal(1, len(rl.ShareThresholdKeyPattern), "Should have one pattern")
+			asrt.Equal("test*", rl.ShareThresholdKeyPattern[0], "Pattern should be test*")
+			asrt.EqualValues(100, rl.Limit.RequestsPerUnit, "Should have shared limit of 100")
+
+			// Verify Stats: All wildcard matches should have the same stats key
+			asrt.Equal("test-domain.file", rl.Stats.Key, "Stats key should be same for all wildcard values")
+
+			rateLimits = append(rateLimits, rl)
+		}
+
+		// Verify all wildcard matches have same stats key
+		for i := 1; i < len(rateLimits); i++ {
+			asrt.Equal(rateLimits[0].Stats.Key, rateLimits[i].Stats.Key, "All wildcard values should have same stats key")
+		}
+
+		// Verify stats counters are shared for wildcard matches
+		for _, rl := range rateLimits {
+			rl.Stats.TotalHits.Inc()
+		}
+		counterValue := stats.NewCounter("test-domain.file.total_hits").Value()
+		asrt.GreaterOrEqual(counterValue, uint64(len(testWildcardValues)), "All wildcard values should increment the same counter")
+
+		// test1 should have its own counter
+		rlTest1.Stats.TotalHits.Inc()
+		counterTest1 := stats.NewCounter("test-domain.file_test1.total_hits").Value()
+		asrt.GreaterOrEqual(counterTest1, uint64(1), "test1 should increment its own counter")
+	})
+}

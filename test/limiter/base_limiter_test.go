@@ -56,6 +56,87 @@ func TestGenerateCacheKeysPrefix(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
 }
 
+func TestGenerateCacheKeysWithShareThreshold(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	jitterSource := mock_utils.NewMockJitterRandSource(controller)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	sm := mockstats.NewMockStatManager(statsStore)
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).AnyTimes()
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm)
+
+	// Test 1: Simple case - different values with same wildcard prefix generate same cache key
+	limit := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("files_files/*"), false, false, "", nil, false)
+	limit.ShareThresholdKeyPattern = []string{"files/*"} // Entry at index 0
+
+	request1 := common.NewRateLimitRequest("domain", [][][2]string{{{"files", "files/a.pdf"}}}, 1)
+	limits1 := []*config.RateLimit{limit}
+	cacheKeys1 := baseRateLimit.GenerateCacheKeys(request1, limits1, []uint64{1})
+	assert.Equal(1, len(cacheKeys1))
+	assert.Equal("domain_files_files/*_1234", cacheKeys1[0].Key)
+
+	request2 := common.NewRateLimitRequest("domain", [][][2]string{{{"files", "files/b.csv"}}}, 1)
+	limits2 := []*config.RateLimit{limit}
+	cacheKeys2 := baseRateLimit.GenerateCacheKeys(request2, limits2, []uint64{1})
+	assert.Equal(1, len(cacheKeys2))
+	// Should generate the same cache key as the first request
+	assert.Equal("domain_files_files/*_1234", cacheKeys2[0].Key)
+	assert.Equal(cacheKeys1[0].Key, cacheKeys2[0].Key)
+
+	// Test 2: Multiple different values all generate the same cache key
+	testValues := []string{"files/c.txt", "files/d.json", "files/e.xml", "files/subdir/f.txt"}
+	for _, value := range testValues {
+		request := common.NewRateLimitRequest("domain", [][][2]string{{{"files", value}}}, 1)
+		cacheKeys := baseRateLimit.GenerateCacheKeys(request, limits1, []uint64{1})
+		assert.Equal(1, len(cacheKeys))
+		assert.Equal("domain_files_files/*_1234", cacheKeys[0].Key, "Value %s should generate same cache key", value)
+	}
+
+	// Test 3: Nested descriptors with share_threshold at second level
+	limitNested := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("parent_files_nested/*"), false, false, "", nil, false)
+	limitNested.ShareThresholdKeyPattern = []string{"", "nested/*"} // First entry no share_threshold, second entry has it
+
+	request3a := common.NewRateLimitRequest("domain", [][][2]string{
+		{{"parent", "value1"}, {"files", "nested/file1.txt"}},
+	}, 1)
+	limits3a := []*config.RateLimit{limitNested}
+	cacheKeys3a := baseRateLimit.GenerateCacheKeys(request3a, limits3a, []uint64{1})
+	assert.Equal(1, len(cacheKeys3a))
+	assert.Equal("domain_parent_value1_files_nested/*_1234", cacheKeys3a[0].Key)
+
+	request3b := common.NewRateLimitRequest("domain", [][][2]string{
+		{{"parent", "value1"}, {"files", "nested/file2.csv"}},
+	}, 1)
+	cacheKeys3b := baseRateLimit.GenerateCacheKeys(request3b, limits3a, []uint64{1})
+	assert.Equal(1, len(cacheKeys3b))
+	// Should generate the same cache key despite different file values
+	assert.Equal("domain_parent_value1_files_nested/*_1234", cacheKeys3b[0].Key)
+	assert.Equal(cacheKeys3a[0].Key, cacheKeys3b[0].Key)
+
+	// Test 4: Multiple entries with share_threshold at different positions
+	limitMulti := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("files_top/*_files_nested/*"), false, false, "", nil, false)
+	limitMulti.ShareThresholdKeyPattern = []string{"top/*", "nested/*"} // Both entries have share_threshold
+
+	request4a := common.NewRateLimitRequest("domain", [][][2]string{
+		{{"files", "top/file1.txt"}, {"files", "nested/sub1.txt"}},
+	}, 1)
+	limits4a := []*config.RateLimit{limitMulti}
+	cacheKeys4a := baseRateLimit.GenerateCacheKeys(request4a, limits4a, []uint64{1})
+	assert.Equal(1, len(cacheKeys4a))
+	assert.Equal("domain_files_top/*_files_nested/*_1234", cacheKeys4a[0].Key)
+
+	request4b := common.NewRateLimitRequest("domain", [][][2]string{
+		{{"files", "top/file2.pdf"}, {"files", "nested/sub2.csv"}},
+	}, 1)
+	cacheKeys4b := baseRateLimit.GenerateCacheKeys(request4b, limits4a, []uint64{1})
+	assert.Equal(1, len(cacheKeys4b))
+	// Should generate the same cache key despite different values
+	assert.Equal("domain_files_top/*_files_nested/*_1234", cacheKeys4b[0].Key)
+	assert.Equal(cacheKeys4a[0].Key, cacheKeys4b[0].Key)
+}
+
 func TestOverLimitWithLocalCache(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
