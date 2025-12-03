@@ -1727,10 +1727,8 @@ func TestShareThreshold(t *testing.T) {
 			})
 		asrt.NotNil(rlTest1, "Should find rate limit for file=test1")
 		asrt.EqualValues(50, rlTest1.Limit.RequestsPerUnit, "test1 should have isolated limit of 50")
-		// ShareThresholdKeyPattern is initialized as a slice, but should be empty for explicit matches
-		asrt.NotNil(rlTest1.ShareThresholdKeyPattern, "ShareThresholdKeyPattern should be initialized")
-		asrt.Equal(1, len(rlTest1.ShareThresholdKeyPattern), "Should have one entry")
-		asrt.Equal("", rlTest1.ShareThresholdKeyPattern[0], "test1 should not have share_threshold pattern (explicit match)")
+		// ShareThresholdKeyPattern should be nil for explicit matches (lazy initialization)
+		asrt.Nil(rlTest1.ShareThresholdKeyPattern, "ShareThresholdKeyPattern should be nil for explicit matches (no share_threshold)")
 		// Verify Stats: test1 should have its own stats key
 		asrt.Equal("test-domain.file_test1", rlTest1.Stats.Key, "test1 should have its own stats key")
 

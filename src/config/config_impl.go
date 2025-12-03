@@ -356,7 +356,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 	// Track share_threshold patterns for entries matched via wildcard (using indexes)
 	// This allows share_threshold to work when wildcard has nested descriptors
-	shareThresholdPatterns := make(map[int]string)
+	var shareThresholdPatterns map[int]string
 
 	for i, entry := range descriptor.Entries {
 		// First see if key_value is in the map. If that isn't in the map we look for just key
@@ -391,6 +391,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 		// Track share_threshold pattern when matching via wildcard, even if no rate_limit at this level
 		if matchedViaWildcard && nextDescriptor != nil && nextDescriptor.shareThreshold && nextDescriptor.wildcardPattern != "" {
 			// Extract the value part from the wildcard pattern (e.g., "key_files*" -> "files*")
+			if shareThresholdPatterns == nil {
+				shareThresholdPatterns = make(map[int]string)
+			}
+
 			wildcardValue := strings.TrimPrefix(nextDescriptor.wildcardPattern, entry.Key+"_")
 			shareThresholdPatterns[i] = wildcardValue
 			logger.Debugf("tracking share_threshold for entry index %d (key %s), wildcard pattern %s", i, entry.Key, wildcardValue)
@@ -471,11 +475,15 @@ func (this *rateLimitConfigImpl) GetLimit(
 					Replaces:       originalLimit.Replaces,
 					DetailedMetric: originalLimit.DetailedMetric,
 					// Initialize ShareThresholdKeyPattern with correct length, empty strings for entries without share_threshold
-					ShareThresholdKeyPattern: make([]string, len(descriptor.Entries)),
+					ShareThresholdKeyPattern: nil,
 				}
 				// Apply all tracked share_threshold patterns when we find the rate_limit
 				// This works whether the rate_limit is at the wildcard level or deeper
 				// Only entries with share_threshold will have non-empty patterns
+				if len(shareThresholdPatterns) > 0 {
+					rateLimit.ShareThresholdKeyPattern = make([]string, len(descriptor.Entries))
+				}
+
 				for idx, pattern := range shareThresholdPatterns {
 					rateLimit.ShareThresholdKeyPattern[idx] = pattern
 					logger.Debugf("share_threshold enabled for entry index %d, using wildcard pattern %s", idx, pattern)
