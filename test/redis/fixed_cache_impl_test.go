@@ -144,38 +144,39 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 	}
 }
 
-func testLocalCacheStats(localCacheStats gostats.StatGenerator, statsStore gostats.Store, sink *common.TestStatSink,
-	expectedHitCount int, expectedMissCount int, expectedLookUpCount int, expectedExpiredCount int,
-	expectedEntryCount int,
+func testLocalCacheStats(localCacheScopeName string, localCacheStats gostats.StatGenerator, statsStore gostats.Store, sink *common.TestStatSink,
+	expectedHitCount uint64, expectedMissCount uint64, expectedLookUpCount uint64, expectedExpiredCount uint64,
+	expectedEntryCount uint64,
 ) func(*testing.T) {
 	return func(t *testing.T) {
 		localCacheStats.GenerateStats()
 		statsStore.Flush()
 
+		prefix := localCacheScopeName + "."
 		// Check whether all local_cache related stats are available.
-		_, ok := sink.Record["averageAccessTime"]
+		_, ok := sink.Record[prefix+"averageAccessTime"]
 		assert.Equal(t, true, ok)
-		hitCount, ok := sink.Record["hitCount"]
+		hitCount, ok := sink.Record[prefix+"hitCount"]
 		assert.Equal(t, true, ok)
-		missCount, ok := sink.Record["missCount"]
+		missCount, ok := sink.Record[prefix+"missCount"]
 		assert.Equal(t, true, ok)
-		lookupCount, ok := sink.Record["lookupCount"]
+		lookupCount, ok := sink.Record[prefix+"lookupCount"]
 		assert.Equal(t, true, ok)
-		_, ok = sink.Record["overwriteCount"]
+		_, ok = sink.Record[prefix+"overwriteCount"]
 		assert.Equal(t, true, ok)
-		_, ok = sink.Record["evacuateCount"]
+		_, ok = sink.Record[prefix+"evacuateCount"]
 		assert.Equal(t, true, ok)
-		expiredCount, ok := sink.Record["expiredCount"]
+		expiredCount, ok := sink.Record[prefix+"expiredCount"]
 		assert.Equal(t, true, ok)
-		entryCount, ok := sink.Record["entryCount"]
+		entryCount, ok := sink.Record[prefix+"entryCount"]
 		assert.Equal(t, true, ok)
 
 		// Check the correctness of hitCount, missCount, lookupCount, expiredCount and entryCount
-		assert.Equal(t, expectedHitCount, hitCount.(int))
-		assert.Equal(t, expectedMissCount, missCount.(int))
-		assert.Equal(t, expectedLookUpCount, lookupCount.(int))
-		assert.Equal(t, expectedExpiredCount, expiredCount.(int))
-		assert.Equal(t, expectedEntryCount, entryCount.(int))
+		assert.Equal(t, expectedHitCount, hitCount.(uint64))
+		assert.Equal(t, expectedMissCount, missCount.(uint64))
+		assert.Equal(t, expectedLookUpCount, lookupCount.(uint64))
+		assert.Equal(t, expectedExpiredCount, expiredCount.(uint64))
+		assert.Equal(t, expectedEntryCount, entryCount.(uint64))
 
 		sink.Clear()
 	}
@@ -189,11 +190,13 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sink := common.NewTestStatSink()
+	statsStore := gostats.NewStore(sink, false)
 	sm := stats.NewMockStatManager(statsStore)
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false)
-	sink := &common.TestStatSink{}
-	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
+
+	localCacheScopeName := "localcache"
+	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope(localCacheScopeName))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -220,7 +223,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
+	t.Run("TestLocalCacheStats", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 1, 1, 0, 0))
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -241,7 +244,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
+	t.Run("TestLocalCacheStats_1", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 2, 2, 0, 0))
 
 	// Test Over limit stats
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -262,7 +265,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
+	t.Run("TestLocalCacheStats_2", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 3, 3, 0, 1))
 
 	// Test Over limit stats with local cache
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -281,7 +284,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 1, 3, 4, 0, 1)
+	t.Run("TestLocalCacheStats_3", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 1, 3, 4, 0, 1))
 }
 
 func TestNearLimit(t *testing.T) {
@@ -495,11 +498,13 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sink := common.NewTestStatSink()
+	statsStore := gostats.NewStore(sink, false)
 	sm := stats.NewMockStatManager(statsStore)
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false)
-	sink := &common.TestStatSink{}
-	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
+
+	localCacheScopeName := "localcache"
+	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope(localCacheScopeName))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -526,7 +531,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	assert.Equal(uint64(1), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
+	t.Run("TestLocalCacheStats", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 1, 1, 0, 0))
 
 	// Test Near Limit Stats. At Near Limit Ratio, still OK
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -547,7 +552,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
+	t.Run("TestLocalCacheStats_1", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 2, 2, 0, 0))
 
 	// Test Over limit stats
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -570,7 +575,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
+	t.Run("TestLocalCacheStats_2", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 3, 3, 0, 1))
 
 	// Test Over limit stats with local cache
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -594,7 +599,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	assert.Equal(uint64(2), limits[0].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 1, 3, 4, 0, 1)
+	t.Run("TestLocalCacheStats_3", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 1, 3, 4, 0, 1))
 }
 
 func TestRedisTracer(t *testing.T) {
@@ -636,11 +641,13 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sink := common.NewTestStatSink()
+	statsStore := gostats.NewStore(sink, false)
 	sm := stats.NewMockStatManager(statsStore)
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, true)
-	sink := &common.TestStatSink{}
-	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
+
+	localCacheScopeName := "localcache"
+	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope(localCacheScopeName))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
@@ -681,7 +688,7 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	assert.Equal(uint64(1), limits[1].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 1, 1, 0, 0)
+	t.Run("TestLocalCacheStats", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 2, 2, 0, 0))
 
 	// Test Near Limit Stats. Some hits at Near Limit Ratio, but still OK.
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
@@ -715,7 +722,7 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	assert.Equal(uint64(3), limits[1].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 2, 0, 0)
+	t.Run("TestLocalCacheStats_1", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 4, 4, 0, 0))
 
 	// Test one key is reaching to the Overlimit threshold
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(5)
@@ -747,5 +754,5 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	assert.Equal(uint64(3), limits[1].Stats.WithinLimit.Value())
 
 	// Check the local cache stats.
-	testLocalCacheStats(localCacheStats, statsStore, sink, 0, 2, 3, 0, 1)
+	t.Run("TestLocalCacheStats_2", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 6, 6, 0, 1))
 }
