@@ -1,0 +1,87 @@
+# Configuration for testing share_threshold feature
+domain: test-domain
+descriptors:
+  - key: files
+    value: files/*
+    share_threshold: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 100
+  - key: nested
+    value: parent
+    descriptors:
+      - key: files
+        value: nested/*
+        share_threshold: true
+        rate_limit:
+          unit: minute
+          requests_per_unit: 200
+  # Test case for nested descriptors with same key name at different levels
+  - key: files
+    value: top/*
+    share_threshold: true
+    descriptors:
+      - key: files
+        value: nested/*
+        share_threshold: true
+        rate_limit:
+          unit: minute
+          requests_per_unit: 300
+  # Test case for share_threshold with value_to_metric
+  - key: route
+    value: api/*
+    share_threshold: true
+    value_to_metric: true
+    descriptors:
+      - key: method
+        rate_limit:
+          unit: minute
+          requests_per_unit: 60
+  # Test case for share_threshold with detailed_metric
+  - key: service
+    value: svc/*
+    share_threshold: true
+    descriptors:
+      - key: endpoint
+        detailed_metric: true
+        rate_limit:
+          unit: minute
+          requests_per_unit: 80
+  # Test case for nested descriptors with multiple wildcards - mixed share_threshold
+  - key: path
+    value: path/*
+    share_threshold: true
+    descriptors:
+      - key: file
+        value: file/*
+        share_threshold: false
+        descriptors:
+          - key: type
+            rate_limit:
+              unit: minute
+              requests_per_unit: 120
+  # Test case for nested descriptors with multiple wildcards - both with share_threshold
+  - key: user
+    value: user/*
+    share_threshold: true
+    descriptors:
+      - key: resource
+        value: res/*
+        share_threshold: true
+        descriptors:
+          - key: action
+            rate_limit:
+              unit: minute
+              requests_per_unit: 150
+  # Test case: explicit value takes precedence over wildcard with share_threshold
+  - key: file
+    value: test1
+    rate_limit:
+      unit: minute
+      requests_per_unit: 50
+  - key: file
+    value: test*
+    share_threshold: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 100

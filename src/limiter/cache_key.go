@@ -63,10 +63,18 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 	b.WriteString(domain)
 	b.WriteByte('_')
 
-	for _, entry := range descriptor.Entries {
+	for i, entry := range descriptor.Entries {
 		b.WriteString(entry.Key)
 		b.WriteByte('_')
-		b.WriteString(entry.Value)
+		// If share_threshold is enabled for this entry index, use the wildcard pattern instead of the actual value
+		// Use entry index instead of key name to handle nested descriptors with same key names
+		valueToUse := entry.Value
+		if limit != nil && limit.ShareThresholdKeyPattern != nil && i < len(limit.ShareThresholdKeyPattern) {
+			if wildcardPattern := limit.ShareThresholdKeyPattern[i]; wildcardPattern != "" {
+				valueToUse = wildcardPattern
+			}
+		}
+		b.WriteString(valueToUse)
 		b.WriteByte('_')
 	}
 

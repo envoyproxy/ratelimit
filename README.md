@@ -22,6 +22,7 @@
     - [ShadowMode](#shadowmode)
     - [Including detailed metrics for unspecified values](#including-detailed-metrics-for-unspecified-values)
     - [Including descriptor values in metrics](#including-descriptor-values-in-metrics)
+    - [Sharing thresholds for wildcard matches](#sharing-thresholds-for-wildcard-matches)
     - [Examples](#examples)
       - [Example 1](#example-1)
       - [Example 2](#example-2)
@@ -33,6 +34,7 @@
       - [Example 8](#example-8)
       - [Example 9](#example-9)
       - [Example 10](#example-10)
+      - [Example 11](#example-11)
   - [Loading Configuration](#loading-configuration)
     - [File Based Configuration Loading](#file-based-configuration-loading)
     - [xDS Management Server Based Configuration Loading](#xds-management-server-based-configuration-loading)
@@ -285,6 +287,7 @@ descriptors:
     shadow_mode: (optional)
     detailed_metric: (optional)
     value_to_metric: (optional)
+    share_threshold: (optional)
     descriptors: (optional block)
       - ... (nested repetition of above)
 ```
@@ -346,6 +349,20 @@ Setting `value_to_metric: true` (default: `false`) for a descriptor will include
 **Note:** If a value is explicitly specified in a descriptor (e.g., `value: "GET"`), that value is always included in the metric key regardless of the `value_to_metric` setting. The `value_to_metric` flag only affects descriptors where the value is not explicitly defined in the configuration.
 
 When combined with wildcard matching, the full runtime value is included in the metric key, not just the wildcard prefix. This feature works independently of `detailed_metric` - when `detailed_metric` is set, it takes precedence and `value_to_metric` is ignored.
+
+### Sharing thresholds for wildcard matches
+
+Setting `share_threshold: true` (default: `false`) for a descriptor with a wildcard value (ending with `*`) allows all values matching that wildcard to share the same rate limit threshold, instead of using isolated thresholds for each matching value.
+
+This is useful when you want to apply a single rate limit across multiple resources that match a wildcard pattern. For example, if you have a rule for `files/*`, both `files/a.pdf` and `files/b.csv` will share the same threshold when `share_threshold: true` is set.
+
+**Important notes:**
+
+- `share_threshold` can only be used with wildcard values (values ending with `*`)
+- When `share_threshold: true` is enabled, all matching values share the same cache key and rate limit counter
+- When `share_threshold: false` (or not set), each matching value has its own isolated threshold
+- When combined with `value_to_metric: true`, the metric key includes the wildcard prefix (the part before `*`) instead of the full runtime value, to reflect that values are sharing a threshold
+- When combined with `detailed_metric: true`, the metric key also includes the wildcard prefix for entries with `share_threshold` enabled
 
 ### Examples
 
@@ -691,6 +708,58 @@ descriptors:
 - Metric key: `example10_wildcard.user_alice.action_readfile.resource`
 
 Note: When `detailed_metric: true` is set on a descriptor, it takes precedence and `value_to_metric` is ignored for that descriptor.
+
+#### Example 11
+
+Using `share_threshold: true` to share rate limits across wildcard matches:
+
+```yaml
+domain: example11
+descriptors:
+  # With share_threshold: true, all files/* matches share the same threshold
+  - key: files
+    value: files/*
+    share_threshold: true
+    rate_limit:
+      unit: hour
+      requests_per_unit: 10
+
+  # Without share_threshold, each files_no_share/* match has its own isolated threshold
+  - key: files_no_share
+    value: files_no_share/*
+    share_threshold: false
+    rate_limit:
+      unit: hour
+      requests_per_unit: 10
+```
+
+With this configuration:
+
+- Requests for `files/a.pdf`, `files/b.csv`, and `files/c.txt` all share the same threshold of 10 requests per hour
+- If 5 requests are made for `files/a.pdf` and 5 requests for `files/b.csv`, a request for `files/c.txt` will be rate limited (OVER_LIMIT) because the shared threshold of 10 has been reached
+- Requests for `files_no_share/a.pdf` and `files_no_share/b.csv` each have their own isolated threshold of 10 requests per hour
+- If 10 requests are made for `files_no_share/a.pdf` (exhausting its quota), requests for `files_no_share/b.csv` will still be allowed (up to 10 requests)
+
+Combining `share_threshold` with `value_to_metric`:
+
+```yaml
+domain: example11_metrics
+descriptors:
+  - key: route
+    value: api/*
+    share_threshold: true
+    value_to_metric: true
+    descriptors:
+      - key: method
+        rate_limit:
+          unit: minute
+          requests_per_unit: 60
+```
+
+- Request: `route=api/v1`, `method=GET`
+- Metric key: `example11_metrics.route_api.method_GET` (includes the wildcard prefix `api` instead of the full value `api/v1`)
+
+This reflects that all `api/*` routes share the same threshold, while still providing visibility into which API routes are being accessed.
 
 ## Loading Configuration
 

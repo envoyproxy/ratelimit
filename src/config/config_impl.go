@@ -33,6 +33,7 @@ type YamlDescriptor struct {
 	ShadowMode     bool `yaml:"shadow_mode"`
 	DetailedMetric bool `yaml:"detailed_metric"`
 	ValueToMetric  bool `yaml:"value_to_metric"`
+	ShareThreshold bool `yaml:"share_threshold"`
 }
 
 type YamlRoot struct {
@@ -41,10 +42,12 @@ type YamlRoot struct {
 }
 
 type rateLimitDescriptor struct {
-	descriptors   map[string]*rateLimitDescriptor
-	limit         *RateLimit
-	wildcardKeys  []string
-	valueToMetric bool
+	descriptors     map[string]*rateLimitDescriptor
+	limit           *RateLimit
+	wildcardKeys    []string
+	valueToMetric   bool
+	shareThreshold  bool
+	wildcardPattern string // stores the wildcard pattern when share_threshold is true
 }
 
 type rateLimitDomain struct {
@@ -71,6 +74,7 @@ var validKeys = map[string]bool{
 	"replaces":          true,
 	"detailed_metric":   true,
 	"value_to_metric":   true,
+	"share_threshold":   true,
 }
 
 // Create a new rate limit config entry.
@@ -90,11 +94,12 @@ func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Un
 			Unit:            unit,
 			Name:            name,
 		},
-		Unlimited:      unlimited,
-		ShadowMode:     shadowMode,
-		Name:           name,
-		Replaces:       replaces,
-		DetailedMetric: detailedMetric,
+		Unlimited:                unlimited,
+		ShadowMode:               shadowMode,
+		Name:                     name,
+		Replaces:                 replaces,
+		DetailedMetric:           detailedMetric,
+		ShareThresholdKeyPattern: nil,
 	}
 }
 
@@ -186,16 +191,38 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			}
 		}
 
-		logger.Debugf(
-			"loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
-		newDescriptor := &rateLimitDescriptor{map[string]*rateLimitDescriptor{}, rateLimit, nil, descriptorConfig.ValueToMetric}
-		newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, statsManager)
-		this.descriptors[finalKey] = newDescriptor
+		// Validate share_threshold can only be used with wildcards
+		if descriptorConfig.ShareThreshold {
+			if len(finalKey) == 0 || finalKey[len(finalKey)-1:] != "*" {
+				panic(newRateLimitConfigError(
+					config.Name,
+					fmt.Sprintf("share_threshold can only be used with wildcard values (ending with '*'), but found key '%s'", finalKey)))
+			}
+		}
+
+		// Store wildcard pattern if share_threshold is enabled
+		var wildcardPattern string = ""
+		if descriptorConfig.ShareThreshold && len(finalKey) > 0 && finalKey[len(finalKey)-1:] == "*" {
+			wildcardPattern = finalKey
+		}
 
 		// Preload keys ending with "*" symbol.
 		if finalKey[len(finalKey)-1:] == "*" {
 			this.wildcardKeys = append(this.wildcardKeys, finalKey)
 		}
+
+		logger.Debugf(
+			"loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
+		newDescriptor := &rateLimitDescriptor{
+			descriptors:     map[string]*rateLimitDescriptor{},
+			limit:           rateLimit,
+			wildcardKeys:    nil,
+			valueToMetric:   descriptorConfig.ValueToMetric,
+			shareThreshold:  descriptorConfig.ShareThreshold,
+			wildcardPattern: wildcardPattern,
+		}
+		newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, statsManager)
+		this.descriptors[finalKey] = newDescriptor
 	}
 }
 
@@ -265,7 +292,14 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	}
 
 	logger.Debugf("loading domain: %s", root.Domain)
-	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil, nil, false}}
+	newDomain := &rateLimitDomain{rateLimitDescriptor{
+		descriptors:     map[string]*rateLimitDescriptor{},
+		limit:           nil,
+		wildcardKeys:    nil,
+		valueToMetric:   false,
+		shareThreshold:  false,
+		wildcardPattern: "",
+	}}
 	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsManager)
 	this.domains[root.Domain] = newDomain
 }
@@ -320,6 +354,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 	var valueToMetricFullKey strings.Builder
 	valueToMetricFullKey.WriteString(domain)
 
+	// Track share_threshold patterns for entries matched via wildcard (using indexes)
+	// This allows share_threshold to work when wildcard has nested descriptors
+	var shareThresholdPatterns map[int]string
+
 	for i, entry := range descriptor.Entries {
 		// First see if key_value is in the map. If that isn't in the map we look for just key
 		// to check for a default value.
@@ -350,11 +388,31 @@ func (this *rateLimitConfigImpl) GetLimit(
 			matchedUsingValue = false
 		}
 
+		// Track share_threshold pattern when matching via wildcard, even if no rate_limit at this level
+		if matchedViaWildcard && nextDescriptor != nil && nextDescriptor.shareThreshold && nextDescriptor.wildcardPattern != "" {
+			// Extract the value part from the wildcard pattern (e.g., "key_files*" -> "files*")
+			if shareThresholdPatterns == nil {
+				shareThresholdPatterns = make(map[int]string)
+			}
+
+			wildcardValue := strings.TrimPrefix(nextDescriptor.wildcardPattern, entry.Key+"_")
+			shareThresholdPatterns[i] = wildcardValue
+			logger.Debugf("tracking share_threshold for entry index %d (key %s), wildcard pattern %s", i, entry.Key, wildcardValue)
+		}
+
 		// Build value_to_metric metrics path for this level
 		valueToMetricFullKey.WriteString(".")
 		if nextDescriptor != nil {
+			// Check if share_threshold is enabled for this entry
+			hasShareThreshold := shareThresholdPatterns[i] != ""
 			if matchedViaWildcard {
-				if nextDescriptor.valueToMetric {
+				// When share_threshold is enabled AND value_to_metric is enabled, use the prefix of the wildcard pattern
+				if hasShareThreshold && nextDescriptor.valueToMetric {
+					wildcardPrefix := strings.TrimSuffix(shareThresholdPatterns[i], "*")
+					valueToMetricFullKey.WriteString(entry.Key)
+					valueToMetricFullKey.WriteString("_")
+					valueToMetricFullKey.WriteString(wildcardPrefix)
+				} else if nextDescriptor.valueToMetric {
 					valueToMetricFullKey.WriteString(entry.Key)
 					if entry.Value != "" {
 						valueToMetricFullKey.WriteString("_")
@@ -365,14 +423,28 @@ func (this *rateLimitConfigImpl) GetLimit(
 				}
 			} else if matchedUsingValue {
 				// Matched explicit key+value in config
-				valueToMetricFullKey.WriteString(entry.Key)
-				if entry.Value != "" {
+				// When share_threshold is enabled AND value_to_metric is enabled, use the prefix of the wildcard pattern
+				if hasShareThreshold && nextDescriptor.valueToMetric {
+					wildcardPrefix := strings.TrimSuffix(shareThresholdPatterns[i], "*")
+					valueToMetricFullKey.WriteString(entry.Key)
 					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(entry.Value)
+					valueToMetricFullKey.WriteString(wildcardPrefix)
+				} else {
+					valueToMetricFullKey.WriteString(entry.Key)
+					if entry.Value != "" {
+						valueToMetricFullKey.WriteString("_")
+						valueToMetricFullKey.WriteString(entry.Value)
+					}
 				}
 			} else {
 				// Matched default key (no value) in config
-				if nextDescriptor.valueToMetric {
+				// When share_threshold is enabled AND value_to_metric is enabled, use the prefix of the wildcard pattern
+				if hasShareThreshold && nextDescriptor.valueToMetric {
+					wildcardPrefix := strings.TrimSuffix(shareThresholdPatterns[i], "*")
+					valueToMetricFullKey.WriteString(entry.Key)
+					valueToMetricFullKey.WriteString("_")
+					valueToMetricFullKey.WriteString(wildcardPrefix)
+				} else if nextDescriptor.valueToMetric {
 					valueToMetricFullKey.WriteString(entry.Key)
 					if entry.Value != "" {
 						valueToMetricFullKey.WriteString("_")
@@ -391,7 +463,31 @@ func (this *rateLimitConfigImpl) GetLimit(
 			logger.Debugf("found rate limit: %s", finalKey)
 
 			if i == len(descriptor.Entries)-1 {
-				rateLimit = nextDescriptor.limit
+				// Create a copy of the rate limit to avoid modifying the shared object
+				originalLimit := nextDescriptor.limit
+				rateLimit = &RateLimit{
+					FullKey:        originalLimit.FullKey,
+					Stats:          originalLimit.Stats,
+					Limit:          originalLimit.Limit,
+					Unlimited:      originalLimit.Unlimited,
+					ShadowMode:     originalLimit.ShadowMode,
+					Name:           originalLimit.Name,
+					Replaces:       originalLimit.Replaces,
+					DetailedMetric: originalLimit.DetailedMetric,
+					// Initialize ShareThresholdKeyPattern with correct length, empty strings for entries without share_threshold
+					ShareThresholdKeyPattern: nil,
+				}
+				// Apply all tracked share_threshold patterns when we find the rate_limit
+				// This works whether the rate_limit is at the wildcard level or deeper
+				// Only entries with share_threshold will have non-empty patterns
+				if len(shareThresholdPatterns) > 0 {
+					rateLimit.ShareThresholdKeyPattern = make([]string, len(descriptor.Entries))
+				}
+
+				for idx, pattern := range shareThresholdPatterns {
+					rateLimit.ShareThresholdKeyPattern[idx] = pattern
+					logger.Debugf("share_threshold enabled for entry index %d, using wildcard pattern %s", idx, pattern)
+				}
 			} else {
 				logger.Debugf("request depth does not match config depth, there are more entries in the request's descriptor")
 			}
@@ -402,7 +498,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 			descriptorsMap = nextDescriptor.descriptors
 		} else {
 			if rateLimit != nil && rateLimit.DetailedMetric {
+				// Preserve ShareThresholdKeyPattern when recreating rate limit
+				originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
 				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
+				rateLimit.ShareThresholdKeyPattern = originalShareThresholdKeyPattern
 			}
 
 			break
@@ -411,10 +510,39 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	// Replace metric with detailed metric, if leaf descriptor is detailed.
+	// When share_threshold is enabled, expose the prefix (before *) of the wildcard pattern
 	if rateLimit != nil && rateLimit.DetailedMetric {
-		detailedKey := detailedMetricFullKey.String()
-		rateLimit.Stats = this.statsManager.NewStats(detailedKey)
-		rateLimit.FullKey = detailedKey
+		// Check if any entry has share_threshold enabled
+		hasShareThreshold := rateLimit.ShareThresholdKeyPattern != nil && len(rateLimit.ShareThresholdKeyPattern) > 0
+		if hasShareThreshold {
+			// Build metric key with wildcard prefix for entries with share_threshold
+			var shareThresholdMetricKey strings.Builder
+			shareThresholdMetricKey.WriteString(domain)
+			for i, entry := range descriptor.Entries {
+				shareThresholdMetricKey.WriteString(".")
+				if i < len(rateLimit.ShareThresholdKeyPattern) && rateLimit.ShareThresholdKeyPattern[i] != "" {
+					// Use the prefix of the wildcard pattern (before *)
+					wildcardPrefix := strings.TrimSuffix(rateLimit.ShareThresholdKeyPattern[i], "*")
+					shareThresholdMetricKey.WriteString(entry.Key)
+					shareThresholdMetricKey.WriteString("_")
+					shareThresholdMetricKey.WriteString(wildcardPrefix)
+				} else {
+					// Include full key_value for entries without share_threshold
+					shareThresholdMetricKey.WriteString(entry.Key)
+					if entry.Value != "" {
+						shareThresholdMetricKey.WriteString("_")
+						shareThresholdMetricKey.WriteString(entry.Value)
+					}
+				}
+			}
+			shareThresholdKey := shareThresholdMetricKey.String()
+			rateLimit.FullKey = shareThresholdKey
+			rateLimit.Stats = this.statsManager.NewStats(shareThresholdKey)
+		} else {
+			detailedKey := detailedMetricFullKey.String()
+			rateLimit.FullKey = detailedKey
+			rateLimit.Stats = this.statsManager.NewStats(detailedKey)
+		}
 	}
 
 	// If not using detailed metric, but any value_to_metric path produced a different key,
@@ -423,7 +551,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 		enhancedKey := valueToMetricFullKey.String()
 		if enhancedKey != rateLimit.FullKey {
 			// Recreate to ensure a clean stats struct, then set to enhanced stats
+			originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
 			rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
+			rateLimit.ShareThresholdKeyPattern = originalShareThresholdKeyPattern
 			rateLimit.Stats = this.statsManager.NewStats(enhancedKey)
 			rateLimit.FullKey = enhancedKey
 		}
