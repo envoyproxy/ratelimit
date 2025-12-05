@@ -430,17 +430,11 @@ func (this *rateLimitConfigImpl) GetLimit(
 				}
 			} else if matchedUsingValue {
 				// Matched explicit key+value in config
-				// If share_threshold: use wildcard pattern with *
-				if hasShareThreshold {
-					valueToMetricFullKey.WriteString(entry.Key)
+				// share_threshold can't apply here (only works with wildcards)
+				valueToMetricFullKey.WriteString(entry.Key)
+				if entry.Value != "" {
 					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(shareThresholdPatterns[i])
-				} else {
-					valueToMetricFullKey.WriteString(entry.Key)
-					if entry.Value != "" {
-						valueToMetricFullKey.WriteString("_")
-						valueToMetricFullKey.WriteString(entry.Value)
-					}
+					valueToMetricFullKey.WriteString(entry.Value)
 				}
 			} else {
 				// Matched default key (no value) in config
