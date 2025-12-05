@@ -592,6 +592,10 @@ func TestWildcardConfig(t *testing.T) {
 		})
 	assert.NotNil(withoutVal1)
 	assert.Equal(withoutVal1, withoutVal2)
+	// Verify stats keys for no value descriptors
+	assert.Equal("test-domain.noVal", withoutVal1.Stats.Key, "No value descriptor should use just the key")
+	assert.Equal(withoutVal1.Stats.Key, withoutVal1.FullKey, "FullKey should match Stats.Key")
+	assert.Equal(withoutVal1.Stats.Key, withoutVal2.Stats.Key, "All no-value matches should have same stats key")
 
 	// Matches multiple wildcard values and results are equal
 	wildcard1 := rlConfig.GetLimit(
@@ -611,7 +615,12 @@ func TestWildcardConfig(t *testing.T) {
 		})
 	assert.NotNil(wildcard1)
 	assert.Equal(wildcard1, wildcard2)
+	assert.Equal("test-domain.wild_foo*", wildcard1.Stats.Key, "Wildcard stats key should include the wildcard pattern with *")
+	assert.Equal("test-domain.wild_foo*", wildcard1.FullKey, "Wildcard FullKey should match Stats.Key")
+	assert.Equal("test-domain.wild_foo*", wildcard2.Stats.Key, "All wildcard matches should have same stats key with wildcard pattern")
 	assert.NotNil(wildcard3)
+	assert.Equal("test-domain.nestedWild_val1.wild_goo*", wildcard3.Stats.Key, "Nested wildcard stats key should include the wildcard pattern with *")
+	assert.Equal("test-domain.nestedWild_val1.wild_goo*", wildcard3.FullKey, "Nested wildcard FullKey should match Stats.Key")
 
 	// Doesn't match non-matching values
 	noMatch := rlConfig.GetLimit(
@@ -1615,21 +1624,24 @@ func TestShareThreshold(t *testing.T) {
 			// Verify config: ShareThresholdKeyPattern is set correctly
 			asrt.Equal("files/*", rl.ShareThresholdKeyPattern[0])
 			asrt.EqualValues(100, rl.Limit.RequestsPerUnit)
-			// Verify stats: All should have the same stats key
-			asrt.Equal("test-domain.files", rl.Stats.Key)
+			// Verify stats: All should have the same stats key with wildcard pattern
+			// share_threshold: stats key includes wildcard pattern with *
+			asrt.Equal("test-domain.files_files/*", rl.Stats.Key)
 			rateLimits = append(rateLimits, rl)
 		}
 
 		// Verify all have same stats key
 		for i := 1; i < len(rateLimits); i++ {
 			asrt.Equal(rateLimits[0].Stats.Key, rateLimits[i].Stats.Key, "All values should have same stats key")
+			asrt.Equal(rateLimits[i].Stats.Key, rateLimits[i].FullKey, "FullKey should match Stats.Key for all rate limits")
 		}
 	})
 
 	// Test Case 2: share_threshold with metrics (value_to_metric and detailed_metric)
 	// Tests that metrics correctly include wildcard prefix when share_threshold is enabled
 	t.Run("share_threshold with metrics", func(t *testing.T) {
-		// Test value_to_metric
+		// Test value_to_metric with share_threshold
+		// share_threshold takes priority: should use wildcard pattern with *
 		rl1 := rlConfig.GetLimit(
 			context.TODO(), "test-domain",
 			&pb_struct.RateLimitDescriptor{
@@ -1640,9 +1652,11 @@ func TestShareThreshold(t *testing.T) {
 			})
 		asrt.NotNil(rl1)
 		asrt.Equal("api/*", rl1.ShareThresholdKeyPattern[0])
-		asrt.Equal("test-domain.route_api/.method", rl1.Stats.Key)
+		asrt.Equal("test-domain.route_api/*.method", rl1.Stats.Key, "share_threshold takes priority over value_to_metric, should use wildcard pattern with *")
+		asrt.Equal(rl1.Stats.Key, rl1.FullKey, "FullKey should match Stats.Key")
 
-		// Test detailed_metric
+		// Test detailed_metric with share_threshold
+		// share_threshold takes priority: should use wildcard pattern with *
 		rl2 := rlConfig.GetLimit(
 			context.TODO(), "test-domain",
 			&pb_struct.RateLimitDescriptor{
@@ -1654,7 +1668,8 @@ func TestShareThreshold(t *testing.T) {
 		asrt.NotNil(rl2)
 		asrt.Equal("svc/*", rl2.ShareThresholdKeyPattern[0])
 		asrt.True(rl2.DetailedMetric)
-		asrt.Equal("test-domain.service_svc/.endpoint_get", rl2.Stats.Key)
+		asrt.Equal("test-domain.service_svc/*.endpoint_get", rl2.Stats.Key, "share_threshold takes priority over detailed_metric, should use wildcard pattern with *")
+		asrt.Equal(rl2.Stats.Key, rl2.FullKey, "FullKey should match Stats.Key")
 	})
 
 	// Test Case 3: Nested wildcards with share_threshold
@@ -1671,6 +1686,9 @@ func TestShareThreshold(t *testing.T) {
 		asrt.NotNil(rl1)
 		asrt.Equal("nested/*", rl1.ShareThresholdKeyPattern[1])
 		asrt.EqualValues(200, rl1.Limit.RequestsPerUnit)
+		// Verify stats key includes wildcard pattern for nested share_threshold
+		asrt.Equal("test-domain.nested_parent.files_nested/*", rl1.Stats.Key, "Nested share_threshold should include wildcard pattern with *")
+		asrt.Equal(rl1.Stats.Key, rl1.FullKey, "FullKey should match Stats.Key")
 
 		// Multiple wildcards
 		rl2 := rlConfig.GetLimit(
@@ -1684,6 +1702,9 @@ func TestShareThreshold(t *testing.T) {
 		asrt.NotNil(rl2)
 		asrt.Equal("top/*", rl2.ShareThresholdKeyPattern[0])
 		asrt.Equal("nested/*", rl2.ShareThresholdKeyPattern[1])
+		// Verify stats key includes wildcard patterns for multiple share_threshold entries
+		asrt.Equal("test-domain.files_top/*.files_nested/*", rl2.Stats.Key, "Multiple share_threshold entries should include all wildcard patterns")
+		asrt.Equal(rl2.Stats.Key, rl2.FullKey, "FullKey should match Stats.Key")
 
 		// Parent has share_threshold, child does not
 		rl3 := rlConfig.GetLimit(
@@ -1698,6 +1719,10 @@ func TestShareThreshold(t *testing.T) {
 		asrt.NotNil(rl3)
 		asrt.Equal("path/*", rl3.ShareThresholdKeyPattern[0])
 		asrt.Equal("", rl3.ShareThresholdKeyPattern[1])
+		// Verify stats key: parent has share_threshold (wildcard pattern), child is wildcard without share_threshold (preserves original behavior with *)
+		// Note: file has wildcard pattern file/* in config but share_threshold: false, so it preserves original wildcard behavior
+		asrt.Equal("test-domain.path_path/*.file_file/*.type", rl3.Stats.Key, "Parent with share_threshold uses wildcard pattern, child wildcard without share_threshold preserves original behavior")
+		asrt.Equal(rl3.Stats.Key, rl3.FullKey, "FullKey should match Stats.Key")
 
 		// Both parent and child have share_threshold
 		rl4 := rlConfig.GetLimit(
@@ -1712,6 +1737,10 @@ func TestShareThreshold(t *testing.T) {
 		asrt.NotNil(rl4)
 		asrt.Equal("user/*", rl4.ShareThresholdKeyPattern[0])
 		asrt.Equal("res/*", rl4.ShareThresholdKeyPattern[1])
+		// Verify stats key includes wildcard patterns for both parent and child with share_threshold
+		// Note: action is just a key with value, no wildcard, so it doesn't include the value in stats key (no value_to_metric or detailed_metric)
+		asrt.Equal("test-domain.user_user/*.resource_res/*.action", rl4.Stats.Key, "Both parent and child with share_threshold should include wildcard patterns, action key without flags uses just the key")
+		asrt.Equal(rl4.Stats.Key, rl4.FullKey, "FullKey should match Stats.Key")
 	})
 
 	// Test Case 4: Explicit value takes precedence over wildcard
@@ -1752,8 +1781,8 @@ func TestShareThreshold(t *testing.T) {
 			asrt.Equal("test*", rl.ShareThresholdKeyPattern[0], "Pattern should be test*")
 			asrt.EqualValues(100, rl.Limit.RequestsPerUnit, "Should have shared limit of 100")
 
-			// Verify Stats: All wildcard matches should have the same stats key
-			asrt.Equal("test-domain.file", rl.Stats.Key, "Stats key should be same for all wildcard values")
+			// Verify Stats: All wildcard matches should have the same stats key with wildcard pattern
+			asrt.Equal("test-domain.file_test*", rl.Stats.Key, "Stats key should include wildcard pattern with * when share_threshold is true")
 
 			rateLimits = append(rateLimits, rl)
 		}
@@ -1767,12 +1796,186 @@ func TestShareThreshold(t *testing.T) {
 		for _, rl := range rateLimits {
 			rl.Stats.TotalHits.Inc()
 		}
-		counterValue := stats.NewCounter("test-domain.file.total_hits").Value()
+		counterValue := stats.NewCounter("test-domain.file_test*.total_hits").Value()
 		asrt.GreaterOrEqual(counterValue, uint64(len(testWildcardValues)), "All wildcard values should increment the same counter")
 
 		// test1 should have its own counter
 		rlTest1.Stats.TotalHits.Inc()
 		counterTest1 := stats.NewCounter("test-domain.file_test1.total_hits").Value()
 		asrt.GreaterOrEqual(counterTest1, uint64(1), "test1 should increment its own counter")
+	})
+}
+
+// TestWildcardStatsBehavior verifies the stats key behavior for wildcards under different flag combinations
+func TestWildcardStatsBehavior(t *testing.T) {
+	asrt := assert.New(t)
+	store := stats.NewStore(stats.NewNullSink(), false)
+
+	t.Run("No flags - preserves original behavior with wildcard pattern", func(t *testing.T) {
+		cfg := []config.RateLimitConfigToLoad{
+			{
+				Name: "inline",
+				ConfigYaml: &config.YamlRoot{
+					Domain: "test-domain",
+					Descriptors: []config.YamlDescriptor{
+						{
+							Key:   "wild",
+							Value: "foo*",
+							RateLimit: &config.YamlRateLimit{
+								RequestsPerUnit: 20,
+								Unit:            "minute",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo1"}},
+			})
+		asrt.NotNil(rl)
+		asrt.Equal("test-domain.wild_foo*", rl.Stats.Key)
+		asrt.Equal(rl.Stats.Key, rl.FullKey)
+	})
+
+	t.Run("value_to_metric - uses runtime value", func(t *testing.T) {
+		cfg := []config.RateLimitConfigToLoad{
+			{
+				Name: "inline",
+				ConfigYaml: &config.YamlRoot{
+					Domain: "test-domain",
+					Descriptors: []config.YamlDescriptor{
+						{
+							Key:           "wild",
+							Value:         "foo*",
+							ValueToMetric: true,
+							RateLimit: &config.YamlRateLimit{
+								RequestsPerUnit: 20,
+								Unit:            "minute",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo1"}},
+			})
+		asrt.NotNil(rl)
+		asrt.Equal("test-domain.wild_foo1", rl.Stats.Key)
+	})
+
+	t.Run("share_threshold - uses wildcard pattern with *", func(t *testing.T) {
+		cfg := []config.RateLimitConfigToLoad{
+			{
+				Name: "inline",
+				ConfigYaml: &config.YamlRoot{
+					Domain: "test-domain",
+					Descriptors: []config.YamlDescriptor{
+						{
+							Key:            "wild",
+							Value:          "foo*",
+							ShareThreshold: true,
+							RateLimit: &config.YamlRateLimit{
+								RequestsPerUnit: 20,
+								Unit:            "minute",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo1"}},
+			})
+		asrt.NotNil(rl)
+		asrt.Equal("test-domain.wild_foo*", rl.Stats.Key)
+		asrt.Equal(rl.Stats.Key, rl.FullKey)
+	})
+
+	t.Run("share_threshold with value_to_metric - share_threshold takes priority", func(t *testing.T) {
+		cfg := []config.RateLimitConfigToLoad{
+			{
+				Name: "inline",
+				ConfigYaml: &config.YamlRoot{
+					Domain: "test-domain",
+					Descriptors: []config.YamlDescriptor{
+						{
+							Key:            "wild",
+							Value:          "foo*",
+							ShareThreshold: true,
+							ValueToMetric:  true,
+							RateLimit: &config.YamlRateLimit{
+								RequestsPerUnit: 20,
+								Unit:            "minute",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo1"}},
+			})
+		asrt.NotNil(rl)
+		asrt.Equal("test-domain.wild_foo*", rl.Stats.Key)
+		asrt.Equal(rl.Stats.Key, rl.FullKey)
+	})
+
+	t.Run("value_to_metric in other descriptor - wildcard pattern preserved", func(t *testing.T) {
+		cfg := []config.RateLimitConfigToLoad{
+			{
+				Name: "inline",
+				ConfigYaml: &config.YamlRoot{
+					Domain: "test-domain",
+					Descriptors: []config.YamlDescriptor{
+						{
+							Key:   "wild",
+							Value: "foo*",
+							Descriptors: []config.YamlDescriptor{
+								{
+									Key:           "other",
+									ValueToMetric: true,
+									Descriptors: []config.YamlDescriptor{
+										{
+											Key:       "limit",
+											RateLimit: &config.YamlRateLimit{RequestsPerUnit: 20, Unit: "minute"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rl := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "wild", Value: "foo1"},
+					{Key: "other", Value: "bar"},
+					{Key: "limit", Value: "X"},
+				},
+			},
+		)
+		asrt.NotNil(rl)
+		// Wildcard pattern should be preserved even though value_to_metric is enabled on "other"
+		asrt.Equal("test-domain.wild_foo*.other_bar.limit", rl.Stats.Key, "Should preserve wildcard pattern when value_to_metric is only on other descriptor")
+		asrt.Equal(rl.Stats.Key, rl.FullKey, "FullKey should match Stats.Key")
 	})
 }

@@ -369,12 +369,14 @@ func (this *rateLimitConfigImpl) GetLimit(
 		logger.Debugf("looking up key: %s", finalKey)
 		nextDescriptor := descriptorsMap[finalKey]
 		matchedViaWildcard := false
+		var matchedWildcardKey string
 
 		if nextDescriptor == nil && len(prevDescriptor.wildcardKeys) > 0 {
 			for _, wildcardKey := range prevDescriptor.wildcardKeys {
 				if strings.HasPrefix(finalKey, strings.TrimSuffix(wildcardKey, "*")) {
 					nextDescriptor = descriptorsMap[wildcardKey]
 					matchedViaWildcard = true
+					matchedWildcardKey = wildcardKey
 					break
 				}
 			}
@@ -406,12 +408,14 @@ func (this *rateLimitConfigImpl) GetLimit(
 			// Check if share_threshold is enabled for this entry
 			hasShareThreshold := shareThresholdPatterns[i] != ""
 			if matchedViaWildcard {
-				// When share_threshold is enabled AND value_to_metric is enabled, use the prefix of the wildcard pattern
-				if hasShareThreshold && nextDescriptor.valueToMetric {
-					wildcardPrefix := strings.TrimSuffix(shareThresholdPatterns[i], "*")
+				// If share_threshold: always use wildcard pattern with * (e.g., "foo*")
+				// Else if value_to_metric: use actual runtime value (e.g., "foo1")
+				// Else: use wildcard pattern with * (e.g., "foo*")
+				if hasShareThreshold {
+					// share_threshold: always use wildcard pattern with *
 					valueToMetricFullKey.WriteString(entry.Key)
 					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(wildcardPrefix)
+					valueToMetricFullKey.WriteString(shareThresholdPatterns[i])
 				} else if nextDescriptor.valueToMetric {
 					valueToMetricFullKey.WriteString(entry.Key)
 					if entry.Value != "" {
@@ -419,16 +423,24 @@ func (this *rateLimitConfigImpl) GetLimit(
 						valueToMetricFullKey.WriteString(entry.Value)
 					}
 				} else {
-					valueToMetricFullKey.WriteString(entry.Key)
+					// No value_to_metric on this descriptor: preserve wildcard pattern
+					if matchedWildcardKey != "" {
+						// Extract the value part from the matched wildcard key (e.g., "key_foo*" -> "foo*")
+						wildcardValue := strings.TrimPrefix(matchedWildcardKey, entry.Key+"_")
+						valueToMetricFullKey.WriteString(entry.Key)
+						valueToMetricFullKey.WriteString("_")
+						valueToMetricFullKey.WriteString(wildcardValue)
+					} else {
+						valueToMetricFullKey.WriteString(entry.Key)
+					}
 				}
 			} else if matchedUsingValue {
 				// Matched explicit key+value in config
-				// When share_threshold is enabled AND value_to_metric is enabled, use the prefix of the wildcard pattern
-				if hasShareThreshold && nextDescriptor.valueToMetric {
-					wildcardPrefix := strings.TrimSuffix(shareThresholdPatterns[i], "*")
+				// If share_threshold: use wildcard pattern with *
+				if hasShareThreshold {
 					valueToMetricFullKey.WriteString(entry.Key)
 					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(wildcardPrefix)
+					valueToMetricFullKey.WriteString(shareThresholdPatterns[i])
 				} else {
 					valueToMetricFullKey.WriteString(entry.Key)
 					if entry.Value != "" {
@@ -438,12 +450,11 @@ func (this *rateLimitConfigImpl) GetLimit(
 				}
 			} else {
 				// Matched default key (no value) in config
-				// When share_threshold is enabled AND value_to_metric is enabled, use the prefix of the wildcard pattern
-				if hasShareThreshold && nextDescriptor.valueToMetric {
-					wildcardPrefix := strings.TrimSuffix(shareThresholdPatterns[i], "*")
+				// If share_threshold: use wildcard pattern with *
+				if hasShareThreshold {
 					valueToMetricFullKey.WriteString(entry.Key)
 					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(wildcardPrefix)
+					valueToMetricFullKey.WriteString(shareThresholdPatterns[i])
 				} else if nextDescriptor.valueToMetric {
 					valueToMetricFullKey.WriteString(entry.Key)
 					if entry.Value != "" {
@@ -510,22 +521,20 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	// Replace metric with detailed metric, if leaf descriptor is detailed.
-	// When share_threshold is enabled, expose the prefix (before *) of the wildcard pattern
+	// If share_threshold is enabled, always use wildcard pattern with *
 	if rateLimit != nil && rateLimit.DetailedMetric {
 		// Check if any entry has share_threshold enabled
 		hasShareThreshold := rateLimit.ShareThresholdKeyPattern != nil && len(rateLimit.ShareThresholdKeyPattern) > 0
 		if hasShareThreshold {
-			// Build metric key with wildcard prefix for entries with share_threshold
+			// Build metric key with wildcard pattern (including *) for entries with share_threshold
 			var shareThresholdMetricKey strings.Builder
 			shareThresholdMetricKey.WriteString(domain)
 			for i, entry := range descriptor.Entries {
 				shareThresholdMetricKey.WriteString(".")
 				if i < len(rateLimit.ShareThresholdKeyPattern) && rateLimit.ShareThresholdKeyPattern[i] != "" {
-					// Use the prefix of the wildcard pattern (before *)
-					wildcardPrefix := strings.TrimSuffix(rateLimit.ShareThresholdKeyPattern[i], "*")
 					shareThresholdMetricKey.WriteString(entry.Key)
 					shareThresholdMetricKey.WriteString("_")
-					shareThresholdMetricKey.WriteString(wildcardPrefix)
+					shareThresholdMetricKey.WriteString(rateLimit.ShareThresholdKeyPattern[i])
 				} else {
 					// Include full key_value for entries without share_threshold
 					shareThresholdMetricKey.WriteString(entry.Key)
