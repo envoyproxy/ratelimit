@@ -403,51 +403,37 @@ func (this *rateLimitConfigImpl) GetLimit(
 		// Build value_to_metric metrics path for this level
 		valueToMetricFullKey.WriteString(".")
 		if nextDescriptor != nil {
-			// Check if share_threshold is enabled for this entry
+			// Determine the value to use for this entry
+			var valueToUse string
 			hasShareThreshold := shareThresholdPatterns[i] != ""
+
 			if matchedWildcardKey != "" {
-				// If share_threshold: always use wildcard pattern with * (e.g., "foo*")
-				// Else if value_to_metric: use actual runtime value (e.g., "foo1")
-				// Else: use wildcard pattern with * (e.g., "foo*")
+				// Matched via wildcard
 				if hasShareThreshold {
 					// share_threshold: always use wildcard pattern with *
-					valueToMetricFullKey.WriteString(entry.Key)
-					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(shareThresholdPatterns[i])
+					valueToUse = shareThresholdPatterns[i]
 				} else if nextDescriptor.valueToMetric {
-					valueToMetricFullKey.WriteString(entry.Key)
-					if entry.Value != "" {
-						valueToMetricFullKey.WriteString("_")
-						valueToMetricFullKey.WriteString(entry.Value)
-					}
+					// value_to_metric: use actual runtime value
+					valueToUse = entry.Value
 				} else {
-					// No value_to_metric on this descriptor: preserve wildcard pattern
-					// Extract the value part from the matched wildcard key (e.g., "key_foo*" -> "foo*")
-					wildcardValue := strings.TrimPrefix(matchedWildcardKey, entry.Key+"_")
-					valueToMetricFullKey.WriteString(entry.Key)
-					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(wildcardValue)
+					// No flags: preserve wildcard pattern
+					valueToUse = strings.TrimPrefix(matchedWildcardKey, entry.Key+"_")
 				}
 			} else if matchedUsingValue {
-				// Matched explicit key+value in config
-				// share_threshold can't apply here (only works with wildcards)
-				valueToMetricFullKey.WriteString(entry.Key)
-				if entry.Value != "" {
-					valueToMetricFullKey.WriteString("_")
-					valueToMetricFullKey.WriteString(entry.Value)
-				}
+				// Matched explicit key+value in config (share_threshold can't apply here)
+				valueToUse = entry.Value
 			} else {
 				// Matched default key (no value) in config
-				// share_threshold can't apply here (only works with wildcards)
 				if nextDescriptor.valueToMetric {
-					valueToMetricFullKey.WriteString(entry.Key)
-					if entry.Value != "" {
-						valueToMetricFullKey.WriteString("_")
-						valueToMetricFullKey.WriteString(entry.Value)
-					}
-				} else {
-					valueToMetricFullKey.WriteString(entry.Key)
+					valueToUse = entry.Value
 				}
+			}
+
+			// Write key and value (if any)
+			valueToMetricFullKey.WriteString(entry.Key)
+			if valueToUse != "" {
+				valueToMetricFullKey.WriteString("_")
+				valueToMetricFullKey.WriteString(valueToUse)
 			}
 		} else {
 			// No next descriptor found; still append something deterministic
