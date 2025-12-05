@@ -70,7 +70,7 @@ func checkError(err error) {
 	}
 }
 
-func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
+func NewClientImpl(scope stats.Scope, useTls bool, auth, sAuth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
 	timeout time.Duration,
 ) Client {
@@ -94,6 +94,29 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 			} else {
 				logger.Warnf("enabling authentication to redis on %s without user", maskedUrl)
 				dialOpts = append(dialOpts, radix.DialAuthPass(auth))
+			}
+		}
+
+		return radix.Dial(network, addr, dialOpts...)
+	}
+
+	sdf := func(network, addr string) (radix.Conn, error) {
+		var dialOpts []radix.DialOpt
+
+		dialOpts = append(dialOpts, radix.DialTimeout(timeout))
+
+		if useTls {
+			dialOpts = append(dialOpts, radix.DialUseTLS(tlsConfig))
+		}
+
+		if sAuth != "" {
+			user, pass, found := strings.Cut(sAuth, ":")
+			if found {
+				logger.Warnf("enabling authentication to sentinel on %s with user %s", maskedUrl, user)
+				dialOpts = append(dialOpts, radix.DialAuthUser(user, pass))
+			} else {
+				logger.Warnf("enabling authentication to sentinel on %s without user", maskedUrl)
+				dialOpts = append(dialOpts, radix.DialAuthPass(sAuth))
 			}
 		}
 
@@ -133,7 +156,14 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		if len(urls) < 2 {
 			panic(RedisError("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>"))
 		}
-		client, err = radix.NewSentinel(urls[0], urls[1:], radix.SentinelPoolFunc(poolFunc))
+
+		sentConnOpt := radix.SentinelConnFunc(sdf)
+		opt := radix.SentinelPoolFunc(poolFunc)
+
+		client, err = radix.NewSentinel(urls[0], urls[1:], opt, sentConnOpt)
+		if err != nil {
+			panic(RedisError(fmt.Sprintf("Unable to create sentinel client: %v", err)))
+		}
 	default:
 		panic(RedisError("Unrecognized redis type " + redisType))
 	}
