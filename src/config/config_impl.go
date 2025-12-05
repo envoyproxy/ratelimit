@@ -553,7 +553,6 @@ func (this *rateLimitConfigImpl) GetLimit(
 			originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
 			rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(enhancedKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
 			rateLimit.ShareThresholdKeyPattern = originalShareThresholdKeyPattern
-			rateLimit.FullKey = enhancedKey
 		}
 	}
 
