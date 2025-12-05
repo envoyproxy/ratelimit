@@ -368,14 +368,12 @@ func (this *rateLimitConfigImpl) GetLimit(
 
 		logger.Debugf("looking up key: %s", finalKey)
 		nextDescriptor := descriptorsMap[finalKey]
-		matchedViaWildcard := false
 		var matchedWildcardKey string
 
 		if nextDescriptor == nil && len(prevDescriptor.wildcardKeys) > 0 {
 			for _, wildcardKey := range prevDescriptor.wildcardKeys {
 				if strings.HasPrefix(finalKey, strings.TrimSuffix(wildcardKey, "*")) {
 					nextDescriptor = descriptorsMap[wildcardKey]
-					matchedViaWildcard = true
 					matchedWildcardKey = wildcardKey
 					break
 				}
@@ -391,7 +389,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 		}
 
 		// Track share_threshold pattern when matching via wildcard, even if no rate_limit at this level
-		if matchedViaWildcard && nextDescriptor != nil && nextDescriptor.shareThreshold && nextDescriptor.wildcardPattern != "" {
+		if matchedWildcardKey != "" && nextDescriptor != nil && nextDescriptor.shareThreshold && nextDescriptor.wildcardPattern != "" {
 			// Extract the value part from the wildcard pattern (e.g., "key_files*" -> "files*")
 			if shareThresholdPatterns == nil {
 				shareThresholdPatterns = make(map[int]string)
@@ -407,7 +405,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 		if nextDescriptor != nil {
 			// Check if share_threshold is enabled for this entry
 			hasShareThreshold := shareThresholdPatterns[i] != ""
-			if matchedViaWildcard {
+			if matchedWildcardKey != "" {
 				// If share_threshold: always use wildcard pattern with * (e.g., "foo*")
 				// Else if value_to_metric: use actual runtime value (e.g., "foo1")
 				// Else: use wildcard pattern with * (e.g., "foo*")
@@ -424,15 +422,11 @@ func (this *rateLimitConfigImpl) GetLimit(
 					}
 				} else {
 					// No value_to_metric on this descriptor: preserve wildcard pattern
-					if matchedWildcardKey != "" {
-						// Extract the value part from the matched wildcard key (e.g., "key_foo*" -> "foo*")
-						wildcardValue := strings.TrimPrefix(matchedWildcardKey, entry.Key+"_")
-						valueToMetricFullKey.WriteString(entry.Key)
-						valueToMetricFullKey.WriteString("_")
-						valueToMetricFullKey.WriteString(wildcardValue)
-					} else {
-						valueToMetricFullKey.WriteString(entry.Key)
-					}
+					// Extract the value part from the matched wildcard key (e.g., "key_foo*" -> "foo*")
+					wildcardValue := strings.TrimPrefix(matchedWildcardKey, entry.Key+"_")
+					valueToMetricFullKey.WriteString(entry.Key)
+					valueToMetricFullKey.WriteString("_")
+					valueToMetricFullKey.WriteString(wildcardValue)
 				}
 			} else if matchedUsingValue {
 				// Matched explicit key+value in config
