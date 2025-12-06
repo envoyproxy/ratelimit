@@ -1278,6 +1278,7 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 1. "cluster": A comma separated list of hostname:port pairs with all the nodes in the cluster.
 
 ## Connection Pool Settings
+
 ### Pool Size
 
 1. `REDIS_POOL_SIZE`: the number of connections to keep in the pool. Default: `10`
