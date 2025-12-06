@@ -72,7 +72,7 @@ func checkError(err error) {
 
 func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
-	timeout time.Duration,
+	timeout time.Duration, poolOnEmptyBehavior string, poolOnEmptyWaitDuration time.Duration,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
@@ -111,6 +111,24 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		opts = append(opts, radix.PoolPipelineWindow(pipelineWindow, pipelineLimit))
 	}
 	logger.Debugf("Implicit pipelining enabled: %v", implicitPipelining)
+
+	// Configure pool on-empty behavior to prevent connection storms during Redis failures
+	switch strings.ToUpper(poolOnEmptyBehavior) {
+	case "WAIT":
+		opts = append(opts, radix.PoolOnEmptyWait())
+		logger.Warnf("Redis pool %s: on-empty=WAIT (block until connection available)", maskedUrl)
+	case "CREATE":
+		opts = append(opts, radix.PoolOnEmptyCreateAfter(poolOnEmptyWaitDuration))
+		logger.Warnf("Redis pool %s: on-empty=CREATE after %v", maskedUrl, poolOnEmptyWaitDuration)
+	case "ERROR":
+		opts = append(opts, radix.PoolOnEmptyErrAfter(poolOnEmptyWaitDuration))
+		logger.Warnf("Redis pool %s: on-empty=ERROR after %v (fail-fast)", maskedUrl, poolOnEmptyWaitDuration)
+	default:
+		// Empty string = use radix default (PoolOnEmptyCreateAfter(1s))
+		if poolOnEmptyBehavior != "" {
+			logger.Warnf("Redis pool %s: unknown on-empty behavior '%s', using default (CREATE after 1s)", maskedUrl, poolOnEmptyBehavior)
+		}
+	}
 
 	poolFunc := func(network, addr string) (radix.Client, error) {
 		return radix.NewPool(network, addr, poolSize, opts...)

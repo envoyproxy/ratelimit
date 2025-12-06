@@ -62,6 +62,7 @@
 - [Redis](#redis)
   - [Redis type](#redis-type)
   - [Connection Timeout](#connection-timeout)
+  - [Pool On-Empty Behavior](#pool-on-empty-behavior)
   - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
@@ -1280,6 +1281,18 @@ Connection timeout controls the maximum duration for Redis connection establishm
 
 1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
 1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
+
+## Pool On-Empty Behavior
+
+Controls what happens when all connections in the Redis pool are in use and a new request arrives.
+
+1. `REDIS_POOL_ON_EMPTY_BEHAVIOR`: controls what happens when the pool is empty. Default: `""` (radix default: create after 1s)
+   - `ERROR`: return an error after waiting for the specified duration. This enforces a strict pool size limit.
+   - `CREATE`: create a new overflow connection after waiting for the specified duration. This is the [default radix behavior](https://github.com/mediocregopher/radix/blob/v3.8.1/pool.go#L291-L312).
+   - `WAIT`: block until a connection becomes available. This enforces a strict pool size limit but may cause goroutine buildup.
+1. `REDIS_POOL_ON_EMPTY_WAIT_DURATION`: the duration to wait before taking the configured action. Default: `0` (immediate)
+1. `REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR`: same as above for per-second Redis pool. Default: `""`
+1. `REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION`: same as above for per-second Redis pool. Default: `0`
 
 ## Pipelining
 
