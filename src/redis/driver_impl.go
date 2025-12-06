@@ -112,7 +112,6 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 	}
 	logger.Debugf("Implicit pipelining enabled: %v", implicitPipelining)
 
-	// Configure pool on-empty behavior to prevent connection storms during Redis failures
 	switch strings.ToUpper(poolOnEmptyBehavior) {
 	case "WAIT":
 		opts = append(opts, radix.PoolOnEmptyWait())

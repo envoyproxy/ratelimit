@@ -61,9 +61,11 @@
 - [Local Cache](#local-cache)
 - [Redis](#redis)
   - [Redis type](#redis-type)
-  - [Connection Timeout](#connection-timeout)
-  - [Pool On-Empty Behavior](#pool-on-empty-behavior)
-  - [Pipelining](#pipelining)
+  - [Connection Pool Settings](#connection-pool-settings)
+    - [Pool Size](#pool-size)
+    - [Connection Timeout](#connection-timeout)
+    - [Pool On-Empty Behavior](#pool-on-empty-behavior)
+    - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
@@ -1275,26 +1277,32 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 1. "sentinel": A comma separated list with the first string as the master name of the sentinel cluster followed by hostname:port pairs. The list size should be >= 2. The first item is the name of the master and the rest are the sentinels.
 1. "cluster": A comma separated list of hostname:port pairs with all the nodes in the cluster.
 
-## Connection Timeout
+## Connection Pool Settings
+### Pool Size
 
-Connection timeout controls the maximum duration for Redis connection establishment, read operations, and write operations.
+1. `REDIS_POOL_SIZE`: the number of connections to keep in the pool. Default: `10`
+1. `REDIS_PERSECOND_POOL_SIZE`: pool size for per-second Redis. Default: `10`
+
+### Connection Timeout
+
+Controls the maximum duration for Redis connection establishment, read operations, and write operations.
 
 1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
 1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
 
-## Pool On-Empty Behavior
+### Pool On-Empty Behavior
 
-Controls what happens when all connections in the Redis pool are in use and a new request arrives.
+Controls what happens when all connections in the pool are in use and a new request arrives.
 
 1. `REDIS_POOL_ON_EMPTY_BEHAVIOR`: controls what happens when the pool is empty. Default: `""` (radix default: create after 1s)
-   - `ERROR`: return an error after waiting for the specified duration. This enforces a strict pool size limit.
-   - `CREATE`: create a new overflow connection after waiting for the specified duration. This is the [default radix behavior](https://github.com/mediocregopher/radix/blob/v3.8.1/pool.go#L291-L312).
+   - `ERROR`: return an error after waiting for `REDIS_POOL_ON_EMPTY_WAIT_DURATION`. This enforces a strict pool size limit and is recommended for production to fail fast during Redis outages.
+   - `CREATE`: create a new overflow connection after waiting for `REDIS_POOL_ON_EMPTY_WAIT_DURATION`. This is the [default radix behavior](https://github.com/mediocregopher/radix/blob/v3.8.1/pool.go#L291-L312).
    - `WAIT`: block until a connection becomes available. This enforces a strict pool size limit but may cause goroutine buildup.
-1. `REDIS_POOL_ON_EMPTY_WAIT_DURATION`: the duration to wait before taking the configured action. Default: `0` (immediate)
+1. `REDIS_POOL_ON_EMPTY_WAIT_DURATION`: the duration to wait before taking the configured action (`ERROR` or `CREATE`). Default: `0` (immediate)
 1. `REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR`: same as above for per-second Redis pool. Default: `""`
 1. `REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION`: same as above for per-second Redis pool. Default: `0`
 
-## Pipelining
+### Pipelining
 
 By default, for each request, ratelimit will pick up a connection from pool, write multiple redis commands in a single write then reads their responses in a single read. This reduces network delay.
 
