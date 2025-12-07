@@ -163,6 +163,25 @@ type Settings struct {
 	RedisTimeout time.Duration `envconfig:"REDIS_TIMEOUT" default:"10s"`
 	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.
 	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
+
+	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
+	// This setting helps prevent connection storms during Redis failures.
+	// Possible values:
+	//   - "CREATE": Create a new connection after RedisPoolOnEmptyWaitDuration (default)
+	//   - "ERROR": Return error after RedisPoolOnEmptyWaitDuration
+	//   - "WAIT": Block until a connection is available
+	RedisPoolOnEmptyBehavior string `envconfig:"REDIS_POOL_ON_EMPTY_BEHAVIOR" default:"CREATE"`
+	// RedisPoolOnEmptyWaitDuration is the wait duration before taking action when pool is empty.
+	// Only applicable when RedisPoolOnEmptyBehavior is "CREATE" or "ERROR".
+	RedisPoolOnEmptyWaitDuration time.Duration `envconfig:"REDIS_POOL_ON_EMPTY_WAIT_DURATION" default:"1s"`
+
+	// RedisPerSecondPoolOnEmptyBehavior controls pool-empty behavior for per-second Redis.
+	// See RedisPoolOnEmptyBehavior for possible values and details.
+	RedisPerSecondPoolOnEmptyBehavior string `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR" default:"CREATE"`
+	// RedisPerSecondPoolOnEmptyWaitDuration is the wait duration for per-second Redis pool.
+	// See RedisPoolOnEmptyWaitDuration for details.
+	RedisPerSecondPoolOnEmptyWaitDuration time.Duration `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION" default:"1s"`
+
 	// Memcache settings
 	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`
 	// MemcacheMaxIdleConns sets the maximum number of idle TCP connections per memcached node.
