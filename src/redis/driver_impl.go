@@ -123,10 +123,8 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		opts = append(opts, radix.PoolOnEmptyErrAfter(poolOnEmptyWaitDuration))
 		logger.Warnf("Redis pool %s: on-empty=ERROR after %v (fail-fast)", maskedUrl, poolOnEmptyWaitDuration)
 	default:
-		// Empty string = use radix default (PoolOnEmptyCreateAfter(1s))
-		if poolOnEmptyBehavior != "" {
-			logger.Warnf("Redis pool %s: unknown on-empty behavior '%s', using default (CREATE after 1s)", maskedUrl, poolOnEmptyBehavior)
-		}
+		logger.Warnf("Redis pool %s: invalid on-empty behavior '%s', using default CREATE after %v", maskedUrl, poolOnEmptyBehavior, poolOnEmptyWaitDuration)
+		opts = append(opts, radix.PoolOnEmptyCreateAfter(poolOnEmptyWaitDuration))
 	}
 
 	poolFunc := func(network, addr string) (radix.Client, error) {

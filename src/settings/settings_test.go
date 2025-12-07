@@ -21,8 +21,8 @@ func TestRedisPoolOnEmptyBehavior_Default(t *testing.T) {
 
 	settings := NewSettings()
 
-	assert.Equal(t, "", settings.RedisPoolOnEmptyBehavior)
-	assert.Equal(t, time.Duration(0), settings.RedisPoolOnEmptyWaitDuration)
+	assert.Equal(t, "CREATE", settings.RedisPoolOnEmptyBehavior)
+	assert.Equal(t, 1*time.Second, settings.RedisPoolOnEmptyWaitDuration)
 }
 
 func TestRedisPoolOnEmptyBehavior_Error(t *testing.T) {
@@ -88,8 +88,8 @@ func TestRedisPerSecondPoolOnEmptyBehavior_Default(t *testing.T) {
 
 	settings := NewSettings()
 
-	assert.Equal(t, "", settings.RedisPerSecondPoolOnEmptyBehavior)
-	assert.Equal(t, time.Duration(0), settings.RedisPerSecondPoolOnEmptyWaitDuration)
+	assert.Equal(t, "CREATE", settings.RedisPerSecondPoolOnEmptyBehavior)
+	assert.Equal(t, 1*time.Second, settings.RedisPerSecondPoolOnEmptyWaitDuration)
 }
 
 func TestRedisPerSecondPoolOnEmptyBehavior_Error(t *testing.T) {

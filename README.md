@@ -1295,13 +1295,13 @@ Controls the maximum duration for Redis connection establishment, read operation
 
 Controls what happens when all connections in the pool are in use and a new request arrives.
 
-1. `REDIS_POOL_ON_EMPTY_BEHAVIOR`: controls what happens when the pool is empty. Default: `""` (radix default: create after 1s)
-   - `ERROR`: return an error after waiting for `REDIS_POOL_ON_EMPTY_WAIT_DURATION`. This enforces a strict pool size limit and is recommended for production to fail fast during Redis outages.
+1. `REDIS_POOL_ON_EMPTY_BEHAVIOR`: controls what happens when the pool is empty. Default: `CREATE`
    - `CREATE`: create a new overflow connection after waiting for `REDIS_POOL_ON_EMPTY_WAIT_DURATION`. This is the [default radix behavior](https://github.com/mediocregopher/radix/blob/v3.8.1/pool.go#L291-L312).
+   - `ERROR`: return an error after waiting for `REDIS_POOL_ON_EMPTY_WAIT_DURATION`. This enforces a strict pool size limit.
    - `WAIT`: block until a connection becomes available. This enforces a strict pool size limit but may cause goroutine buildup.
-1. `REDIS_POOL_ON_EMPTY_WAIT_DURATION`: the duration to wait before taking the configured action (`ERROR` or `CREATE`). Default: `0` (immediate)
-1. `REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR`: same as above for per-second Redis pool. Default: `""`
-1. `REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION`: same as above for per-second Redis pool. Default: `0`
+1. `REDIS_POOL_ON_EMPTY_WAIT_DURATION`: the duration to wait before taking the configured action (`CREATE` or `ERROR`). Default: `1s`
+1. `REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR`: same as above for per-second Redis pool. Default: `CREATE`
+1. `REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION`: same as above for per-second Redis pool. Default: `1s`
 
 ### Pipelining
 
