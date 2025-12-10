@@ -74,7 +74,8 @@ func NewRateLimitRequest(domain string, descriptors [][][2]string, hitsAddend ui
 }
 
 func NewRateLimitRequestWithPerDescriptorHitsAddend(domain string, descriptors [][][2]string,
-	hitsAddends []uint64) *pb.RateLimitRequest {
+	hitsAddends []uint64,
+) *pb.RateLimitRequest {
 	request := NewRateLimitRequest(domain, descriptors, 1)
 	for i, hitsAddend := range hitsAddends {
 		request.Descriptors[i].HitsAddend = &wrapperspb.UInt64Value{Value: hitsAddend}

@@ -151,6 +151,14 @@ type Settings struct {
 	RedisPerSecondPoolSize   int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	RedisPerSecondAuth       string `envconfig:"REDIS_PERSECOND_AUTH" default:""`
 	RedisPerSecondTls        bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
+	// RedisSentinelAuth is the password for authenticating to Redis Sentinel nodes (not the Redis master/replica).
+	// This is separate from RedisAuth which is used for authenticating to the Redis master/replica nodes.
+	// If empty, no authentication will be attempted when connecting to Sentinel nodes.
+	RedisSentinelAuth string `envconfig:"REDIS_SENTINEL_AUTH" default:""`
+	// RedisPerSecondSentinelAuth is the password for authenticating to per-second Redis Sentinel nodes.
+	// This is separate from RedisPerSecondAuth which is used for authenticating to the Redis master/replica nodes.
+	// If empty, no authentication will be attempted when connecting to per-second Sentinel nodes.
+	RedisPerSecondSentinelAuth string `envconfig:"REDIS_PERSECOND_SENTINEL_AUTH" default:""`
 	// RedisPerSecondPipelineWindow sets the duration after which internal pipelines will be flushed for per second redis.
 	// See comments of RedisPipelineWindow for details.
 	RedisPerSecondPipelineWindow time.Duration `envconfig:"REDIS_PERSECOND_PIPELINE_WINDOW" default:"0"`

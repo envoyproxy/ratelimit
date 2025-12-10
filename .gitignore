@@ -1,6 +1,7 @@
 cover.out
 
 bin/
+env/
 .idea/
 .vscode/
 vendor
