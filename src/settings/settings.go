@@ -202,6 +202,8 @@ type Settings struct {
 	// Should the ratelimiting be running in Global shadow-mode, ie. never report a ratelimit status, unless a rate was provided from envoy as an override
 	GlobalShadowMode bool `envconfig:"SHADOW_MODE" default:"false"`
 
+	ResponseDynamicMetadata bool `envconfig:"RESPONSE_DYNAMIC_METADATA" default:"false"`
+
 	// Allow merging of multiple yaml files referencing the same domain
 	MergeDomainConfigurations bool `envconfig:"MERGE_DOMAIN_CONFIG" default:"false"`
 

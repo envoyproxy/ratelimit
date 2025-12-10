@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/src/stats"
@@ -17,6 +18,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ratelimitv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -38,18 +40,19 @@ type RateLimitServiceServer interface {
 }
 
 type service struct {
-	configLock                  sync.RWMutex
-	configUpdateEvent           <-chan provider.ConfigUpdateEvent
-	config                      config.RateLimitConfig
-	cache                       limiter.RateLimitCache
-	stats                       stats.ServiceStats
-	health                      *server.HealthChecker
-	customHeadersEnabled        bool
-	customHeaderLimitHeader     string
-	customHeaderRemainingHeader string
-	customHeaderResetHeader     string
-	customHeaderClock           utils.TimeSource
-	globalShadowMode            bool
+	configLock                     sync.RWMutex
+	configUpdateEvent              <-chan provider.ConfigUpdateEvent
+	config                         config.RateLimitConfig
+	cache                          limiter.RateLimitCache
+	stats                          stats.ServiceStats
+	health                         *server.HealthChecker
+	customHeadersEnabled           bool
+	customHeaderLimitHeader        string
+	customHeaderRemainingHeader    string
+	customHeaderResetHeader        string
+	customHeaderClock              utils.TimeSource
+	globalShadowMode               bool
+	responseDynamicMetadataEnabled bool
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -84,6 +87,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 
 	rlSettings := settings.NewSettings()
 	this.globalShadowMode = rlSettings.GlobalShadowMode
+	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
 
 	if rlSettings.RateLimitResponseHeadersEnabled {
 		this.customHeadersEnabled = true
@@ -239,8 +243,65 @@ func (this *service) shouldRateLimitWorker(
 		this.stats.GlobalShadowMode.Inc()
 	}
 
+	// If response dynamic data enabled, set dynamic data on response.
+	if this.responseDynamicMetadataEnabled {
+		response.DynamicMetadata = ratelimitToMetadata(request)
+	}
+
 	response.OverallCode = finalCode
 	return response
+}
+
+func ratelimitToMetadata(req *pb.RateLimitRequest) *structpb.Struct {
+	dm, _ := structpb.NewStruct(nil)
+	dm.Fields = make(map[string]*structpb.Value)
+	// Domain
+	dm.Fields["domain"] = structpb.NewStringValue(req.Domain)
+	// Descriptors
+	descriptorsValues := make([]*structpb.Value, 0, len(req.Descriptors))
+	for _, descriptor := range req.Descriptors {
+		s := descriptorToStruct(descriptor)
+		if s == nil {
+			continue
+		}
+		descriptorsValues = append(descriptorsValues, structpb.NewStructValue(s))
+	}
+	dm.Fields["descriptors"] = structpb.NewListValue(&structpb.ListValue{
+		Values: descriptorsValues,
+	})
+	// HitsAddend
+	if hitsAddend := req.GetHitsAddend(); hitsAddend != 0 {
+		dm.Fields["hitsAddend"] = structpb.NewNumberValue(float64(hitsAddend))
+	}
+	return dm
+}
+
+func descriptorToStruct(descriptor *ratelimitv3.RateLimitDescriptor) *structpb.Struct {
+	if descriptor == nil {
+		return nil
+	}
+	s, _ := structpb.NewStruct(nil)
+	s.Fields = make(map[string]*structpb.Value)
+
+	// Entities
+	entriesValues := make([]*structpb.Value, 0, len(descriptor.Entries))
+	for _, entry := range descriptor.Entries {
+		val := fmt.Sprintf("%s=%s", entry.GetKey(), entry.GetValue())
+		entriesValues = append(entriesValues, structpb.NewStringValue(val))
+	}
+	s.Fields["entries"] = structpb.NewListValue(&structpb.ListValue{
+		Values: entriesValues,
+	})
+	// Limit
+	if descriptor.GetLimit() != nil {
+		s.Fields["limit"] = structpb.NewStringValue(descriptor.Limit.String())
+	}
+	// HitsAddend
+	if hitsAddend := descriptor.GetHitsAddend(); hitsAddend != nil {
+		s.Fields["hitsAddend"] = structpb.NewNumberValue(float64(hitsAddend.GetValue()))
+	}
+
+	return s
 }
 
 func (this *service) rateLimitLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
