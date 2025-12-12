@@ -253,10 +253,11 @@ func (this *service) shouldRateLimitWorker(
 }
 
 func ratelimitToMetadata(req *pb.RateLimitRequest) *structpb.Struct {
-	dm, _ := structpb.NewStruct(nil)
-	dm.Fields = make(map[string]*structpb.Value)
+	fields := make(map[string]*structpb.Value)
+
 	// Domain
-	dm.Fields["domain"] = structpb.NewStringValue(req.Domain)
+	fields["domain"] = structpb.NewStringValue(req.Domain)
+
 	// Descriptors
 	descriptorsValues := make([]*structpb.Value, 0, len(req.Descriptors))
 	for _, descriptor := range req.Descriptors {
@@ -266,42 +267,46 @@ func ratelimitToMetadata(req *pb.RateLimitRequest) *structpb.Struct {
 		}
 		descriptorsValues = append(descriptorsValues, structpb.NewStructValue(s))
 	}
-	dm.Fields["descriptors"] = structpb.NewListValue(&structpb.ListValue{
+	fields["descriptors"] = structpb.NewListValue(&structpb.ListValue{
 		Values: descriptorsValues,
 	})
+
 	// HitsAddend
 	if hitsAddend := req.GetHitsAddend(); hitsAddend != 0 {
-		dm.Fields["hitsAddend"] = structpb.NewNumberValue(float64(hitsAddend))
+		fields["hitsAddend"] = structpb.NewNumberValue(float64(hitsAddend))
 	}
-	return dm
+
+	return &structpb.Struct{Fields: fields}
 }
 
 func descriptorToStruct(descriptor *ratelimitv3.RateLimitDescriptor) *structpb.Struct {
 	if descriptor == nil {
 		return nil
 	}
-	s, _ := structpb.NewStruct(nil)
-	s.Fields = make(map[string]*structpb.Value)
 
-	// Entities
+	fields := make(map[string]*structpb.Value)
+
+	// Entries
 	entriesValues := make([]*structpb.Value, 0, len(descriptor.Entries))
 	for _, entry := range descriptor.Entries {
 		val := fmt.Sprintf("%s=%s", entry.GetKey(), entry.GetValue())
 		entriesValues = append(entriesValues, structpb.NewStringValue(val))
 	}
-	s.Fields["entries"] = structpb.NewListValue(&structpb.ListValue{
+	fields["entries"] = structpb.NewListValue(&structpb.ListValue{
 		Values: entriesValues,
 	})
+
 	// Limit
 	if descriptor.GetLimit() != nil {
-		s.Fields["limit"] = structpb.NewStringValue(descriptor.Limit.String())
-	}
-	// HitsAddend
-	if hitsAddend := descriptor.GetHitsAddend(); hitsAddend != nil {
-		s.Fields["hitsAddend"] = structpb.NewNumberValue(float64(hitsAddend.GetValue()))
+		fields["limit"] = structpb.NewStringValue(descriptor.Limit.String())
 	}
 
-	return s
+	// HitsAddend
+	if hitsAddend := descriptor.GetHitsAddend(); hitsAddend != nil {
+		fields["hitsAddend"] = structpb.NewNumberValue(float64(hitsAddend.GetValue()))
+	}
+
+	return &structpb.Struct{Fields: fields}
 }
 
 func (this *service) rateLimitLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
