@@ -148,14 +148,14 @@ type Settings struct {
 	// RedisPipelineLimit is DEPRECATED and unused in radix v4.
 	// This setting has no effect. Radix v4 does not support explicit pipeline size limits.
 	// Write buffering is controlled solely by RedisPipelineWindow (WriteFlushInterval).
-	RedisPipelineLimit       int    `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
+	RedisPipelineLimit int `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
 	// RedisUseExplicitPipeline controls whether to use explicit pipelining (radix.NewPipeline()).
 	// When true, commands are batched using radix.NewPipeline() and sent together.
 	// When false (default), individual commands are sent with automatic write buffering via WriteFlushInterval.
 	// IMPORTANT: Explicit pipelining CANNOT be used with Redis Cluster mode.
 	// For cluster mode, you MUST use automatic write buffering (set this to false and use RedisPipelineWindow).
 	// Only set this to true for single/sentinel mode when you specifically need explicit pipeline control.
-	RedisUseExplicitPipeline bool `envconfig:"REDIS_USE_EXPLICIT_PIPELINE" default:"false"`
+	RedisUseExplicitPipeline bool   `envconfig:"REDIS_USE_EXPLICIT_PIPELINE" default:"false"`
 	RedisPerSecond           bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
 	RedisPerSecondType       string `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`
