@@ -132,10 +132,15 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 	// Otherwise, individual Do() calls are used with automatic write buffering via WriteFlushInterval.
 	// pipelineLimit parameter is deprecated and ignored in radix v4.
 
+	// Warn if deprecated pipelineLimit is set
+	if pipelineLimit > 0 {
+		logger.Warnf("REDIS_PIPELINE_LIMIT=%d is deprecated and has no effect in radix v4. Write buffering is controlled solely by REDIS_PIPELINE_WINDOW.", pipelineLimit)
+	}
+
 	// Set WriteFlushInterval for automatic write buffering when not using explicit pipeline
 	if !useExplicitPipeline && pipelineWindow > 0 {
 		poolConfig.Dialer.WriteFlushInterval = pipelineWindow
-		logger.Debugf("Setting WriteFlushInterval to %v (pipelineLimit=%d is ignored in v4)", pipelineWindow, pipelineLimit)
+		logger.Debugf("Setting WriteFlushInterval to %v", pipelineWindow)
 	}
 
 	logger.Debugf("Use explicit pipeline: %v", useExplicitPipeline)
