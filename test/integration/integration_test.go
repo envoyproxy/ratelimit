@@ -471,8 +471,9 @@ func configRedisCluster(s *settings.Settings) {
 	s.RedisAuth = "password123"
 	s.RedisPerSecondAuth = "password123"
 
-	s.RedisPerSecondPipelineLimit = 8
-	s.RedisPipelineLimit = 8
+	// RedisPipelineLimit is deprecated in radix v4, use RedisPipelineWindow instead
+	s.RedisPerSecondPipelineWindow = 150 * time.Microsecond
+	s.RedisPipelineWindow = 150 * time.Microsecond
 }
 
 func testBasicConfigWithoutWatchRootWithRedisCluster(perSecond bool, local_cache_size int) func(*testing.T) {
