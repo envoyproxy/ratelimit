@@ -8,7 +8,7 @@ import (
 	"github.com/envoyproxy/ratelimit/test/mocks/stats"
 
 	"github.com/coocood/freecache"
-	"github.com/mediocregopher/radix/v3"
+	"github.com/mediocregopher/radix/v4"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	gostats "github.com/lyft/gostats"
@@ -35,7 +35,7 @@ func TestRedis(t *testing.T) {
 }
 
 func pipeAppend(pipeline redis.Pipeline, rcv interface{}, cmd, key string, args ...interface{}) redis.Pipeline {
-	return append(pipeline, radix.FlatCmd(rcv, cmd, key, args...))
+	return append(pipeline, radix.FlatCmd(rcv, cmd, append([]interface{}{key}, args...)...))
 }
 
 func testRedis(usePerSecondRedis bool) func(*testing.T) {

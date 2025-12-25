@@ -33,13 +33,13 @@ func expectPanicError(t *testing.T, f assert.PanicTestFunc) (result error) {
 	return
 }
 
-func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) func(t *testing.T) {
+func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit int, useExplicitPipeline bool) func(t *testing.T) {
 	return func(t *testing.T) {
 		redisAuth := "123"
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 		mkRedisClient := func(auth, addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, auth, "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", 0, "")
+			return redis.NewClientImpl(statsStore, false, auth, "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", 0, "", useExplicitPipeline)
 		}
 
 		t.Run("connection refused", func(t *testing.T) {
@@ -66,7 +66,7 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 
 			redisSrv.RequireAuth(redisAuth)
 
-			assert.PanicsWithError(t, "NOAUTH Authentication required.", func() {
+			assert.PanicsWithError(t, "response returned from Conn: NOAUTH Authentication required.", func() {
 				mkRedisClient("", redisSrv.Addr())
 			})
 		})
@@ -103,36 +103,32 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 			redisSrv.RequireUserAuth(user, pass)
 
 			redisAuth := fmt.Sprintf("%s:invalid-password", user)
-			assert.PanicsWithError(t, "WRONGPASS invalid username-password pair", func() {
+			assert.PanicsWithError(t, "response returned from Conn: WRONGPASS invalid username-password pair", func() {
 				mkRedisClient(redisAuth, redisSrv.Addr())
 			})
 		})
 
-		t.Run("ImplicitPipeliningEnabled() return expected value", func(t *testing.T) {
+		t.Run("UseExplicitPipeline() return expected value", func(t *testing.T) {
 			redisSrv := mustNewRedisServer()
 			defer redisSrv.Close()
 
 			client := mkRedisClient("", redisSrv.Addr())
 
-			if pipelineWindow == 0 && pipelineLimit == 0 {
-				assert.False(t, client.ImplicitPipeliningEnabled())
-			} else {
-				assert.True(t, client.ImplicitPipeliningEnabled())
-			}
+			assert.Equal(t, useExplicitPipeline, client.UseExplicitPipeline())
 		})
 	}
 }
 
 func TestNewClientImpl(t *testing.T) {
-	t.Run("ImplicitPipeliningEnabled", testNewClientImpl(t, 2*time.Millisecond, 2))
-	t.Run("ImplicitPipeliningDisabled", testNewClientImpl(t, 0, 0))
+	t.Run("AutoBuffering", testNewClientImpl(t, 2*time.Millisecond, 2, false))
+	t.Run("ExplicitPipeline", testNewClientImpl(t, 0, 0, true))
 }
 
 func TestDoCmd(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	mkRedisClient := func(addr string) redis.Client {
-		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, "", 0, "")
+		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, "", 0, "", false)
 	}
 
 	t.Run("SETGET ok", func(t *testing.T) {
@@ -168,16 +164,16 @@ func TestDoCmd(t *testing.T) {
 		assert.Nil(t, client.DoCmd(nil, "SET", "foo", "bar"))
 
 		redisSrv.Close()
-		assert.EqualError(t, client.DoCmd(nil, "GET", "foo"), "EOF")
+		assert.EqualError(t, client.DoCmd(nil, "GET", "foo"), "response returned from Conn: EOF")
 	})
 }
 
-func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) func(t *testing.T) {
+func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int, useExplicitPipeline bool) func(t *testing.T) {
 	return func(t *testing.T) {
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 		mkRedisClient := func(addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", 0, "")
+			return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", 0, "", useExplicitPipeline)
 		}
 
 		t.Run("SETGET ok", func(t *testing.T) {
@@ -220,7 +216,13 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 
 			expectErrContainEOF := func(t *testing.T, err error) {
 				assert.NotNil(t, err)
-				assert.Contains(t, err.Error(), "EOF")
+				// radix v4 wraps errors with "response returned from Conn:"
+				// and may return different connection errors (EOF, connection reset, etc)
+				errMsg := err.Error()
+				hasConnectionError := strings.Contains(errMsg, "EOF") ||
+					strings.Contains(errMsg, "connection reset") ||
+					strings.Contains(errMsg, "broken pipe")
+				assert.True(t, hasConnectionError, "expected connection error, got: %s", errMsg)
 			}
 
 			expectErrContainEOF(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, nil, "GET", "foo")))
@@ -229,8 +231,8 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 }
 
 func TestPipeDo(t *testing.T) {
-	t.Run("ImplicitPipeliningEnabled", testPipeDo(t, 10*time.Millisecond, 2))
-	t.Run("ImplicitPipeliningDisabled", testPipeDo(t, 0, 0))
+	t.Run("AutoBuffering", testPipeDo(t, 10*time.Millisecond, 2, false))
+	t.Run("ExplicitPipeline", testPipeDo(t, 0, 0, true))
 }
 
 // Tests for pool on-empty behavior
@@ -239,7 +241,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 
 	// Helper to create client with specific on-empty behavior
 	mkRedisClientWithBehavior := func(addr, behavior string, waitDuration time.Duration) redis.Client {
-		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, behavior, waitDuration, "")
+		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, behavior, waitDuration, "", false)
 	}
 
 	t.Run("default behavior (empty string)", func(t *testing.T) {
@@ -387,7 +389,7 @@ func TestNewClientImplSentinel(t *testing.T) {
 	mkSentinelClient := func(auth, sentinelAuth, url string, useTls bool, timeout time.Duration) redis.Client {
 		// Pass nil for tlsConfig - we can't test TLS without a real TLS server,
 		// but we can verify the code path is executed (logs will show TLS is enabled)
-		return redis.NewClientImpl(statsStore, useTls, auth, "tcp", "sentinel", url, 1, 0, 0, nil, false, nil, timeout, "", 0, sentinelAuth)
+		return redis.NewClientImpl(statsStore, useTls, auth, "tcp", "sentinel", url, 1, 0, 0, nil, false, nil, timeout, "", 0, sentinelAuth, false)
 	}
 
 	t.Run("invalid url format - missing sentinel addresses", func(t *testing.T) {
