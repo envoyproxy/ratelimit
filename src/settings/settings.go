@@ -137,13 +137,25 @@ type Settings struct {
 	RedisTlsCACert                   string `envconfig:"REDIS_TLS_CACERT" default:""`
 	RedisTlsSkipHostnameVerification bool   `envconfig:"REDIS_TLS_SKIP_HOSTNAME_VERIFICATION" default:"false"`
 
-	// RedisPipelineWindow sets the duration after which internal pipelines will be flushed.
-	// If window is zero then implicit pipelining will be disabled. Radix use 150us for the
-	// default value, see https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L278.
+	// RedisPipelineWindow sets the WriteFlushInterval for radix v4 connections.
+	// This controls how often buffered writes are flushed to the network connection.
+	// When set to a non-zero value, radix v4 will buffer multiple concurrent write operations
+	// and flush them together, reducing system calls and improving throughput.
+	// If zero, each write is flushed immediately (no buffering).
+	// Required for Redis Cluster mode. Recommended value: 150us-500us.
+	// See: https://pkg.go.dev/github.com/mediocregopher/radix/v4#Dialer
 	RedisPipelineWindow time.Duration `envconfig:"REDIS_PIPELINE_WINDOW" default:"0"`
-	// RedisPipelineLimit sets maximum number of commands that can be pipelined before flushing.
-	// If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
+	// RedisPipelineLimit is DEPRECATED and unused in radix v4.
+	// This setting has no effect. Radix v4 does not support explicit pipeline size limits.
+	// Write buffering is controlled solely by RedisPipelineWindow (WriteFlushInterval).
 	RedisPipelineLimit       int    `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
+	// RedisUseExplicitPipeline controls whether to use explicit pipelining (radix.NewPipeline()).
+	// When true, commands are batched using radix.NewPipeline() and sent together.
+	// When false (default), individual commands are sent with automatic write buffering via WriteFlushInterval.
+	// IMPORTANT: Explicit pipelining CANNOT be used with Redis Cluster mode.
+	// For cluster mode, you MUST use automatic write buffering (set this to false and use RedisPipelineWindow).
+	// Only set this to true for single/sentinel mode when you specifically need explicit pipeline control.
+	RedisUseExplicitPipeline bool `envconfig:"REDIS_USE_EXPLICIT_PIPELINE" default:"false"`
 	RedisPerSecond           bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
 	RedisPerSecondType       string `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`
@@ -159,12 +171,15 @@ type Settings struct {
 	// This is separate from RedisPerSecondAuth which is used for authenticating to the Redis master/replica nodes.
 	// If empty, no authentication will be attempted when connecting to per-second Sentinel nodes.
 	RedisPerSecondSentinelAuth string `envconfig:"REDIS_PERSECOND_SENTINEL_AUTH" default:""`
-	// RedisPerSecondPipelineWindow sets the duration after which internal pipelines will be flushed for per second redis.
+	// RedisPerSecondPipelineWindow sets the WriteFlushInterval for per-second redis connections.
 	// See comments of RedisPipelineWindow for details.
 	RedisPerSecondPipelineWindow time.Duration `envconfig:"REDIS_PERSECOND_PIPELINE_WINDOW" default:"0"`
-	// RedisPerSecondPipelineLimit sets maximum number of commands that can be pipelined before flushing for per second redis.
+	// RedisPerSecondPipelineLimit is DEPRECATED and unused in radix v4.
 	// See comments of RedisPipelineLimit for details.
 	RedisPerSecondPipelineLimit int `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
+	// RedisPerSecondUseExplicitPipeline controls explicit pipelining for per-second redis.
+	// See comments of RedisUseExplicitPipeline for details.
+	RedisPerSecondUseExplicitPipeline bool `envconfig:"REDIS_PERSECOND_USE_EXPLICIT_PIPELINE" default:"false"`
 	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
 	RedisHealthCheckActiveConnection bool `envconfig:"REDIS_HEALTH_CHECK_ACTIVE_CONNECTION" default:"false"`
 	// RedisTimeout sets the timeout for Redis connection and I/O operations.
