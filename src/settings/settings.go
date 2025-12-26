@@ -188,20 +188,21 @@ type Settings struct {
 	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
 
 	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
-	// This setting helps prevent connection storms during Redis failures.
+	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).
 	// Possible values:
-	//   - "CREATE": Create a new connection after RedisPoolOnEmptyWaitDuration (default)
-	//   - "ERROR": Return error after RedisPoolOnEmptyWaitDuration
-	//   - "WAIT": Block until a connection is available
-	RedisPoolOnEmptyBehavior string `envconfig:"REDIS_POOL_ON_EMPTY_BEHAVIOR" default:"CREATE"`
-	// RedisPoolOnEmptyWaitDuration is the wait duration before taking action when pool is empty.
-	// Only applicable when RedisPoolOnEmptyBehavior is "CREATE" or "ERROR".
+	//   - "WAIT": Block until a connection is available (default, radix v4 behavior)
+	//   - "CREATE": NOT SUPPORTED in radix v4 - will cause panic at startup
+	//   - "ERROR": NOT SUPPORTED in radix v4 - will cause panic at startup
+	// For fail-fast behavior, use context timeouts when calling Redis operations.
+	RedisPoolOnEmptyBehavior string `envconfig:"REDIS_POOL_ON_EMPTY_BEHAVIOR" default:"WAIT"`
+	// RedisPoolOnEmptyWaitDuration is DEPRECATED in radix v4.
+	// This setting has no effect as radix v4 always blocks until a connection is available.
 	RedisPoolOnEmptyWaitDuration time.Duration `envconfig:"REDIS_POOL_ON_EMPTY_WAIT_DURATION" default:"1s"`
 
 	// RedisPerSecondPoolOnEmptyBehavior controls pool-empty behavior for per-second Redis.
 	// See RedisPoolOnEmptyBehavior for possible values and details.
-	RedisPerSecondPoolOnEmptyBehavior string `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR" default:"CREATE"`
-	// RedisPerSecondPoolOnEmptyWaitDuration is the wait duration for per-second Redis pool.
+	RedisPerSecondPoolOnEmptyBehavior string `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR" default:"WAIT"`
+	// RedisPerSecondPoolOnEmptyWaitDuration is DEPRECATED in radix v4.
 	// See RedisPoolOnEmptyWaitDuration for details.
 	RedisPerSecondPoolOnEmptyWaitDuration time.Duration `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION" default:"1s"`
 
