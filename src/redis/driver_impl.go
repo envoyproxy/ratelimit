@@ -148,31 +148,32 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 	// IMPORTANT: radix v4 pool behavior changes from v3
 	//
 	// v4 uses a FIXED pool size and BLOCKS when all connections are in use.
-	// This is similar to v3's WAIT behavior, NOT CREATE or ERROR behavior.
+	// This is the same as v3's WAIT behavior.
 	//
-	// Key differences:
-	// - v3 WAIT  → v4 default (same: blocks until connection available)
-	// - v3 CREATE → v4 INCOMPATIBLE (v4 does NOT create overflow connections, only blocks)
-	// - v3 ERROR → v4 INCOMPATIBLE (v4 does NOT fail-fast, only blocks)
+	// v3 CREATE and ERROR behaviors are NOT supported in v4:
+	// - v3 WAIT   → v4 supported (blocks until connection available)
+	// - v3 CREATE → v4 NOT SUPPORTED (would block instead of creating overflow connections)
+	// - v3 ERROR  → v4 NOT SUPPORTED (would block instead of failing fast)
 	//
-	// Migration recommendations:
-	// - Remove REDIS_POOL_ON_EMPTY_BEHAVIOR setting (it has no effect in v4)
+	// Migration requirements:
+	// - Remove REDIS_POOL_ON_EMPTY_BEHAVIOR setting if set to CREATE or ERROR
+	// - Use WAIT or leave unset (WAIT is default)
+	// - Consider increasing REDIS_POOL_SIZE if you previously relied on CREATE
 	// - Use context timeouts to prevent indefinite blocking:
 	//     ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	//     defer cancel()
 	//     client.Do(ctx, cmd)
-	// - Consider increasing REDIS_POOL_SIZE if using CREATE or ERROR previously
 	switch strings.ToUpper(poolOnEmptyBehavior) {
 	case "WAIT":
-		logger.Warnf("Redis pool %s: WAIT is default in v4 (blocks until connection available)", maskedUrl)
+		logger.Warnf("Redis pool %s: WAIT is default in radix v4 (blocks until connection available)", maskedUrl)
 	case "CREATE":
 		// v3 CREATE created overflow connections when pool was full
-		// v4 does NOT support this - it will block instead
-		logger.Errorf("Redis pool %s: CREATE not supported in v4. Pool size=%d is fixed, requests will block. Use context timeouts!", maskedUrl, poolSize)
+		// v4 does NOT support this - fail fast to prevent unexpected blocking behavior
+		panic(RedisError("REDIS_POOL_ON_EMPTY_BEHAVIOR=CREATE is not supported in radix v4. Pool will block instead of creating overflow connections. Remove this setting or set to WAIT, and consider increasing REDIS_POOL_SIZE."))
 	case "ERROR":
 		// v3 ERROR failed fast when pool was full
-		// v4 does NOT support this - it will block instead, which could cause goroutine buildup
-		logger.Errorf("Redis pool %s: ERROR not supported in v4. Requests will block instead of failing. Use context timeouts!", maskedUrl)
+		// v4 does NOT support this - fail fast to prevent unexpected blocking behavior
+		panic(RedisError("REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4. Pool will block instead of failing fast. Remove this setting or set to WAIT, and use context timeouts for fail-fast behavior."))
 	default:
 		logger.Warnf("Redis pool %s: using v4 default (fixed size=%d, blocks when full)", maskedUrl, poolSize)
 	}

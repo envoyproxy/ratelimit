@@ -261,72 +261,48 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 		assert.Equal(t, "bar", res)
 	})
 
-	t.Run("ERROR behavior", func(t *testing.T) {
+	t.Run("ERROR behavior should panic", func(t *testing.T) {
 		redisSrv := mustNewRedisServer()
 		defer redisSrv.Close()
 
-		var client redis.Client
-		assert.NotPanics(t, func() {
-			client = mkRedisClientWithBehavior(redisSrv.Addr(), "ERROR", 0)
+		// radix v4 does not support ERROR behavior - should panic at startup
+		panicErr := expectPanicError(t, func() {
+			mkRedisClientWithBehavior(redisSrv.Addr(), "ERROR", 0)
 		})
-		assert.NotNil(t, client)
-
-		// Verify client works
-		var res string
-		assert.Nil(t, client.DoCmd(nil, "SET", "test", "value"))
-		assert.Nil(t, client.DoCmd(&res, "GET", "test"))
-		assert.Equal(t, "value", res)
+		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4")
 	})
 
-	t.Run("ERROR behavior with wait duration", func(t *testing.T) {
+	t.Run("ERROR behavior with wait duration should panic", func(t *testing.T) {
 		redisSrv := mustNewRedisServer()
 		defer redisSrv.Close()
 
-		var client redis.Client
-		assert.NotPanics(t, func() {
-			client = mkRedisClientWithBehavior(redisSrv.Addr(), "ERROR", 100*time.Millisecond)
+		// radix v4 does not support ERROR behavior - should panic at startup
+		panicErr := expectPanicError(t, func() {
+			mkRedisClientWithBehavior(redisSrv.Addr(), "ERROR", 100*time.Millisecond)
 		})
-		assert.NotNil(t, client)
-
-		// Verify client works
-		var res string
-		assert.Nil(t, client.DoCmd(nil, "SET", "test2", "value2"))
-		assert.Nil(t, client.DoCmd(&res, "GET", "test2"))
-		assert.Equal(t, "value2", res)
+		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4")
 	})
 
-	t.Run("CREATE behavior", func(t *testing.T) {
+	t.Run("CREATE behavior should panic", func(t *testing.T) {
 		redisSrv := mustNewRedisServer()
 		defer redisSrv.Close()
 
-		var client redis.Client
-		assert.NotPanics(t, func() {
-			client = mkRedisClientWithBehavior(redisSrv.Addr(), "CREATE", 0)
+		// radix v4 does not support CREATE behavior - should panic at startup
+		panicErr := expectPanicError(t, func() {
+			mkRedisClientWithBehavior(redisSrv.Addr(), "CREATE", 0)
 		})
-		assert.NotNil(t, client)
-
-		// Verify client works
-		var res string
-		assert.Nil(t, client.DoCmd(nil, "SET", "test3", "value3"))
-		assert.Nil(t, client.DoCmd(&res, "GET", "test3"))
-		assert.Equal(t, "value3", res)
+		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=CREATE is not supported in radix v4")
 	})
 
-	t.Run("CREATE behavior with wait duration", func(t *testing.T) {
+	t.Run("CREATE behavior with wait duration should panic", func(t *testing.T) {
 		redisSrv := mustNewRedisServer()
 		defer redisSrv.Close()
 
-		var client redis.Client
-		assert.NotPanics(t, func() {
-			client = mkRedisClientWithBehavior(redisSrv.Addr(), "CREATE", 500*time.Millisecond)
+		// radix v4 does not support CREATE behavior - should panic at startup
+		panicErr := expectPanicError(t, func() {
+			mkRedisClientWithBehavior(redisSrv.Addr(), "CREATE", 500*time.Millisecond)
 		})
-		assert.NotNil(t, client)
-
-		// Verify client works
-		var res string
-		assert.Nil(t, client.DoCmd(nil, "SET", "test4", "value4"))
-		assert.Nil(t, client.DoCmd(&res, "GET", "test4"))
-		assert.Equal(t, "value4", res)
+		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=CREATE is not supported in radix v4")
 	})
 
 	t.Run("WAIT behavior", func(t *testing.T) {
@@ -346,14 +322,36 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 		assert.Equal(t, "value5", res)
 	})
 
-	t.Run("case insensitive behavior", func(t *testing.T) {
+	t.Run("case insensitive behavior - lowercase 'error' panics", func(t *testing.T) {
 		redisSrv := mustNewRedisServer()
 		defer redisSrv.Close()
 
-		// Test lowercase
+		// Test that lowercase 'error' is treated same as 'ERROR' (case insensitive)
+		panicErr := expectPanicError(t, func() {
+			mkRedisClientWithBehavior(redisSrv.Addr(), "error", 0)
+		})
+		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4")
+	})
+
+	t.Run("case insensitive behavior - lowercase 'create' panics", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		// Test that lowercase 'create' is treated same as 'CREATE' (case insensitive)
+		panicErr := expectPanicError(t, func() {
+			mkRedisClientWithBehavior(redisSrv.Addr(), "create", 0)
+		})
+		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=CREATE is not supported in radix v4")
+	})
+
+	t.Run("case insensitive behavior - lowercase 'wait' works", func(t *testing.T) {
+		redisSrv := mustNewRedisServer()
+		defer redisSrv.Close()
+
+		// Test that lowercase 'wait' is treated same as 'WAIT' (case insensitive)
 		var client redis.Client
 		assert.NotPanics(t, func() {
-			client = mkRedisClientWithBehavior(redisSrv.Addr(), "error", 0)
+			client = mkRedisClientWithBehavior(redisSrv.Addr(), "wait", 0)
 		})
 		assert.NotNil(t, client)
 
