@@ -1312,7 +1312,6 @@ For high throughput scenarios, ratelimit supports write buffering via [radix v4'
 
 1. `REDIS_PIPELINE_WINDOW` & `REDIS_PERSECOND_PIPELINE_WINDOW`: controls how often buffered writes are flushed to the network connection. When set to a non-zero value (e.g., 150us-500us), radix v4 will buffer multiple concurrent write operations and flush them together, reducing system calls and improving throughput. If zero, each write is flushed immediately. **Required for Redis Cluster mode.**
 1. `REDIS_PIPELINE_LIMIT` & `REDIS_PERSECOND_PIPELINE_LIMIT`: **DEPRECATED** - These settings have no effect in radix v4. Write buffering is controlled solely by the window settings above.
-1. `REDIS_USE_EXPLICIT_PIPELINE` & `REDIS_PERSECOND_USE_EXPLICIT_PIPELINE`: controls whether to use explicit pipelining with `radix.NewPipeline()`. When `true`, commands are batched together and sent as a single pipeline request. When `false` (default), individual commands are sent with automatic write buffering via `WriteFlushInterval`. **IMPORTANT**: Explicit pipelining **CANNOT** be used with Redis Cluster mode. For cluster mode, this must be set to `false` and use `REDIS_PIPELINE_WINDOW` for write buffering instead. Only use this for single/sentinel mode when you specifically need explicit pipeline control. Default: `false`
 
 Write buffering is disabled by default (window = 0). For optimal performance, set `REDIS_PIPELINE_WINDOW` to 150us-500us depending on your latency requirements and load patterns.
 
