@@ -121,7 +121,7 @@ func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, aut
 
 func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
-	timeout time.Duration, poolOnEmptyBehavior string, poolOnEmptyWaitDuration time.Duration, sentinelAuth string,
+	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	useExplicitPipeline bool,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)

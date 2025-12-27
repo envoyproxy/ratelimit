@@ -19,13 +19,13 @@ func NewRateLimiterCacheImplFromSettings(s settings.Settings, localCache *freeca
 	if s.RedisPerSecond {
 		perSecondPool = NewClientImpl(srv.Scope().Scope("redis_per_second_pool"), s.RedisPerSecondTls, s.RedisPerSecondAuth, s.RedisPerSecondSocketType,
 			s.RedisPerSecondType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize, s.RedisPerSecondPipelineWindow, s.RedisPerSecondPipelineLimit, s.RedisTlsConfig, s.RedisHealthCheckActiveConnection, srv, s.RedisPerSecondTimeout,
-			s.RedisPerSecondPoolOnEmptyBehavior, s.RedisPerSecondPoolOnEmptyWaitDuration, s.RedisPerSecondSentinelAuth, s.RedisPerSecondUseExplicitPipeline)
+			s.RedisPerSecondPoolOnEmptyBehavior, s.RedisPerSecondSentinelAuth, s.RedisPerSecondUseExplicitPipeline)
 		closer.Closers = append(closer.Closers, perSecondPool)
 	}
 
 	otherPool := NewClientImpl(srv.Scope().Scope("redis_pool"), s.RedisTls, s.RedisAuth, s.RedisSocketType, s.RedisType, s.RedisUrl, s.RedisPoolSize,
 		s.RedisPipelineWindow, s.RedisPipelineLimit, s.RedisTlsConfig, s.RedisHealthCheckActiveConnection, srv, s.RedisTimeout,
-		s.RedisPoolOnEmptyBehavior, s.RedisPoolOnEmptyWaitDuration, s.RedisSentinelAuth, s.RedisUseExplicitPipeline)
+		s.RedisPoolOnEmptyBehavior, s.RedisSentinelAuth, s.RedisUseExplicitPipeline)
 	closer.Closers = append(closer.Closers, otherPool)
 
 	return NewFixedRateLimitCacheImpl(

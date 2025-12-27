@@ -195,16 +195,10 @@ type Settings struct {
 	//   - "ERROR": NOT SUPPORTED in radix v4 - will cause panic at startup
 	// For fail-fast behavior, use context timeouts when calling Redis operations.
 	RedisPoolOnEmptyBehavior string `envconfig:"REDIS_POOL_ON_EMPTY_BEHAVIOR" default:"WAIT"`
-	// RedisPoolOnEmptyWaitDuration is DEPRECATED in radix v4.
-	// This setting has no effect as radix v4 always blocks until a connection is available.
-	RedisPoolOnEmptyWaitDuration time.Duration `envconfig:"REDIS_POOL_ON_EMPTY_WAIT_DURATION" default:"1s"`
 
 	// RedisPerSecondPoolOnEmptyBehavior controls pool-empty behavior for per-second Redis.
 	// See RedisPoolOnEmptyBehavior for possible values and details.
 	RedisPerSecondPoolOnEmptyBehavior string `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR" default:"WAIT"`
-	// RedisPerSecondPoolOnEmptyWaitDuration is DEPRECATED in radix v4.
-	// See RedisPoolOnEmptyWaitDuration for details.
-	RedisPerSecondPoolOnEmptyWaitDuration time.Duration `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION" default:"1s"`
 
 	// Memcache settings
 	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`

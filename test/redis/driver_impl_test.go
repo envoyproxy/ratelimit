@@ -39,7 +39,7 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 		mkRedisClient := func(auth, addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, auth, "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", 0, "", useExplicitPipeline)
+			return redis.NewClientImpl(statsStore, false, auth, "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", "", useExplicitPipeline)
 		}
 
 		t.Run("connection refused", func(t *testing.T) {
@@ -128,7 +128,7 @@ func TestDoCmd(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	mkRedisClient := func(addr string) redis.Client {
-		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, "", 0, "", false)
+		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, "", "", false)
 	}
 
 	t.Run("SETGET ok", func(t *testing.T) {
@@ -173,7 +173,7 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int, u
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 		mkRedisClient := func(addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", 0, "", useExplicitPipeline)
+			return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", "", useExplicitPipeline)
 		}
 
 		t.Run("SETGET ok", func(t *testing.T) {
@@ -240,8 +240,8 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	// Helper to create client with specific on-empty behavior
-	mkRedisClientWithBehavior := func(addr, behavior string, waitDuration time.Duration) redis.Client {
-		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, behavior, waitDuration, "", false)
+	mkRedisClientWithBehavior := func(addr, behavior string) redis.Client {
+		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, behavior, "", false)
 	}
 
 	t.Run("default behavior (empty string)", func(t *testing.T) {
@@ -250,7 +250,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 
 		var client redis.Client
 		assert.NotPanics(t, func() {
-			client = mkRedisClientWithBehavior(redisSrv.Addr(), "", 0)
+			client = mkRedisClientWithBehavior(redisSrv.Addr(), "")
 		})
 		assert.NotNil(t, client)
 
@@ -267,18 +267,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 
 		// radix v4 does not support ERROR behavior - should panic at startup
 		panicErr := expectPanicError(t, func() {
-			mkRedisClientWithBehavior(redisSrv.Addr(), "ERROR", 0)
-		})
-		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4")
-	})
-
-	t.Run("ERROR behavior with wait duration should panic", func(t *testing.T) {
-		redisSrv := mustNewRedisServer()
-		defer redisSrv.Close()
-
-		// radix v4 does not support ERROR behavior - should panic at startup
-		panicErr := expectPanicError(t, func() {
-			mkRedisClientWithBehavior(redisSrv.Addr(), "ERROR", 100*time.Millisecond)
+			mkRedisClientWithBehavior(redisSrv.Addr(), "ERROR")
 		})
 		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4")
 	})
@@ -289,18 +278,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 
 		// radix v4 does not support CREATE behavior - should panic at startup
 		panicErr := expectPanicError(t, func() {
-			mkRedisClientWithBehavior(redisSrv.Addr(), "CREATE", 0)
-		})
-		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=CREATE is not supported in radix v4")
-	})
-
-	t.Run("CREATE behavior with wait duration should panic", func(t *testing.T) {
-		redisSrv := mustNewRedisServer()
-		defer redisSrv.Close()
-
-		// radix v4 does not support CREATE behavior - should panic at startup
-		panicErr := expectPanicError(t, func() {
-			mkRedisClientWithBehavior(redisSrv.Addr(), "CREATE", 500*time.Millisecond)
+			mkRedisClientWithBehavior(redisSrv.Addr(), "CREATE")
 		})
 		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=CREATE is not supported in radix v4")
 	})
@@ -311,7 +289,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 
 		var client redis.Client
 		assert.NotPanics(t, func() {
-			client = mkRedisClientWithBehavior(redisSrv.Addr(), "WAIT", 0)
+			client = mkRedisClientWithBehavior(redisSrv.Addr(), "WAIT")
 		})
 		assert.NotNil(t, client)
 
@@ -328,7 +306,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 
 		// Test that lowercase 'error' is treated same as 'ERROR' (case insensitive)
 		panicErr := expectPanicError(t, func() {
-			mkRedisClientWithBehavior(redisSrv.Addr(), "error", 0)
+			mkRedisClientWithBehavior(redisSrv.Addr(), "error")
 		})
 		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4")
 	})
@@ -339,7 +317,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 
 		// Test that lowercase 'create' is treated same as 'CREATE' (case insensitive)
 		panicErr := expectPanicError(t, func() {
-			mkRedisClientWithBehavior(redisSrv.Addr(), "create", 0)
+			mkRedisClientWithBehavior(redisSrv.Addr(), "create")
 		})
 		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=CREATE is not supported in radix v4")
 	})
@@ -351,7 +329,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 		// Test that lowercase 'wait' is treated same as 'WAIT' (case insensitive)
 		var client redis.Client
 		assert.NotPanics(t, func() {
-			client = mkRedisClientWithBehavior(redisSrv.Addr(), "wait", 0)
+			client = mkRedisClientWithBehavior(redisSrv.Addr(), "wait")
 		})
 		assert.NotNil(t, client)
 
@@ -369,7 +347,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 		// Unknown behavior should not panic, just log warning and use default
 		var client redis.Client
 		assert.NotPanics(t, func() {
-			client = mkRedisClientWithBehavior(redisSrv.Addr(), "UNKNOWN_BEHAVIOR", 0)
+			client = mkRedisClientWithBehavior(redisSrv.Addr(), "UNKNOWN_BEHAVIOR")
 		})
 		assert.NotNil(t, client)
 
@@ -387,7 +365,7 @@ func TestNewClientImplSentinel(t *testing.T) {
 	mkSentinelClient := func(auth, sentinelAuth, url string, useTls bool, timeout time.Duration) redis.Client {
 		// Pass nil for tlsConfig - we can't test TLS without a real TLS server,
 		// but we can verify the code path is executed (logs will show TLS is enabled)
-		return redis.NewClientImpl(statsStore, useTls, auth, "tcp", "sentinel", url, 1, 0, 0, nil, false, nil, timeout, "", 0, sentinelAuth, false)
+		return redis.NewClientImpl(statsStore, useTls, auth, "tcp", "sentinel", url, 1, 0, 0, nil, false, nil, timeout, "", sentinelAuth, false)
 	}
 
 	t.Run("invalid url format - missing sentinel addresses", func(t *testing.T) {
