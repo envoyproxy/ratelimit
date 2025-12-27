@@ -148,8 +148,8 @@ type Settings struct {
 	// RedisPipelineLimit is DEPRECATED and unused in radix v4.
 	// This setting has no effect. Radix v4 does not support explicit pipeline size limits.
 	// Write buffering is controlled solely by RedisPipelineWindow (WriteFlushInterval).
-	RedisPipelineLimit int  `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
-	RedisPerSecond     bool `envconfig:"REDIS_PERSECOND" default:"false"`
+	RedisPipelineLimit       int    `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
+	RedisPerSecond           bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
 	RedisPerSecondType       string `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`
 	RedisPerSecondUrl        string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
