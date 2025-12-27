@@ -79,15 +79,9 @@ func checkError(err error) {
 	}
 }
 
-func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
-	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
-	timeout time.Duration, poolOnEmptyBehavior string, poolOnEmptyWaitDuration time.Duration, sentinelAuth string,
-	useExplicitPipeline bool,
-) Client {
-	maskedUrl := utils.MaskCredentialsInUrl(url)
-	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
-
-	// Create Dialer for connecting to Redis
+// createDialer creates a radix.Dialer with timeout, TLS, and auth configuration
+// targetName is used for logging to identify the connection target (e.g., URL, "sentinel(url)")
+func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, auth string, targetName string) radix.Dialer {
 	var netDialer net.Dialer
 	if timeout > 0 {
 		netDialer.Timeout = timeout
@@ -104,19 +98,37 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 			Config:    tlsConfig,
 		}
 		dialer.NetDialer = &tlsNetDialer
+		if targetName != "" {
+			logger.Warnf("enabling TLS to redis %s", targetName)
+		}
 	}
 
+	// Setup auth if provided
 	if auth != "" {
 		user, pass, found := strings.Cut(auth, ":")
 		if found {
-			logger.Warnf("enabling authentication to redis on %s with user %s", maskedUrl, user)
+			logger.Warnf("enabling authentication to redis %s with user %s", targetName, user)
 			dialer.AuthUser = user
 			dialer.AuthPass = pass
 		} else {
-			logger.Warnf("enabling authentication to redis on %s without user", maskedUrl)
+			logger.Warnf("enabling authentication to redis %s without user", targetName)
 			dialer.AuthPass = auth
 		}
 	}
+
+	return dialer
+}
+
+func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
+	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
+	timeout time.Duration, poolOnEmptyBehavior string, poolOnEmptyWaitDuration time.Duration, sentinelAuth string,
+	useExplicitPipeline bool,
+) Client {
+	maskedUrl := utils.MaskCredentialsInUrl(url)
+	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
+
+	// Create Dialer for connecting to Redis
+	dialer := createDialer(timeout, useTls, tlsConfig, auth, maskedUrl)
 
 	stats := newPoolStats(scope)
 
@@ -206,39 +218,9 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 			panic(RedisError("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>"))
 		}
 
-		// Create sentinel dialer
-		var sentinelNetDialer net.Dialer
-		if timeout > 0 {
-			sentinelNetDialer.Timeout = timeout
-		}
-
-		sentinelDialer := radix.Dialer{
-			NetDialer: &sentinelNetDialer,
-		}
-
-		// Setup TLS for sentinel if needed
-		if useTls {
-			logger.Warnf("enabling TLS to redis sentinel")
-			tlsSentinelDialer := tls.Dialer{
-				NetDialer: &sentinelNetDialer,
-				Config:    tlsConfig,
-			}
-			sentinelDialer.NetDialer = &tlsSentinelDialer
-		}
-
-		// Use sentinelAuth for authenticating to Sentinel nodes, not auth
-		// auth is used for Redis master/replica authentication
-		if sentinelAuth != "" {
-			user, pass, found := strings.Cut(sentinelAuth, ":")
-			if found {
-				logger.Warnf("enabling authentication to redis sentinel with user %s", user)
-				sentinelDialer.AuthUser = user
-				sentinelDialer.AuthPass = pass
-			} else {
-				logger.Warnf("enabling authentication to redis sentinel without user")
-				sentinelDialer.AuthPass = sentinelAuth
-			}
-		}
+		// Create sentinel dialer (may use different auth from Redis master/replica)
+		// sentinelAuth is for Sentinel nodes, auth is for Redis master/replica
+		sentinelDialer := createDialer(timeout, useTls, tlsConfig, sentinelAuth, fmt.Sprintf("sentinel(%s)", maskedUrl))
 
 		sentinelConfig := radix.SentinelConfig{
 			PoolConfig:     poolConfig,
