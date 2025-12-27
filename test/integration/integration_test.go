@@ -797,7 +797,8 @@ func startTestRunner(t *testing.T, s settings.Settings) *runner.Runner {
 	}()
 
 	// HACK: Wait for the server to come up. Make a hook that we can wait on.
-	common.WaitForTcpPort(context.Background(), s.GrpcPort, 1*time.Second)
+	// Increased timeout from 1s to 10s to allow for Redis cluster connection initialization
+	common.WaitForTcpPort(context.Background(), s.GrpcPort, 10*time.Second)
 
 	return &runner
 }

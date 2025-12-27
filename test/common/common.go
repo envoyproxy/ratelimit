@@ -105,7 +105,7 @@ func WaitForTcpPort(ctx context.Context, port int, timeout time.Duration) error 
 	// Wait up to 1s for the redis instance to start accepting connections.
 	for {
 		var d net.Dialer
-		conn, err := d.DialContext(ctx, "tcp", "localhost:"+strconv.Itoa(port))
+		conn, err := d.DialContext(timeoutCtx, "tcp", "localhost:"+strconv.Itoa(port))
 		if err == nil {
 			conn.Close()
 			// TCP connections are working. All is well.
