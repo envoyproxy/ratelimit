@@ -68,20 +68,6 @@ func (mr *MockClientMockRecorder) DoCmd(arg0, arg1, arg2 interface{}, arg3 ...in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoCmd", reflect.TypeOf((*MockClient)(nil).DoCmd), varargs...)
 }
 
-// UseExplicitPipeline mocks base method
-func (m *MockClient) UseExplicitPipeline() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UseExplicitPipeline")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// UseExplicitPipeline indicates an expected call of UseExplicitPipeline
-func (mr *MockClientMockRecorder) UseExplicitPipeline() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseExplicitPipeline", reflect.TypeOf((*MockClient)(nil).UseExplicitPipeline))
-}
-
 // NumActiveConns mocks base method
 func (m *MockClient) NumActiveConns() int {
 	m.ctrl.T.Helper()

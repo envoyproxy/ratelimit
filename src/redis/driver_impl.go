@@ -68,9 +68,9 @@ type redisClient interface {
 }
 
 type clientImpl struct {
-	client              redisClient
-	stats               poolStats
-	useExplicitPipeline bool
+	client    redisClient
+	stats     poolStats
+	isCluster bool
 }
 
 func checkError(err error) {
@@ -122,7 +122,6 @@ func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, aut
 func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
-	useExplicitPipeline bool,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
@@ -139,23 +138,21 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		Trace:  poolTrace(&stats, healthCheckActiveConnection, srv),
 	}
 
-	// Note: radix v4 handles write buffering via WriteFlushInterval.
-	// Explicit pipelining (radix.NewPipeline()) is only used when explicitly requested via useExplicitPipeline parameter.
-	// Otherwise, individual Do() calls are used with automatic write buffering via WriteFlushInterval.
-	// pipelineLimit parameter is deprecated and ignored in radix v4.
+	// Determine pipeline mode based on Redis type:
+	// - Cluster: uses grouped pipeline (same-key commands batched together)
+	// - Single/Sentinel: uses explicit pipeline (all commands batched together)
+	isCluster := strings.ToLower(redisType) == "cluster"
 
-	// Warn if deprecated pipelineLimit is set
+	// pipelineLimit parameter is deprecated and ignored in radix v4.
 	if pipelineLimit > 0 {
 		logger.Warnf("REDIS_PIPELINE_LIMIT=%d is deprecated and has no effect in radix v4. Write buffering is controlled solely by REDIS_PIPELINE_WINDOW.", pipelineLimit)
 	}
 
-	// Set WriteFlushInterval for automatic write buffering when not using explicit pipeline
-	if !useExplicitPipeline && pipelineWindow > 0 {
+	// Set WriteFlushInterval for cluster mode (grouped pipeline uses auto buffering)
+	if isCluster && pipelineWindow > 0 {
 		poolConfig.Dialer.WriteFlushInterval = pipelineWindow
-		logger.Debugf("Setting WriteFlushInterval to %v", pipelineWindow)
+		logger.Debugf("Cluster mode: setting WriteFlushInterval to %v", pipelineWindow)
 	}
-
-	logger.Debugf("Use explicit pipeline: %v", useExplicitPipeline)
 
 	// IMPORTANT: radix v4 pool behavior changes from v3
 	//
@@ -204,9 +201,6 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		client, err = poolFunc(ctx, redisSocketType, url)
 	case "cluster":
 		urls := strings.Split(url, ",")
-		if useExplicitPipeline {
-			panic(RedisError("Explicit pipelining cannot be used with Redis Cluster Mode. Set REDIS_PIPELINE_WINDOW to a non-zero value (e.g., 150us)"))
-		}
 		logger.Warnf("Creating cluster with urls %v", urls)
 		clusterConfig := radix.ClusterConfig{
 			PoolConfig: poolConfig,
@@ -241,9 +235,9 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 	}
 
 	return &clientImpl{
-		client:              client,
-		stats:               stats,
-		useExplicitPipeline: useExplicitPipeline,
+		client:    client,
+		stats:     stats,
+		isCluster: isCluster,
 	}
 }
 
@@ -269,33 +263,63 @@ func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd, key str
 	allArgs := make([]interface{}, 0, 1+len(args))
 	allArgs = append(allArgs, key)
 	allArgs = append(allArgs, args...)
-	return append(pipeline, radix.FlatCmd(rcv, cmd, allArgs...))
+	return append(pipeline, PipelineAction{
+		Action: radix.FlatCmd(rcv, cmd, allArgs...),
+		Key:    key,
+	})
 }
 
 func (c *clientImpl) PipeDo(pipeline Pipeline) error {
 	ctx := context.Background()
-	if c.useExplicitPipeline {
-		// When explicit pipelining is enabled (WriteFlushInterval == 0):
-		// Use radix.NewPipeline() to batch commands together.
-		p := radix.NewPipeline()
-		for _, action := range pipeline {
-			p.Append(action)
-		}
-		return c.client.Do(ctx, p)
+	if c.isCluster {
+		// Cluster mode: group commands by key and execute each group as a pipeline.
+		// This ensures INCRBY + EXPIRE for the same key are pipelined together (same slot),
+		// reducing round-trips from 2 to 1 per key.
+		return c.executeGroupedPipeline(ctx, pipeline)
 	}
 
-	// When automatic buffering is enabled (WriteFlushInterval > 0):
-	// Execute each action individually. Radix v4 will automatically buffer
-	// concurrent writes and flush them together based on WriteFlushInterval.
-	// This provides better performance for most workloads.
-	for _, action := range pipeline {
-		if err := c.client.Do(ctx, action); err != nil {
-			return err
-		}
+	// Single/Sentinel mode: batch all commands in a single pipeline.
+	p := radix.NewPipeline()
+	for _, pipelineAction := range pipeline {
+		p.Append(pipelineAction.Action)
 	}
-	return nil
+	return c.client.Do(ctx, p)
 }
 
-func (c *clientImpl) UseExplicitPipeline() bool {
-	return c.useExplicitPipeline
+// executeGroupedPipeline groups pipeline actions by key and executes each group
+// as a separate pipeline. This allows same-key commands (like INCRBY + EXPIRE)
+// to be pipelined together even in cluster mode.
+func (c *clientImpl) executeGroupedPipeline(ctx context.Context, pipeline Pipeline) error {
+	// Group actions by key, preserving first-occurrence order
+	var groups [][]radix.Action
+	keyToIndex := make(map[string]int)
+
+	for _, pa := range pipeline {
+		if idx, exists := keyToIndex[pa.Key]; exists {
+			groups[idx] = append(groups[idx], pa.Action)
+		} else {
+			keyToIndex[pa.Key] = len(groups)
+			groups = append(groups, []radix.Action{pa.Action})
+		}
+	}
+
+	// Execute each group
+	for _, actions := range groups {
+		if len(actions) == 1 {
+			if err := c.client.Do(ctx, actions[0]); err != nil {
+				return err
+			}
+		} else {
+			// Multiple commands for same key: pipeline them together
+			p := radix.NewPipeline()
+			for _, action := range actions {
+				p.Append(action)
+			}
+			if err := c.client.Do(ctx, p); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

@@ -41,11 +41,13 @@ type Client interface {
 
 	// NumActiveConns return number of active connections, used in testing.
 	NumActiveConns() int
-
-	// UseExplicitPipeline returns true if explicit pipelining should be used.
-	// When false, individual commands are executed and radix v4 automatically buffers writes.
-	// When true, commands are batched using radix.NewPipeline().
-	UseExplicitPipeline() bool
 }
 
-type Pipeline []radix.Action
+// PipelineAction represents a single action in the pipeline along with its key.
+// The key is used for grouping commands in cluster mode.
+type PipelineAction struct {
+	Action radix.Action
+	Key    string
+}
+
+type Pipeline []PipelineAction
