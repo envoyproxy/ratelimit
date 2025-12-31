@@ -1,6 +1,6 @@
 package redis
 
-import "github.com/mediocregopher/radix/v3"
+import "github.com/mediocregopher/radix/v4"
 
 // Errors that may be raised during config parsing.
 type RedisError string
@@ -41,9 +41,13 @@ type Client interface {
 
 	// NumActiveConns return number of active connections, used in testing.
 	NumActiveConns() int
-
-	// ImplicitPipeliningEnabled return true if implicit pipelining is enabled.
-	ImplicitPipeliningEnabled() bool
 }
 
-type Pipeline []radix.CmdAction
+// PipelineAction represents a single action in the pipeline along with its key.
+// The key is used for grouping commands in cluster mode.
+type PipelineAction struct {
+	Action radix.Action
+	Key    string
+}
+
+type Pipeline []PipelineAction

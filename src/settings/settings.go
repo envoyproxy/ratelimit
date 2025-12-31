@@ -137,12 +137,17 @@ type Settings struct {
 	RedisTlsCACert                   string `envconfig:"REDIS_TLS_CACERT" default:""`
 	RedisTlsSkipHostnameVerification bool   `envconfig:"REDIS_TLS_SKIP_HOSTNAME_VERIFICATION" default:"false"`
 
-	// RedisPipelineWindow sets the duration after which internal pipelines will be flushed.
-	// If window is zero then implicit pipelining will be disabled. Radix use 150us for the
-	// default value, see https://github.com/mediocregopher/radix/blob/v3.5.1/pool.go#L278.
+	// RedisPipelineWindow sets the WriteFlushInterval for radix v4 connections.
+	// This controls how often buffered writes are flushed to the network connection.
+	// When set to a non-zero value, radix v4 will buffer multiple concurrent write operations
+	// and flush them together, reducing system calls and improving throughput.
+	// If zero, each write is flushed immediately (no buffering).
+	// Required for Redis Cluster mode. Recommended value: 150us-500us.
+	// See: https://pkg.go.dev/github.com/mediocregopher/radix/v4#Dialer
 	RedisPipelineWindow time.Duration `envconfig:"REDIS_PIPELINE_WINDOW" default:"0"`
-	// RedisPipelineLimit sets maximum number of commands that can be pipelined before flushing.
-	// If limit is zero then no limit will be used and pipelines will only be limited by the specified time window.
+	// RedisPipelineLimit is DEPRECATED and unused in radix v4.
+	// This setting has no effect. Radix v4 does not support explicit pipeline size limits.
+	// Write buffering is controlled solely by RedisPipelineWindow (WriteFlushInterval).
 	RedisPipelineLimit       int    `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
 	RedisPerSecond           bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
@@ -159,10 +164,10 @@ type Settings struct {
 	// This is separate from RedisPerSecondAuth which is used for authenticating to the Redis master/replica nodes.
 	// If empty, no authentication will be attempted when connecting to per-second Sentinel nodes.
 	RedisPerSecondSentinelAuth string `envconfig:"REDIS_PERSECOND_SENTINEL_AUTH" default:""`
-	// RedisPerSecondPipelineWindow sets the duration after which internal pipelines will be flushed for per second redis.
+	// RedisPerSecondPipelineWindow sets the WriteFlushInterval for per-second redis connections.
 	// See comments of RedisPipelineWindow for details.
 	RedisPerSecondPipelineWindow time.Duration `envconfig:"REDIS_PERSECOND_PIPELINE_WINDOW" default:"0"`
-	// RedisPerSecondPipelineLimit sets maximum number of commands that can be pipelined before flushing for per second redis.
+	// RedisPerSecondPipelineLimit is DEPRECATED and unused in radix v4.
 	// See comments of RedisPipelineLimit for details.
 	RedisPerSecondPipelineLimit int `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
 	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
@@ -173,22 +178,17 @@ type Settings struct {
 	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
 
 	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
-	// This setting helps prevent connection storms during Redis failures.
+	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).
 	// Possible values:
-	//   - "CREATE": Create a new connection after RedisPoolOnEmptyWaitDuration (default)
-	//   - "ERROR": Return error after RedisPoolOnEmptyWaitDuration
-	//   - "WAIT": Block until a connection is available
-	RedisPoolOnEmptyBehavior string `envconfig:"REDIS_POOL_ON_EMPTY_BEHAVIOR" default:"CREATE"`
-	// RedisPoolOnEmptyWaitDuration is the wait duration before taking action when pool is empty.
-	// Only applicable when RedisPoolOnEmptyBehavior is "CREATE" or "ERROR".
-	RedisPoolOnEmptyWaitDuration time.Duration `envconfig:"REDIS_POOL_ON_EMPTY_WAIT_DURATION" default:"1s"`
+	//   - "WAIT": Block until a connection is available (default, radix v4 behavior)
+	//   - "CREATE": NOT SUPPORTED in radix v4 - will cause panic at startup
+	//   - "ERROR": NOT SUPPORTED in radix v4 - will cause panic at startup
+	// For fail-fast behavior, use context timeouts when calling Redis operations.
+	RedisPoolOnEmptyBehavior string `envconfig:"REDIS_POOL_ON_EMPTY_BEHAVIOR" default:"WAIT"`
 
 	// RedisPerSecondPoolOnEmptyBehavior controls pool-empty behavior for per-second Redis.
 	// See RedisPoolOnEmptyBehavior for possible values and details.
-	RedisPerSecondPoolOnEmptyBehavior string `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR" default:"CREATE"`
-	// RedisPerSecondPoolOnEmptyWaitDuration is the wait duration for per-second Redis pool.
-	// See RedisPoolOnEmptyWaitDuration for details.
-	RedisPerSecondPoolOnEmptyWaitDuration time.Duration `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION" default:"1s"`
+	RedisPerSecondPoolOnEmptyBehavior string `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR" default:"WAIT"`
 
 	// Memcache settings
 	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`

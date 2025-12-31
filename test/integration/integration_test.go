@@ -471,8 +471,9 @@ func configRedisCluster(s *settings.Settings) {
 	s.RedisAuth = "password123"
 	s.RedisPerSecondAuth = "password123"
 
-	s.RedisPerSecondPipelineLimit = 8
-	s.RedisPipelineLimit = 8
+	// RedisPipelineLimit is deprecated in radix v4, use RedisPipelineWindow instead
+	s.RedisPerSecondPipelineWindow = 150 * time.Microsecond
+	s.RedisPipelineWindow = 150 * time.Microsecond
 }
 
 func testBasicConfigWithoutWatchRootWithRedisCluster(perSecond bool, local_cache_size int) func(*testing.T) {
@@ -796,7 +797,8 @@ func startTestRunner(t *testing.T, s settings.Settings) *runner.Runner {
 	}()
 
 	// HACK: Wait for the server to come up. Make a hook that we can wait on.
-	common.WaitForTcpPort(context.Background(), s.GrpcPort, 1*time.Second)
+	// Increased timeout from 1s to 10s to allow for Redis cluster connection initialization
+	common.WaitForTcpPort(context.Background(), s.GrpcPort, 10*time.Second)
 
 	return &runner
 }
