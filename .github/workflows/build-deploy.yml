@@ -21,3 +21,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f   # v3.12.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708  # v5.1.1
+        with:
+          role-to-assume: 'arn:aws:iam::190066226418:role/GithubECRPublisherRole'
+          aws-region: us-east-1
+
+      - name: Login to AWS Release ECR
+        id: ecr-release
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076  # v2.0.1
+        with:
+          registries: "190066226418"
+        env:
+          AWS_REGION: us-east-1
