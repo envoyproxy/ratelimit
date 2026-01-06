@@ -1,0 +1,23 @@
+---
+name: Build and Deploy
+
+on:
+  pull_request:
+  push:
+    tags:
+      - "*"  # Triggers on all tags (equivalent to /.+/)
+
+env:
+  AWS_DEFAULT_REGION: us-west-2
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 190066226418.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: vault/envoy-ratelimit
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    outputs:
+      should-deploy: ${{ steps.check-version.outputs.should-deploy }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
