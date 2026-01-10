@@ -3,9 +3,9 @@ package ratelimit
 import (
 	"testing"
 
-	"github.com/envoyproxy/ratelimit/src/config"
 	ratelimitv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	"github.com/envoyproxy/ratelimit/src/config"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -15,11 +15,11 @@ import (
 
 func TestRatelimitToMetadata(t *testing.T) {
 	cases := []struct {
-		name                 string
-		req                  *pb.RateLimitRequest
-		quotaModeViolations  []int
-		limitsToCheck        []*config.RateLimit
-		expected             string
+		name                string
+		req                 *pb.RateLimitRequest
+		quotaModeViolations []int
+		limitsToCheck       []*config.RateLimit
+		expected            string
 	}{
 		{
 			name: "Single descriptor with single entry, no quota violations",
