@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"testing"
 
+	"github.com/envoyproxy/ratelimit/src/config"
 	ratelimitv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/google/go-cmp/cmp"
@@ -10,8 +11,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
-
-	"github.com/envoyproxy/ratelimit/src/config"
 )
 
 func TestRatelimitToMetadata(t *testing.T) {
