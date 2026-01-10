@@ -31,6 +31,7 @@ type YamlDescriptor struct {
 	RateLimit      *YamlRateLimit `yaml:"rate_limit"`
 	Descriptors    []YamlDescriptor
 	ShadowMode     bool `yaml:"shadow_mode"`
+	QuotaMode      bool `yaml:"quota_mode"`
 	DetailedMetric bool `yaml:"detailed_metric"`
 	ValueToMetric  bool `yaml:"value_to_metric"`
 	ShareThreshold bool `yaml:"share_threshold"`
@@ -70,6 +71,7 @@ var validKeys = map[string]bool{
 	"requests_per_unit": true,
 	"unlimited":         true,
 	"shadow_mode":       true,
+	"quota_mode":        true,
 	"name":              true,
 	"replaces":          true,
 	"detailed_metric":   true,
@@ -84,7 +86,7 @@ var validKeys = map[string]bool{
 // @param unlimited supplies whether the rate limit is unlimited
 // @return the new config entry.
 func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats,
-	unlimited bool, shadowMode bool, name string, replaces []string, detailedMetric bool,
+	unlimited bool, shadowMode bool, quotaMode bool, name string, replaces []string, detailedMetric bool,
 ) *RateLimit {
 	return &RateLimit{
 		FullKey: rlStats.GetKey(),
@@ -96,6 +98,7 @@ func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Un
 		},
 		Unlimited:                unlimited,
 		ShadowMode:               shadowMode,
+		QuotaMode:                quotaMode,
 		Name:                     name,
 		Replaces:                 replaces,
 		DetailedMetric:           detailedMetric,
@@ -108,8 +111,8 @@ func (this *rateLimitDescriptor) dump() string {
 	ret := ""
 	if this.limit != nil {
 		ret += fmt.Sprintf(
-			"%s: unit=%s requests_per_unit=%d, shadow_mode: %t\n", this.limit.FullKey,
-			this.limit.Limit.Unit.String(), this.limit.Limit.RequestsPerUnit, this.limit.ShadowMode)
+			"%s: unit=%s requests_per_unit=%d, shadow_mode: %t, quota_mode: %t\n", this.limit.FullKey,
+			this.limit.Limit.Unit.String(), this.limit.Limit.RequestsPerUnit, this.limit.ShadowMode, this.limit.QuotaMode)
 	}
 	for _, descriptor := range this.descriptors {
 		ret += descriptor.dump()
@@ -174,12 +177,12 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 
 			rateLimit = NewRateLimit(
 				descriptorConfig.RateLimit.RequestsPerUnit, pb.RateLimitResponse_RateLimit_Unit(value),
-				statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode,
+				statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode, descriptorConfig.QuotaMode,
 				descriptorConfig.RateLimit.Name, replaces, descriptorConfig.DetailedMetric,
 			)
 			rateLimitDebugString = fmt.Sprintf(
-				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t}", rateLimit.Limit.RequestsPerUnit,
-				rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode)
+				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t, quota_mode=%t}", rateLimit.Limit.RequestsPerUnit,
+				rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode)
 
 			for _, replaces := range descriptorConfig.RateLimit.Replaces {
 				if replaces.Name == "" {
@@ -336,6 +339,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 			this.statsManager.NewStats(rateLimitKey),
 			false,
 			false,
+			false,
 			"",
 			[]string{},
 			false,
@@ -481,7 +485,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 			if rateLimit != nil && rateLimit.DetailedMetric {
 				// Preserve ShareThresholdKeyPattern when recreating rate limit
 				originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
-				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
+				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
 				rateLimit.ShareThresholdKeyPattern = originalShareThresholdKeyPattern
 			}
 
@@ -531,7 +535,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 		if enhancedKey != rateLimit.FullKey {
 			// Recreate to ensure a clean stats struct, then set to enhanced stats
 			originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
-			rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(enhancedKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
+			rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(enhancedKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
 			rateLimit.ShareThresholdKeyPattern = originalShareThresholdKeyPattern
 		}
 	}
