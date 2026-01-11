@@ -456,6 +456,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 					Limit:          originalLimit.Limit,
 					Unlimited:      originalLimit.Unlimited,
 					ShadowMode:     originalLimit.ShadowMode,
+					QuotaMode:      originalLimit.QuotaMode,
 					Name:           originalLimit.Name,
 					Replaces:       originalLimit.Replaces,
 					DetailedMetric: originalLimit.DetailedMetric,
