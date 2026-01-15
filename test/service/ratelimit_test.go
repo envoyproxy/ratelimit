@@ -153,7 +153,7 @@ func TestService(test *testing.T) {
 	request = common.NewRateLimitRequest(
 		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "key_name", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "key_name", nil, false),
 		nil,
 	}
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
@@ -187,7 +187,7 @@ func TestService(test *testing.T) {
 	// Config should still be valid. Also make sure order does not affect results.
 	limits = []*config.RateLimit{
 		nil,
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
 	}
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
@@ -241,7 +241,7 @@ func TestServiceGlobalShadowMode(test *testing.T) {
 
 	// Global Shadow mode
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
 		nil,
 	}
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
@@ -281,8 +281,8 @@ func TestRuleShadowMode(test *testing.T) {
 	request := common.NewRateLimitRequest(
 		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true, "", nil, false),
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true, "", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true, false, "", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true, false, "", nil, false),
 	}
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
@@ -314,8 +314,8 @@ func TestMixedRuleShadowMode(test *testing.T) {
 	request := common.NewRateLimitRequest(
 		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true, "", nil, false),
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true, false, "", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
 	}
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
@@ -374,7 +374,7 @@ func TestServiceWithCustomRatelimitHeaders(test *testing.T) {
 	request := common.NewRateLimitRequest(
 		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
 		nil,
 	}
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
@@ -427,7 +427,7 @@ func TestServiceWithDefaultRatelimitHeaders(test *testing.T) {
 	request := common.NewRateLimitRequest(
 		"different-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
 		nil,
 	}
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
@@ -487,7 +487,7 @@ func TestCacheError(test *testing.T) {
 	service := t.setupBasicService()
 
 	request := common.NewRateLimitRequest("different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
-	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, "", nil, false)}
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false)}
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Do(
 		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
@@ -529,9 +529,9 @@ func TestUnlimited(test *testing.T) {
 	request := common.NewRateLimitRequest(
 		"some-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}, {{"baz", "qux"}}}, 1)
 	limits := []*config.RateLimit{
-		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("foo_bar"), false, false, "", nil, false),
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("foo_bar"), false, false, false, "", nil, false),
 		nil,
-		config.NewRateLimit(55, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("baz_qux"), true, false, "", nil, false),
+		config.NewRateLimit(55, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("baz_qux"), true, false, false, "", nil, false),
 	}
 	t.config.EXPECT().GetLimit(context.Background(), "some-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(context.Background(), "some-domain", request.Descriptors[1]).Return(limits[1])
@@ -664,4 +664,278 @@ func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 	if healthpb.HealthCheckResponse_NOT_SERVING != res.Status {
 		test.Errorf("expected status NOT_SERVING actual %v", res.Status)
 	}
+}
+
+func TestServiceGlobalQuotaMode(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	// No global quota_mode, this should be picked-up from environment variables during re-load of config
+	service := t.setupBasicService()
+
+	// Force a config reload.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Make a request.
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, 1)
+
+	// Global Quota mode
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
+		config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	// OK overall code even if limit response was OVER_LIMIT, because global quota mode is enabled
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestServiceQuotaModeWithMetadata(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	os.Setenv("RESPONSE_DYNAMIC_METADATA", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+		os.Unsetenv("RESPONSE_DYNAMIC_METADATA")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload to pick up environment variables.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Make a request.
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"regular", "limit"}}, {{"quota", "limit"}}}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
+		config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, true, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	// Verify response includes metadata about quota violations
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.NotNil(response.DynamicMetadata)
+
+	// Check that quota violation is tracked in metadata for descriptor index 1
+	quotaViolations := response.DynamicMetadata.Fields["quotaModeViolations"]
+	t.assert.NotNil(quotaViolations)
+	violations := quotaViolations.GetListValue()
+	t.assert.Len(violations.Values, 1)
+	t.assert.Equal(float64(1), violations.Values[0].GetNumberValue())
+
+	// Check that quotaModeEnabled is true
+	quotaModeEnabled := response.DynamicMetadata.Fields["quotaModeEnabled"]
+	t.assert.NotNil(quotaModeEnabled)
+	t.assert.True(quotaModeEnabled.GetBoolValue())
+}
+
+func TestServicePerDescriptorQuotaMode(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	// No Global Quota mode
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"regular", "limit"}}, {{"quota", "limit"}}}, 1)
+
+	// Create limits with one having quota mode enabled per-descriptor
+	limits := []*config.RateLimit{
+		// Regular limit - should reject when exceeded
+		{
+			FullKey:    "regular_limit",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 5, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  false,
+			ShadowMode: false,
+		},
+		// Quota mode limit - should not reject when exceeded
+		{
+			FullKey:    "quota_limit",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 3, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	// Regular limit should cause OVER_LIMIT overall, but quota mode limit should be converted to OK
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestServiceQuotaModeOnly(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"quota1", "limit"}}, {{"quota2", "limit"}}}, 1)
+
+	// Both limits are in quota mode
+	limits := []*config.RateLimit{
+		{
+			FullKey:    "quota_limit_1",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 5, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+		{
+			FullKey:    "quota_limit_2",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 3, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	// All quota mode limits should result in OK overall code
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestServiceQuotaModeWithShadowMode(test *testing.T) {
+	os.Setenv("SHADOW_MODE", "true")
+	defer func() {
+		os.Unsetenv("SHADOW_MODE")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload to pick up environment variables.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"regular", "limit"}}, {{"quota", "limit"}}}, 1)
+
+	// Mix of regular and quota mode limits with global shadow mode
+	limits := []*config.RateLimit{
+		{
+			FullKey:    "regular_limit",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 5, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  false,
+			ShadowMode: false,
+		},
+		{
+			FullKey:    "quota_limit",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 3, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	// Global shadow mode should override everything and result in OK
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+
+	// Verify global shadow mode counter is incremented
+	t.assert.EqualValues(1, t.statStore.NewCounter("global_shadow_mode").Value())
 }

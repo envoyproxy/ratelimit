@@ -35,7 +35,7 @@ var tracer = otel.Tracer("ratelimit")
 
 type RateLimitServiceServer interface {
 	pb.RateLimitServiceServer
-	GetCurrentConfig() (config.RateLimitConfig, bool)
+	GetCurrentConfig() (config.RateLimitConfig, bool, bool)
 	SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool)
 }
 
@@ -52,6 +52,7 @@ type service struct {
 	customHeaderResetHeader        string
 	customHeaderClock              utils.TimeSource
 	globalShadowMode               bool
+	globalQuotaMode                bool
 	responseDynamicMetadataEnabled bool
 }
 
@@ -87,6 +88,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 
 	rlSettings := settings.NewSettings()
 	this.globalShadowMode = rlSettings.GlobalShadowMode
+	this.globalQuotaMode = rlSettings.GlobalQuotaMode
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
 
 	if rlSettings.RateLimitResponseHeadersEnabled {
@@ -186,7 +188,7 @@ func (this *service) shouldRateLimitWorker(
 	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
 	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
 
-	snappedConfig, globalShadowMode := this.GetCurrentConfig()
+	snappedConfig, globalShadowMode, globalQuotaMode := this.GetCurrentConfig()
 	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx, snappedConfig)
 
 	assert.Assert(len(limitsToCheck) == len(isUnlimited))
@@ -202,6 +204,9 @@ func (this *service) shouldRateLimitWorker(
 	// Keep track of the descriptor which is closest to hit the ratelimit
 	minLimitRemaining := MaxUint32
 	var minimumDescriptor *pb.RateLimitResponse_DescriptorStatus = nil
+
+	// Track quota mode violations for metadata
+	var quotaModeViolations []int
 
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		// Keep track of the descriptor closest to hit the ratelimit
@@ -220,10 +225,23 @@ func (this *service) shouldRateLimitWorker(
 		} else {
 			response.Statuses[i] = descriptorStatus
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
-				finalCode = descriptorStatus.Code
+				// Check if this limit is in quota mode (individual or global)
+				isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
 
-				minimumDescriptor = descriptorStatus
-				minLimitRemaining = 0
+				if isQuotaMode {
+					// In quota mode: track the violation for metadata but keep response as OK
+					quotaModeViolations = append(quotaModeViolations, i)
+					response.Statuses[i] = &pb.RateLimitResponse_DescriptorStatus{
+						Code:           pb.RateLimitResponse_OK,
+						CurrentLimit:   descriptorStatus.CurrentLimit,
+						LimitRemaining: descriptorStatus.LimitRemaining,
+					}
+				} else {
+					// Normal rate limit: set final code to OVER_LIMIT
+					finalCode = descriptorStatus.Code
+					minimumDescriptor = descriptorStatus
+					minLimitRemaining = 0
+				}
 			}
 		}
 	}
@@ -245,14 +263,14 @@ func (this *service) shouldRateLimitWorker(
 
 	// If response dynamic data enabled, set dynamic data on response.
 	if this.responseDynamicMetadataEnabled {
-		response.DynamicMetadata = ratelimitToMetadata(request)
+		response.DynamicMetadata = ratelimitToMetadata(request, quotaModeViolations, limitsToCheck)
 	}
 
 	response.OverallCode = finalCode
 	return response
 }
 
-func ratelimitToMetadata(req *pb.RateLimitRequest) *structpb.Struct {
+func ratelimitToMetadata(req *pb.RateLimitRequest, quotaModeViolations []int, limitsToCheck []*config.RateLimit) *structpb.Struct {
 	fields := make(map[string]*structpb.Value)
 
 	// Domain
@@ -275,6 +293,27 @@ func ratelimitToMetadata(req *pb.RateLimitRequest) *structpb.Struct {
 	if hitsAddend := req.GetHitsAddend(); hitsAddend != 0 {
 		fields["hitsAddend"] = structpb.NewNumberValue(float64(hitsAddend))
 	}
+
+	// Quota mode information
+	if len(quotaModeViolations) > 0 {
+		violationValues := make([]*structpb.Value, len(quotaModeViolations))
+		for i, violationIndex := range quotaModeViolations {
+			violationValues[i] = structpb.NewNumberValue(float64(violationIndex))
+		}
+		fields["quotaModeViolations"] = structpb.NewListValue(&structpb.ListValue{
+			Values: violationValues,
+		})
+	}
+
+	// Check if any limits have quota mode enabled
+	quotaModeEnabled := false
+	for _, limit := range limitsToCheck {
+		if limit != nil && limit.QuotaMode {
+			quotaModeEnabled = true
+			break
+		}
+	}
+	fields["quotaModeEnabled"] = structpb.NewBoolValue(quotaModeEnabled)
 
 	return &structpb.Struct{Fields: fields}
 }
@@ -379,10 +418,10 @@ func (this *service) ShouldRateLimit(
 	return response, nil
 }
 
-func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool) {
+func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool, bool) {
 	this.configLock.RLock()
 	defer this.configLock.RUnlock()
-	return this.config, this.globalShadowMode
+	return this.config, this.globalShadowMode, this.globalQuotaMode
 }
 
 func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
@@ -396,6 +435,7 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 		stats:             statsManager.NewServiceStats(),
 		health:            health,
 		globalShadowMode:  shadowMode,
+		globalQuotaMode:   false,
 		customHeaderClock: clock,
 	}
 

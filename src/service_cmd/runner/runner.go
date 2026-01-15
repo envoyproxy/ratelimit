@@ -173,7 +173,7 @@ func (runner *Runner) Run() {
 		"/rlconfig",
 		"print out the currently loaded configuration for debugging",
 		func(writer http.ResponseWriter, request *http.Request) {
-			if current, _ := service.GetCurrentConfig(); current != nil {
+			if current, _, _ := service.GetCurrentConfig(); current != nil {
 				io.WriteString(writer, current.Dump())
 			}
 		})

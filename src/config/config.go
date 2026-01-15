@@ -22,6 +22,7 @@ type RateLimit struct {
 	Limit          *pb.RateLimitResponse_RateLimit
 	Unlimited      bool
 	ShadowMode     bool
+	QuotaMode      bool
 	Name           string
 	Replaces       []string
 	DetailedMetric bool
