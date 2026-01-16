@@ -229,7 +229,7 @@ func newMemcachedFromSrv(srv string, d time.Duration, resolver srv.SrvResolver) 
 	err := refreshServers(serverList, srv, resolver)
 	if err != nil {
 		errorText := "Unable to fetch servers from SRV"
-		logger.Errorf(errorText)
+		logger.Error(errorText)
 		panic(MemcacheError(errorText))
 	}
 
