@@ -236,12 +236,12 @@ func validateYamlKeys(fileName string, config_map map[interface{}]interface{}) {
 	for k, v := range config_map {
 		if _, ok := k.(string); !ok {
 			errorText := fmt.Sprintf("config error, key is not of type string: %v", k)
-			logger.Debugf(errorText)
+			logger.Debug(errorText)
 			panic(newRateLimitConfigError(fileName, errorText))
 		}
 		if _, ok := validKeys[k.(string)]; !ok {
 			errorText := fmt.Sprintf("config error, unknown key '%s'", k)
-			logger.Debugf(errorText)
+			logger.Debug(errorText)
 			panic(newRateLimitConfigError(fileName, errorText))
 		}
 		switch v := v.(type) {
@@ -249,7 +249,7 @@ func validateYamlKeys(fileName string, config_map map[interface{}]interface{}) {
 			for _, e := range v {
 				if _, ok := e.(map[interface{}]interface{}); !ok {
 					errorText := fmt.Sprintf("config error, yaml file contains list of type other than map: %v", e)
-					logger.Debugf(errorText)
+					logger.Debug(errorText)
 					panic(newRateLimitConfigError(fileName, errorText))
 				}
 				element := e.(map[interface{}]interface{})
@@ -268,7 +268,7 @@ func validateYamlKeys(fileName string, config_map map[interface{}]interface{}) {
 		case nil:
 		default:
 			errorText := "error checking config"
-			logger.Debugf(errorText)
+			logger.Debug(errorText)
 			panic(newRateLimitConfigError(fileName, errorText))
 		}
 	}
@@ -571,7 +571,7 @@ func ConfigFileContentToYaml(fileName, content string) *YamlRoot {
 	err := yaml.Unmarshal([]byte(content), &any)
 	if err != nil {
 		errorText := fmt.Sprintf("error loading config file: %s", err.Error())
-		logger.Debugf(errorText)
+		logger.Debug(errorText)
 		panic(newRateLimitConfigError(fileName, errorText))
 	}
 	validateYamlKeys(fileName, any)
@@ -580,7 +580,7 @@ func ConfigFileContentToYaml(fileName, content string) *YamlRoot {
 	err = yaml.Unmarshal([]byte(content), &root)
 	if err != nil {
 		errorText := fmt.Sprintf("error loading config file: %s", err.Error())
-		logger.Debugf(errorText)
+		logger.Debug(errorText)
 		panic(newRateLimitConfigError(fileName, errorText))
 	}
 

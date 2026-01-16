@@ -24,7 +24,7 @@ func ParseSrv(srv string) (string, string, string, error) {
 	matches := srvRegex.FindStringSubmatch(srv)
 	if matches == nil {
 		errorText := fmt.Sprintf("could not parse %s to SRV parts", srv)
-		logger.Errorf(errorText)
+		logger.Error(errorText)
 		return "", "", "", errors.New(errorText)
 	}
 	return matches[1], matches[2], matches[3], nil
