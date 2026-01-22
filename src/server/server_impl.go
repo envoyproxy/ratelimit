@@ -211,7 +211,7 @@ func (server *server) startGrpc() {
 	case tcp:
 		lis, err = reuseport.Listen("tcp", server.grpcAddress)
 	case unixDomainSocket:
-		lis, err = net.Listen("unix", server.grpcAddress)
+		lis, err = reuseport.Listen("unix", server.grpcAddress)
 	default:
 		logger.Fatalf("Invalid gRPC listen type %v", server.grpcListenType)
 	}
