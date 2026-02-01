@@ -74,6 +74,7 @@ func TestXdsProvider(t *testing.T) {
 		t.Error("Error setting 'MERGE_DOMAIN_CONFIG' environment variable", err)
 	}
 	t.Run("Test same domain multiple times xDS config update", testSameDomainMultipleXdsConfigUpdate(setSnapshotFunc, providerEventChan))
+	t.Run("Test quota mode xDS config update", testQuotaModeXdsConfigUpdate(&snapVersion, setSnapshotFunc, providerEventChan))
 }
 
 func testInitialXdsConfig(snapVersion *int, setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
@@ -325,6 +326,54 @@ func testSameDomainMultipleXdsConfigUpdate(setSnapshotFunc common.SetSnapshotFun
 		assert.ElementsMatch([]string{
 			"foo.k1_v2: unit=MINUTE requests_per_unit=100, shadow_mode: false, quota_mode: false",
 			"foo.k1_v1: unit=MINUTE requests_per_unit=10, shadow_mode: false, quota_mode: false",
+		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
+	}
+}
+
+func testQuotaModeXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.SetSnapshotFunc, providerEventChan <-chan provider.ConfigUpdateEvent) func(t *testing.T) {
+	*snapVersion += 1
+	return func(t *testing.T) {
+		assert := assert.New(t)
+
+		snapshot, _ := cache.NewSnapshot(fmt.Sprint(*snapVersion),
+			map[resource.Type][]types.Resource{
+				resource.RateLimitConfigType: {
+					&rls_config.RateLimitConfig{
+						Name:   "quota_test",
+						Domain: "quota_domain",
+						Descriptors: []*rls_config.RateLimitDescriptor{
+							{
+								Key:       "quota_key",
+								Value:     "quota_value",
+								QuotaMode: true,
+								RateLimit: &rls_config.RateLimitPolicy{
+									Unit:            rls_config.RateLimitUnit_MINUTE,
+									RequestsPerUnit: 100,
+								},
+							},
+							{
+								Key:   "regular_key",
+								Value: "regular_value",
+								RateLimit: &rls_config.RateLimitPolicy{
+									Unit:            rls_config.RateLimitUnit_HOUR,
+									RequestsPerUnit: 1000,
+								},
+							},
+						},
+					},
+				},
+			},
+		)
+		setSnapshotFunc(snapshot)
+
+		configEvent := <-providerEventChan
+		assert.NotNil(configEvent)
+
+		config, err := configEvent.GetConfig()
+		assert.Nil(err)
+		assert.ElementsMatch([]string{
+			"quota_domain.quota_key_quota_value: unit=MINUTE requests_per_unit=100, shadow_mode: false, quota_mode: true",
+			"quota_domain.regular_key_regular_value: unit=HOUR requests_per_unit=1000, shadow_mode: false, quota_mode: false",
 		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
 	}
 }

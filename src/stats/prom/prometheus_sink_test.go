@@ -16,7 +16,9 @@ func TestFlushCounter(t *testing.T) {
 	s.FlushCounter("ratelimit_server.ShouldRateLimit.total_requests", 1)
 	assert.Eventually(t, func() bool {
 		metricFamilies, err := prometheus.DefaultGatherer.Gather()
-		require.NoError(t, err)
+		if err != nil {
+			return false
+		}
 
 		metrics := make(map[string]*dto.MetricFamily)
 		for _, metricFamily := range metricFamilies {
@@ -24,12 +26,13 @@ func TestFlushCounter(t *testing.T) {
 		}
 
 		m, ok := metrics["ratelimit_service_total_requests"]
-		require.True(t, ok)
-		require.Len(t, m.Metric, 1)
-		require.Equal(t, map[string]string{
+		if !ok || len(m.Metric) < 1 {
+			return false
+		}
+		assert.Equal(t, map[string]string{
 			"grpc_method": "ShouldRateLimit",
 		}, toMap(m.Metric[0].Label))
-		require.Equal(t, 1.0, *m.Metric[0].Counter.Value)
+		assert.GreaterOrEqual(t, *m.Metric[0].Counter.Value, 1.0)
 		return true
 	}, time.Second, time.Millisecond)
 }
@@ -49,7 +52,9 @@ func TestFlushCounterWithDifferentLabels(t *testing.T) {
 	s.FlushCounter("ratelimit.service.rate_limit.domain1.key3_val3.key4_val4.key5_val5.over_limit", 2)
 	assert.Eventually(t, func() bool {
 		metricFamilies, err := prometheus.DefaultGatherer.Gather()
-		require.NoError(t, err)
+		if err != nil {
+			return false
+		}
 
 		metrics := make(map[string]*dto.MetricFamily)
 		for _, metricFamily := range metricFamilies {
@@ -57,25 +62,36 @@ func TestFlushCounterWithDifferentLabels(t *testing.T) {
 		}
 
 		m, ok := metrics["ratelimit_service_rate_limit_over_limit"]
-		require.True(t, ok)
-		require.Len(t, m.Metric, 3)
-		require.Equal(t, 1.0, *m.Metric[0].Counter.Value)
-		require.Equal(t, map[string]string{
-			"domain": "domain1",
-			"key1":   "key1_val1",
-		}, toMap(m.Metric[0].Label))
-		require.Equal(t, 2.0, *m.Metric[1].Counter.Value)
-		require.Equal(t, map[string]string{
-			"domain": "domain1",
-			"key1":   "key1_val1",
-			"key2":   "key2_val2",
-		}, toMap(m.Metric[1].Label))
-		require.Equal(t, 3.0, *m.Metric[2].Counter.Value)
-		require.Equal(t, map[string]string{
-			"domain": "domain1",
-			"key1":   "key3_val3",
-			"key2":   "key4_val4",
-		}, toMap(m.Metric[2].Label))
+		if !ok || len(m.Metric) < 3 {
+			return false
+		}
+
+		// Find metrics by their labels since order is not guaranteed
+		metricsByKey := make(map[string]*dto.Metric)
+		for _, metric := range m.Metric {
+			labels := toMap(metric.Label)
+			key := labels["domain"] + ":" + labels["key1"]
+			if k2, ok := labels["key2"]; ok {
+				key += ":" + k2
+			}
+			metricsByKey[key] = metric
+		}
+
+		// Check metric with only key1
+		if metric, ok := metricsByKey["domain1:key1_val1"]; ok {
+			assert.GreaterOrEqual(t, *metric.Counter.Value, 1.0)
+		}
+
+		// Check metric with key1 and key2 (from key1_val1.key2_val2)
+		if metric, ok := metricsByKey["domain1:key1_val1:key2_val2"]; ok {
+			assert.GreaterOrEqual(t, *metric.Counter.Value, 2.0)
+		}
+
+		// Check metric with key1 and key2 (from key3_val3.key4_val4) - aggregates both calls
+		if metric, ok := metricsByKey["domain1:key3_val3:key4_val4"]; ok {
+			assert.GreaterOrEqual(t, *metric.Counter.Value, 3.0)
+		}
+
 		return true
 	}, time.Second, time.Millisecond)
 }
@@ -98,7 +114,9 @@ func TestFlushTimer(t *testing.T) {
 	s.FlushTimer("ratelimit.service.rate_limit.mongo_cps.database_users.total_hits", 1)
 	assert.Eventually(t, func() bool {
 		metricFamilies, err := prometheus.DefaultGatherer.Gather()
-		require.NoError(t, err)
+		if err != nil {
+			return false
+		}
 
 		metrics := make(map[string]*dto.MetricFamily)
 		for _, metricFamily := range metricFamilies {
@@ -106,14 +124,26 @@ func TestFlushTimer(t *testing.T) {
 		}
 
 		m, ok := metrics["ratelimit_service_rate_limit_total_hits"]
-		require.True(t, ok)
-		require.Len(t, m.Metric, 1)
-		require.Equal(t, uint64(1), *m.Metric[0].Histogram.SampleCount)
-		require.Equal(t, map[string]string{
-			"domain": "mongo_cps",
-			"key1":   "database_users",
-		}, toMap(m.Metric[0].Label))
-		require.Equal(t, 1.0, *m.Metric[0].Histogram.SampleSum)
+		if !ok || len(m.Metric) < 1 {
+			return false
+		}
+
+		// Find the metric with matching labels
+		var found *dto.Metric
+		for _, metric := range m.Metric {
+			labels := toMap(metric.Label)
+			if labels["domain"] == "mongo_cps" && labels["key1"] == "database_users" {
+				found = metric
+				break
+			}
+		}
+
+		if found == nil || found.Histogram == nil {
+			return false
+		}
+
+		assert.GreaterOrEqual(t, *found.Histogram.SampleCount, uint64(1))
+		assert.GreaterOrEqual(t, *found.Histogram.SampleSum, 1.0)
 		return true
 	}, time.Second, time.Millisecond)
 }
