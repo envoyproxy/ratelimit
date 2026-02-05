@@ -116,6 +116,22 @@ func checkServiceErr(something bool, msg string) {
 	}
 }
 
+func isQuotaMode(limitsToCheck []*config.RateLimit) bool {
+	// Quota mode is if ALL matching limits are quotas.
+	allLimitsAreQuotas := false
+	for _, limit := range limitsToCheck {
+		if limit != nil {
+			if !limit.QuotaMode {
+				allLimitsAreQuotas = false
+				break
+			} else {
+				allLimitsAreQuotas = true
+			}
+		}
+	}
+	return allLimitsAreQuotas
+}
+
 func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx context.Context, snappedConfig config.RateLimitConfig) ([]*config.RateLimit, []bool) {
 	checkServiceErr(snappedConfig != nil, "no rate limit configuration loaded")
 
@@ -144,10 +160,11 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 					logger.Debugf("descriptor is unlimited, not passing to the cache")
 				} else {
 					logger.Debugf(
-						"applying limit: %d requests per %s, shadow_mode: %t",
+						"applying limit: %d requests per %s, shadow_mode: %t, quota: %t",
 						limitsToCheck[i].Limit.RequestsPerUnit,
 						limitsToCheck[i].Limit.Unit.String(),
 						limitsToCheck[i].ShadowMode,
+						limitsToCheck[i].QuotaMode,
 					)
 				}
 			}
@@ -190,16 +207,21 @@ func (this *service) shouldRateLimitWorker(
 
 	snappedConfig, globalShadowMode, globalQuotaMode := this.GetCurrentConfig()
 	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx, snappedConfig)
+	isQuotaMode := globalQuotaMode || isQuotaMode(limitsToCheck)
 
 	assert.Assert(len(limitsToCheck) == len(isUnlimited))
 	assert.Assert(len(limitsToCheck) == len(request.Descriptors))
 
 	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck)
+	logger.Debugf("mode %t, descriptor statuses: %+v", isQuotaMode, responseDescriptorStatuses)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
 
 	response := &pb.RateLimitResponse{}
 	response.Statuses = make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
 	finalCode := pb.RateLimitResponse_OK
+	if isQuotaMode {
+		finalCode = pb.RateLimitResponse_OVER_LIMIT
+	}
 
 	// Keep track of the descriptor which is closest to hit the ratelimit
 	minLimitRemaining := MaxUint32
@@ -225,23 +247,18 @@ func (this *service) shouldRateLimitWorker(
 		} else {
 			response.Statuses[i] = descriptorStatus
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
-				// Check if this limit is in quota mode (individual or global)
-				isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
-
 				if isQuotaMode {
 					// In quota mode: track the violation for metadata but keep response as OK
 					quotaModeViolations = append(quotaModeViolations, i)
-					response.Statuses[i] = &pb.RateLimitResponse_DescriptorStatus{
-						Code:           pb.RateLimitResponse_OK,
-						CurrentLimit:   descriptorStatus.CurrentLimit,
-						LimitRemaining: descriptorStatus.LimitRemaining,
-					}
 				} else {
 					// Normal rate limit: set final code to OVER_LIMIT
 					finalCode = descriptorStatus.Code
 					minimumDescriptor = descriptorStatus
 					minLimitRemaining = 0
 				}
+			} else if isQuotaMode {
+				// In quota mode, if at least one descriptor is allowed, the overall code is allow
+				finalCode = pb.RateLimitResponse_OK
 			}
 		}
 	}
