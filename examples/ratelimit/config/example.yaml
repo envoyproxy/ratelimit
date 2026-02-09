@@ -84,3 +84,15 @@ descriptors:
   - key: qux
     rate_limit:
       unlimited: true
+  - key: service
+    value: service_1
+    quota_mode: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 1
+  - key: service
+    value: service_2
+    quota_mode: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 2

@@ -144,10 +144,11 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 					logger.Debugf("descriptor is unlimited, not passing to the cache")
 				} else {
 					logger.Debugf(
-						"applying limit: %d requests per %s, shadow_mode: %t",
+						"applying limit: %d requests per %s, shadow_mode: %t, quota: %t",
 						limitsToCheck[i].Limit.RequestsPerUnit,
 						limitsToCheck[i].Limit.Unit.String(),
 						limitsToCheck[i].ShadowMode,
+						limitsToCheck[i].QuotaMode,
 					)
 				}
 			}
@@ -195,11 +196,11 @@ func (this *service) shouldRateLimitWorker(
 	assert.Assert(len(limitsToCheck) == len(request.Descriptors))
 
 	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck)
+	logger.Debugf("descriptor statuses: %+v", responseDescriptorStatuses)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
 
 	response := &pb.RateLimitResponse{}
 	response.Statuses = make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
-	finalCode := pb.RateLimitResponse_OK
 
 	// Keep track of the descriptor which is closest to hit the ratelimit
 	minLimitRemaining := MaxUint32
@@ -207,6 +208,9 @@ func (this *service) shouldRateLimitWorker(
 
 	// Track quota mode violations for metadata
 	var quotaModeViolations []int
+	failedRateLimitDescriptors := 0
+	failedQuotaDescriptors := 0
+	totalQuotaDescriptors := 0
 
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		// Keep track of the descriptor closest to hit the ratelimit
@@ -224,26 +228,29 @@ func (this *service) shouldRateLimitWorker(
 			}
 		} else {
 			response.Statuses[i] = descriptorStatus
+			isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
-				// Check if this limit is in quota mode (individual or global)
-				isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
-
 				if isQuotaMode {
 					// In quota mode: track the violation for metadata but keep response as OK
 					quotaModeViolations = append(quotaModeViolations, i)
-					response.Statuses[i] = &pb.RateLimitResponse_DescriptorStatus{
-						Code:           pb.RateLimitResponse_OK,
-						CurrentLimit:   descriptorStatus.CurrentLimit,
-						LimitRemaining: descriptorStatus.LimitRemaining,
-					}
+					failedQuotaDescriptors += 1
 				} else {
-					// Normal rate limit: set final code to OVER_LIMIT
-					finalCode = descriptorStatus.Code
+					failedRateLimitDescriptors += 1
 					minimumDescriptor = descriptorStatus
 					minLimitRemaining = 0
 				}
 			}
+			if isQuotaMode {
+				totalQuotaDescriptors += 1
+			}
 		}
+	}
+
+	finalCode := pb.RateLimitResponse_OK
+	// The final code is OVER_LIMIT iff at least one rate limit descriptor is over the limit
+	// or all quota descriptors are over the limit.
+	if failedRateLimitDescriptors > 0 || (totalQuotaDescriptors > 0 && totalQuotaDescriptors == failedQuotaDescriptors) {
+		finalCode = pb.RateLimitResponse_OVER_LIMIT
 	}
 
 	// Add Headers if requested
@@ -378,6 +385,7 @@ func (this *service) ShouldRateLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
 ) (finalResponse *pb.RateLimitResponse, finalError error) {
+	logger.Debugf("ShouldRateLimit: %+v", request)
 	// Generate trace
 	_, span := tracer.Start(ctx, "ShouldRateLimit Execution",
 		trace.WithAttributes(
