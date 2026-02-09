@@ -792,7 +792,7 @@ func TestServicePerDescriptorQuotaMode(test *testing.T) {
 		{
 			FullKey:    "regular_limit",
 			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 5, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
-			QuotaMode:  true,
+			QuotaMode:  false,
 			ShadowMode: false,
 		},
 		// Quota mode limit - should not reject when exceeded
@@ -813,11 +813,11 @@ func TestServicePerDescriptorQuotaMode(test *testing.T) {
 		})
 	response, err := service.ShouldRateLimit(context.Background(), request)
 
-	// Regular limit should cause OVER_LIMIT overall, but quota mode limit should be converted to OK
+	// Regular limit should cause OVER_LIMIT overall, even though quota mode is under the limit
 	common.AssertProtoEqual(
 		t.assert,
 		&pb.RateLimitResponse{
-			OverallCode: pb.RateLimitResponse_OK,
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
 			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
@@ -865,7 +865,7 @@ func TestServiceMixedPerDescriptorModes(test *testing.T) {
 		})
 	response, err := service.ShouldRateLimit(context.Background(), request)
 
-	// Overall result is OVER_LIMIT, since all limits with mixed quota and rate limit modes are treated as rate limits
+	// Overall result is OVER_LIMIT, since all quota limits were exceeded
 	common.AssertProtoEqual(
 		t.assert,
 		&pb.RateLimitResponse{
@@ -879,7 +879,59 @@ func TestServiceMixedPerDescriptorModes(test *testing.T) {
 	t.assert.Nil(err)
 }
 
-func TestServiceQuotaModeOnly(test *testing.T) {
+func TestServiceMixedPerDescriptorModesUnderLimit(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	// No Global Quota mode
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"regular", "limit"}}, {{"quota", "limit"}}}, 1)
+
+	// Create limits with one having quota mode enabled per-descriptor
+	// In this configuration the limits will be evaluated as rate limits.
+	limits := []*config.RateLimit{
+		// Regular limit
+		{
+			FullKey:    "regular_limit",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 5, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  false,
+			ShadowMode: false,
+		},
+		// Quota mode limit
+		{
+			FullKey:    "quota_limit",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 3, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	// Overall result is OVER_LIMIT, since all quota limits were exceeded
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestServiceQuotaModeOnlyAllOverTheLimit(test *testing.T) {
 	t := commonSetup(test)
 	defer t.controller.Finish()
 
@@ -921,6 +973,54 @@ func TestServiceQuotaModeOnly(test *testing.T) {
 			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
 				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestServiceQuotaModeOnlySomeOverTheLimit(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"quota1", "limit"}}, {{"quota2", "limit"}}}, 1)
+
+	// Both limits are in quota mode
+	limits := []*config.RateLimit{
+		{
+			FullKey:    "quota_limit_1",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 5, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+		{
+			FullKey:    "quota_limit_2",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 3, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	// Since only some quota limits were exceeded overall result is OK
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
 			},
 		},
 		response)
