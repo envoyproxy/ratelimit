@@ -21,11 +21,11 @@ if [ $? -eq 0 ]; then
 	exit 1
 fi
 
-echo "Wating 1 minute for quota buckets to be refreshed"
+echo "Waiting 1 minute for quota buckets to be refreshed"
 sleep 60
 
 response=$(curl -i -s http://envoy-proxy:8888/quota)
 if [ $? -ne 0 ]; then
-	echo "Quota bucket should be refereshed"
+	echo "Quota bucket should be refreshed"
 	exit 1
 fi

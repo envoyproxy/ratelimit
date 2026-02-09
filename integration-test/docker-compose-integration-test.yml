@@ -61,11 +61,13 @@ services:
       - "--config-path /etc/envoy/envoy.yaml"
       - "--concurrency 1"
       - "--mode serve"
-      - "--log-level info"
+      - "--log-level trace"
+      - "--log-path /tmp/envoy/envoy.log"
     depends_on:
       - ratelimit
     volumes:
       - ./examples/envoy/proxy.yaml:/etc/envoy/envoy.yaml
+      - /tmp/envoy:/tmp/envoy
     networks:
       - ratelimit-network
     expose:
