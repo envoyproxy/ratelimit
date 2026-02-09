@@ -61,20 +61,6 @@ static_resources:
                           envoy_grpc:
                             cluster_name: ratelimit
                         transport_api_version: V3
-                  - name: envoy.filters.http.ratelimit_quota
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit
-                      domain: quota
-                      request_type: external
-                      stage: 1
-                      rate_limited_as_resource_exhausted: true
-                      failure_mode_deny: false
-                      enable_x_ratelimit_headers: DRAFT_VERSION_03
-                      rate_limit_service:
-                        grpc_service:
-                          envoy_grpc:
-                            cluster_name: ratelimit
-                        transport_api_version: V3
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
