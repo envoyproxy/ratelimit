@@ -208,7 +208,8 @@ type Settings struct {
 	MemcacheTlsSkipHostnameVerification bool   `envconfig:"MEMCACHE_TLS_SKIP_HOSTNAME_VERIFICATION" default:"false"`
 
 	// Should the ratelimiting be running in Global shadow-mode, ie. never report a ratelimit status, unless a rate was provided from envoy as an override
-	GlobalShadowMode bool `envconfig:"SHADOW_MODE" default:"false"`
+	GlobalShadowMode                 bool `envconfig:"SHADOW_MODE" default:"false"`
+	ShadowModeExceededHeaderEnabled  bool `envconfig:"SHADOW_MODE_EXCEEDED_HEADER_ENABLED" default:"false"`
 
 	// Should the ratelimiting be running in Global quota-mode, ie. set metadata but never report OVER_LIMIT status when quota limits are exceeded
 	GlobalQuotaMode bool `envconfig:"QUOTA_MODE" default:"false"`

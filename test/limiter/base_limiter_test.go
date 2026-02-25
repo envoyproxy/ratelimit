@@ -210,8 +210,8 @@ func TestGetResponseStatusOverLimitWithLocalCacheShadowMode(t *testing.T) {
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 4, 5)
 	// As `isOverLimitWithLocalCache` is passed as `true`, immediate response is returned with no checks of the limits.
 	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, true, 2)
-	// Limit is reached, but response is still OK due to ShadowMode
-	assert.Equal(pb.RateLimitResponse_OK, responseStatus.GetCode())
+	// Limit is reached, shadow mode code conversion now happens in service layer
+	assert.Equal(pb.RateLimitResponse_OVER_LIMIT, responseStatus.GetCode())
 	assert.Equal(uint32(0), responseStatus.GetLimitRemaining())
 	assert.Equal(limits[0].Limit, responseStatus.GetCurrentLimit())
 	assert.Equal(uint64(2), limits[0].Stats.OverLimit.Value())
@@ -259,7 +259,8 @@ func TestGetResponseStatusOverLimitShadowMode(t *testing.T) {
 	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, true, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 7, 4, 5)
 	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1)
-	assert.Equal(pb.RateLimitResponse_OK, responseStatus.GetCode())
+	// Shadow mode code conversion now happens in service layer
+	assert.Equal(pb.RateLimitResponse_OVER_LIMIT, responseStatus.GetCode())
 	assert.Equal(uint32(0), responseStatus.GetLimitRemaining())
 	assert.Equal(limits[0].Limit, responseStatus.GetCurrentLimit())
 	result, _ := localCache.Get([]byte("key"))

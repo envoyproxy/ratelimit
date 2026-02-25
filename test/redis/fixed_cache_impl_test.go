@@ -564,10 +564,10 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 		"EXPIRE", "domain_key4_value4_997200", int64(3600)).DoAndReturn(pipeAppend)
 	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
 
-	// The result should be OK since limit is in ShadowMode
+	// Shadow mode code conversion now happens in service layer, cache returns OVER_LIMIT
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
 		cache.DoLimit(context.Background(), request, limits))
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
@@ -586,10 +586,10 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(),
 		"EXPIRE", "domain_key4_value4_997200", int64(3600)).Times(0)
 
-	// The result should be OK since limit is in ShadowMode
+	// Shadow mode code conversion now happens in service layer, cache returns OVER_LIMIT
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource)},
 		},
 		cache.DoLimit(context.Background(), request, limits))
 
