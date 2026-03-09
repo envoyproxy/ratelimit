@@ -119,6 +119,10 @@ type Settings struct {
 	// value: remaining seconds
 	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:"RateLimit-Reset"`
 
+	// Custom logic to add rate limit exceeded request header when any rate limits remaining is 0s
+	RateLimitExceededRequestHeaderEnabled bool   `envconfig:"RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED" default:"false"`
+	HeaderRateLimitExceeded               string `envconfig:"RATE_LIMIT_EXCEEDED_REQUEST_HEADER" default:"x-rate-limit-exceeded"`
+
 	// Health-check settings
 	HealthyWithAtLeastOneConfigLoaded bool `envconfig:"HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED" default:"false"`
 

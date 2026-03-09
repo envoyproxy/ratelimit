@@ -939,3 +939,279 @@ func TestServiceQuotaModeWithShadowMode(test *testing.T) {
 	// Verify global shadow mode counter is incremented
 	t.assert.EqualValues(1, t.statStore.NewCounter("global_shadow_mode").Value())
 }
+
+func TestRateLimitExceededHeader_NotExceeded(test *testing.T) {
+	os.Setenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload to pick up env var.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Request where limit is not exceeded (remaining > 0).
+	request := common.NewRateLimitRequest(
+		"test-domain", [][][2]string{{{"foo", "bar"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
+			},
+			RequestHeadersToAdd: []*core.HeaderValue{
+				{Key: "x-rate-limit-exceeded", Value: "false"},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestRateLimitExceededHeader_Exceeded(test *testing.T) {
+	os.Setenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload to pick up env var.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Request where limit is exceeded (remaining == 0, OVER_LIMIT).
+	request := common.NewRateLimitRequest(
+		"test-domain", [][][2]string{{{"foo", "bar"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			},
+			RequestHeadersToAdd: []*core.HeaderValue{
+				{Key: "x-rate-limit-exceeded", Value: "true"},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestRateLimitExceededHeader_CustomHeaderName(test *testing.T) {
+	os.Setenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED", "true")
+	os.Setenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER", "x-custom-exceeded")
+	defer func() {
+		os.Unsetenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED")
+		os.Unsetenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload to pick up env vars.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	request := common.NewRateLimitRequest(
+		"test-domain", [][][2]string{{{"foo", "bar"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			},
+			RequestHeadersToAdd: []*core.HeaderValue{
+				{Key: "x-custom-exceeded", Value: "true"},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestRateLimitExceededHeader_Disabled(test *testing.T) {
+	// Feature disabled by default (no env var set).
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest(
+		"test-domain", [][][2]string{{{"foo", "bar"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+	// No RequestHeadersToAdd when feature is disabled.
+	t.assert.Nil(response.RequestHeadersToAdd)
+}
+
+func TestRateLimitExceededHeader_GlobalShadowMode(test *testing.T) {
+	os.Setenv("SHADOW_MODE", "true")
+	os.Setenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("SHADOW_MODE")
+		os.Unsetenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload to pick up env vars.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Request that would be OVER_LIMIT but global shadow mode converts to OK.
+	request := common.NewRateLimitRequest(
+		"test-domain", [][][2]string{{{"foo", "bar"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			},
+			RequestHeadersToAdd: []*core.HeaderValue{
+				{Key: "x-rate-limit-exceeded", Value: "true"},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+	t.assert.EqualValues(1, t.statStore.NewCounter("global_shadow_mode").Value())
+}
+
+func TestRateLimitExceededHeader_MultipleDescriptors(test *testing.T) {
+	os.Setenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("RATE_LIMIT_EXCEEDED_REQUEST_HEADER_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload to pick up env var.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Two descriptors: first is OK with remaining > 0, second has remaining == 0.
+	// Header should be true because at least one descriptor has remaining == 0.
+	request := common.NewRateLimitRequest(
+		"test-domain", [][][2]string{{{"foo", "bar"}}, {{"baz", "qux"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key1"), false, false, false, "", nil, false),
+		config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			},
+			RequestHeadersToAdd: []*core.HeaderValue{
+				{Key: "x-rate-limit-exceeded", Value: "true"},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}

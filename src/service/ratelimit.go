@@ -40,20 +40,22 @@ type RateLimitServiceServer interface {
 }
 
 type service struct {
-	configLock                     sync.RWMutex
-	configUpdateEvent              <-chan provider.ConfigUpdateEvent
-	config                         config.RateLimitConfig
-	cache                          limiter.RateLimitCache
-	stats                          stats.ServiceStats
-	health                         *server.HealthChecker
-	customHeadersEnabled           bool
-	customHeaderLimitHeader        string
-	customHeaderRemainingHeader    string
-	customHeaderResetHeader        string
-	customHeaderClock              utils.TimeSource
-	globalShadowMode               bool
-	globalQuotaMode                bool
-	responseDynamicMetadataEnabled bool
+	configLock                           sync.RWMutex
+	configUpdateEvent                    <-chan provider.ConfigUpdateEvent
+	config                               config.RateLimitConfig
+	cache                                limiter.RateLimitCache
+	stats                                stats.ServiceStats
+	health                               *server.HealthChecker
+	customHeadersEnabled                 bool
+	customHeaderLimitHeader              string
+	customHeaderRemainingHeader          string
+	customHeaderResetHeader              string
+	customRateLimitExceededHeaderEnabled bool
+	customRateLimitExceededHeader        string
+	customHeaderClock                    utils.TimeSource
+	globalShadowMode                     bool
+	globalQuotaMode                      bool
+	responseDynamicMetadataEnabled       bool
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -100,6 +102,13 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 
 		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
 	}
+
+	// Custom logic to add rate limit exceeded request header when any rate limits remaining is 0
+	if rlSettings.RateLimitExceededRequestHeaderEnabled {
+		this.customRateLimitExceededHeaderEnabled = true
+		this.customRateLimitExceededHeader = rlSettings.HeaderRateLimitExceeded
+	}
+
 	this.configLock.Unlock()
 	logger.Info("Successfully loaded new configuration")
 }
@@ -208,6 +217,9 @@ func (this *service) shouldRateLimitWorker(
 	// Track quota mode violations for metadata
 	var quotaModeViolations []int
 
+	// Custom logic to add rate limit exceeded request header when any rate limits remaining is 0
+	rateLimitExceeded := false
+
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		// Keep track of the descriptor closest to hit the ratelimit
 		if this.customHeadersEnabled &&
@@ -224,6 +236,13 @@ func (this *service) shouldRateLimitWorker(
 			}
 		} else {
 			response.Statuses[i] = descriptorStatus
+
+			// Custom logic to add rate limit exceeded request header when any rate limits remaining is 0
+			// Descriptors status remaining limit is set to 0 when exceeding the limit -> src/limiter/base_limiter.go:135.
+			if descriptorStatus.GetLimitRemaining() == 0 {
+				rateLimitExceeded = true
+			}
+
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				// Check if this limit is in quota mode (individual or global)
 				isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
@@ -257,8 +276,18 @@ func (this *service) shouldRateLimitWorker(
 
 	// If there is a global shadow_mode, it should always return OK
 	if finalCode == pb.RateLimitResponse_OVER_LIMIT && globalShadowMode {
+		// Custom logic to add rate limit exceeded request header when any rate limits remaining is 0
+		rateLimitExceeded = true
+
 		finalCode = pb.RateLimitResponse_OK
 		this.stats.GlobalShadowMode.Inc()
+	}
+
+	// Custom logic to add rate limit exceeded request header when any rate limits remaining is 0
+	if this.customRateLimitExceededHeaderEnabled {
+		response.RequestHeadersToAdd = []*core.HeaderValue{
+			this.rateLimitExceededHeader(rateLimitExceeded),
+		}
 	}
 
 	// If response dynamic data enabled, set dynamic data on response.
@@ -371,6 +400,13 @@ func (this *service) rateLimitResetHeader(
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
 		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
+	}
+}
+
+func (this *service) rateLimitExceededHeader(rateLimitExceeded bool) *core.HeaderValue {
+	return &core.HeaderValue{
+		Key:   this.customRateLimitExceededHeader,
+		Value: strconv.FormatBool(rateLimitExceeded),
 	}
 }
 
