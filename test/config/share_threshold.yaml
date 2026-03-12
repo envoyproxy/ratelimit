@@ -85,3 +85,36 @@ descriptors:
     rate_limit:
       unit: minute
       requests_per_unit: 100
+  # Test case: share_threshold with middle wildcard (single *)
+  - key: midpath
+    value: /api*v1
+    share_threshold: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 100
+  # Test case: share_threshold with multi-wildcard (multiple *)
+  - key: multiroute
+    value: svc*ep*rpc
+    share_threshold: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 50
+  # Test case: share_threshold with middle wildcard + value_to_metric (share_threshold takes priority)
+  - key: midroute
+    value: /api*v2
+    share_threshold: true
+    value_to_metric: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 80
+  # Test case: share_threshold with middle wildcard nested
+  - key: tenant
+    value: t*prod
+    share_threshold: true
+    descriptors:
+      - key: resource
+        value: res*v2
+        share_threshold: true
+        rate_limit:
+          unit: minute
+          requests_per_unit: 60

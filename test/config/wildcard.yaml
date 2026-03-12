@@ -20,6 +20,11 @@ descriptors:
     rate_limit:
       unit: minute
       requests_per_unit: 20
+  - key: multiWild
+    value: foo*bar*baz
+    rate_limit:
+      unit: minute
+      requests_per_unit: 10
   - key: nestedWild
     value: val1
     descriptors:

@@ -42,10 +42,17 @@ type YamlRoot struct {
 	Descriptors []YamlDescriptor
 }
 
+// wildcardMatchEntry holds a pre-computed wildcard pattern for non-trailing * matching.
+// parts is the pattern split on "*" at load time, avoiding allocations per request.
+type wildcardMatchEntry struct {
+	key   string   // full descriptor key, e.g. "path_bar*baz*qux"
+	parts []string // pre-split on "*", e.g. ["path_bar", "baz", "qux"]
+}
+
 type rateLimitDescriptor struct {
 	descriptors     map[string]*rateLimitDescriptor
 	limit           *RateLimit
-	wildcardKeys    []string
+	wildcardEntries []wildcardMatchEntry // all wildcard patterns, pre-split at load time
 	valueToMetric   bool
 	shareThreshold  bool
 	wildcardPattern string // stores the wildcard pattern when share_threshold is true
@@ -127,6 +134,47 @@ func newRateLimitConfigError(name string, err string) RateLimitConfigError {
 	return RateLimitConfigError(fmt.Sprintf("%s: %s", name, err))
 }
 
+// wildcardMatch reports whether value matches a pre-split wildcard pattern.
+// parts is the pattern split on "*" at load time (e.g. ["path_bar", "baz", "qux"]).
+// Each * matches zero or more characters. No allocations are performed per call.
+func wildcardMatch(parts []string, value string) bool {
+	if len(parts) == 1 {
+		return parts[0] == value
+	}
+
+	// Value must start with the first literal segment and end with the last.
+	if !strings.HasPrefix(value, parts[0]) {
+		return false
+	}
+	if !strings.HasSuffix(value, parts[len(parts)-1]) {
+		return false
+	}
+
+	// Ensure total fixed characters don't exceed the value length.
+	totalFixed := 0
+	for _, p := range parts {
+		totalFixed += len(p)
+	}
+	if len(value) < totalFixed {
+		return false
+	}
+
+	// Scan middle segments in order within the region between the consumed prefix and suffix.
+	remaining := value[len(parts[0]):]
+	if last := parts[len(parts)-1]; last != "" {
+		remaining = remaining[:len(remaining)-len(last)]
+	}
+	for _, part := range parts[1 : len(parts)-1] {
+		idx := strings.Index(remaining, part)
+		if idx < 0 {
+			return false
+		}
+		remaining = remaining[idx+len(part):]
+	}
+
+	return true
+}
+
 // Load a set of config descriptors from the YAML file and check the input.
 // @param config supplies the config file that owns the descriptor.
 // @param parentKey supplies the fully resolved key name that owns this config level.
@@ -194,24 +242,30 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			}
 		}
 
-		// Validate share_threshold can only be used with wildcards
+		// Validate share_threshold can only be used with wildcards (trailing or middle).
 		if descriptorConfig.ShareThreshold {
-			if len(finalKey) == 0 || finalKey[len(finalKey)-1:] != "*" {
+			if !strings.Contains(finalKey, "*") {
 				panic(newRateLimitConfigError(
 					config.Name,
-					fmt.Sprintf("share_threshold can only be used with wildcard values (ending with '*'), but found key '%s'", finalKey)))
+					fmt.Sprintf("share_threshold can only be used with wildcard values (containing '*'), but found key '%s'", finalKey)))
 			}
 		}
 
-		// Store wildcard pattern if share_threshold is enabled
+		// Store wildcard pattern if share_threshold is enabled.
+		// Applies to both trailing-* and middle/multi-* patterns.
 		var wildcardPattern string = ""
-		if descriptorConfig.ShareThreshold && len(finalKey) > 0 && finalKey[len(finalKey)-1:] == "*" {
+		if descriptorConfig.ShareThreshold && strings.Contains(finalKey, "*") {
 			wildcardPattern = finalKey
 		}
 
-		// Preload keys ending with "*" symbol.
-		if finalKey[len(finalKey)-1:] == "*" {
-			this.wildcardKeys = append(this.wildcardKeys, finalKey)
+		// All wildcard patterns go into one unified list with pre-split parts.
+		// wildcardMatch handles trailing-* with the same performance as HasPrefix
+		// because HasSuffix("", "") is O(1) and there are no middle segments to scan.
+		if strings.Contains(finalKey, "*") {
+			this.wildcardEntries = append(this.wildcardEntries, wildcardMatchEntry{
+				key:   finalKey,
+				parts: strings.Split(finalKey, "*"),
+			})
 		}
 
 		logger.Debugf(
@@ -219,7 +273,7 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 		newDescriptor := &rateLimitDescriptor{
 			descriptors:     map[string]*rateLimitDescriptor{},
 			limit:           rateLimit,
-			wildcardKeys:    nil,
+			wildcardEntries: nil,
 			valueToMetric:   descriptorConfig.ValueToMetric,
 			shareThreshold:  descriptorConfig.ShareThreshold,
 			wildcardPattern: wildcardPattern,
@@ -298,7 +352,7 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	newDomain := &rateLimitDomain{rateLimitDescriptor{
 		descriptors:     map[string]*rateLimitDescriptor{},
 		limit:           nil,
-		wildcardKeys:    nil,
+		wildcardEntries: nil,
 		valueToMetric:   false,
 		shareThreshold:  false,
 		wildcardPattern: "",
@@ -374,11 +428,11 @@ func (this *rateLimitConfigImpl) GetLimit(
 		nextDescriptor := descriptorsMap[finalKey]
 		var matchedWildcardKey string
 
-		if nextDescriptor == nil && len(prevDescriptor.wildcardKeys) > 0 {
-			for _, wildcardKey := range prevDescriptor.wildcardKeys {
-				if strings.HasPrefix(finalKey, strings.TrimSuffix(wildcardKey, "*")) {
-					nextDescriptor = descriptorsMap[wildcardKey]
-					matchedWildcardKey = wildcardKey
+		if nextDescriptor == nil && len(prevDescriptor.wildcardEntries) > 0 {
+			for _, entry := range prevDescriptor.wildcardEntries {
+				if wildcardMatch(entry.parts, finalKey) {
+					nextDescriptor = descriptorsMap[entry.key]
+					matchedWildcardKey = entry.key
 					break
 				}
 			}

@@ -643,12 +643,9 @@ rather than the normal
 
 #### Example 9
 
-Value supports wildcard matching to apply rate-limit for nested endpoints:
+Value supports wildcard matching using `*`, which can appear at any position — trailing, middle, or multiple times. Each `*` matches zero or more characters.
 
-```
-(key_1, value_1): 20 / sec
-(key_1, value_2): 20 / sec
-```
+Trailing wildcard — matches any value starting with the given prefix:
 
 ```yaml
 domain: example9
@@ -659,6 +656,36 @@ descriptors:
       unit: minute
       requests_per_unit: 20
 ```
+
+Matches `value1`, `value2`, `valueXYZ`, etc.
+
+Middle wildcard — matches values with a fixed prefix **and** suffix:
+
+```yaml
+domain: example9
+descriptors:
+  - key: path
+    value: /api/*/action
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
+```
+
+Matches `/api/123/action`, `/api/user-id/action`. Does not match `/api/123/other`.
+
+Multiple wildcards — each `*` matches an independent segment, in order:
+
+```yaml
+domain: example9
+descriptors:
+  - key: route
+    value: /api/*/resource/*/action
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
+```
+
+Matches `/api/v1/resource/123/action`, `/api/v2/resource/456/action`.
 
 #### Example 10
 

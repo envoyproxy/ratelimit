@@ -638,13 +638,75 @@ func TestWildcardConfig(t *testing.T) {
 		})
 	assert.Nil(eager)
 
-	// Wildcard in the middle of value is not supported.
-	midWildcard := rlConfig.GetLimit(
+	// Middle wildcard (single *): bar*b matches values with "bar" prefix and "b" suffix.
+	midWild1 := rlConfig.GetLimit(
 		context.TODO(), "test-domain",
 		&pb_struct.RateLimitDescriptor{
-			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWildcard", Value: "barab"}},
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWild", Value: "barab"}},
 		})
-	assert.Nil(midWildcard)
+	midWild2 := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWild", Value: "bar123b"}},
+		})
+	assert.NotNil(midWild1)
+	assert.NotNil(midWild2)
+	assert.Equal(midWild1, midWild2, "Different values matching the same middle wildcard should share the same rate limit")
+	assert.Equal("test-domain.midWild_bar*b", midWild1.Stats.Key, "Middle wildcard stats key should use the wildcard pattern")
+	assert.Equal("test-domain.midWild_bar*b", midWild1.FullKey, "Middle wildcard FullKey should use the wildcard pattern")
+
+	// Middle wildcard: zero-length middle is allowed (* matches empty string).
+	midWildEmpty := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWild", Value: "barb"}},
+		})
+	assert.NotNil(midWildEmpty, "* should match empty string so 'barb' matches 'bar*b'")
+
+	// Middle wildcard: does not match values that don't satisfy prefix+suffix.
+	midWildNoMatch1 := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWild", Value: "bara"}},
+		})
+	midWildNoMatch2 := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midWild", Value: "xbarb"}},
+		})
+	assert.Nil(midWildNoMatch1, "Value without required suffix should not match middle wildcard")
+	assert.Nil(midWildNoMatch2, "Value without required prefix should not match middle wildcard")
+
+	// Multiple wildcards: foo*bar*baz matches values containing "foo"..."bar"..."baz" in order.
+	multiWild1 := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "multiWild", Value: "foo123bar456baz"}},
+		})
+	multiWild2 := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "multiWild", Value: "foobarbaz"}},
+		})
+	assert.NotNil(multiWild1)
+	assert.NotNil(multiWild2)
+	assert.Equal(multiWild1, multiWild2, "Different values matching the same multi-wildcard should share the same rate limit")
+	assert.Equal("test-domain.multiWild_foo*bar*baz", multiWild1.Stats.Key, "Multi-wildcard stats key should use the wildcard pattern")
+	assert.Equal("test-domain.multiWild_foo*bar*baz", multiWild1.FullKey, "Multi-wildcard FullKey should use the wildcard pattern")
+
+	// Multiple wildcards: does not match when a required segment is missing or out of order.
+	multiWildNoMatch1 := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "multiWild", Value: "foo123baz"}},
+		})
+	multiWildNoMatch2 := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "multiWild", Value: "bar456baz"}},
+		})
+	assert.Nil(multiWildNoMatch1, "Value missing middle segment 'bar' should not match")
+	assert.Nil(multiWildNoMatch2, "Value missing required prefix 'foo' should not match")
 }
 
 func TestDetailedMetric(t *testing.T) {
@@ -1804,9 +1866,124 @@ func TestShareThreshold(t *testing.T) {
 		counterTest1 := stats.NewCounter("test-domain.file_test1.total_hits").Value()
 		asrt.GreaterOrEqual(counterTest1, uint64(1), "test1 should increment its own counter")
 	})
+
+	// Test Case 5: share_threshold with middle wildcard (single *)
+	t.Run("share_threshold with middle wildcard", func(t *testing.T) {
+		testValues := []string{"/api/v1", "/api-beta-v1", "/apiXYZv1"}
+
+		var rateLimits []*config.RateLimit
+		for _, value := range testValues {
+			rl := rlConfig.GetLimit(
+				context.TODO(), "test-domain",
+				&pb_struct.RateLimitDescriptor{
+					Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midpath", Value: value}},
+				})
+			asrt.NotNil(rl, "Should match middle wildcard for value %s", value)
+			asrt.NotNil(rl.ShareThresholdKeyPattern)
+			asrt.Equal("/api*v1", rl.ShareThresholdKeyPattern[0], "ShareThresholdKeyPattern should hold the wildcard pattern")
+			asrt.EqualValues(100, rl.Limit.RequestsPerUnit)
+			asrt.Equal("test-domain.midpath_/api*v1", rl.Stats.Key, "Stats key should use middle wildcard pattern")
+			asrt.Equal(rl.Stats.Key, rl.FullKey)
+			rateLimits = append(rateLimits, rl)
+		}
+		for i := 1; i < len(rateLimits); i++ {
+			asrt.Equal(rateLimits[0].Stats.Key, rateLimits[i].Stats.Key, "All matching values should share the same stats key")
+		}
+
+		// Non-matching values should not match
+		noMatch := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midpath", Value: "/api/v2"}},
+			})
+		asrt.Nil(noMatch, "Value not satisfying prefix+suffix should not match")
+	})
+
+	// Test Case 6: share_threshold with multi-wildcard (multiple *)
+	t.Run("share_threshold with multi-wildcard", func(t *testing.T) {
+		testValues := []string{"svcAepBrpc", "svcXXXepYYYrpc", "svceprpc"}
+
+		var rateLimits []*config.RateLimit
+		for _, value := range testValues {
+			rl := rlConfig.GetLimit(
+				context.TODO(), "test-domain",
+				&pb_struct.RateLimitDescriptor{
+					Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "multiroute", Value: value}},
+				})
+			asrt.NotNil(rl, "Should match multi-wildcard for value %s", value)
+			asrt.NotNil(rl.ShareThresholdKeyPattern)
+			asrt.Equal("svc*ep*rpc", rl.ShareThresholdKeyPattern[0])
+			asrt.EqualValues(50, rl.Limit.RequestsPerUnit)
+			asrt.Equal("test-domain.multiroute_svc*ep*rpc", rl.Stats.Key, "Stats key should use multi-wildcard pattern")
+			asrt.Equal(rl.Stats.Key, rl.FullKey)
+			rateLimits = append(rateLimits, rl)
+		}
+		for i := 1; i < len(rateLimits); i++ {
+			asrt.Equal(rateLimits[0].Stats.Key, rateLimits[i].Stats.Key, "All matching values should share the same stats key")
+		}
+
+		// Non-matching: missing middle segment
+		noMatch := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "multiroute", Value: "svcABCrpc"}},
+			})
+		asrt.Nil(noMatch, "Value missing required middle segment 'ep' should not match")
+	})
+
+	// Test Case 7: share_threshold with middle wildcard — share_threshold takes priority over value_to_metric
+	t.Run("share_threshold priority over value_to_metric with middle wildcard", func(t *testing.T) {
+		rl1 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midroute", Value: "/api/v2"}},
+			})
+		rl2 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "midroute", Value: "/api-beta-v2"}},
+			})
+		asrt.NotNil(rl1)
+		asrt.NotNil(rl2)
+		asrt.Equal("/api*v2", rl1.ShareThresholdKeyPattern[0])
+		asrt.Equal("test-domain.midroute_/api*v2", rl1.Stats.Key, "share_threshold should take priority over value_to_metric")
+		asrt.Equal(rl1.Stats.Key, rl2.Stats.Key, "Both values should share the same stats key")
+	})
+
+	// Test Case 8: share_threshold with nested middle wildcards
+	t.Run("share_threshold with nested middle wildcards", func(t *testing.T) {
+		rl := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "tenant", Value: "t1prod"},
+					{Key: "resource", Value: "resAv2"},
+				},
+			})
+		asrt.NotNil(rl)
+		asrt.Equal("t*prod", rl.ShareThresholdKeyPattern[0])
+		asrt.Equal("res*v2", rl.ShareThresholdKeyPattern[1])
+		asrt.Equal("test-domain.tenant_t*prod.resource_res*v2", rl.Stats.Key, "Nested middle wildcards with share_threshold should both use wildcard patterns in stats key")
+		asrt.Equal(rl.Stats.Key, rl.FullKey)
+
+		// Different matching values should share the same stats key
+		rl2 := rlConfig.GetLimit(
+			context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{
+					{Key: "tenant", Value: "t99prod"},
+					{Key: "resource", Value: "resBBBv2"},
+				},
+			})
+		asrt.NotNil(rl2)
+		asrt.Equal(rl.Stats.Key, rl2.Stats.Key, "Different matching values should share the same stats key")
+	})
 }
 
-// TestWildcardStatsBehavior verifies the stats key behavior for wildcards under different flag combinations
+// TestWildcardStatsBehavior verifies that trailing wildcards (foo*) and middle/multi wildcards (foo*bar, foo*bar*baz)
+// produce identical stats key behavior for all flag combinations (no flags, value_to_metric, share_threshold).
+// Since all wildcard patterns now go through the same wildcardEntries+wildcardMatch path, each sub-test
+// runs the same scenario for both trailing and middle patterns and asserts equal outcomes.
 func TestWildcardStatsBehavior(t *testing.T) {
 	asrt := assert.New(t)
 	store := stats.NewStore(stats.NewNullSink(), false)
@@ -1978,4 +2155,56 @@ func TestWildcardStatsBehavior(t *testing.T) {
 		asrt.Equal("test-domain.wild_foo*.other_bar.limit", rl.Stats.Key, "Should preserve wildcard pattern when value_to_metric is only on other descriptor")
 		asrt.Equal(rl.Stats.Key, rl.FullKey, "FullKey should match Stats.Key")
 	})
+
+	// The following sub-tests mirror the trailing-* cases above using middle/multi wildcards,
+	// explicitly asserting that the unified wildcardEntries+wildcardMatch path produces identical
+	// flag behavior regardless of wildcard position.
+
+	t.Run("middle+trailing wildcard - no flags - preserves wildcard pattern in stats key", func(t *testing.T) {
+		cfg := []config.RateLimitConfigToLoad{{
+			Name: "inline",
+			ConfigYaml: &config.YamlRoot{
+				Domain: "test-domain",
+				Descriptors: []config.YamlDescriptor{
+					{Key: "wild", Value: "foo*bar*", RateLimit: &config.YamlRateLimit{RequestsPerUnit: 20, Unit: "minute"}},
+				},
+			},
+		}}
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rl1 := rlConfig.GetLimit(context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo123bar456"}},
+			})
+		rl2 := rlConfig.GetLimit(context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "fooXbarY"}},
+			})
+		asrt.NotNil(rl1)
+		asrt.NotNil(rl2)
+		asrt.Equal("test-domain.wild_foo*bar*", rl1.Stats.Key, "Middle+trailing wildcard with no flags should preserve wildcard pattern — same as trailing-only")
+		asrt.Equal(rl1.Stats.Key, rl2.Stats.Key, "Different matching values should share the same stats key")
+		asrt.Equal(rl1.Stats.Key, rl1.FullKey)
+	})
+
+	t.Run("middle+trailing wildcard - value_to_metric - uses runtime value", func(t *testing.T) {
+		cfg := []config.RateLimitConfigToLoad{{
+			Name: "inline",
+			ConfigYaml: &config.YamlRoot{
+				Domain: "test-domain",
+				Descriptors: []config.YamlDescriptor{
+					{Key: "wild", Value: "foo*bar*", ValueToMetric: true, RateLimit: &config.YamlRateLimit{RequestsPerUnit: 20, Unit: "minute"}},
+				},
+			},
+		}}
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
+			&pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo123bar456"}},
+			})
+		asrt.NotNil(rl)
+		asrt.Equal("test-domain.wild_foo123bar456", rl.Stats.Key, "Middle+trailing wildcard with value_to_metric should use runtime value — same as trailing-only")
+	})
 }
+
+// share_threshold parity (middle+trailing wildcards produce the same shared-counter
+// behaviour as trailing-only) is covered by TestShareThreshold Cases 5-7.
