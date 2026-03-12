@@ -1,13 +1,13 @@
 package prom
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var s = NewPrometheusSink()
@@ -16,7 +16,9 @@ func TestFlushCounter(t *testing.T) {
 	s.FlushCounter("ratelimit_server.ShouldRateLimit.total_requests", 1)
 	assert.Eventually(t, func() bool {
 		metricFamilies, err := prometheus.DefaultGatherer.Gather()
-		require.NoError(t, err)
+		if err != nil {
+			return false
+		}
 
 		metrics := make(map[string]*dto.MetricFamily)
 		for _, metricFamily := range metricFamilies {
@@ -24,13 +26,11 @@ func TestFlushCounter(t *testing.T) {
 		}
 
 		m, ok := metrics["ratelimit_service_total_requests"]
-		require.True(t, ok)
-		require.Len(t, m.Metric, 1)
-		require.Equal(t, map[string]string{
-			"grpc_method": "ShouldRateLimit",
-		}, toMap(m.Metric[0].Label))
-		require.Equal(t, 1.0, *m.Metric[0].Counter.Value)
-		return true
+		if !ok || len(m.Metric) != 1 {
+			return false
+		}
+		return toMap(m.Metric[0].Label)["grpc_method"] == "ShouldRateLimit" &&
+			*m.Metric[0].Counter.Value == 1.0
 	}, time.Second, time.Millisecond)
 }
 
@@ -49,7 +49,9 @@ func TestFlushCounterWithDifferentLabels(t *testing.T) {
 	s.FlushCounter("ratelimit.service.rate_limit.domain1.key3_val3.key4_val4.key5_val5.over_limit", 2)
 	assert.Eventually(t, func() bool {
 		metricFamilies, err := prometheus.DefaultGatherer.Gather()
-		require.NoError(t, err)
+		if err != nil {
+			return false
+		}
 
 		metrics := make(map[string]*dto.MetricFamily)
 		for _, metricFamily := range metricFamilies {
@@ -57,33 +59,33 @@ func TestFlushCounterWithDifferentLabels(t *testing.T) {
 		}
 
 		m, ok := metrics["ratelimit_service_rate_limit_over_limit"]
-		require.True(t, ok)
-		require.Len(t, m.Metric, 3)
-		require.Equal(t, 1.0, *m.Metric[0].Counter.Value)
-		require.Equal(t, map[string]string{
-			"domain": "domain1",
-			"key1":   "key1_val1",
-		}, toMap(m.Metric[0].Label))
-		require.Equal(t, 2.0, *m.Metric[1].Counter.Value)
-		require.Equal(t, map[string]string{
-			"domain": "domain1",
-			"key1":   "key1_val1",
-			"key2":   "key2_val2",
-		}, toMap(m.Metric[1].Label))
-		require.Equal(t, 3.0, *m.Metric[2].Counter.Value)
-		require.Equal(t, map[string]string{
-			"domain": "domain1",
-			"key1":   "key3_val3",
-			"key2":   "key4_val4",
-		}, toMap(m.Metric[2].Label))
-		return true
+		if !ok || len(m.Metric) != 3 {
+			return false
+		}
+		return *m.Metric[0].Counter.Value == 1.0 &&
+			reflect.DeepEqual(toMap(m.Metric[0].Label), map[string]string{
+				"domain": "domain1",
+				"key1":   "key1_val1",
+			}) &&
+			*m.Metric[1].Counter.Value == 2.0 &&
+			reflect.DeepEqual(toMap(m.Metric[1].Label), map[string]string{
+				"domain": "domain1",
+				"key1":   "key1_val1",
+				"key2":   "key2_val2",
+			}) &&
+			*m.Metric[2].Counter.Value == 3.0 &&
+			reflect.DeepEqual(toMap(m.Metric[2].Label), map[string]string{
+				"domain": "domain1",
+				"key1":   "key3_val3",
+				"key2":   "key4_val4",
+			})
 	}, time.Second, time.Millisecond)
 }
 
 func TestFlushGauge(t *testing.T) {
 	s.FlushGauge("ratelimit.service.rate_limit.domain1.key1.test_gauge", 1)
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	metrics := make(map[string]*dto.MetricFamily)
 	for _, metricFamily := range metricFamilies {
@@ -91,14 +93,16 @@ func TestFlushGauge(t *testing.T) {
 	}
 
 	_, ok := metrics["ratelimit_service_rate_limit_test_gauge"]
-	require.False(t, ok)
+	assert.False(t, ok)
 }
 
 func TestFlushTimer(t *testing.T) {
 	s.FlushTimer("ratelimit.service.rate_limit.mongo_cps.database_users.total_hits", 1)
 	assert.Eventually(t, func() bool {
 		metricFamilies, err := prometheus.DefaultGatherer.Gather()
-		require.NoError(t, err)
+		if err != nil {
+			return false
+		}
 
 		metrics := make(map[string]*dto.MetricFamily)
 		for _, metricFamily := range metricFamilies {
@@ -106,14 +110,14 @@ func TestFlushTimer(t *testing.T) {
 		}
 
 		m, ok := metrics["ratelimit_service_rate_limit_total_hits"]
-		require.True(t, ok)
-		require.Len(t, m.Metric, 1)
-		require.Equal(t, uint64(1), *m.Metric[0].Histogram.SampleCount)
-		require.Equal(t, map[string]string{
-			"domain": "mongo_cps",
-			"key1":   "database_users",
-		}, toMap(m.Metric[0].Label))
-		require.Equal(t, 1.0, *m.Metric[0].Histogram.SampleSum)
-		return true
+		if !ok || len(m.Metric) != 1 {
+			return false
+		}
+		return *m.Metric[0].Histogram.SampleCount == uint64(1) &&
+			reflect.DeepEqual(toMap(m.Metric[0].Label), map[string]string{
+				"domain": "mongo_cps",
+				"key1":   "database_users",
+			}) &&
+			*m.Metric[0].Histogram.SampleSum == 1.0
 	}, time.Second, time.Millisecond)
 }
