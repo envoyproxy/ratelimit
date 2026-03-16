@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "Waiting for services to be up..."
+sleep 2
 echo "Running tests"
 
 FILES=/test/scripts/*
