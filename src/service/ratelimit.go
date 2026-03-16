@@ -144,10 +144,11 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 					logger.Debugf("descriptor is unlimited, not passing to the cache")
 				} else {
 					logger.Debugf(
-						"applying limit: %d requests per %s, shadow_mode: %t",
+						"applying limit: %d requests per %s, shadow_mode: %t, quota: %t",
 						limitsToCheck[i].Limit.RequestsPerUnit,
 						limitsToCheck[i].Limit.Unit.String(),
 						limitsToCheck[i].ShadowMode,
+						limitsToCheck[i].QuotaMode,
 					)
 				}
 			}
@@ -195,6 +196,7 @@ func (this *service) shouldRateLimitWorker(
 	assert.Assert(len(limitsToCheck) == len(request.Descriptors))
 
 	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck)
+	logger.Debugf("descriptor statuses: %+v", responseDescriptorStatuses)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
 
 	response := &pb.RateLimitResponse{}
