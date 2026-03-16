@@ -176,3 +176,26 @@ static_resources:
                                     - generic_key:
                                         descriptor_value: "service_2"
                                         descriptor_key: "service"
+                        - match:
+                            prefix: /tokenquota
+                          route:
+                            cluster: mock
+                          typed_per_filter_config:
+                            envoy.filters.http.ratelimit:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimitPerRoute
+                              vh_rate_limits: INCLUDE
+                              override_option: INCLUDE_POLICY
+                              rate_limits:
+                                - actions:
+                                    - generic_key:
+                                        descriptor_value: "service_2"
+                                        descriptor_key: "service"
+                                  hits_addend:
+                                    number: 0
+                                - actions:
+                                    - generic_key:
+                                        descriptor_value: "service_2"
+                                        descriptor_key: "service"
+                                  hits_addend:
+                                    number: 1
+                                  apply_on_stream_done: true
