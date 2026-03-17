@@ -69,7 +69,7 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 		// If share_threshold is enabled for this entry index, use the wildcard pattern instead of the actual value
 		// Use entry index instead of key name to handle nested descriptors with same key names
 		valueToUse := entry.Value
-		if limit != nil && limit.ShareThresholdKeyPattern != nil && i < len(limit.ShareThresholdKeyPattern) {
+		if limit.ShareThresholdKeyPattern != nil && i < len(limit.ShareThresholdKeyPattern) {
 			if wildcardPattern := limit.ShareThresholdKeyPattern[i]; wildcardPattern != "" {
 				valueToUse = wildcardPattern
 			}
