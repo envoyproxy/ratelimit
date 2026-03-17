@@ -83,10 +83,11 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 
 	this.stats.ConfigLoadSuccess.Inc()
 
+	rlSettings := settings.NewSettings()
+
 	this.configLock.Lock()
 	this.config = newConfig
 
-	rlSettings := settings.NewSettings()
 	this.globalShadowMode = rlSettings.GlobalShadowMode
 	this.globalQuotaMode = rlSettings.GlobalQuotaMode
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
@@ -183,14 +184,43 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 
 const MaxUint32 = uint32(1<<32 - 1)
 
+// serviceSnapshot holds a point-in-time copy of mutable service fields.
+// All fields guarded by configLock are captured here under a single RLock
+// so that shouldRateLimitWorker never races with SetConfig.
+type serviceSnapshot struct {
+	config                         config.RateLimitConfig
+	globalShadowMode               bool
+	globalQuotaMode                bool
+	customHeadersEnabled           bool
+	customHeaderLimitHeader        string
+	customHeaderRemainingHeader    string
+	customHeaderResetHeader        string
+	responseDynamicMetadataEnabled bool
+}
+
+func (this *service) getServiceSnapshot() serviceSnapshot {
+	this.configLock.RLock()
+	defer this.configLock.RUnlock()
+	return serviceSnapshot{
+		config:                         this.config,
+		globalShadowMode:               this.globalShadowMode,
+		globalQuotaMode:                this.globalQuotaMode,
+		customHeadersEnabled:           this.customHeadersEnabled,
+		customHeaderLimitHeader:        this.customHeaderLimitHeader,
+		customHeaderRemainingHeader:    this.customHeaderRemainingHeader,
+		customHeaderResetHeader:        this.customHeaderResetHeader,
+		responseDynamicMetadataEnabled: this.responseDynamicMetadataEnabled,
+	}
+}
+
 func (this *service) shouldRateLimitWorker(
 	ctx context.Context, request *pb.RateLimitRequest,
 ) *pb.RateLimitResponse {
 	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
 	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
 
-	snappedConfig, globalShadowMode, globalQuotaMode := this.GetCurrentConfig()
-	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx, snappedConfig)
+	snap := this.getServiceSnapshot()
+	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx, snap.config)
 
 	assert.Assert(len(limitsToCheck) == len(isUnlimited))
 	assert.Assert(len(limitsToCheck) == len(request.Descriptors))
@@ -212,7 +242,7 @@ func (this *service) shouldRateLimitWorker(
 
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		// Keep track of the descriptor closest to hit the ratelimit
-		if this.customHeadersEnabled &&
+		if snap.customHeadersEnabled &&
 			descriptorStatus.CurrentLimit != nil &&
 			descriptorStatus.LimitRemaining < minLimitRemaining {
 			minimumDescriptor = descriptorStatus
@@ -228,7 +258,7 @@ func (this *service) shouldRateLimitWorker(
 			response.Statuses[i] = descriptorStatus
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				// Check if this limit is in quota mode (individual or global)
-				isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
+				isQuotaMode := snap.globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
 
 				if isQuotaMode {
 					// In quota mode: track the violation for metadata but keep response as OK
@@ -249,22 +279,22 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	// Add Headers if requested
-	if this.customHeadersEnabled && minimumDescriptor != nil {
+	if snap.customHeadersEnabled && minimumDescriptor != nil {
 		response.ResponseHeadersToAdd = []*core.HeaderValue{
-			this.rateLimitLimitHeader(minimumDescriptor),
-			this.rateLimitRemainingHeader(minimumDescriptor),
-			this.rateLimitResetHeader(minimumDescriptor),
+			this.rateLimitLimitHeader(minimumDescriptor, snap.customHeaderLimitHeader),
+			this.rateLimitRemainingHeader(minimumDescriptor, snap.customHeaderRemainingHeader),
+			this.rateLimitResetHeader(minimumDescriptor, snap.customHeaderResetHeader),
 		}
 	}
 
 	// If there is a global shadow_mode, it should always return OK
-	if finalCode == pb.RateLimitResponse_OVER_LIMIT && globalShadowMode {
+	if finalCode == pb.RateLimitResponse_OVER_LIMIT && snap.globalShadowMode {
 		finalCode = pb.RateLimitResponse_OK
 		this.stats.GlobalShadowMode.Inc()
 	}
 
 	// If response dynamic data enabled, set dynamic data on response.
-	if this.responseDynamicMetadataEnabled {
+	if snap.responseDynamicMetadataEnabled {
 		response.DynamicMetadata = ratelimitToMetadata(request, quotaModeViolations, limitsToCheck)
 	}
 
@@ -350,28 +380,28 @@ func descriptorToStruct(descriptor *ratelimitv3.RateLimitDescriptor) *structpb.S
 	return &structpb.Struct{Fields: fields}
 }
 
-func (this *service) rateLimitLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+func (this *service) rateLimitLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus, headerName string) *core.HeaderValue {
 	// Limit header only provides the mandatory part from the spec, the actual limit
 	// the optional quota policy is currently not provided
 	return &core.HeaderValue{
-		Key:   this.customHeaderLimitHeader,
+		Key:   headerName,
 		Value: strconv.FormatUint(uint64(descriptor.CurrentLimit.RequestsPerUnit), 10),
 	}
 }
 
-func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+func (this *service) rateLimitRemainingHeader(descriptor *pb.RateLimitResponse_DescriptorStatus, headerName string) *core.HeaderValue {
 	// How much of the limit is remaining
 	return &core.HeaderValue{
-		Key:   this.customHeaderRemainingHeader,
+		Key:   headerName,
 		Value: strconv.FormatUint(uint64(descriptor.LimitRemaining), 10),
 	}
 }
 
 func (this *service) rateLimitResetHeader(
-	descriptor *pb.RateLimitResponse_DescriptorStatus,
+	descriptor *pb.RateLimitResponse_DescriptorStatus, headerName string,
 ) *core.HeaderValue {
 	return &core.HeaderValue{
-		Key:   this.customHeaderResetHeader,
+		Key:   headerName,
 		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
 	}
 }
