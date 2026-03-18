@@ -288,8 +288,8 @@ func TestRuleShadowMode(test *testing.T) {
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
 	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
 		})
 	response, err := service.ShouldRateLimit(context.Background(), request)
 	t.assert.Equal(
@@ -297,7 +297,7 @@ func TestRuleShadowMode(test *testing.T) {
 			OverallCode: pb.RateLimitResponse_OK,
 			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
 				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
-				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
 			},
 		},
 		response)
@@ -319,16 +319,10 @@ func TestMixedRuleShadowMode(test *testing.T) {
 	}
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[1]).Return(limits[1])
-	testResults := []pb.RateLimitResponse_Code{pb.RateLimitResponse_OVER_LIMIT, pb.RateLimitResponse_OVER_LIMIT}
-	for i := 0; i < len(limits); i++ {
-		if limits[i].ShadowMode {
-			testResults[i] = pb.RateLimitResponse_OK
-		}
-	}
 	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: testResults[0], CurrentLimit: limits[0].Limit, LimitRemaining: 0},
-			{Code: testResults[1], CurrentLimit: nil, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: nil, LimitRemaining: 0},
 		})
 	response, err := service.ShouldRateLimit(context.Background(), request)
 	t.assert.Equal(
@@ -343,6 +337,115 @@ func TestMixedRuleShadowMode(test *testing.T) {
 	t.assert.Nil(err)
 
 	t.assert.EqualValues(0, t.statStore.NewCounter("global_shadow_mode").Value())
+}
+
+func TestShadowModeExceededHeader(test *testing.T) {
+	os.Setenv("SHADOW_MODE_EXCEEDED_HEADER_ENABLED", "true")
+	defer os.Unsetenv("SHADOW_MODE_EXCEEDED_HEADER_ENABLED")
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Test 1: Shadow mode descriptor exceeded - header should be true
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.Statuses[0].Code)
+	t.assert.Equal(1, len(response.RequestHeadersToAdd))
+	t.assert.Equal("x-ratelimit-exceeded-shadow-mode", response.RequestHeadersToAdd[0].Key)
+	t.assert.Equal("true", response.RequestHeadersToAdd[0].Value)
+}
+
+func TestShadowModeExceededHeaderNotExceeded(test *testing.T) {
+	os.Setenv("SHADOW_MODE_EXCEEDED_HEADER_ENABLED", "true")
+	defer os.Unsetenv("SHADOW_MODE_EXCEEDED_HEADER_ENABLED")
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Test: Shadow mode descriptor NOT exceeded - header should be false
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.Equal(1, len(response.RequestHeadersToAdd))
+	t.assert.Equal("x-ratelimit-exceeded-shadow-mode", response.RequestHeadersToAdd[0].Key)
+	t.assert.Equal("false", response.RequestHeadersToAdd[0].Value)
+}
+
+func TestShadowModeExceededHeaderDisabled(test *testing.T) {
+	// Feature flag not set, so no header should be added
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, true, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.Nil(response.RequestHeadersToAdd)
+}
+
+func TestShadowModeExceededHeaderGlobalShadowMode(test *testing.T) {
+	os.Setenv("SHADOW_MODE", "true")
+	os.Setenv("SHADOW_MODE_EXCEEDED_HEADER_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("SHADOW_MODE")
+		os.Unsetenv("SHADOW_MODE_EXCEEDED_HEADER_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Non-shadow-mode descriptor that is over limit, but global shadow mode converts it
+	request := common.NewRateLimitRequest(
+		"different-domain", [][][2]string{{{"foo", "bar"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.Equal(1, len(response.RequestHeadersToAdd))
+	t.assert.Equal("x-ratelimit-exceeded-shadow-mode", response.RequestHeadersToAdd[0].Key)
+	t.assert.Equal("true", response.RequestHeadersToAdd[0].Value)
+	t.assert.EqualValues(1, t.statStore.NewCounter("global_shadow_mode").Value())
 }
 
 func TestServiceWithCustomRatelimitHeaders(test *testing.T) {

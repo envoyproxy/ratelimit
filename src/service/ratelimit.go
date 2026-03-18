@@ -51,9 +51,10 @@ type service struct {
 	customHeaderRemainingHeader    string
 	customHeaderResetHeader        string
 	customHeaderClock              utils.TimeSource
-	globalShadowMode               bool
-	globalQuotaMode                bool
-	responseDynamicMetadataEnabled bool
+	globalShadowMode                bool
+	globalQuotaMode                 bool
+	responseDynamicMetadataEnabled  bool
+	shadowModeExceededHeaderEnabled bool
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -90,6 +91,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 	this.globalShadowMode = rlSettings.GlobalShadowMode
 	this.globalQuotaMode = rlSettings.GlobalQuotaMode
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
+	this.shadowModeExceededHeaderEnabled = rlSettings.ShadowModeExceededHeaderEnabled
 
 	if rlSettings.RateLimitResponseHeadersEnabled {
 		this.customHeadersEnabled = true
@@ -209,6 +211,7 @@ func (this *service) shouldRateLimitWorker(
 
 	// Track quota mode violations for metadata
 	var quotaModeViolations []int
+	shadowModeExceeded := false
 
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		// Keep track of the descriptor closest to hit the ratelimit
@@ -227,10 +230,18 @@ func (this *service) shouldRateLimitWorker(
 		} else {
 			response.Statuses[i] = descriptorStatus
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
+				isShadowMode := limitsToCheck[i] != nil && limitsToCheck[i].ShadowMode
 				// Check if this limit is in quota mode (individual or global)
 				isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
 
-				if isQuotaMode {
+				if isShadowMode {
+					shadowModeExceeded = true
+					response.Statuses[i] = &pb.RateLimitResponse_DescriptorStatus{
+						Code:           pb.RateLimitResponse_OK,
+						CurrentLimit:   descriptorStatus.CurrentLimit,
+						LimitRemaining: descriptorStatus.LimitRemaining,
+					}
+				} else if isQuotaMode {
 					// In quota mode: track the violation for metadata but keep response as OK
 					quotaModeViolations = append(quotaModeViolations, i)
 					response.Statuses[i] = &pb.RateLimitResponse_DescriptorStatus{
@@ -260,7 +271,17 @@ func (this *service) shouldRateLimitWorker(
 	// If there is a global shadow_mode, it should always return OK
 	if finalCode == pb.RateLimitResponse_OVER_LIMIT && globalShadowMode {
 		finalCode = pb.RateLimitResponse_OK
+		shadowModeExceeded = true
 		this.stats.GlobalShadowMode.Inc()
+	}
+
+	if this.shadowModeExceededHeaderEnabled {
+		response.RequestHeadersToAdd = []*core.HeaderValue{
+			{
+				Key:   "x-ratelimit-exceeded-shadow-mode",
+				Value: strconv.FormatBool(shadowModeExceeded),
+			},
+		}
 	}
 
 	// If response dynamic data enabled, set dynamic data on response.
