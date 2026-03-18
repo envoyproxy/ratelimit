@@ -18,8 +18,8 @@ fi
 # Quota is debited from service_2 bucket on the response path so only the 4th request should be rejected
 response=$(curl -f -s -H "request-no: 4" http://envoy-proxy:8888/tokenquota)
 
-if [ $? -ne 0 ]; then
-	echo "Quota mode does not deny requests yet"
+if [ $? -eq 0 ]; then
+	echo "Quota limiting should fail the request"
 	exit 1
 fi
 

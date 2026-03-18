@@ -214,7 +214,6 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
 			limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i])
-
 	}
 
 	return responseDescriptorStatuses
