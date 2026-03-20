@@ -12,3 +12,4 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /go/bin/ratelimit -ldflags="-w -s" -v g
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:e8a4044e0b4ae4257efa45fc026c0bc30ad320d43bd4c1a7d5271bd241e386d0
 COPY --from=build /go/bin/ratelimit /bin/ratelimit
+ENTRYPOINT ["/bin/ratelimit"]
