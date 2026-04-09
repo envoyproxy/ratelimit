@@ -3,6 +3,7 @@ package prom
 import (
 	_ "embed"
 	"net/http"
+	"strings"
 
 	"github.com/go-kit/log"
 	gostats "github.com/lyft/gostats"
@@ -64,9 +65,10 @@ var (
 
 type prometheusSink struct {
 	config struct {
-		addr           string
-		path           string
-		mapperYamlPath string
+		addr                       string
+		path                       string
+		mapperYamlPath             string
+		responseTimeAsMilliseconds bool
 	}
 	mapper *mapper.MetricMapper
 	events chan event.Events
@@ -91,6 +93,20 @@ func WithMapperYamlPath(mapperYamlPath string) prometheusSinkOption {
 	return func(sink *prometheusSink) {
 		sink.config.mapperYamlPath = mapperYamlPath
 	}
+}
+
+func WithResponseTimeAsMilliseconds(responseTimeAsMilliseconds bool) prometheusSinkOption {
+	return func(sink *prometheusSink) {
+		sink.config.responseTimeAsMilliseconds = responseTimeAsMilliseconds
+	}
+}
+
+func (s *prometheusSink) mapperConfig() string {
+	if s.config.responseTimeAsMilliseconds {
+		return strings.Replace(defaultMapper, "    scale: 0.001\n", "", 1)
+	}
+
+	return defaultMapper
 }
 
 // NewPrometheusSink returns a Sink that flushes stats to os.StdErr.
@@ -119,7 +135,7 @@ func NewPrometheusSink(opts ...prometheusSinkOption) gostats.Sink {
 	if sink.config.mapperYamlPath != "" {
 		_ = sink.mapper.InitFromFile(sink.config.mapperYamlPath)
 	} else {
-		_ = sink.mapper.InitFromYAMLString(defaultMapper)
+		_ = sink.mapper.InitFromYAMLString(sink.mapperConfig())
 	}
 
 	sink.exp = exporter.NewExporter(promRegistry,
