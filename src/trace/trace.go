@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	logger "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/contrib/propagators/b3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -62,7 +63,7 @@ func InitProductionTraceProvider(protocol string, serviceName string, serviceNam
 		sdktrace.WithResource(resource),
 	)
 	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, b3.New(), propagation.Baggage{}))
 	logger.Infof("TracerProvider initialized with following parameters: protocol: %s, serviceName: %s, serviceNamespace: %s, serviceInstanceId: %s, samplingRate: %f",
 		protocol, serviceName, serviceNamespace, useServiceInstanceId, samplingRate)
 	return tp
@@ -100,7 +101,7 @@ func GetTestSpanExporter() *tracetest.InMemoryExporter {
 		sdktrace.WithSyncer(testSpanExporter),
 	)
 	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, b3.New(), propagation.Baggage{}))
 
 	return testSpanExporter
 }
