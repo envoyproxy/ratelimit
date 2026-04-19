@@ -2206,5 +2206,58 @@ func TestWildcardStatsBehavior(t *testing.T) {
 	})
 }
 
+func TestMetadata(t *testing.T) {
+	assert := assert.New(t)
+	stats := stats.NewStore(stats.NewNullSink(), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("metadata.yaml"), mockstats.NewMockStatManager(stats), false)
+	rlConfig.Dump()
+	assert.Equal(rlConfig.IsEmptyDomains(), false)
+	assert.Nil(rlConfig.GetLimit(context.TODO(), "test-domain", &pb_struct.RateLimitDescriptor{}))
+	assert.EqualValues(0, stats.NewCounter("test-domain.domain_not_found").Value())
+
+	rl := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey1", Value: "something"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
+	assert.EqualValues(5, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_SECOND, rl.Limit.Unit)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.near_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1.within_limit").Value())
+
+	// Verify metadata for key1_value1.subkey1
+	assert.NotNil(rl.Metadata)
+	nameVal, ok := rl.Metadata.GetFields()["name"]
+	assert.True(ok)
+	assert.Equal("service_1", nameVal.GetStringValue())
+
+	rl = rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key2", Value: "something"}},
+		})
+	rl.Stats.TotalHits.Inc()
+	rl.Stats.OverLimit.Inc()
+	rl.Stats.NearLimit.Inc()
+	rl.Stats.WithinLimit.Inc()
+	assert.EqualValues(20, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2.total_hits").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2.over_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2.near_limit").Value())
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2.within_limit").Value())
+
+	assert.NotNil(rl.Metadata)
+	serviceVal, ok := rl.Metadata.GetFields()["service_with_quota"]
+	assert.True(ok)
+	assert.Equal("service_2", serviceVal.GetStructValue().GetFields()["name"].GetStringValue())
+}
+
 // share_threshold parity (middle+trailing wildcards produce the same shared-counter
 // behaviour as trailing-only) is covered by TestShareThreshold Cases 5-7.

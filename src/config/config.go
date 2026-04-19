@@ -4,6 +4,7 @@ import (
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"golang.org/x/net/context"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/envoyproxy/ratelimit/src/stats"
 )
@@ -29,6 +30,7 @@ type RateLimit struct {
 	// ShareThresholdKeyPattern is a slice of wildcard patterns for descriptor entries
 	// The slice index corresponds to the descriptor entry index.
 	ShareThresholdKeyPattern []string
+	Metadata                 *structpb.Struct
 }
 
 // Interface for interacting with a loaded rate limit config.

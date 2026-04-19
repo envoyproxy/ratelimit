@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/envoyproxy/ratelimit/src/trace"
 
@@ -719,7 +720,7 @@ func TestServiceGlobalQuotaMode(test *testing.T) {
 	t.assert.Nil(err)
 }
 
-func TestServiceQuotaModeWithMetadata(test *testing.T) {
+func TestMetadataReturnedForPassedDescriptors(test *testing.T) {
 	os.Setenv("QUOTA_MODE", "true")
 	os.Setenv("RESPONSE_DYNAMIC_METADATA", "true")
 	defer func() {
@@ -749,6 +750,9 @@ func TestServiceQuotaModeWithMetadata(test *testing.T) {
 		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
 		config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, true, "", nil, false),
 	}
+	limits[0].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("service_1")}}
+	limits[1].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("service_2")}}
+
 	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
 	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
@@ -757,23 +761,149 @@ func TestServiceQuotaModeWithMetadata(test *testing.T) {
 			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
 		})
 	response, err := service.ShouldRateLimit(context.Background(), request)
+	test.Logf("DynamicMetadata: %+v", response.DynamicMetadata)
 
 	// Verify response includes metadata about quota violations
 	t.assert.Nil(err)
 	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
 	t.assert.NotNil(response.DynamicMetadata)
 
-	// Check that quota violation is tracked in metadata for descriptor index 1
-	quotaViolations := response.DynamicMetadata.Fields["quotaModeViolations"]
-	t.assert.NotNil(quotaViolations)
-	violations := quotaViolations.GetListValue()
-	t.assert.Len(violations.Values, 1)
-	t.assert.Equal(float64(1), violations.Values[0].GetNumberValue())
+	// Verify metadata for passed limits
+	passedMetadataVal, ok := response.DynamicMetadata.GetFields()["metadata"]
+	t.assert.True(ok)
+	passedMetadata := passedMetadataVal.GetStructValue()
+	t.assert.NotNil(passedMetadata)
 
-	// Check that quotaModeEnabled is true
-	quotaModeEnabled := response.DynamicMetadata.Fields["quotaModeEnabled"]
-	t.assert.NotNil(quotaModeEnabled)
-	t.assert.True(quotaModeEnabled.GetBoolValue())
+	fields := passedMetadata.GetFields()
+	nameVal, ok := fields["name"]
+	t.assert.True(ok)
+	// Since descriptor 1 has passed and 2 had failed, metadata from the first descriptors should be returned
+	t.assert.Equal("service_1", nameVal.GetStringValue())
+}
+
+func TestMetadataReturnedForAllPassedDescriptors(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	os.Setenv("RESPONSE_DYNAMIC_METADATA", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+		os.Unsetenv("RESPONSE_DYNAMIC_METADATA")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload to pick up environment variables.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Make a request.
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"regular", "limit"}}, {{"quota", "limit"}}}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, true, "", nil, false),
+		config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, true, "", nil, false),
+	}
+	limits[0].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("service_1")}}
+	limits[1].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"some_other_name": structpb.NewStringValue("service_2")}}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 6},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	test.Logf("DynamicMetadata: %+v", response.DynamicMetadata)
+
+	// Verify response includes metadata about quota violations
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.NotNil(response.DynamicMetadata)
+
+	// Verify metadata for passed limits
+	passedMetadataVal, ok := response.DynamicMetadata.GetFields()["metadata"]
+	t.assert.True(ok)
+	passedMetadata := passedMetadataVal.GetStructValue()
+	t.assert.NotNil(passedMetadata)
+
+	fields := passedMetadata.GetFields()
+	nameVal, ok := fields["name"]
+	t.assert.True(ok)
+	// Both descriptors have passed metadata should contain values from both descriptors
+	t.assert.Equal("service_1", nameVal.GetStringValue())
+	nameVal, ok = fields["some_other_name"]
+	t.assert.True(ok)
+	t.assert.Equal("service_2", nameVal.GetStringValue())
+}
+
+func TestOverlappingMetadataReturnsTheFirstValue(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	os.Setenv("RESPONSE_DYNAMIC_METADATA", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+		os.Unsetenv("RESPONSE_DYNAMIC_METADATA")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload to pick up environment variables.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Make a request.
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"regular", "limit"}}, {{"quota", "limit"}}}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, true, "", nil, false),
+		config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, true, "", nil, false),
+	}
+	limits[0].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("service_1")}}
+	limits[1].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("service_2")}}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 6},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	test.Logf("DynamicMetadata: %+v", response.DynamicMetadata)
+
+	// Verify response includes metadata about quota violations
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.NotNil(response.DynamicMetadata)
+
+	// Verify metadata for passed limits
+	passedMetadataVal, ok := response.DynamicMetadata.GetFields()["metadata"]
+	t.assert.True(ok)
+	passedMetadata := passedMetadataVal.GetStructValue()
+	t.assert.NotNil(passedMetadata)
+
+	fields := passedMetadata.GetFields()
+	nameVal, ok := fields["name"]
+	t.assert.True(ok)
+	// Metadata from the first descriptor takes precendence
+	t.assert.Equal("service_1", nameVal.GetStringValue())
 }
 
 func TestServicePerDescriptorQuotaMode(test *testing.T) {

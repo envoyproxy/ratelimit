@@ -16,11 +16,11 @@ import (
 
 func TestRatelimitToMetadata(t *testing.T) {
 	cases := []struct {
-		name                string
-		req                 *pb.RateLimitRequest
-		quotaModeViolations []int
-		limitsToCheck       []*config.RateLimit
-		expected            string
+		name              string
+		req               *pb.RateLimitRequest
+		passedDescriptors []int
+		limitsToCheck     []*config.RateLimit
+		expected          string
 	}{
 		{
 			name: "Single descriptor with single entry, no quota violations",
@@ -37,8 +37,8 @@ func TestRatelimitToMetadata(t *testing.T) {
 					},
 				},
 			},
-			quotaModeViolations: nil,
-			limitsToCheck:       []*config.RateLimit{nil},
+			passedDescriptors: nil,
+			limitsToCheck:     []*config.RateLimit{nil},
 			expected: `{
     "descriptors": [
         {
@@ -47,8 +47,7 @@ func TestRatelimitToMetadata(t *testing.T) {
             ]
         }
     ],
-    "domain": "fake-domain",
-    "quotaModeEnabled": false
+    "domain": "fake-domain"
 }`,
 		},
 		{
@@ -66,10 +65,15 @@ func TestRatelimitToMetadata(t *testing.T) {
 					},
 				},
 			},
-			quotaModeViolations: []int{0},
+			passedDescriptors: []int{0},
 			limitsToCheck: []*config.RateLimit{
 				{
 					QuotaMode: true,
+					Metadata: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							"name": structpb.NewStringValue("service_1"),
+						},
+					},
 				},
 			},
 			expected: `{
@@ -81,8 +85,9 @@ func TestRatelimitToMetadata(t *testing.T) {
         }
     ],
     "domain": "quota-domain",
-    "quotaModeEnabled": true,
-    "quotaModeViolations": [0]
+    "metadata": {
+        "name": "service_1"
+    }
 }`,
 		},
 		{
@@ -116,16 +121,31 @@ func TestRatelimitToMetadata(t *testing.T) {
 					},
 				},
 			},
-			quotaModeViolations: []int{1, 2},
+			passedDescriptors: []int{1, 2},
 			limitsToCheck: []*config.RateLimit{
 				{
 					QuotaMode: false,
+					Metadata: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							"name": structpb.NewStringValue("service_1"),
+						},
+					},
 				},
 				{
 					QuotaMode: true,
+					Metadata: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							"name": structpb.NewStringValue("service_2"),
+						},
+					},
 				},
 				{
 					QuotaMode: true,
+					Metadata: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							"name": structpb.NewStringValue("service_3"),
+						},
+					},
 				},
 			},
 			expected: `{
@@ -147,8 +167,9 @@ func TestRatelimitToMetadata(t *testing.T) {
         }
     ],
     "domain": "mixed-domain",
-    "quotaModeEnabled": true,
-    "quotaModeViolations": [1, 2]
+    "metadata": {
+        "name": "service_2"
+    }
 }`,
 		},
 		{
@@ -167,7 +188,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 					},
 				},
 			},
-			quotaModeViolations: []int{0},
+			passedDescriptors: []int{0},
 			limitsToCheck: []*config.RateLimit{
 				{
 					QuotaMode: true,
@@ -182,16 +203,14 @@ func TestRatelimitToMetadata(t *testing.T) {
         }
     ],
     "domain": "addend-domain",
-    "hitsAddend": 5,
-    "quotaModeEnabled": true,
-    "quotaModeViolations": [0]
+    "hitsAddend": 5
 }`,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ratelimitToMetadata(tc.req, tc.quotaModeViolations, tc.limitsToCheck)
+			got := ratelimitToMetadata(tc.req, tc.passedDescriptors, tc.limitsToCheck)
 			expected := &structpb.Struct{}
 			err := protojson.Unmarshal([]byte(tc.expected), expected)
 			require.NoError(t, err)

@@ -8,6 +8,7 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+	"google.golang.org/protobuf/types/known/structpb"
 	"gopkg.in/yaml.v2"
 
 	"github.com/envoyproxy/ratelimit/src/stats"
@@ -35,6 +36,7 @@ type YamlDescriptor struct {
 	DetailedMetric bool `yaml:"detailed_metric"`
 	ValueToMetric  bool `yaml:"value_to_metric"`
 	ShareThreshold bool `yaml:"share_threshold"`
+	Metadata       map[string]interface{}
 }
 
 type YamlRoot struct {
@@ -56,6 +58,7 @@ type rateLimitDescriptor struct {
 	valueToMetric   bool
 	shareThreshold  bool
 	wildcardPattern string // stores the wildcard pattern when share_threshold is true
+	metadata        *structpb.Struct
 }
 
 type rateLimitDomain struct {
@@ -84,6 +87,7 @@ var validKeys = map[string]bool{
 	"detailed_metric":   true,
 	"value_to_metric":   true,
 	"share_threshold":   true,
+	"metadata":          true,
 }
 
 // Create a new rate limit config entry.
@@ -132,6 +136,64 @@ func (this *rateLimitDescriptor) dump() string {
 // @param err supplies the error string.
 func newRateLimitConfigError(name string, err string) RateLimitConfigError {
 	return RateLimitConfigError(fmt.Sprintf("%s: %s", name, err))
+}
+
+func convertMap(m map[interface{}]interface{}) map[string]interface{} {
+	res := make(map[string]interface{})
+	for k, v := range m {
+		strKey := fmt.Sprintf("%v", k)
+		switch val := v.(type) {
+		case map[interface{}]interface{}:
+			res[strKey] = convertMap(val)
+		case []interface{}:
+			res[strKey] = convertSlice(val)
+		default:
+			res[strKey] = v
+		}
+	}
+	return res
+}
+
+func convertSlice(s []interface{}) []interface{} {
+	res := make([]interface{}, len(s))
+	for i, v := range s {
+		switch val := v.(type) {
+		case map[interface{}]interface{}:
+			res[i] = convertMap(val)
+		case []interface{}:
+			res[i] = convertSlice(val)
+		default:
+			res[i] = v
+		}
+	}
+	return res
+}
+
+// Create envoyMetadata from YamlMetadata
+// @param yamlMetadata supplies metadata parsed from config YAML
+func parseMetadata(yamlMetadata map[string]interface{}) (*structpb.Struct, error) {
+	if len(yamlMetadata) == 0 {
+		return nil, nil
+	}
+
+	convertedValue := make(map[string]interface{})
+	for k, v := range yamlMetadata {
+		switch val := v.(type) {
+		case map[interface{}]interface{}:
+			convertedValue[k] = convertMap(val)
+		case []interface{}:
+			convertedValue[k] = convertSlice(val)
+		default:
+			convertedValue[k] = v
+		}
+	}
+
+	pbStruct, err := structpb.NewStruct(convertedValue)
+	if err != nil {
+		return nil, err
+	}
+
+	return pbStruct, nil
 }
 
 // wildcardMatch reports whether value matches a pre-split wildcard pattern.
@@ -268,6 +330,11 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			})
 		}
 
+		metadata, err := parseMetadata(descriptorConfig.Metadata)
+		if err != nil {
+			panic(newRateLimitConfigError(config.Name, fmt.Sprintf("error parsing metadata: %s", err.Error())))
+		}
+
 		logger.Debugf(
 			"loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
 		newDescriptor := &rateLimitDescriptor{
@@ -277,6 +344,7 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 			valueToMetric:   descriptorConfig.ValueToMetric,
 			shareThreshold:  descriptorConfig.ShareThreshold,
 			wildcardPattern: wildcardPattern,
+			metadata:        metadata,
 		}
 		newDescriptor.loadDescriptors(config, newParentKey+".", descriptorConfig.Descriptors, statsManager)
 		this.descriptors[finalKey] = newDescriptor
@@ -297,6 +365,11 @@ func validateYamlKeys(fileName string, config_map map[interface{}]interface{}) {
 			errorText := fmt.Sprintf("config error, unknown key '%s'", k)
 			logger.Debug(errorText)
 			panic(newRateLimitConfigError(fileName, errorText))
+		}
+		if k.(string) == "metadata" {
+			// Do not validate keys/values in the metadata, since they are arbitrary. If config is invalid the parsing fill fail
+			// later when it is converted to protobuf.Struct
+			continue
 		}
 		switch v := v.(type) {
 		case []interface{}:
@@ -516,6 +589,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 					DetailedMetric: originalLimit.DetailedMetric,
 					// Initialize ShareThresholdKeyPattern with correct length, empty strings for entries without share_threshold
 					ShareThresholdKeyPattern: nil,
+					Metadata:                 nextDescriptor.metadata,
 				}
 				// Apply all tracked share_threshold patterns when we find the rate_limit
 				// This works whether the rate_limit is at the wildcard level or deeper
