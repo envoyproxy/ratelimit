@@ -1,0 +1,28 @@
+domain: test-domain
+descriptors:
+  # Top level key/value with no default rate limit.
+  - key: key1
+    value: value1
+    descriptors:
+      # 2nd level key only with default rate limit.
+      - key: subkey1
+        rate_limit:
+          unit: second
+          requests_per_unit: 5
+        metadata:
+          name: service_1
+
+      # 2nd level key/value with limit. Specific override at 2nd level.
+      - key: subkey1
+        value: subvalue1
+        rate_limit:
+          unit: second
+          requests_per_unit: 10
+
+  - key: key2
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20
+    metadata:
+      service_with_quota:
+        name: service_2

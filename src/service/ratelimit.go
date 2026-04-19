@@ -207,7 +207,7 @@ func (this *service) shouldRateLimitWorker(
 	var minimumDescriptor *pb.RateLimitResponse_DescriptorStatus = nil
 
 	// Track quota mode violations for metadata
-	var quotaModeViolations []int
+	var passedDescriptors []int
 	failedRateLimitDescriptors := 0
 	failedQuotaDescriptors := 0
 	totalQuotaDescriptors := 0
@@ -231,14 +231,15 @@ func (this *service) shouldRateLimitWorker(
 			isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
 				if isQuotaMode {
-					// In quota mode: track the violation for metadata but keep response as OK
-					quotaModeViolations = append(quotaModeViolations, i)
 					failedQuotaDescriptors += 1
 				} else {
 					failedRateLimitDescriptors += 1
 					minimumDescriptor = descriptorStatus
 					minLimitRemaining = 0
 				}
+			} else {
+				// Keep track of the descriptors that have passed
+				passedDescriptors = append(passedDescriptors, i)
 			}
 			if isQuotaMode {
 				totalQuotaDescriptors += 1
@@ -270,14 +271,14 @@ func (this *service) shouldRateLimitWorker(
 
 	// If response dynamic data enabled, set dynamic data on response.
 	if this.responseDynamicMetadataEnabled {
-		response.DynamicMetadata = ratelimitToMetadata(request, quotaModeViolations, limitsToCheck)
+		response.DynamicMetadata = ratelimitToMetadata(request, passedDescriptors, limitsToCheck)
 	}
 
 	response.OverallCode = finalCode
 	return response
 }
 
-func ratelimitToMetadata(req *pb.RateLimitRequest, quotaModeViolations []int, limitsToCheck []*config.RateLimit) *structpb.Struct {
+func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limitsToCheck []*config.RateLimit) *structpb.Struct {
 	fields := make(map[string]*structpb.Value)
 
 	// Domain
@@ -301,26 +302,19 @@ func ratelimitToMetadata(req *pb.RateLimitRequest, quotaModeViolations []int, li
 		fields["hitsAddend"] = structpb.NewNumberValue(float64(hitsAddend))
 	}
 
-	// Quota mode information
-	if len(quotaModeViolations) > 0 {
-		violationValues := make([]*structpb.Value, len(quotaModeViolations))
-		for i, violationIndex := range quotaModeViolations {
-			violationValues[i] = structpb.NewNumberValue(float64(violationIndex))
+	passedMetadata := &structpb.Struct{Fields: make(map[string]*structpb.Value)}
+	for _, idx := range passedDescriptors {
+		if idx < len(limitsToCheck) {
+			limit := limitsToCheck[idx]
+			if limit != nil && limit.Metadata != nil {
+				mergeMetadata(passedMetadata, limit.Metadata)
+			}
 		}
-		fields["quotaModeViolations"] = structpb.NewListValue(&structpb.ListValue{
-			Values: violationValues,
-		})
 	}
 
-	// Check if any limits have quota mode enabled
-	quotaModeEnabled := false
-	for _, limit := range limitsToCheck {
-		if limit != nil && limit.QuotaMode {
-			quotaModeEnabled = true
-			break
-		}
+	if len(passedMetadata.GetFields()) > 0 {
+		fields["metadata"] = structpb.NewStructValue(passedMetadata)
 	}
-	fields["quotaModeEnabled"] = structpb.NewBoolValue(quotaModeEnabled)
 
 	return &structpb.Struct{Fields: fields}
 }
@@ -353,6 +347,28 @@ func descriptorToStruct(descriptor *ratelimitv3.RateLimitDescriptor) *structpb.S
 	}
 
 	return &structpb.Struct{Fields: fields}
+}
+
+func mergeMetadata(dest *structpb.Struct, src *structpb.Struct) {
+	if src == nil {
+		return
+	}
+	for k, v := range src.GetFields() {
+		destVal, exists := dest.GetFields()[k]
+		if exists {
+			// If both are structs, merge them recursively
+			if destStruct := destVal.GetStructValue(); destStruct != nil {
+				if srcStruct := v.GetStructValue(); srcStruct != nil {
+					mergeMetadata(destStruct, srcStruct)
+					continue
+				}
+			}
+			// TODO(yanavlasov): add option to overwrite or add if typoe is a list
+		} else {
+			// Otherwise overwrite or add
+			dest.GetFields()[k] = v
+		}
+	}
 }
 
 func (this *service) rateLimitLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
