@@ -1105,6 +1105,7 @@ To enable Prometheus integration set:
 2. `PROMETHEUS_ADDR`: The port to listen on for Prometheus metrics. Defaults to `:9090`
 3. `PROMETHEUS_PATH`: The path to listen on for Prometheus metrics. Defaults to `/metrics`
 4. `PROMETHEUS_MAPPER_YAML`: The path to the YAML file that defines the mapping from statsd to prometheus metrics.
+5. `PROMETHEUS_RESPONSE_TIME_AS_MILLISECONDS`: `true` to keep the legacy millisecond behavior for `ratelimit_server.*.response_time` in the built-in mapper. Ignored when `PROMETHEUS_MAPPER_YAML` is set.
 
 Define the mapping from statsd to prometheus metrics in a YAML file.
 Find more information about the mapping in the [Metric Mapping and Configuration](https://github.com/prometheus/statsd_exporter?tab=readme-ov-file#metric-mapping-and-configuration).
@@ -1181,6 +1182,7 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
   - match: "ratelimit_server.*.response_time"
     name: "ratelimit_service_response_time_seconds"
     timer_type: histogram
+    scale: 0.001
     labels:
       grpc_method: "$1"
 

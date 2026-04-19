@@ -7,10 +7,29 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const prometheusResponseTimeAsMillisecondsEnv = "PROMETHEUS_RESPONSE_TIME_AS_MILLISECONDS"
+
 func TestSettingsTlsConfigUnmodified(t *testing.T) {
 	settings := NewSettings()
 	assert.NotNil(t, settings.RedisTlsConfig)
 	assert.Nil(t, settings.RedisTlsConfig.RootCAs)
+}
+
+func TestPrometheusResponseTimeAsMillisecondsDefault(t *testing.T) {
+	os.Unsetenv(prometheusResponseTimeAsMillisecondsEnv)
+
+	settings := NewSettings()
+
+	assert.False(t, settings.PrometheusResponseTimeAsMilliseconds)
+}
+
+func TestPrometheusResponseTimeAsMillisecondsEnabled(t *testing.T) {
+	os.Setenv(prometheusResponseTimeAsMillisecondsEnv, "true")
+	defer os.Unsetenv(prometheusResponseTimeAsMillisecondsEnv)
+
+	settings := NewSettings()
+
+	assert.True(t, settings.PrometheusResponseTimeAsMilliseconds)
 }
 
 // Tests for RedisPoolOnEmptyBehavior

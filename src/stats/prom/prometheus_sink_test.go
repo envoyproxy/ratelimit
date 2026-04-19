@@ -121,3 +121,67 @@ func TestFlushTimer(t *testing.T) {
 			*m.Metric[0].Histogram.SampleSum == 1.0
 	}, time.Second, time.Millisecond)
 }
+
+func TestFlushResponseTimeConvertsMillisecondsToSeconds(t *testing.T) {
+	s.FlushTimer("ratelimit_server.ShouldRateLimit.response_time", 1000)
+	assert.Eventually(t, func() bool {
+		metricFamilies, err := prometheus.DefaultGatherer.Gather()
+		if err != nil {
+			return false
+		}
+
+		metrics := make(map[string]*dto.MetricFamily)
+		for _, metricFamily := range metricFamilies {
+			metrics[*metricFamily.Name] = metricFamily
+		}
+
+		m, ok := metrics["ratelimit_service_response_time_seconds"]
+		if !ok || len(m.Metric) != 1 {
+			return false
+		}
+
+		return *m.Metric[0].Histogram.SampleCount == uint64(1) &&
+			reflect.DeepEqual(toMap(m.Metric[0].Label), map[string]string{
+				"grpc_method": "ShouldRateLimit",
+			}) &&
+			*m.Metric[0].Histogram.SampleSum == 1.0
+	}, time.Second, time.Millisecond)
+}
+
+func TestFlushResponseTimeCanUseLegacyMilliseconds(t *testing.T) {
+	oldRegisterer := prometheus.DefaultRegisterer
+	oldGatherer := prometheus.DefaultGatherer
+	reg := prometheus.NewRegistry()
+	prometheus.DefaultRegisterer = reg
+	prometheus.DefaultGatherer = reg
+	defer func() {
+		prometheus.DefaultRegisterer = oldRegisterer
+		prometheus.DefaultGatherer = oldGatherer
+	}()
+
+	legacySink := NewPrometheusSink(WithAddr(":0"), WithPath("/metrics-legacy"), WithResponseTimeAsMilliseconds(true))
+	legacySink.FlushTimer("ratelimit_server.ShouldRateLimit.response_time", 1000)
+
+	assert.Eventually(t, func() bool {
+		metricFamilies, err := reg.Gather()
+		if err != nil {
+			return false
+		}
+
+		metrics := make(map[string]*dto.MetricFamily)
+		for _, metricFamily := range metricFamilies {
+			metrics[*metricFamily.Name] = metricFamily
+		}
+
+		m, ok := metrics["ratelimit_service_response_time_seconds"]
+		if !ok || len(m.Metric) != 1 {
+			return false
+		}
+
+		return *m.Metric[0].Histogram.SampleCount == uint64(1) &&
+			reflect.DeepEqual(toMap(m.Metric[0].Label), map[string]string{
+				"grpc_method": "ShouldRateLimit",
+			}) &&
+			*m.Metric[0].Histogram.SampleSum == 1000.0
+	}, time.Second, time.Millisecond)
+}
