@@ -291,6 +291,7 @@ descriptors:
     detailed_metric: (optional)
     value_to_metric: (optional)
     share_threshold: (optional)
+    metadata: (optional)
     descriptors: (optional block)
       - ... (nested repetition of above)
 ```
@@ -366,6 +367,12 @@ This is useful when you want to apply a single rate limit across multiple resour
 - When `share_threshold: false` (or not set), each matching value has its own isolated threshold
 - When combined with `value_to_metric: true`, the metric key includes the wildcard prefix (the part before `*`) instead of the full runtime value, to reflect that values are sharing a threshold
 - When combined with `detailed_metric: true`, the metric key also includes the wildcard prefix for entries with `share_threshold` enabled
+
+### Metadata
+
+The values under the metadata key are parsed into the well known [protobuf Struct](https://protobuf.dev/reference/protobuf/google.protobuf/#struct) type and returned in the `dynamic_metadata` field of the [v3 rls.proto](https://github.com/envoyproxy/data-plane-api/blob/main/envoy/service/ratelimit/v3/rls.proto). The metadata is sent only when the descriptor is under the configured limit. Returned metadata can be used to influence service selection based on which descriptors have available capacity.
+
+The metadata from multiple descriptors is merged. Metadata field values from the earliest descriptor take precendence. The order of descriptors is determined by the descriptor list in the rate limit request.
 
 ### Examples
 
