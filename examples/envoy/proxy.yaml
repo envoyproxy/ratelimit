@@ -34,6 +34,50 @@ static_resources:
                     socket_address:
                       address: envoy-mock
                       port_value: 9999
+    - name: multiservice
+      connect_timeout: 1s
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      lb_subset_config:
+        fallback_policy: ANY_ENDPOINT
+        subset_selectors:
+          - keys:
+              - service
+      load_assignment:
+        cluster_name: multiservice
+        endpoints:
+          - locality:
+              region: "region_1"
+            metadata:
+              filter_metadata:
+                envoy.cluster.locality:
+                  name: "service_1"
+            lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: envoy-mock
+                      port_value: 9999
+                metadata:
+                  filter_metadata:
+                    envoy.lb:
+                      service: "service_1"
+          - locality:
+              region: "region_2"
+            metadata:
+              filter_metadata:
+                envoy.cluster.locality:
+                  name: "service_2"
+            lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: envoy-mock
+                      port_value: 10001
+                metadata:
+                  filter_metadata:
+                    envoy.lb:
+                      service: "service_2"
   listeners:
     - address:
         socket_address:
@@ -61,6 +105,26 @@ static_resources:
                           envoy_grpc:
                             cluster_name: ratelimit
                         transport_api_version: V3
+                  - name: envoy.filters.http.set_header
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
+                      mutations:
+                        request_mutations:
+                          - append:
+                              header:
+                                key: "x-envoy-service-with-quota"
+                                value: "%DYNAMIC_METADATA(envoy.filters.http.ratelimit:metadata:service_with_quota:name)%"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                  - name: envoy.filters.http.header_to_metadata
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.header_to_metadata.v3.Config
+                      stat_prefix: header_converter
+                      request_rules:
+                        - header: x-envoy-service-with-quota
+                          on_header_present:
+                            metadata_namespace: envoy.lb
+                            key: service
+                            type: STRING
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -196,6 +260,39 @@ static_resources:
                                     - generic_key:
                                         descriptor_value: "service_2"
                                         descriptor_key: "service"
+                                  hits_addend:
+                                    number: 1
+                                  apply_on_stream_done: true
+                        - match:
+                            prefix: /multiservice-tokenquota
+                          route:
+                            cluster: multiservice
+                          typed_per_filter_config:
+                            envoy.filters.http.ratelimit:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimitPerRoute
+                              vh_rate_limits: INCLUDE
+                              override_option: INCLUDE_POLICY
+                              rate_limits:
+                                - actions:
+                                    - generic_key:
+                                        descriptor_value: "service_1"
+                                        descriptor_key: "service"
+                                  hits_addend:
+                                    number: 0
+                                - actions:
+                                    - generic_key:
+                                        descriptor_value: "service_2"
+                                        descriptor_key: "service"
+                                  hits_addend:
+                                    number: 0
+                                - actions:
+                                    - metadata:
+                                        descriptor_key: "service"
+                                        source: CLUSTER_LOCALITY_ENTRY
+                                        metadata_key:
+                                          key: "envoy.cluster.locality"
+                                          path:
+                                            - key: "name"
                                   hits_addend:
                                     number: 1
                                   apply_on_stream_done: true
