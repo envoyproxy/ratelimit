@@ -90,9 +90,15 @@ descriptors:
     rate_limit:
       unit: minute
       requests_per_unit: 1
+    metadata:
+      service_with_quota:
+        name: "service_1"
   - key: service
     value: service_2
     quota_mode: true
     rate_limit:
       unit: minute
       requests_per_unit: 2
+    metadata:
+      service_with_quota:
+        name: "service_2"

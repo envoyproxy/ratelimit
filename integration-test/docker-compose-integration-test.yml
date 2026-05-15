@@ -51,9 +51,10 @@ services:
       - RUNTIME_ROOT=/data
       - RUNTIME_SUBDIRECTORY=ratelimit
       - RUNTIME_WATCH_ROOT=false
+      - RESPONSE_DYNAMIC_METADATA=true
 
   envoy-proxy:
-    image: envoyproxy/envoy-dev:latest
+    image: envoyproxy/envoy:dev
     entrypoint: "/usr/local/bin/envoy"
     command:
       - "--service-node proxy"
@@ -91,8 +92,10 @@ services:
       - ratelimit-network
     expose:
       - "9999"
+      - "10001"
     ports:
       - "9999:9999"
+      - "10001:10001"
 
   tester:
     build:
