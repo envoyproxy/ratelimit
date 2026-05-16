@@ -44,6 +44,7 @@ func (m *MockStatManager) NewStats(key string) stats.RateLimitStats {
 	ret.OverLimitWithLocalCache = m.store.NewCounter(key + ".over_limit_with_local_cache")
 	ret.WithinLimit = m.store.NewCounter(key + ".within_limit")
 	ret.ShadowMode = m.store.NewCounter(key + ".shadow_mode")
+	ret.TotalNegativeHits = m.store.NewCounter(key + ".total_negative_hits")
 
 	return ret
 }

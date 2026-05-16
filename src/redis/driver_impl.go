@@ -353,13 +353,17 @@ func (c *clientImpl) NumActiveConns() int {
 }
 
 func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd, key string, args ...interface{}) Pipeline {
+	return c.PipeAppendWithRoutingKey(pipeline, key, rcv, cmd, key, args...)
+}
+
+func (c *clientImpl) PipeAppendWithRoutingKey(pipeline Pipeline, routingKey string, rcv interface{}, cmd, key string, args ...interface{}) Pipeline {
 	// Combine key and args into a single slice
 	allArgs := make([]interface{}, 0, 1+len(args))
 	allArgs = append(allArgs, key)
 	allArgs = append(allArgs, args...)
 	return append(pipeline, PipelineAction{
 		Action: radix.FlatCmd(rcv, cmd, allArgs...),
-		Key:    key,
+		Key:    routingKey,
 	})
 }
 

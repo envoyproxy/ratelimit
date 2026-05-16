@@ -102,6 +102,25 @@ func (mr *MockClientMockRecorder) PipeAppend(arg0, arg1, arg2, arg3 interface{},
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PipeAppend", reflect.TypeOf((*MockClient)(nil).PipeAppend), varargs...)
 }
 
+// PipeAppendWithRoutingKey mocks base method
+func (m *MockClient) PipeAppendWithRoutingKey(arg0 redis.Pipeline, arg1 string, arg2 interface{}, arg3, arg4 string, arg5 ...interface{}) redis.Pipeline {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1, arg2, arg3, arg4}
+	for _, a := range arg5 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PipeAppendWithRoutingKey", varargs...)
+	ret0, _ := ret[0].(redis.Pipeline)
+	return ret0
+}
+
+// PipeAppendWithRoutingKey indicates an expected call of PipeAppendWithRoutingKey
+func (mr *MockClientMockRecorder) PipeAppendWithRoutingKey(arg0, arg1, arg2, arg3, arg4 interface{}, arg5 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1, arg2, arg3, arg4}, arg5...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PipeAppendWithRoutingKey", reflect.TypeOf((*MockClient)(nil).PipeAppendWithRoutingKey), varargs...)
+}
+
 // PipeDo mocks base method
 func (m *MockClient) PipeDo(arg0 context.Context, arg1 redis.Pipeline) error {
 	m.ctrl.T.Helper()

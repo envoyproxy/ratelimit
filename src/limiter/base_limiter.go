@@ -14,6 +14,18 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
+// DecrementScript atomically decrements a rate limit counter, floored at 0.
+// If the key does not exist there is nothing to refund, so it returns 0 without
+// creating a phantom key.
+const DecrementScript = `
+local current = redis.call('GET', KEYS[1])                   -- get current count
+if current == false then return 0 end                        -- key absent: nothing to refund
+local new_val = math.floor(math.max(0, tonumber(current) - tonumber(ARGV[1]))) -- subtract hits, floor at 0
+redis.call('SET', KEYS[1], tostring(new_val))                -- persist new value
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))             -- reset TTL
+return new_val                                               -- return count after decrement
+`
+
 type BaseRateLimiter struct {
 	timeSource                 utils.TimeSource
 	JitterRand                 *rand.Rand
@@ -44,7 +56,7 @@ func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint64, limit
 // Generates cache keys for given rate limit request. Each cache key is represented by a concatenation of
 // domain, descriptor and current timestamp.
 func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
-	limits []*config.RateLimit, hitsAddends []uint64,
+	limits []*config.RateLimit, hitsAddends []utils.HitsAddend,
 ) []CacheKey {
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]CacheKey, len(request.Descriptors))
@@ -55,7 +67,11 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
-			limits[i].Stats.TotalHits.Add(hitsAddends[i])
+			if hitsAddends[i].IsNegative {
+				limits[i].Stats.TotalNegativeHits.Add(hitsAddends[i].Value)
+			} else {
+				limits[i].Stats.TotalHits.Add(hitsAddends[i].Value)
+			}
 		}
 	}
 	return cacheKeys
@@ -140,6 +156,28 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 	}
 
 	return responseDescriptorStatus
+}
+
+// GetResponseDescriptorStatusForNegativeHits generates a response for a negative-hit
+// (decrement/refund) request. Refunds release capacity rather than consuming it, so they
+// always return OK regardless of the counter value and never trigger over-limit side
+// effects (over-limit stats, local-cache poisoning). currentValue is the counter value
+// after the decrement; LimitRemaining is reported as the remaining capacity, clamped at 0
+// in case the counter is still above the limit.
+func (this *BaseRateLimiter) GetResponseDescriptorStatusForNegativeHits(key string, limit *config.RateLimit,
+	currentValue uint64,
+) *pb.RateLimitResponse_DescriptorStatus {
+	if key == "" {
+		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK, nil, 0)
+	}
+
+	overLimitThreshold := uint64(limit.Limit.RequestsPerUnit)
+	var limitRemaining uint64
+	if overLimitThreshold > currentValue {
+		limitRemaining = overLimitThreshold - currentValue
+	}
+
+	return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK, limit.Limit, uint32(limitRemaining))
 }
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
