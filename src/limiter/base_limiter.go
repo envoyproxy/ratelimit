@@ -14,6 +14,15 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
+// DecrementScript atomically decrements a rate limit counter, floored at 0.
+const DecrementScript = `
+local current = tonumber(redis.call('GET', KEYS[1]) or '0') -- get current count, default 0
+local new_val = math.max(0, current - tonumber(ARGV[1]))     -- subtract hits, floor at 0
+redis.call('SET', KEYS[1], tostring(math.floor(new_val)))    -- persist new value
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))             -- reset TTL
+return new_val                                               -- return count after decrement
+`
+
 type BaseRateLimiter struct {
 	timeSource                 utils.TimeSource
 	JitterRand                 *rand.Rand
@@ -44,7 +53,7 @@ func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint64, limit
 // Generates cache keys for given rate limit request. Each cache key is represented by a concatenation of
 // domain, descriptor and current timestamp.
 func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
-	limits []*config.RateLimit, hitsAddends []uint64,
+	limits []*config.RateLimit, hitsAddends []utils.HitsAddend,
 ) []CacheKey {
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]CacheKey, len(request.Descriptors))
@@ -55,7 +64,11 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
-			limits[i].Stats.TotalHits.Add(hitsAddends[i])
+			if hitsAddends[i].IsNegative {
+				limits[i].Stats.TotalNegativeHits.Add(hitsAddends[i].Value)
+			} else {
+				limits[i].Stats.TotalHits.Add(hitsAddends[i].Value)
+			}
 		}
 	}
 	return cacheKeys

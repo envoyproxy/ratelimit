@@ -77,3 +77,18 @@ func (mr *MockClientMockRecorder) Increment(arg0, arg1 interface{}) *gomock.Call
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Increment", reflect.TypeOf((*MockClient)(nil).Increment), arg0, arg1)
 }
+
+// Decrement mocks base method
+func (m *MockClient) Decrement(arg0 string, arg1 uint64) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Decrement", arg0, arg1)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Decrement indicates an expected call of Decrement
+func (mr *MockClientMockRecorder) Decrement(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Decrement", reflect.TypeOf((*MockClient)(nil).Decrement), arg0, arg1)
+}

@@ -695,3 +695,101 @@ func getMultiResult(vals map[string]int) map[string]*memcache.Item {
 	}
 	return result
 }
+
+func TestMemcachedNegativeHits(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	client := mock_memcached.NewMockClient(controller)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	sm := mockstats.NewMockStatManager(statsStore)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "")
+
+	// Counter at 7, requesting -3. Memcached Decrement floors at 0 natively.
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().GetMulti([]string{"domain_key_value_1234"}).Return(
+		getMultiResult(map[string]int{"domain_key_value_1234": 7}), nil,
+	)
+	client.EXPECT().Decrement("domain_key_value_1234", uint64(3)).Return(uint64(4), nil)
+
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"domain", [][][2]string{{{"key", "value"}}}, []uint64{3}, []bool{true})
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	result := cache.DoLimit(context.Background(), request, limits)
+	cache.Flush()
+
+	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
+	assert.Equal(uint64(6), uint64(result[0].LimitRemaining))
+	assert.Equal(limits[0].Limit, result[0].CurrentLimit)
+	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(3), limits[0].Stats.TotalNegativeHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+}
+
+func TestMemcachedNegativeHitsFloorAtZero(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	client := mock_memcached.NewMockClient(controller)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	sm := mockstats.NewMockStatManager(statsStore)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "")
+
+	// Counter at 2, requesting -5. Floor at 0.
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().GetMulti([]string{"domain_key_value_1234"}).Return(
+		getMultiResult(map[string]int{"domain_key_value_1234": 2}), nil,
+	)
+	client.EXPECT().Decrement("domain_key_value_1234", uint64(5)).Return(uint64(0), nil)
+
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"domain", [][][2]string{{{"key", "value"}}}, []uint64{5}, []bool{true})
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	result := cache.DoLimit(context.Background(), request, limits)
+	cache.Flush()
+
+	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
+	assert.Equal(uint64(10), uint64(result[0].LimitRemaining))
+	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(5), limits[0].Stats.TotalNegativeHits.Value())
+}
+
+func TestMemcachedNegativeHitsSkipsOverLimitCheck(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	client := mock_memcached.NewMockClient(controller)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	sm := mockstats.NewMockStatManager(statsStore)
+	localCache := freecache.NewCache(100)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, localCache, sm, 0.8, "")
+
+	// Set the key as over-limit in local cache.
+	localCache.Set([]byte("domain_key_value_1234"), []byte{}, 60)
+
+	// Negative hits should still proceed despite key being in over-limit local cache.
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().GetMulti([]string{"domain_key_value_1234"}).Return(
+		getMultiResult(map[string]int{"domain_key_value_1234": 10}), nil,
+	)
+	client.EXPECT().Decrement("domain_key_value_1234", uint64(2)).Return(uint64(8), nil)
+
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"domain", [][][2]string{{{"key", "value"}}}, []uint64{2}, []bool{true})
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	result := cache.DoLimit(context.Background(), request, limits)
+	cache.Flush()
+
+	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+}
