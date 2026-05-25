@@ -120,7 +120,7 @@ func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, aut
 	return dialer
 }
 
-func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
+func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
@@ -193,10 +193,6 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		return poolConfig.New(ctx, network, addr)
 	}
 
-	// TODO: handle graceful shutdown and cancellation by passing context from caller instead of Background
-	// canceling the context will unblock the retry loop and allow the server to shut down gracefully without waiting for startupMaxElapsedTime
-	ctx := context.Background()
-
 	// Validate sentinel URL format early (before retry loop) since it's a configuration error.
 	if strings.ToLower(redisType) == "sentinel" {
 		urls := strings.Split(url, ",")
@@ -221,7 +217,11 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		}
 		d := b.Duration()
 		logger.Warnf("Retrying Redis connection to %s in %s (elapsed: %s): %v", maskedUrl, d, elapsed.Round(time.Millisecond), lastErr)
-		time.Sleep(d)
+		select {
+		case <-time.After(d):
+		case <-ctx.Done():
+			panic(RedisError(fmt.Sprintf("context cancelled while waiting for Redis connection to %s: %v", maskedUrl, ctx.Err())))
+		}
 	}
 
 	var client redisClient

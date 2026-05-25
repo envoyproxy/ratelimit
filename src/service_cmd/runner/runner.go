@@ -5,8 +5,11 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/coocood/freecache"
@@ -34,6 +37,7 @@ type Runner struct {
 	srv             server.Server
 	mu              sync.Mutex
 	ratelimitCloser io.Closer
+	cancel          context.CancelFunc
 }
 
 func NewRunner(s settings.Settings) Runner {
@@ -89,10 +93,11 @@ func (runner *Runner) GetStatsStore() gostats.Store {
 	return runner.statsManager.GetStatsStore()
 }
 
-func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache, statsManager stats.Manager) (limiter.RateLimitCache, io.Closer) {
+func createLimiter(ctx context.Context, srv server.Server, s settings.Settings, localCache *freecache.Cache, statsManager stats.Manager) (limiter.RateLimitCache, io.Closer) {
 	switch s.BackendType {
 	case "redis", "":
 		return redis.NewRateLimiterCacheImplFromSettings(
+			ctx,
 			s,
 			localCache,
 			srv,
@@ -116,11 +121,31 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 }
 
 func (runner *Runner) Run() {
+	ctx, cancel := context.WithCancel(context.Background())
+	runner.mu.Lock()
+	runner.cancel = cancel
+	runner.mu.Unlock()
+	defer cancel()
+
+	// Set up signal handling for graceful shutdown
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	go func() {
+		select {
+		case sig := <-sigs:
+			logger.Infof("Received signal %v, initiating shutdown", sig)
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
 	s := runner.settings
 	if s.TracingEnabled {
 		tp := trace.InitProductionTraceProvider(s.TracingExporterProtocol, s.TracingServiceName, s.TracingServiceNamespace, s.TracingServiceInstanceId, s.TracingSamplingRate)
 		defer func() {
-			if err := tp.Shutdown(context.Background()); err != nil {
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer shutdownCancel()
+			if err := tp.Shutdown(shutdownCtx); err != nil {
 				logger.Printf("Error shutting down tracer provider: %v", err)
 			}
 		}()
@@ -156,7 +181,7 @@ func (runner *Runner) Run() {
 	runner.srv = srv
 	runner.mu.Unlock()
 
-	limiter, limiterCloser := createLimiter(srv, s, localCache, runner.statsManager)
+	limiter, limiterCloser := createLimiter(ctx, srv, s, localCache, runner.statsManager)
 	runner.ratelimitCloser = limiterCloser
 
 	service := ratelimit.NewService(
@@ -186,13 +211,17 @@ func (runner *Runner) Run() {
 	// v2 proto is no longer supported
 	pb.RegisterRateLimitServiceServer(srv.GrpcServer(), service)
 
-	srv.Start()
+	srv.Start(ctx)
 }
 
 func (runner *Runner) Stop() {
 	runner.mu.Lock()
 	srv := runner.srv
+	cancel := runner.cancel
 	runner.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 	if srv != nil {
 		srv.Stop()
 	}
