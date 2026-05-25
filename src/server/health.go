@@ -49,7 +49,8 @@ func NewHealthChecker(grpcHealthServer *health.Server, name string, healthyWithA
 
 	ret.healthMap = make(map[string]bool)
 	// Store health states of components into map
-	ret.healthMap[RedisHealthComponentName] = true
+	// Redis starts unhealthy; it is marked healthy once the connection is confirmed at startup.
+	ret.healthMap[RedisHealthComponentName] = false
 	if healthyWithAtLeastOneConfigLoad {
 		// config starts in failed state since we need at least one config loaded to be healthy
 		ret.healthMap[ConfigHealthComponentName] = false
@@ -111,7 +112,7 @@ func (hc *HealthChecker) Ok(componentName string) error {
 		// Set component to be healthy
 		hc.healthMap[componentName] = true
 		allComponentsHealthy := areAllComponentsHealthy(hc.healthMap)
-
+		logger.Debugf("Health status of components: %v, all healthy: %t", hc.healthMap, allComponentsHealthy)
 		if allComponentsHealthy {
 			atomic.StoreUint32(&hc.ok, 1)
 			hc.grpc.SetServingStatus(hc.name, healthpb.HealthCheckResponse_SERVING)

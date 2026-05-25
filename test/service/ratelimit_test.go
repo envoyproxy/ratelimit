@@ -97,6 +97,8 @@ func commonSetup(t *testing.T) rateLimitServiceTestSuite {
 	ret.statStore = gostats.NewStore(gostats.NewNullSink(), false)
 	ret.statsManager = mock_stats.NewMockStatManager(ret.statStore)
 	ret.health = server.NewHealthChecker(health.NewServer(), "ratelimit", false)
+	// Tests use a mocked cache, so simulate a successful Redis connection.
+	_ = ret.health.Ok(server.RedisHealthComponentName)
 	return ret
 }
 
@@ -597,6 +599,8 @@ func TestServiceHealthStatus(test *testing.T) {
 	healthyWithAtLeastOneConfigLoaded := false
 	grpcHealthServer := health.NewServer()
 	hc := server.NewHealthChecker(grpcHealthServer, "ratelimit", healthyWithAtLeastOneConfigLoaded)
+	// Tests use a mocked cache, so simulate a successful Redis connection.
+	_ = hc.Ok(server.RedisHealthComponentName)
 	healthpb.RegisterHealthServer(grpc.NewServer(), grpcHealthServer)
 
 	// Set up the service
@@ -623,6 +627,8 @@ func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 	healthyWithAtLeastOneConfigLoaded := true
 	grpcHealthServer := health.NewServer()
 	hc := server.NewHealthChecker(grpcHealthServer, "ratelimit", healthyWithAtLeastOneConfigLoaded)
+	// Tests use a mocked cache, so simulate a successful Redis connection.
+	_ = hc.Ok(server.RedisHealthComponentName)
 	healthpb.RegisterHealthServer(grpc.NewServer(), grpcHealthServer)
 
 	// Set up the service
