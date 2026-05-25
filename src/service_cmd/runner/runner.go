@@ -38,6 +38,7 @@ type Runner struct {
 	mu              sync.Mutex
 	ratelimitCloser io.Closer
 	cancel          context.CancelFunc
+	done            chan struct{}
 }
 
 func NewRunner(s settings.Settings) Runner {
@@ -86,6 +87,7 @@ func NewRunner(s settings.Settings) Runner {
 	return Runner{
 		statsManager: stats.NewStatManager(store, s),
 		settings:     s,
+		done:         make(chan struct{}),
 	}
 }
 
@@ -121,6 +123,8 @@ func createLimiter(ctx context.Context, srv server.Server, s settings.Settings, 
 }
 
 func (runner *Runner) Run() {
+	defer close(runner.done)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	runner.mu.Lock()
 	runner.cancel = cancel
@@ -183,6 +187,11 @@ func (runner *Runner) Run() {
 
 	limiter, limiterCloser := createLimiter(ctx, srv, s, localCache, runner.statsManager)
 	runner.ratelimitCloser = limiterCloser
+	defer func() {
+		if err := limiterCloser.Close(); err != nil {
+			logger.Errorf("Error closing rate limiter resources: %v", err)
+		}
+	}()
 
 	service := ratelimit.NewService(
 		limiter,
@@ -216,17 +225,10 @@ func (runner *Runner) Run() {
 
 func (runner *Runner) Stop() {
 	runner.mu.Lock()
-	srv := runner.srv
 	cancel := runner.cancel
 	runner.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
-	if srv != nil {
-		srv.Stop()
-	}
-
-	if runner.ratelimitCloser != nil {
-		_ = runner.ratelimitCloser.Close()
-	}
+	<-runner.done
 }
