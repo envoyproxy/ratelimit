@@ -8,12 +8,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
-	"os"
-	"os/signal"
 	"sort"
 	"strconv"
 	"sync"
-	"syscall"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -166,7 +163,7 @@ func (server *server) GrpcServer() *grpc.Server {
 	return server.grpcServer
 }
 
-func (server *server) Start() {
+func (server *server) Start(ctx context.Context) {
 	go func() {
 		logger.Warnf("Listening for debug on '%s'", server.debugAddress)
 		var err error
@@ -184,7 +181,7 @@ func (server *server) Start() {
 
 	go server.startGrpc()
 
-	server.handleGracefulShutdown()
+	server.handleGracefulShutdown(ctx)
 
 	logger.Warnf("Listening for HTTP on '%s'", server.httpAddress)
 	list, err := reuseport.Listen("tcp", server.httpAddress)
@@ -365,16 +362,11 @@ func (server *server) Stop() {
 	server.provider.Stop()
 }
 
-func (server *server) handleGracefulShutdown() {
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-
+func (server *server) handleGracefulShutdown(ctx context.Context) {
 	go func() {
-		sig := <-sigs
-
-		logger.Infof("Ratelimit server received %v, shutting down gracefully", sig)
+		<-ctx.Done()
+		logger.Infof("Context cancelled, stopping server")
 		server.Stop()
-		os.Exit(0)
 	}()
 }
 

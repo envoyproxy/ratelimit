@@ -1,6 +1,7 @@
 package redis_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -38,8 +39,9 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 		redisAuth := "123"
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
+		// Use a short maxElapsedTime so failing connection tests don't hang in retry loops.
 		mkRedisClient := func(auth, addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, auth, "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", "")
+			return redis.NewClientImpl(context.Background(), statsStore, false, auth, "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", "", time.Second, 30*time.Second, 100*time.Millisecond)
 		}
 
 		t.Run("connection refused", func(t *testing.T) {
@@ -66,9 +68,8 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 
 			redisSrv.RequireAuth(redisAuth)
 
-			assert.PanicsWithError(t, "response returned from Conn: NOAUTH Authentication required.", func() {
-				mkRedisClient("", redisSrv.Addr())
-			})
+			panicErr := expectPanicError(t, func() { mkRedisClient("", redisSrv.Addr()) })
+			assert.Contains(t, panicErr.Error(), "NOAUTH")
 		})
 
 		t.Run("auth pass", func(t *testing.T) {
@@ -103,9 +104,8 @@ func testNewClientImpl(t *testing.T, pipelineWindow time.Duration, pipelineLimit
 			redisSrv.RequireUserAuth(user, pass)
 
 			redisAuth := fmt.Sprintf("%s:invalid-password", user)
-			assert.PanicsWithError(t, "response returned from Conn: WRONGPASS invalid username-password pair", func() {
-				mkRedisClient(redisAuth, redisSrv.Addr())
-			})
+			panicErr := expectPanicError(t, func() { mkRedisClient(redisAuth, redisSrv.Addr()) })
+			assert.Contains(t, panicErr.Error(), "WRONGPASS")
 		})
 	}
 }
@@ -119,7 +119,7 @@ func TestDoCmd(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 	mkRedisClient := func(addr string) redis.Client {
-		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, "", "")
+		return redis.NewClientImpl(context.Background(), statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, "", "", time.Second, 30*time.Second, 0)
 	}
 
 	t.Run("SETGET ok", func(t *testing.T) {
@@ -164,7 +164,7 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 		statsStore := stats.NewStore(stats.NewNullSink(), false)
 
 		mkRedisClient := func(addr string) redis.Client {
-			return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", "")
+			return redis.NewClientImpl(context.Background(), statsStore, false, "", "tcp", "single", addr, 1, pipelineWindow, pipelineLimit, nil, false, nil, 10*time.Second, "", "", time.Second, 30*time.Second, 0)
 		}
 
 		t.Run("SETGET ok", func(t *testing.T) {
@@ -232,7 +232,7 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 
 	// Helper to create client with specific on-empty behavior
 	mkRedisClientWithBehavior := func(addr, behavior string) redis.Client {
-		return redis.NewClientImpl(statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, behavior, "")
+		return redis.NewClientImpl(context.Background(), statsStore, false, "", "tcp", "single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, behavior, "", time.Second, 30*time.Second, 0)
 	}
 
 	t.Run("default behavior (empty string)", func(t *testing.T) {
@@ -356,7 +356,8 @@ func TestNewClientImplSentinel(t *testing.T) {
 	mkSentinelClient := func(auth, sentinelAuth, url string, useTls bool, timeout time.Duration) redis.Client {
 		// Pass nil for tlsConfig - we can't test TLS without a real TLS server,
 		// but we can verify the code path is executed (logs will show TLS is enabled)
-		return redis.NewClientImpl(statsStore, useTls, auth, "tcp", "sentinel", url, 1, 0, 0, nil, false, nil, timeout, "", sentinelAuth)
+		// Use a short maxElapsedTime so failing connection tests don't hang in retry loops.
+		return redis.NewClientImpl(context.Background(), statsStore, useTls, auth, "tcp", "sentinel", url, 1, 0, 0, nil, false, nil, timeout, "", sentinelAuth, time.Second, 30*time.Second, 100*time.Millisecond)
 	}
 
 	t.Run("invalid url format - missing sentinel addresses", func(t *testing.T) {
