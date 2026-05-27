@@ -47,7 +47,7 @@ message RateLimitDescriptor {
   bool detailed_metric = 6;
 
   // Mark the descriptor as quota mode. When quota_mode is true, the rate limit service will allow
-  // requests unless all quota descriptors are over the limit.
+  // requests until all quota descriptors are over the limit.
   bool quota_mode = 7;
 }
 
