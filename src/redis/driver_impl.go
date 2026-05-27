@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jpillora/backoff"
 	stats "github.com/lyft/gostats"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/mediocregopher/radix/v4/trace"
@@ -119,9 +120,10 @@ func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, aut
 	return dialer
 }
 
-func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
+func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
+	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
@@ -191,47 +193,88 @@ func NewClientImpl(scope stats.Scope, useTls bool, auth, redisSocketType, redisT
 		return poolConfig.New(ctx, network, addr)
 	}
 
-	var client redisClient
-	var err error
-	ctx := context.Background()
-
-	switch strings.ToLower(redisType) {
-	case "single":
-		logger.Warnf("Creating single with urls %v", url)
-		client, err = poolFunc(ctx, redisSocketType, url)
-	case "cluster":
-		urls := strings.Split(url, ",")
-		logger.Warnf("Creating cluster with urls %v", urls)
-		clusterConfig := radix.ClusterConfig{
-			PoolConfig: poolConfig,
-		}
-		client, err = clusterConfig.New(ctx, urls)
-	case "sentinel":
+	// Validate sentinel URL format early (before retry loop) since it's a configuration error.
+	if strings.ToLower(redisType) == "sentinel" {
 		urls := strings.Split(url, ",")
 		if len(urls) < 2 {
 			panic(RedisError("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>"))
 		}
-
-		// Create sentinel dialer (may use different auth from Redis master/replica)
-		// sentinelAuth is for Sentinel nodes, auth is for Redis master/replica
-		sentinelDialer := createDialer(timeout, useTls, tlsConfig, sentinelAuth, fmt.Sprintf("sentinel(%s)", maskedUrl))
-
-		sentinelConfig := radix.SentinelConfig{
-			PoolConfig:     poolConfig,
-			SentinelDialer: sentinelDialer,
-		}
-		client, err = sentinelConfig.New(ctx, urls[0], urls[1:])
-	default:
-		panic(RedisError("Unrecognized redis type " + redisType))
 	}
 
-	checkError(err)
+	b := &backoff.Backoff{
+		Min:    startupInitialInterval,
+		Max:    startupMaxInterval,
+		Factor: 2,
+		Jitter: true,
+	}
 
-	// Check if connection is good
-	var pingResponse string
-	checkError(client.Do(ctx, radix.Cmd(&pingResponse, "PING")))
-	if pingResponse != "PONG" {
-		checkError(fmt.Errorf("connecting redis error: %s", pingResponse))
+	startTime := time.Now()
+
+	retryOrDie := func(lastErr error) {
+		elapsed := time.Since(startTime)
+		if startupMaxElapsedTime > 0 && elapsed >= startupMaxElapsedTime {
+			panic(RedisError(fmt.Sprintf("timed out waiting for Redis connection to %s after %s: %v", maskedUrl, elapsed.Round(time.Millisecond), lastErr)))
+		}
+		d := b.Duration()
+		logger.Warnf("Retrying Redis connection to %s in %s (elapsed: %s): %v", maskedUrl, d, elapsed.Round(time.Millisecond), lastErr)
+		select {
+		case <-time.After(d):
+		case <-ctx.Done():
+			panic(RedisError(fmt.Sprintf("context cancelled while waiting for Redis connection to %s: %v", maskedUrl, ctx.Err())))
+		}
+	}
+
+	var client redisClient
+	for {
+		var err error
+		switch strings.ToLower(redisType) {
+		case "single":
+			logger.Warnf("Creating single with urls %v", url)
+			client, err = poolFunc(ctx, redisSocketType, url)
+		case "cluster":
+			urls := strings.Split(url, ",")
+			logger.Warnf("Creating cluster with urls %v", urls)
+			clusterConfig := radix.ClusterConfig{
+				PoolConfig: poolConfig,
+			}
+			client, err = clusterConfig.New(ctx, urls)
+		case "sentinel":
+			urls := strings.Split(url, ",")
+			sentinelDialer := createDialer(timeout, useTls, tlsConfig, sentinelAuth, fmt.Sprintf("sentinel(%s)", maskedUrl))
+			sentinelConfig := radix.SentinelConfig{
+				PoolConfig:     poolConfig,
+				SentinelDialer: sentinelDialer,
+			}
+			client, err = sentinelConfig.New(ctx, urls[0], urls[1:])
+		default:
+			panic(RedisError("Unrecognized redis type " + redisType))
+		}
+
+		if err != nil {
+			retryOrDie(err)
+			continue
+		}
+
+		var pingResponse string
+		if pingErr := client.Do(ctx, radix.Cmd(&pingResponse, "PING")); pingErr != nil {
+			_ = client.Close()
+			retryOrDie(pingErr)
+			continue
+		}
+		if pingResponse != "PONG" {
+			_ = client.Close()
+			retryOrDie(fmt.Errorf("unexpected PING response: %q", pingResponse))
+			continue
+		}
+
+		// Successfully connected.
+		break
+	}
+
+	if srv != nil {
+		if err := srv.HealthChecker().Ok(server.RedisHealthComponentName); err != nil {
+			logger.Errorf("Unable to update health status after Redis connection: %s", err)
+		}
 	}
 
 	return &clientImpl{

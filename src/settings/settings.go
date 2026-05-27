@@ -191,6 +191,14 @@ type Settings struct {
 	// See RedisPoolOnEmptyBehavior for possible values and details.
 	RedisPerSecondPoolOnEmptyBehavior string `envconfig:"REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR" default:"WAIT"`
 
+	// RedisStartupInitialInterval is the initial backoff interval when retrying Redis connection at startup.
+	RedisStartupInitialInterval time.Duration `envconfig:"REDIS_STARTUP_INITIAL_INTERVAL" default:"1s"`
+	// RedisStartupMaxInterval is the maximum backoff interval between Redis connection retries at startup.
+	RedisStartupMaxInterval time.Duration `envconfig:"REDIS_STARTUP_MAX_INTERVAL" default:"30s"`
+	// RedisStartupMaxElapsedTime is the total time to keep retrying the Redis connection at startup.
+	// 0 means retry indefinitely until the connection succeeds.
+	RedisStartupMaxElapsedTime time.Duration `envconfig:"REDIS_STARTUP_MAX_ELAPSED_TIME" default:"0"`
+
 	// Memcache settings
 	MemcacheHostPort []string `envconfig:"MEMCACHE_HOST_PORT" default:""`
 	// MemcacheMaxIdleConns sets the maximum number of idle TCP connections per memcached node.

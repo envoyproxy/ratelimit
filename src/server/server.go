@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -17,7 +18,7 @@ type Server interface {
 	 * all endpoints have been registered through 'AddHttpEndpoint'
 	 * and 'GrpcServer'.
 	 */
-	Start()
+	Start(ctx context.Context)
 
 	/**
 	 * Returns the root of the stats tree for the server

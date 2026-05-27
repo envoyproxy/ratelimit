@@ -18,117 +18,81 @@ import (
 func TestHealthCheck(t *testing.T) {
 	defer signal.Reset(syscall.SIGTERM)
 
-	recorder := httptest.NewRecorder()
-
 	hc := server.NewHealthChecker(health.NewServer(), "ratelimit", false)
 
-	r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
-	hc.ServeHTTP(recorder, r)
-
-	if recorder.Code != 200 {
-		t.Errorf("expected code 200 actual %d", recorder.Code)
+	checkHTTP := func(wantCode int) {
+		recorder := httptest.NewRecorder()
+		r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
+		hc.ServeHTTP(recorder, r)
+		if recorder.Code != wantCode {
+			t.Errorf("expected code %d actual %d", wantCode, recorder.Code)
+		}
 	}
 
-	if recorder.Body.String() != "OK" {
-		t.Errorf("expected body 'OK', got '%s'", recorder.Body.String())
-	}
+	// Redis starts unhealthy until the connection is confirmed.
+	checkHTTP(500)
 
-	err := hc.Fail(server.RedisHealthComponentName)
+	err := hc.Ok(server.RedisHealthComponentName)
 	if err != nil {
 		t.Errorf("Expected no errors for updating redis health status")
 	}
-
-	recorder = httptest.NewRecorder()
-
-	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
-	hc.ServeHTTP(recorder, r)
-
-	if recorder.Code != 500 {
-		t.Errorf("expected code 500 actual %d", recorder.Code)
-	}
-
-	err = hc.Ok(server.RedisHealthComponentName)
-	if err != nil {
-		t.Errorf("Expected no errors for updating redis health status")
-	}
-
-	recorder = httptest.NewRecorder()
-
-	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
-	hc.ServeHTTP(recorder, r)
-
-	if recorder.Code != 200 {
-		t.Errorf("expected code 200 actual %d", recorder.Code)
-	}
-
-	if recorder.Body.String() != "OK" {
-		t.Errorf("expected body 'OK', got '%s'", recorder.Body.String())
-	}
-}
-
-func TestHealthyWithAtLeastOneConfigLoaded(t *testing.T) {
-	defer signal.Reset(syscall.SIGTERM)
-
-	recorder := httptest.NewRecorder()
-
-	hc := server.NewHealthChecker(health.NewServer(), "ratelimit", true)
-
-	r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
-	hc.ServeHTTP(recorder, r)
-
-	if recorder.Code != 500 {
-		t.Errorf("expected code 500 actual %d", recorder.Code)
-	}
-
-	err := hc.Ok(server.ConfigHealthComponentName)
-	if err != nil {
-		t.Errorf("Expected no errors for updating config health status")
-	}
-
-	recorder = httptest.NewRecorder()
-
-	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
-	hc.ServeHTTP(recorder, r)
-
-	if recorder.Code != 200 {
-		t.Errorf("expected code 200 actual %d", recorder.Code)
-	}
-
-	if recorder.Body.String() != "OK" {
-		t.Errorf("expected body 'OK', got '%s'", recorder.Body.String())
-	}
+	checkHTTP(200)
 
 	err = hc.Fail(server.RedisHealthComponentName)
 	if err != nil {
 		t.Errorf("Expected no errors for updating redis health status")
 	}
-
-	recorder = httptest.NewRecorder()
-
-	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
-	hc.ServeHTTP(recorder, r)
-
-	if recorder.Code != 500 {
-		t.Errorf("expected code 500 actual %d", recorder.Code)
-	}
+	checkHTTP(500)
 
 	err = hc.Ok(server.RedisHealthComponentName)
 	if err != nil {
 		t.Errorf("Expected no errors for updating redis health status")
 	}
+	checkHTTP(200)
+}
 
-	recorder = httptest.NewRecorder()
+func TestHealthyWithAtLeastOneConfigLoaded(t *testing.T) {
+	defer signal.Reset(syscall.SIGTERM)
 
-	r, _ = http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
-	hc.ServeHTTP(recorder, r)
+	hc := server.NewHealthChecker(health.NewServer(), "ratelimit", true)
 
-	if recorder.Code != 200 {
-		t.Errorf("expected code 200 actual %d", recorder.Code)
+	checkHTTP := func(wantCode int) {
+		recorder := httptest.NewRecorder()
+		r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
+		hc.ServeHTTP(recorder, r)
+		if recorder.Code != wantCode {
+			t.Errorf("expected code %d actual %d", wantCode, recorder.Code)
+		}
 	}
 
-	if recorder.Body.String() != "OK" {
-		t.Errorf("expected body 'OK', got '%s'", recorder.Body.String())
+	// Both Redis and config start unhealthy.
+	checkHTTP(500)
+
+	err := hc.Ok(server.ConfigHealthComponentName)
+	if err != nil {
+		t.Errorf("Expected no errors for updating config health status")
 	}
+	// Config is ready but Redis still unhealthy.
+	checkHTTP(500)
+
+	err = hc.Ok(server.RedisHealthComponentName)
+	if err != nil {
+		t.Errorf("Expected no errors for updating redis health status")
+	}
+	// Both ready now.
+	checkHTTP(200)
+
+	err = hc.Fail(server.RedisHealthComponentName)
+	if err != nil {
+		t.Errorf("Expected no errors for updating redis health status")
+	}
+	checkHTTP(500)
+
+	err = hc.Ok(server.RedisHealthComponentName)
+	if err != nil {
+		t.Errorf("Expected no errors for updating redis health status")
+	}
+	checkHTTP(200)
 }
 
 func TestGrpcHealthCheck(t *testing.T) {
@@ -142,9 +106,10 @@ func TestGrpcHealthCheck(t *testing.T) {
 		Service: "ratelimit",
 	}
 
+	// Redis starts unhealthy until the connection is confirmed.
 	res, _ := grpcHealthServer.Check(context.Background(), req)
-	if healthpb.HealthCheckResponse_SERVING != res.Status {
-		t.Errorf("expected status SERVING actual %v", res.Status)
+	if healthpb.HealthCheckResponse_NOT_SERVING != res.Status {
+		t.Errorf("expected status NOT_SERVING actual %v", res.Status)
 	}
 
 	err := hc.Ok(server.RedisHealthComponentName)
