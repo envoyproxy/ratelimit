@@ -45,6 +45,10 @@ message RateLimitDescriptor {
 
   // Setting the `detailed_metric: true` for a descriptor will extend the metrics that are produced.
   bool detailed_metric = 6;
+
+  // Mark the descriptor as quota mode. When quota_mode is true, the rate limit service will allow
+  // requests unless all quota descriptors are over the limit.
+  bool quota_mode = 7;
 }
 
 // Rate-limit policy.
