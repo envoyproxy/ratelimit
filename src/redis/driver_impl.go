@@ -13,6 +13,7 @@ import (
 	"github.com/mediocregopher/radix/v4"
 	"github.com/mediocregopher/radix/v4/trace"
 	logger "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/envoyproxy/ratelimit/src/server"
 	"github.com/envoyproxy/ratelimit/src/utils"
@@ -69,9 +70,10 @@ type redisClient interface {
 }
 
 type clientImpl struct {
-	client    redisClient
-	stats     poolStats
-	isCluster bool
+	client                     redisClient
+	stats                      poolStats
+	isCluster                  bool
+	clusterPipelineParallelism int
 }
 
 func checkError(err error) {
@@ -125,6 +127,18 @@ func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
 ) Client {
+	return newClientImpl(ctx, scope, useTls, auth, redisSocketType, redisType, url, poolSize,
+		pipelineWindow, pipelineLimit, tlsConfig, healthCheckActiveConnection, srv,
+		timeout, poolOnEmptyBehavior, sentinelAuth,
+		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1)
+}
+
+func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
+	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
+	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
+	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
+	clusterPipelineParallelism int,
+) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
 
@@ -154,6 +168,18 @@ func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	if isCluster && pipelineWindow > 0 {
 		poolConfig.Dialer.WriteFlushInterval = pipelineWindow
 		logger.Debugf("Cluster mode: setting WriteFlushInterval to %v", pipelineWindow)
+	}
+	if isCluster {
+		switch {
+		case clusterPipelineParallelism < 0:
+			panic(RedisError("REDIS_CLUSTER_PIPELINE_PARALLELISM must be >= 0"))
+		case clusterPipelineParallelism == 0:
+			logger.Warnf("Redis cluster pipeline parallelism: unbounded")
+		case clusterPipelineParallelism == 1:
+			logger.Warnf("Redis cluster pipeline parallelism: disabled (serial legacy behavior)")
+		default:
+			logger.Warnf("Redis cluster pipeline parallelism: bounded to %d concurrent groups", clusterPipelineParallelism)
+		}
 	}
 
 	// IMPORTANT: radix v4 pool behavior changes from v3
@@ -278,9 +304,10 @@ func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	}
 
 	return &clientImpl{
-		client:    client,
-		stats:     stats,
-		isCluster: isCluster,
+		client:                     client,
+		stats:                      stats,
+		isCluster:                  isCluster,
+		clusterPipelineParallelism: clusterPipelineParallelism,
 	}
 }
 
@@ -329,13 +356,25 @@ func (c *clientImpl) PipeDo(pipeline Pipeline) error {
 	return c.client.Do(ctx, p)
 }
 
-// executeGroupedPipeline groups pipeline actions by key and executes each group
-// as a separate pipeline. This allows same-key commands (like INCRBY + EXPIRE)
-// to be pipelined together even in cluster mode.
+// executeGroupedPipeline routes a pipeline of Redis actions in cluster mode
+// via a three-tier dispatch:
+//
+//  1. Single-action fast path (len==1): skip grouping entirely.
+//  2. Serial compatibility path: clusterPipelineParallelism == 1 preserves
+//     the pre-parallelization behavior.
+//  3. General path: group actions by key (same-key commands like INCRBY +
+//     EXPIRE are still pipelined together) and execute groups concurrently
+//     via errgroup. clusterPipelineParallelism == 0 is unbounded; values >1
+//     bound the number of concurrent groups.
 func (c *clientImpl) executeGroupedPipeline(ctx context.Context, pipeline Pipeline) error {
-	// Group actions by key, preserving first-occurrence order
-	var groups [][]radix.Action
-	keyToIndex := make(map[string]int)
+	// Tier 1: single action — skip grouping, skip map alloc.
+	if len(pipeline) == 1 {
+		return c.client.Do(ctx, pipeline[0].Action)
+	}
+
+	// Tier 2: group by key, preserving first-occurrence order.
+	groups := make([][]radix.Action, 0, len(pipeline))
+	keyToIndex := make(map[string]int, len(pipeline))
 
 	for _, pa := range pipeline {
 		if idx, exists := keyToIndex[pa.Key]; exists {
@@ -346,23 +385,40 @@ func (c *clientImpl) executeGroupedPipeline(ctx context.Context, pipeline Pipeli
 		}
 	}
 
-	// Execute each group
-	for _, actions := range groups {
-		if len(actions) == 1 {
-			if err := c.client.Do(ctx, actions[0]); err != nil {
-				return err
-			}
-		} else {
-			// Multiple commands for same key: pipeline them together
-			p := radix.NewPipeline()
-			for _, action := range actions {
-				p.Append(action)
-			}
-			if err := c.client.Do(ctx, p); err != nil {
-				return err
-			}
-		}
+	if c.clusterPipelineParallelism == 1 {
+		return c.doPipelineGroupsSerial(ctx, groups)
 	}
 
+	// Execute groups concurrently.
+	eg, egCtx := errgroup.WithContext(ctx)
+	if c.clusterPipelineParallelism > 1 {
+		eg.SetLimit(c.clusterPipelineParallelism)
+	}
+	for _, actions := range groups {
+		actions := actions
+		eg.Go(func() error {
+			return c.doPipelineGroup(egCtx, actions)
+		})
+	}
+	return eg.Wait()
+}
+
+func (c *clientImpl) doPipelineGroupsSerial(ctx context.Context, groups [][]radix.Action) error {
+	for _, actions := range groups {
+		if err := c.doPipelineGroup(ctx, actions); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (c *clientImpl) doPipelineGroup(ctx context.Context, actions []radix.Action) error {
+	if len(actions) == 1 {
+		return c.client.Do(ctx, actions[0])
+	}
+	p := radix.NewPipeline()
+	for _, action := range actions {
+		p.Append(action)
+	}
+	return c.client.Do(ctx, p)
 }

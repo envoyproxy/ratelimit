@@ -97,6 +97,37 @@ func TestRedisPerSecondPoolOnEmptyBehavior_Error(t *testing.T) {
 	assert.Equal(t, "ERROR", settings.RedisPerSecondPoolOnEmptyBehavior)
 }
 
+func TestRedisClusterPipelineParallelism_Default(t *testing.T) {
+	os.Unsetenv("REDIS_CLUSTER_PIPELINE_PARALLELISM")
+	os.Unsetenv("REDIS_PERSECOND_CLUSTER_PIPELINE_PARALLELISM")
+
+	settings := NewSettings()
+
+	assert.Equal(t, 1, settings.RedisClusterPipelineParallelism)
+	assert.Equal(t, 1, settings.RedisPerSecondClusterPipelineParallelism)
+}
+
+func TestRedisClusterPipelineParallelism_Configured(t *testing.T) {
+	os.Setenv("REDIS_CLUSTER_PIPELINE_PARALLELISM", "8")
+	os.Setenv("REDIS_PERSECOND_CLUSTER_PIPELINE_PARALLELISM", "4")
+	defer os.Unsetenv("REDIS_CLUSTER_PIPELINE_PARALLELISM")
+	defer os.Unsetenv("REDIS_PERSECOND_CLUSTER_PIPELINE_PARALLELISM")
+
+	settings := NewSettings()
+
+	assert.Equal(t, 8, settings.RedisClusterPipelineParallelism)
+	assert.Equal(t, 4, settings.RedisPerSecondClusterPipelineParallelism)
+}
+
+func TestRedisClusterPipelineParallelism_Unbounded(t *testing.T) {
+	os.Setenv("REDIS_CLUSTER_PIPELINE_PARALLELISM", "0")
+	defer os.Unsetenv("REDIS_CLUSTER_PIPELINE_PARALLELISM")
+
+	settings := NewSettings()
+
+	assert.Equal(t, 0, settings.RedisClusterPipelineParallelism)
+}
+
 // Test both pools can be configured independently
 func TestRedisPoolOnEmptyBehavior_IndependentConfiguration(t *testing.T) {
 	os.Setenv("REDIS_POOL_ON_EMPTY_BEHAVIOR", "ERROR")
