@@ -42,7 +42,7 @@ func pipelineAppendtoGet(client Client, pipeline *Pipeline, key string, result *
 }
 
 func (this *fixedRateLimitCacheImpl) getHitsAddend(hitsAddend uint64, isCacheKeyOverlimit, isCacheKeyNearlimit,
-	isNearLimt bool,
+	isNearLimit bool,
 ) uint64 {
 	// If stopCacheKeyIncrementWhenOverlimit is false, then we always increment the cache key.
 	if !this.stopCacheKeyIncrementWhenOverlimit {
@@ -64,7 +64,7 @@ func (this *fixedRateLimitCacheImpl) getHitsAddend(hitsAddend uint64, isCacheKey
 
 	// If stopCacheKeyIncrementWhenOverlimit is true, and some of the keys are near limit, then
 	// we only increment the cache key if the key is near limit.
-	if isNearLimt {
+	if isNearLimit {
 		return hitsAddend
 	}
 
@@ -187,7 +187,8 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	}
 
 	// Generate trace
-	_, span := tracer.Start(ctx, "Redis Pipeline Execution",
+	_, span := tracer.Start(
+		ctx, "Redis Pipeline Execution",
 		trace.WithAttributes(
 			attribute.Int("pipeline length", len(pipeline)),
 			attribute.Int("perSecondPipeline length", len(perSecondPipeline)),
