@@ -22,6 +22,7 @@ func rateLimitDescriptorsPbToYaml(pb []*rls_conf_v3.RateLimitDescriptor) []YamlD
 			Descriptors:    rateLimitDescriptorsPbToYaml(d.Descriptors),
 			ShadowMode:     d.ShadowMode,
 			DetailedMetric: d.DetailedMetric,
+			QuotaMode:      d.QuotaMode,
 		}
 	}
 

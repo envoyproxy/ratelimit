@@ -9,7 +9,7 @@ require (
 	github.com/coocood/freecache v1.2.4
 	github.com/envoyproxy/go-control-plane v0.14.0
 	github.com/envoyproxy/go-control-plane/envoy v1.36.0
-	github.com/envoyproxy/go-control-plane/ratelimit v0.1.1-0.20250812085011-4cf7e8485428
+	github.com/envoyproxy/go-control-plane/ratelimit v0.1.1-0.20260131204543-4ca8b9cded3e
 	github.com/go-kit/log v0.2.1
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.7.0

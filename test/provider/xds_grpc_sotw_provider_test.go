@@ -236,6 +236,7 @@ func testDeeperLimitsXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.Se
 											RequestsPerUnit: 15,
 										},
 										ShadowMode: true,
+										QuotaMode:  true,
 									},
 								},
 							},
@@ -271,7 +272,7 @@ func testDeeperLimitsXdsConfigUpdate(snapVersion *int, setSnapshotFunc common.Se
 			"foo.k1_v1.k2_v2: unit=HOUR requests_per_unit=15, shadow_mode: false, quota_mode: false",
 			"foo.j1_v2: unit=UNKNOWN requests_per_unit=0, shadow_mode: false, quota_mode: false",
 			"foo.j1_v2.j2: unit=UNKNOWN requests_per_unit=0, shadow_mode: false, quota_mode: false",
-			"foo.j1_v2.j2_v2: unit=DAY requests_per_unit=15, shadow_mode: true, quota_mode: false",
+			"foo.j1_v2.j2_v2: unit=DAY requests_per_unit=15, shadow_mode: true, quota_mode: true",
 			"bar.k1_v1: unit=MINUTE requests_per_unit=100, shadow_mode: false, quota_mode: false",
 		}, strings.Split(strings.TrimSuffix(config.Dump(), "\n"), "\n"))
 	}
