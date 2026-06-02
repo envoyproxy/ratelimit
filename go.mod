@@ -1,6 +1,6 @@
 module github.com/envoyproxy/ratelimit
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/DataDog/datadog-go/v5 v5.5.0
