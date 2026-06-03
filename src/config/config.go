@@ -63,5 +63,5 @@ type RateLimitConfigLoader interface {
 	// @param mergeDomainConfigs defines whether multiple configurations referencing the same domain will be merged or rejected throwing an error.
 	// @return a new configuration.
 	// @throws RateLimitConfigError if the configuration could not be created.
-	Load(configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool) RateLimitConfig
+	Load(configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool, descriptorKeyConfig *DescriptorKeyConfig) RateLimitConfig
 }

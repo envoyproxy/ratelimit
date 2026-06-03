@@ -22,6 +22,7 @@ type FileProvider struct {
 	runtimeWatchRoot      bool
 	rootStore             gostats.Store
 	statsManager          stats.Manager
+	descriptorKeyConfig   *config.DescriptorKeyConfig
 }
 
 func (p *FileProvider) ConfigUpdateEvent() <-chan ConfigUpdateEvent {
@@ -64,7 +65,7 @@ func (p *FileProvider) sendEvent() {
 	}
 
 	rlSettings := settings.NewSettings()
-	newConfig := p.loader.Load(files, p.statsManager, rlSettings.MergeDomainConfigurations)
+	newConfig := p.loader.Load(files, p.statsManager, rlSettings.MergeDomainConfigurations, p.descriptorKeyConfig)
 
 	p.configUpdateEventChan <- &ConfigUpdateEventImpl{config: newConfig}
 }
@@ -111,6 +112,7 @@ func NewFileProvider(settings settings.Settings, statsManager stats.Manager, roo
 		runtimeWatchRoot:      settings.RuntimeWatchRoot,
 		rootStore:             rootStore,
 		statsManager:          statsManager,
+		descriptorKeyConfig:   loadDescriptorKeyConfigOrPanic(settings.DescriptorKeyConfigPath),
 	}
 	p.setupRuntime()
 	go p.watch()

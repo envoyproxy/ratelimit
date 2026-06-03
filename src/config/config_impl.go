@@ -66,9 +66,10 @@ type rateLimitDomain struct {
 }
 
 type rateLimitConfigImpl struct {
-	domains            map[string]*rateLimitDomain
-	statsManager       stats.Manager
-	mergeDomainConfigs bool
+	domains             map[string]*rateLimitDomain
+	statsManager        stats.Manager
+	mergeDomainConfigs  bool
+	descriptorKeyConfig *DescriptorKeyConfig
 }
 
 var validKeys = map[string]bool{
@@ -457,7 +458,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
-		rateLimitKey := descriptorKey(domain, descriptor)
+		rateLimitKey := descriptorKey(domain, descriptor, this.descriptorKeyConfig)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		// When limit override is provided by envoy config, we don't want to enable shadow_mode
 		rateLimit = NewRateLimit(
@@ -676,14 +677,14 @@ func (this *rateLimitConfigImpl) IsEmptyDomains() bool {
 	return len(this.domains) == 0
 }
 
-func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
+func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor, cfg *DescriptorKeyConfig) string {
 	rateLimitKey := ""
 	for _, entry := range descriptor.Entries {
 		if rateLimitKey != "" {
 			rateLimitKey += "."
 		}
 		rateLimitKey += entry.Key
-		if entry.Value != "" {
+		if entry.Value != "" && (cfg == nil || cfg.IncludeEntryValueForKey(domain, entry.Key)) {
 			rateLimitKey += "_" + entry.Value
 		}
 	}
@@ -722,8 +723,14 @@ func ConfigFileContentToYaml(fileName, content string) *YamlRoot {
 // @return a new config.
 func NewRateLimitConfigImpl(
 	configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool,
+	descriptorKeyConfig *DescriptorKeyConfig,
 ) RateLimitConfig {
-	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsManager, mergeDomainConfigs}
+	ret := &rateLimitConfigImpl{
+		domains:             map[string]*rateLimitDomain{},
+		statsManager:        statsManager,
+		mergeDomainConfigs:  mergeDomainConfigs,
+		descriptorKeyConfig: descriptorKeyConfig,
+	}
 	for _, config := range configs {
 		ret.loadConfig(config)
 	}
@@ -735,8 +742,9 @@ type rateLimitConfigLoaderImpl struct{}
 
 func (this *rateLimitConfigLoaderImpl) Load(
 	configs []RateLimitConfigToLoad, statsManager stats.Manager, mergeDomainConfigs bool,
+	descriptorKeyConfig *DescriptorKeyConfig,
 ) RateLimitConfig {
-	return NewRateLimitConfigImpl(configs, statsManager, mergeDomainConfigs)
+	return NewRateLimitConfigImpl(configs, statsManager, mergeDomainConfigs, descriptorKeyConfig)
 }
 
 // @return a new default config loader implementation.

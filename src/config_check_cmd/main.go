@@ -14,7 +14,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/config"
 )
 
-func loadConfigs(allConfigs []config.RateLimitConfigToLoad, mergeDomainConfigs bool) {
+func loadConfigs(allConfigs []config.RateLimitConfigToLoad, mergeDomainConfigs bool, descriptorKeyConfigPath string) {
 	defer func() {
 		err := recover()
 		if err != nil {
@@ -23,7 +23,11 @@ func loadConfigs(allConfigs []config.RateLimitConfigToLoad, mergeDomainConfigs b
 		}
 	}()
 	statsManager := stats.NewStatManager(gostats.NewStore(gostats.NewNullSink(), false), settings.NewSettings())
-	config.NewRateLimitConfigImpl(allConfigs, statsManager, mergeDomainConfigs)
+	descriptorKeyConfig, err := config.LoadDescriptorKeyConfig(descriptorKeyConfigPath)
+	if err != nil {
+		panic(err)
+	}
+	config.NewRateLimitConfigImpl(allConfigs, statsManager, mergeDomainConfigs, descriptorKeyConfig)
 }
 
 func main() {
@@ -31,6 +35,8 @@ func main() {
 		"config_dir", "", "path to directory containing rate limit configs")
 	mergeDomainConfigs := flag.Bool(
 		"merge_domain_configs", false, "whether to merge configurations, referencing the same domain")
+	descriptorKeyConfigPath := flag.String(
+		"descriptor_key_config", "", "path to descriptor_key.yaml (optional)")
 	flag.Parse()
 	fmt.Printf("checking rate limit configs...\n")
 	fmt.Printf("loading config directory: %s\n", *configDirectory)
@@ -54,6 +60,6 @@ func main() {
 		allConfigs = append(allConfigs, config.RateLimitConfigToLoad{Name: finalPath, ConfigYaml: configYaml})
 	}
 
-	loadConfigs(allConfigs, *mergeDomainConfigs)
+	loadConfigs(allConfigs, *mergeDomainConfigs, *descriptorKeyConfigPath)
 	fmt.Printf("all rate limit configs ok\n")
 }

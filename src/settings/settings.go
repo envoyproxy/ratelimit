@@ -97,11 +97,12 @@ type Settings struct {
 	PrometheusResponseTimeAsMilliseconds bool              `envconfig:"PROMETHEUS_RESPONSE_TIME_AS_MILLISECONDS" default:"false"`
 
 	// Settings for rate limit configuration
-	RuntimePath           string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`
-	RuntimeSubdirectory   string `envconfig:"RUNTIME_SUBDIRECTORY"`
-	RuntimeAppDirectory   string `envconfig:"RUNTIME_APPDIRECTORY" default:"config"`
-	RuntimeIgnoreDotFiles bool   `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
-	RuntimeWatchRoot      bool   `envconfig:"RUNTIME_WATCH_ROOT" default:"true"`
+	DescriptorKeyConfigPath string `envconfig:"DESCRIPTOR_KEY_CONFIG" default:""`
+	RuntimePath             string `envconfig:"RUNTIME_ROOT" default:"/srv/runtime_data/current"`
+	RuntimeSubdirectory     string `envconfig:"RUNTIME_SUBDIRECTORY"`
+	RuntimeAppDirectory     string `envconfig:"RUNTIME_APPDIRECTORY" default:"config"`
+	RuntimeIgnoreDotFiles   bool   `envconfig:"RUNTIME_IGNOREDOTFILES" default:"false"`
+	RuntimeWatchRoot        bool   `envconfig:"RUNTIME_WATCH_ROOT" default:"true"`
 
 	// Settings for all cache types
 	ExpirationJitterMaxSeconds         int64   `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
