@@ -29,6 +29,93 @@ import (
 
 var testSpanExporter = trace.GetTestSpanExporter()
 
+func TestNegativeHits(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+
+	client := mock_redis.NewMockClient(controller)
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
+
+	// Decrement from a counter at 5, requesting -3. Lua returns 2 (5-3=2).
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EVAL", limiter.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1)).SetArg(1, uint64(2)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"domain", [][][2]string{{{"key", "value"}}}, []uint64{3}, []bool{true})
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	result := cache.DoLimit(context.Background(), request, limits)
+	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
+	assert.Equal(uint64(8), uint64(result[0].LimitRemaining))
+	assert.Equal(limits[0].Limit, result[0].CurrentLimit)
+	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(3), limits[0].Stats.TotalNegativeHits.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+}
+
+func TestNegativeHitsFloorAtZero(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+
+	client := mock_redis.NewMockClient(controller)
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
+
+	// Counter at 2, requesting -5. Lua floors at 0 and returns 0.
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EVAL", limiter.DecrementScript, 1, "domain_key_value_1234", uint64(5), int64(1)).SetArg(1, uint64(0)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"domain", [][][2]string{{{"key", "value"}}}, []uint64{5}, []bool{true})
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	result := cache.DoLimit(context.Background(), request, limits)
+	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
+	assert.Equal(uint64(10), uint64(result[0].LimitRemaining))
+	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
+	assert.Equal(uint64(5), limits[0].Stats.TotalNegativeHits.Value())
+}
+
+func TestNegativeHitsSkipsOverLimitCheck(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+
+	client := mock_redis.NewMockClient(controller)
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	localCache := freecache.NewCache(100)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false)
+
+	// Set the key as over-limit in local cache.
+	localCache.Set([]byte("domain_key_value_1234"), []byte{}, 60)
+
+	// Even though the key is in the over-limit local cache, negative hits should still proceed.
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().PipeAppend(gomock.Any(), gomock.Any(), "EVAL", limiter.DecrementScript, 1, "domain_key_value_1234", uint64(2), int64(1)).SetArg(1, uint64(8)).DoAndReturn(pipeAppend)
+	client.EXPECT().PipeDo(gomock.Any()).Return(nil)
+
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"domain", [][][2]string{{{"key", "value"}}}, []uint64{2}, []bool{true})
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	result := cache.DoLimit(context.Background(), request, limits)
+	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
+	assert.Equal(uint64(2), uint64(result[0].LimitRemaining))
+	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
+	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+}
+
 func TestRedis(t *testing.T) {
 	t.Run("WithoutPerSecondRedis", testRedis(false))
 	t.Run("WithPerSecondRedis", testRedis(true))

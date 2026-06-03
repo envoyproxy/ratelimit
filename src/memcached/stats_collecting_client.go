@@ -13,6 +13,9 @@ type statsCollectingClient struct {
 	incrementSuccess stats.Counter
 	incrementMiss    stats.Counter
 	incrementError   stats.Counter
+	decrementSuccess stats.Counter
+	decrementMiss    stats.Counter
+	decrementError   stats.Counter
 	addSuccess       stats.Counter
 	addError         stats.Counter
 	addNotStored     stats.Counter
@@ -28,6 +31,9 @@ func CollectStats(c Client, scope stats.Scope) Client {
 		incrementSuccess: scope.NewCounterWithTags("increment", map[string]string{"code": "success"}),
 		incrementMiss:    scope.NewCounterWithTags("increment", map[string]string{"code": "miss"}),
 		incrementError:   scope.NewCounterWithTags("increment", map[string]string{"code": "error"}),
+		decrementSuccess: scope.NewCounterWithTags("decrement", map[string]string{"code": "success"}),
+		decrementMiss:    scope.NewCounterWithTags("decrement", map[string]string{"code": "miss"}),
+		decrementError:   scope.NewCounterWithTags("decrement", map[string]string{"code": "error"}),
 		addSuccess:       scope.NewCounterWithTags("add", map[string]string{"code": "success"}),
 		addError:         scope.NewCounterWithTags("add", map[string]string{"code": "error"}),
 		addNotStored:     scope.NewCounterWithTags("add", map[string]string{"code": "not_stored"}),
@@ -60,6 +66,19 @@ func (scc statsCollectingClient) Increment(key string, delta uint64) (newValue u
 		scc.incrementSuccess.Inc()
 	default:
 		scc.incrementError.Inc()
+	}
+	return
+}
+
+func (scc statsCollectingClient) Decrement(key string, delta uint64) (newValue uint64, err error) {
+	newValue, err = scc.c.Decrement(key, delta)
+	switch err {
+	case memcache.ErrCacheMiss:
+		scc.decrementMiss.Inc()
+	case nil:
+		scc.decrementSuccess.Inc()
+	default:
+		scc.decrementError.Inc()
 	}
 	return
 }

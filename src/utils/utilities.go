@@ -72,19 +72,25 @@ func SanitizeStatName(s string) string {
 	})
 }
 
-func GetHitsAddends(request *pb.RateLimitRequest) []uint64 {
-	hitsAddends := make([]uint64, len(request.Descriptors))
+type HitsAddend struct {
+	Value      uint64
+	IsNegative bool
+}
+
+func GetHitsAddends(request *pb.RateLimitRequest) []HitsAddend {
+	hitsAddends := make([]HitsAddend, len(request.Descriptors))
 
 	for i, descriptor := range request.Descriptors {
 		if descriptor.HitsAddend != nil {
 			// If the per descriptor hits_addend is set, use that. It allows to be zero. The zero value is
 			// means check only by no increment the hits.
-			hitsAddends[i] = descriptor.HitsAddend.Value
+			hitsAddends[i].Value = descriptor.HitsAddend.Value
 		} else {
 			// If the per descriptor hits_addend is not set, use the request's hits_addend. If the value is
 			// zero (default value if not specified by the caller), use 1 for backward compatibility.
-			hitsAddends[i] = uint64(max(1, uint64(request.HitsAddend)))
+			hitsAddends[i].Value = uint64(max(1, uint64(request.HitsAddend)))
 		}
+		hitsAddends[i].IsNegative = descriptor.GetIsNegativeHits()
 	}
 	return hitsAddends
 }
