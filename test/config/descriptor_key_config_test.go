@@ -60,6 +60,12 @@ default:
 	assert.False(t, cfg.IncludeEntryValueForKey("unknown-domain", "bar"))
 }
 
+func TestDescriptorKeyConfigNilIncludesAllValues(t *testing.T) {
+	var cfg *config.DescriptorKeyConfig
+	cfg = nil
+	assert.True(t, cfg.IncludeEntryValueForKey("any-domain", "any-key"))
+}
+
 func TestDescriptorKeyConfigMultipleDomains(t *testing.T) {
 	assert := assert.New(t)
 	yaml := []byte(`

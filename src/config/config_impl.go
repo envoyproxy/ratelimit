@@ -684,7 +684,7 @@ func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor, cfg
 			rateLimitKey += "."
 		}
 		rateLimitKey += entry.Key
-		if entry.Value != "" && (cfg == nil || cfg.IncludeEntryValueForKey(domain, entry.Key)) {
+		if entry.Value != "" && cfg.IncludeEntryValueForKey(domain, entry.Key) {
 			rateLimitKey += "_" + entry.Value
 		}
 	}
