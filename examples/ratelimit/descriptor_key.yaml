@@ -1,5 +1,6 @@
-# Controls which descriptor entry keys include their runtime value in rate limit key
-# for Envoy limit overrides (descriptorKey).
+# Controls which descriptor entry keys include their runtime value in rate limit stats key
+# for Envoy limit overrides (descriptorKey). This config file only affects metrics key, the
+# cache key generation is unaffected.
 #
 # When DESCRIPTOR_KEY_CONFIG points at this file:
 #   - Listed entries append "_<value>" to the rate limit key segment.

@@ -8,7 +8,7 @@ import (
 )
 
 // DescriptorKeyConfig controls which descriptor entries include their runtime
-// value in rate limit keys built by descriptorKey for Envoy limit overrides.
+// value in rate limit stats keys built by descriptorKey for Envoy limit overrides.
 type DescriptorKeyConfig struct {
 	defaultKeys map[string]struct{}
 	domainKeys  map[string]map[string]struct{}
