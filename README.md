@@ -22,6 +22,7 @@
     - [ShadowMode](#shadowmode)
     - [Including detailed metrics for unspecified values](#including-detailed-metrics-for-unspecified-values)
     - [Including descriptor values in metrics](#including-descriptor-values-in-metrics)
+    - [Limit override descriptor key config](#limit-override-descriptor-key-config)
     - [Sharing thresholds for wildcard matches](#sharing-thresholds-for-wildcard-matches)
     - [Examples](#examples)
       - [Example 1](#example-1)
@@ -352,6 +353,46 @@ Setting `value_to_metric: true` (default: `false`) for a descriptor will include
 **Note:** If a value is explicitly specified in a descriptor (e.g., `value: "GET"`), that value is always included in the metric key regardless of the `value_to_metric` setting. The `value_to_metric` flag only affects descriptors where the value is not explicitly defined in the configuration.
 
 When combined with wildcard matching, the full runtime value is included in the metric key, not just the wildcard prefix. This feature works independently of `detailed_metric` - when `detailed_metric` is set, it takes precedence and `value_to_metric` is ignored.
+
+### Limit override descriptor key config
+
+When Envoy sends a [rate limit override](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/rate_limit_filter#config-http-filters-rate-limit-override) on a descriptor (`limit` set in the request), the service builds the stats key from the descriptor entries in the request. By default, every non-empty entry value is appended to the key (legacy behavior), which can produce high metric cardinality when many descriptor entries are present.
+
+`value_to_metric` and `detailed_metric` apply to limits matched from the rate limit **configuration**. They do not control stats keys for Envoy **overrides**.
+
+To selectively include entry values in override stats keys, set `DESCRIPTOR_KEY_CONFIG` to the path of a YAML file (see [`examples/ratelimit/descriptor_key.yaml`](examples/ratelimit/descriptor_key.yaml)). The file is loaded once when the configuration provider starts (file or xDS). Changing the file requires a process restart.
+
+```yaml
+default:
+  include_entry_value_for_keys: []
+
+domains:
+  example:
+    include_entry_value_for_keys:
+      - key1
+      - key2
+```
+
+- **`default`**: used for any domain not listed under `domains`.
+- **`domains`**: per-domain allowlists of entry **keys** whose runtime **values** are appended as `_<value>` in the stats key.
+- Unlisted entry keys contribute only the key name (no value suffix).
+
+If `DESCRIPTOR_KEY_CONFIG` is unset, all non-empty entry values are included (backward compatible).
+
+**Example:** for domain `example`, descriptor entries `key1=value1`, `key2=value2`, `key3=value3`, and the YAML above:
+
+- Default (no config): `example.key1_value1.key2_value2.key3_value3`
+- With config: `example.key1_value1.key2_value2.key3`
+
+This affects **stats keys only** for override limits. Redis cache keys are unchanged. Limits matched from the rate limit configuration file continue to use the existing stats key rules (`detailed_metric`, `value_to_metric`, etc.).
+
+The configuration checker accepts the same file:
+
+```bash
+ratelimit_config_check \
+  -config_dir=examples/ratelimit/config \
+  -descriptor_key_config=examples/ratelimit/descriptor_key.yaml
+```
 
 ### Sharing thresholds for wildcard matches
 
@@ -1045,6 +1086,7 @@ ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 ## Statistics options
 
 1. `EXTRA_TAGS`: set to `"<k1:v1>,<k2:v2>"` to tag all emitted stats with the provided tags. You might want to tag build commit or release version, for example.
+2. `DESCRIPTOR_KEY_CONFIG`: path to a YAML file that controls which descriptor entry values are included in stats keys for Envoy limit overrides. See [Limit override descriptor key config](#limit-override-descriptor-key-config). Loaded at startup; restart required to pick up changes.
 
 ## DogStatsD
 

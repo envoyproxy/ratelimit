@@ -1,0 +1,17 @@
+# Controls which descriptor entry keys include their runtime value in rate limit key
+# for Envoy limit overrides (descriptorKey).
+#
+# When DESCRIPTOR_KEY_CONFIG points at this file:
+#   - Listed entries append "_<value>" to the rate limit key segment.
+#   - Unlisted entries contribute only the entry name, reducing cardinality.
+#
+# Omit DESCRIPTOR_KEY_CONFIG to keep legacy behavior (all non-empty values included).
+
+default:
+  include_entry_value_for_keys: []
+
+domains:
+  example:
+    include_entry_value_for_keys:
+      - key1
+      - key2
