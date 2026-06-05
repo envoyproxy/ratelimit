@@ -1,6 +1,6 @@
 module github.com/envoyproxy/ratelimit/examples/xds-sotw-config-server
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/envoyproxy/go-control-plane v0.12.1-0.20240123181358-841e293a220b
