@@ -363,7 +363,7 @@ func mergeMetadata(dest *structpb.Struct, src *structpb.Struct) {
 					continue
 				}
 			}
-			// TODO(yanavlasov): add option to overwrite or add if typoe is a list
+			// TODO(yanavlasov): add option to overwrite or add if type is a list
 		} else {
 			// Otherwise overwrite or add
 			dest.GetFields()[k] = v
@@ -403,7 +403,8 @@ func (this *service) ShouldRateLimit(
 ) (finalResponse *pb.RateLimitResponse, finalError error) {
 	logger.Debugf("ShouldRateLimit: %+v", request)
 	// Generate trace
-	_, span := tracer.Start(ctx, "ShouldRateLimit Execution",
+	_, span := tracer.Start(
+		ctx, "ShouldRateLimit Execution",
 		trace.WithAttributes(
 			attribute.String("domain", request.Domain),
 			attribute.String("request string", request.String()),

@@ -97,7 +97,8 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	}
 
 	// Generate trace
-	_, span := tracer.Start(ctx, "Memcached Fetch Execution",
+	_, span := tracer.Start(
+		ctx, "Memcached Fetch Execution",
 		trace.WithAttributes(
 			attribute.Int("keysToGet length", len(keysToGet)),
 		),
@@ -202,7 +203,7 @@ func refreshServersPeriodically(serverList *memcache.ServerList, srv string, d t
 		case <-t.C:
 			err := refreshServers(serverList, srv, resolver)
 			if err != nil {
-				logger.Warn("failed to refresh memcahce hosts")
+				logger.Warn("failed to refresh memcache hosts")
 			} else {
 				logger.Debug("refreshed memcache hosts")
 			}
@@ -246,7 +247,7 @@ func newMemcachedFromSrv(srv string, d time.Duration, resolver srv.SrvResolver) 
 
 func newMemcacheFromSettings(s settings.Settings) Client {
 	if s.MemcacheSrv != "" && len(s.MemcacheHostPort) > 0 {
-		panic(MemcacheError("Both MEMCADHE_HOST_PORT and MEMCACHE_SRV are set"))
+		panic(MemcacheError("Both MEMCACHE_HOST_PORT and MEMCACHE_SRV are set"))
 	}
 	var client *memcache.Client
 	if s.MemcacheSrv != "" {
