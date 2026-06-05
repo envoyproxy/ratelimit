@@ -51,6 +51,10 @@ type service struct {
 	customHeaderRemainingHeader    string
 	customHeaderResetHeader        string
 	customHeaderClock              utils.TimeSource
+	requestHeadersEnabled          bool
+	requestHeaderLimitHeader       string
+	requestHeaderRemainingHeader   string
+	requestHeaderResetHeader       string
 	globalShadowMode               bool
 	globalQuotaMode                bool
 	responseDynamicMetadataEnabled bool
@@ -99,6 +103,13 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 		this.customHeaderRemainingHeader = rlSettings.HeaderRatelimitRemaining
 
 		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
+	}
+
+	if rlSettings.RateLimitRequestHeadersEnabled {
+		this.requestHeadersEnabled = true
+		this.requestHeaderLimitHeader = rlSettings.HeaderRequestRatelimitLimit
+		this.requestHeaderRemainingHeader = rlSettings.HeaderRequestRatelimitRemaining
+		this.requestHeaderResetHeader = rlSettings.HeaderRequestRatelimitReset
 	}
 	this.configLock.Unlock()
 	logger.Info("Successfully loaded new configuration")
