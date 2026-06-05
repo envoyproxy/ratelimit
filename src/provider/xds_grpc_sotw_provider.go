@@ -38,6 +38,7 @@ type XdsGrpcSotwProvider struct {
 	adsClient             sotw.ADSClient
 	// connectionRetryChannel is the channel which trigger true for connection issues
 	connectionRetryChannel chan bool
+	descriptorKeyConfig    *config.DescriptorKeyConfig
 }
 
 // NewXdsGrpcSotwProvider initializes xDS listener and returns the xDS provider.
@@ -51,6 +52,7 @@ func NewXdsGrpcSotwProvider(settings settings.Settings, statsManager stats.Manag
 		connectionRetryChannel: make(chan bool),
 		loader:                 config.NewRateLimitConfigLoaderImpl(),
 		adsClient:              sotw.NewADSClient(ctx, getClientNode(settings), resource.RateLimitConfigType),
+		descriptorKeyConfig:    loadDescriptorKeyConfigOrPanic(settings.DescriptorKeyConfigPath),
 	}
 	go p.initXdsClient()
 	return p
@@ -180,7 +182,7 @@ func (p *XdsGrpcSotwProvider) sendConfigs(resources []*anypb.Any) {
 		conf = append(conf, config.RateLimitConfigToLoad{Name: confPb.Name, ConfigYaml: configYaml})
 	}
 	rlSettings := settings.NewSettings()
-	rlsConf := p.loader.Load(conf, p.statsManager, rlSettings.MergeDomainConfigurations)
+	rlsConf := p.loader.Load(conf, p.statsManager, rlSettings.MergeDomainConfigurations, p.descriptorKeyConfig)
 	p.configUpdateEventChan <- &ConfigUpdateEventImpl{config: rlsConf}
 	p.adsClient.Ack()
 }

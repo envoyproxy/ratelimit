@@ -30,7 +30,7 @@ func loadFile(path string) []config.RateLimitConfigToLoad {
 func TestBasicConfig(t *testing.T) {
 	assert := assert.New(t)
 	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), mockstats.NewMockStatManager(stats), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), mockstats.NewMockStatManager(stats), false, nil)
 	rlConfig.Dump()
 	assert.Equal(rlConfig.IsEmptyDomains(), false)
 	assert.EqualValues(0, stats.NewCounter("foo_domain.domain_not_found").Value())
@@ -231,7 +231,7 @@ func TestDomainMerge(t *testing.T) {
 	files := loadFile("merge_domain_key1.yaml")
 	files = append(files, loadFile("merge_domain_key2.yaml")...)
 
-	rlConfig := config.NewRateLimitConfigImpl(files, mockstats.NewMockStatManager(stats), true)
+	rlConfig := config.NewRateLimitConfigImpl(files, mockstats.NewMockStatManager(stats), true, nil)
 	rlConfig.Dump()
 	assert.Nil(rlConfig.GetLimit(context.TODO(), "foo_domain", &pb_struct.RateLimitDescriptor{}))
 	assert.Nil(rlConfig.GetLimit(context.TODO(), "test-domain", &pb_struct.RateLimitDescriptor{}))
@@ -256,7 +256,7 @@ func TestDomainMerge(t *testing.T) {
 func TestConfigLimitOverride(t *testing.T) {
 	assert := assert.New(t)
 	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), mockstats.NewMockStatManager(stats), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), mockstats.NewMockStatManager(stats), false, nil)
 	rlConfig.Dump()
 	// No matching domain
 	assert.Nil(rlConfig.GetLimit(context.TODO(), "foo_domain", &pb_struct.RateLimitDescriptor{
@@ -349,7 +349,7 @@ func TestEmptyDomain(t *testing.T) {
 		t,
 		func() {
 			config.NewRateLimitConfigImpl(
-				loadFile("empty_domain.yaml"), mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				loadFile("empty_domain.yaml"), mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"empty_domain.yaml: config file cannot have empty domain")
 }
@@ -360,7 +360,7 @@ func TestDuplicateDomain(t *testing.T) {
 		func() {
 			files := loadFile("basic_config.yaml")
 			files = append(files, loadFile("duplicate_domain.yaml")...)
-			config.NewRateLimitConfigImpl(files, mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+			config.NewRateLimitConfigImpl(files, mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"duplicate_domain.yaml: duplicate domain 'test-domain' in config file")
 }
@@ -371,7 +371,7 @@ func TestEmptyKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("empty_key.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"empty_key.yaml: descriptor has empty key")
 }
@@ -382,7 +382,7 @@ func TestDuplicateKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("duplicate_key.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"duplicate_key.yaml: duplicate descriptor composite key 'test-domain.key1_value1'")
 }
@@ -395,7 +395,7 @@ func TestDuplicateKeyDomainMerge(t *testing.T) {
 			files = append(files, loadFile("merge_domain_key1.yaml")...)
 			config.NewRateLimitConfigImpl(
 				files,
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), true)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), true, nil)
 		},
 		"merge_domain_key1.yaml: duplicate descriptor composite key 'test-domain.key1_value1'")
 }
@@ -406,7 +406,7 @@ func TestBadLimitUnit(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("bad_limit_unit.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"bad_limit_unit.yaml: invalid rate limit unit 'foo'")
 }
@@ -417,7 +417,7 @@ func TestReplacesSelf(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("replaces_self.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"replaces_self.yaml: replaces should not contain name of same descriptor")
 }
@@ -428,7 +428,7 @@ func TestReplacesEmpty(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("replaces_empty.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"replaces_empty.yaml: should not have an empty replaces entry")
 }
@@ -439,7 +439,7 @@ func TestBadYaml(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("bad_yaml.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"bad_yaml.yaml: error loading config file: yaml: line 2: found unexpected end of stream")
 }
@@ -450,7 +450,7 @@ func TestMisspelledKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("misspelled_key.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"misspelled_key.yaml: config error, unknown key 'ratelimit'")
 
@@ -459,7 +459,7 @@ func TestMisspelledKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("misspelled_key2.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"misspelled_key2.yaml: config error, unknown key 'requestsperunit'")
 }
@@ -470,7 +470,7 @@ func TestNonStringKey(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("non_string_key.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"non_string_key.yaml: config error, key is not of type string: 0.25")
 }
@@ -481,7 +481,7 @@ func TestNonMapList(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("non_map_list.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"non_map_list.yaml: config error, yaml file contains list of type other than map: a")
 }
@@ -492,7 +492,7 @@ func TestUnlimitedWithRateLimitUnit(t *testing.T) {
 		func() {
 			config.NewRateLimitConfigImpl(
 				loadFile("unlimited_with_unit.yaml"),
-				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false)
+				mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false)), false, nil)
 		},
 		"unlimited_with_unit.yaml: should not specify rate limit unit when unlimited")
 }
@@ -501,7 +501,7 @@ func TestShadowModeConfig(t *testing.T) {
 	assert := assert.New(t)
 	stats := stats.NewStore(stats.NewNullSink(), false)
 
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("shadowmode_config.yaml"), mockstats.NewMockStatManager(stats), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("shadowmode_config.yaml"), mockstats.NewMockStatManager(stats), false, nil)
 	rlConfig.Dump()
 
 	rl := rlConfig.GetLimit(
@@ -576,7 +576,7 @@ func TestShadowModeConfig(t *testing.T) {
 func TestWildcardConfig(t *testing.T) {
 	assert := assert.New(t)
 	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("wildcard.yaml"), mockstats.NewMockStatManager(stats), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("wildcard.yaml"), mockstats.NewMockStatManager(stats), false, nil)
 	rlConfig.Dump()
 
 	// Baseline to show wildcard works like no value
@@ -1011,7 +1011,7 @@ func TestDetailedMetric(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rlConfig := config.NewRateLimitConfigImpl(tt.config, mockstats.NewMockStatManager(stats), true)
+			rlConfig := config.NewRateLimitConfigImpl(tt.config, mockstats.NewMockStatManager(stats), true, nil)
 			rlConfig.Dump()
 
 			rl := rlConfig.GetLimit(
@@ -1058,7 +1058,7 @@ func TestValueToMetric_UsesRuntimeValuesInStats(t *testing.T) {
 		},
 	}
 
-	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 
 	rl := rlConfig.GetLimit(
 		context.TODO(), "domain",
@@ -1112,7 +1112,7 @@ func TestValueToMetric_DefaultKeyIncludesValueAtThatLevel(t *testing.T) {
 		},
 	}
 
-	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 	rl := rlConfig.GetLimit(
 		context.TODO(), "d",
 		&pb_struct.RateLimitDescriptor{Entries: []*pb_struct.RateLimitDescriptor_Entry{
@@ -1154,7 +1154,7 @@ func TestValueToMetric_MidLevelOnly(t *testing.T) {
 		},
 	}
 
-	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 	rl := rlConfig.GetLimit(
 		context.TODO(), "d",
 		&pb_struct.RateLimitDescriptor{Entries: []*pb_struct.RateLimitDescriptor_Entry{
@@ -1192,7 +1192,7 @@ func TestValueToMetric_NoFlag_Unchanged(t *testing.T) {
 		},
 	}
 
-	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 	rl := rlConfig.GetLimit(
 		context.TODO(), "d",
 		&pb_struct.RateLimitDescriptor{Entries: []*pb_struct.RateLimitDescriptor_Entry{
@@ -1240,7 +1240,7 @@ func TestValueToMetric_DoesNotOverrideDetailedMetric(t *testing.T) {
 		},
 	}
 
-	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 
 	rl := rlConfig.GetLimit(
 		context.TODO(), "domain",
@@ -1311,7 +1311,7 @@ func TestValueToMetric_WithConfiguredValues(t *testing.T) {
 		},
 	}
 
-	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 
 	// Test GET path - should include runtime value for route, but use configured value for http_method
 	rl := rlConfig.GetLimit(
@@ -1386,7 +1386,7 @@ func TestValueToMetric_WithWildcard(t *testing.T) {
 		},
 	}
 
-	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 
 	// Test wildcard matching with value_to_metric - should include full runtime value
 	rl := rlConfig.GetLimit(
@@ -1459,7 +1459,7 @@ func TestValueToMetric_WithEmptyValue(t *testing.T) {
 		},
 	}
 
-	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 
 	// Test with empty value for route - should not include underscore and empty value
 	rl := rlConfig.GetLimit(
@@ -1557,7 +1557,7 @@ func TestValueToMetric_FullKeyMatchesStatsKey(t *testing.T) {
 		},
 	}
 
-	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+	rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 
 	// Test case 1: value_to_metric enabled - FullKey should match Stats.Key
 	rl := rlConfig.GetLimit(
@@ -1605,7 +1605,7 @@ func TestValueToMetric_FullKeyMatchesStatsKey(t *testing.T) {
 		},
 	}
 
-	rlConfig2 := config.NewRateLimitConfigImpl(cfgNoValueToMetric, mockstats.NewMockStatManager(store), false)
+	rlConfig2 := config.NewRateLimitConfigImpl(cfgNoValueToMetric, mockstats.NewMockStatManager(store), false, nil)
 	rl2 := rlConfig2.GetLimit(
 		context.TODO(), "test-domain-2",
 		&pb_struct.RateLimitDescriptor{
@@ -1649,7 +1649,7 @@ func TestValueToMetric_FullKeyMatchesStatsKey(t *testing.T) {
 		},
 	}
 
-	rlConfig3 := config.NewRateLimitConfigImpl(cfgDetailedMetric, mockstats.NewMockStatManager(store), false)
+	rlConfig3 := config.NewRateLimitConfigImpl(cfgDetailedMetric, mockstats.NewMockStatManager(store), false, nil)
 	rl3 := rlConfig3.GetLimit(
 		context.TODO(), "test-domain-3",
 		&pb_struct.RateLimitDescriptor{
@@ -1669,7 +1669,7 @@ func TestValueToMetric_FullKeyMatchesStatsKey(t *testing.T) {
 func TestShareThreshold(t *testing.T) {
 	asrt := assert.New(t)
 	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("share_threshold.yaml"), mockstats.NewMockStatManager(stats), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("share_threshold.yaml"), mockstats.NewMockStatManager(stats), false, nil)
 
 	// Test Case 1: Basic share_threshold functionality
 	t.Run("Basic share_threshold", func(t *testing.T) {
@@ -2008,7 +2008,7 @@ func TestWildcardStatsBehavior(t *testing.T) {
 			},
 		}
 
-		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
 			&pb_struct.RateLimitDescriptor{
 				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo1"}},
@@ -2039,7 +2039,7 @@ func TestWildcardStatsBehavior(t *testing.T) {
 			},
 		}
 
-		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
 			&pb_struct.RateLimitDescriptor{
 				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo1"}},
@@ -2069,7 +2069,7 @@ func TestWildcardStatsBehavior(t *testing.T) {
 			},
 		}
 
-		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
 			&pb_struct.RateLimitDescriptor{
 				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo1"}},
@@ -2101,7 +2101,7 @@ func TestWildcardStatsBehavior(t *testing.T) {
 			},
 		}
 
-		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
 			&pb_struct.RateLimitDescriptor{
 				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo1"}},
@@ -2139,7 +2139,7 @@ func TestWildcardStatsBehavior(t *testing.T) {
 			},
 		}
 
-		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 		rl := rlConfig.GetLimit(
 			context.TODO(), "test-domain",
 			&pb_struct.RateLimitDescriptor{
@@ -2170,7 +2170,7 @@ func TestWildcardStatsBehavior(t *testing.T) {
 				},
 			},
 		}}
-		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 		rl1 := rlConfig.GetLimit(context.TODO(), "test-domain",
 			&pb_struct.RateLimitDescriptor{
 				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo123bar456"}},
@@ -2196,7 +2196,7 @@ func TestWildcardStatsBehavior(t *testing.T) {
 				},
 			},
 		}}
-		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false)
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManager(store), false, nil)
 		rl := rlConfig.GetLimit(context.TODO(), "test-domain",
 			&pb_struct.RateLimitDescriptor{
 				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "wild", Value: "foo123bar456"}},
@@ -2209,7 +2209,7 @@ func TestWildcardStatsBehavior(t *testing.T) {
 func TestMetadata(t *testing.T) {
 	assert := assert.New(t)
 	stats := stats.NewStore(stats.NewNullSink(), false)
-	rlConfig := config.NewRateLimitConfigImpl(loadFile("metadata.yaml"), mockstats.NewMockStatManager(stats), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("metadata.yaml"), mockstats.NewMockStatManager(stats), false, nil)
 	rlConfig.Dump()
 	assert.Equal(rlConfig.IsEmptyDomains(), false)
 	assert.Nil(rlConfig.GetLimit(context.TODO(), "test-domain", &pb_struct.RateLimitDescriptor{}))
