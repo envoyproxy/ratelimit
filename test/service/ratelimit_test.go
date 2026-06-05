@@ -30,6 +30,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/redis"
 	server "github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
+	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_config "github.com/envoyproxy/ratelimit/test/mocks/config"
 	mock_limiter "github.com/envoyproxy/ratelimit/test/mocks/limiter"
@@ -346,6 +347,14 @@ func TestMixedRuleShadowMode(test *testing.T) {
 	t.assert.Nil(err)
 
 	t.assert.EqualValues(0, t.statStore.NewCounter("global_shadow_mode").Value())
+}
+
+func TestRequestHeadersSettingsDefaults(test *testing.T) {
+	s := settings.NewSettings()
+	assert.False(test, s.RateLimitRequestHeadersEnabled)
+	assert.Equal(test, "RateLimit-Limit", s.HeaderRequestRatelimitLimit)
+	assert.Equal(test, "RateLimit-Remaining", s.HeaderRequestRatelimitRemaining)
+	assert.Equal(test, "RateLimit-Reset", s.HeaderRequestRatelimitReset)
 }
 
 func TestServiceWithCustomRatelimitHeaders(test *testing.T) {

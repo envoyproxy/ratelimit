@@ -120,6 +120,15 @@ type Settings struct {
 	// value: remaining seconds
 	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:"RateLimit-Reset"`
 
+	// Settings for optional returning of custom request headers
+	RateLimitRequestHeadersEnabled bool `envconfig:"LIMIT_REQUEST_HEADERS_ENABLED" default:"false"`
+	// value: the current limit
+	HeaderRequestRatelimitLimit string `envconfig:"LIMIT_REQUEST_LIMIT_HEADER" default:"RateLimit-Limit"`
+	// value: remaining count
+	HeaderRequestRatelimitRemaining string `envconfig:"LIMIT_REQUEST_REMAINING_HEADER" default:"RateLimit-Remaining"`
+	// value: remaining seconds
+	HeaderRequestRatelimitReset string `envconfig:"LIMIT_REQUEST_RESET_HEADER" default:"RateLimit-Reset"`
+
 	// Health-check settings
 	HealthyWithAtLeastOneConfigLoaded bool `envconfig:"HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED" default:"false"`
 
