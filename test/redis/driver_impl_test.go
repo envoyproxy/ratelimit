@@ -178,7 +178,7 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 			pipeline = client.PipeAppend(pipeline, nil, "SET", "foo", "bar")
 			pipeline = client.PipeAppend(pipeline, &res, "GET", "foo")
 
-			assert.Nil(t, client.PipeDo(pipeline))
+			assert.Nil(t, client.PipeDo(context.Background(), pipeline))
 			assert.Equal(t, "bar", res)
 		})
 
@@ -190,10 +190,10 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 			var res uint32
 			hits := uint32(1)
 
-			assert.Nil(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
+			assert.Nil(t, client.PipeDo(context.Background(), client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
 			assert.Equal(t, hits, res)
 
-			assert.Nil(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
+			assert.Nil(t, client.PipeDo(context.Background(), client.PipeAppend(redis.Pipeline{}, &res, "INCRBY", "a", hits)))
 			assert.Equal(t, uint32(2), res)
 		})
 
@@ -201,7 +201,7 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 			redisSrv := mustNewRedisServer()
 			client := mkRedisClient(redisSrv.Addr())
 
-			assert.Nil(t, nil, client.PipeDo(client.PipeAppend(redis.Pipeline{}, nil, "SET", "foo", "bar")))
+			assert.Nil(t, nil, client.PipeDo(context.Background(), client.PipeAppend(redis.Pipeline{}, nil, "SET", "foo", "bar")))
 
 			redisSrv.Close()
 
@@ -216,7 +216,7 @@ func testPipeDo(t *testing.T, pipelineWindow time.Duration, pipelineLimit int) f
 				assert.True(t, hasConnectionError, "expected connection error, got: %s", errMsg)
 			}
 
-			expectErrContainEOF(t, client.PipeDo(client.PipeAppend(redis.Pipeline{}, nil, "GET", "foo")))
+			expectErrContainEOF(t, client.PipeDo(context.Background(), client.PipeAppend(redis.Pipeline{}, nil, "GET", "foo")))
 		})
 	}
 }

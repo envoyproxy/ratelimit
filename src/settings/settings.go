@@ -152,9 +152,9 @@ type Settings struct {
 	RedisPipelineLimit int `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
 	// RedisClusterPipelineParallelism controls how many per-key pipeline groups
 	// can be executed concurrently in Redis Cluster mode.
-	//   - 0: unbounded parallelism
+	//   - 0: auto, bounded to REDIS_POOL_SIZE
 	//   - 1: serial legacy behavior (default)
-	//   - >1: bounded parallelism
+	//   - >1: bounded parallelism, capped to REDIS_POOL_SIZE
 	RedisClusterPipelineParallelism int    `envconfig:"REDIS_CLUSTER_PIPELINE_PARALLELISM" default:"1"`
 	RedisPerSecond                  bool   `envconfig:"REDIS_PERSECOND" default:"false"`
 	RedisPerSecondSocketType        string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`

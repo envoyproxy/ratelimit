@@ -119,7 +119,7 @@ func TestRedisClusterPipelineParallelism_Configured(t *testing.T) {
 	assert.Equal(t, 4, settings.RedisPerSecondClusterPipelineParallelism)
 }
 
-func TestRedisClusterPipelineParallelism_Unbounded(t *testing.T) {
+func TestRedisClusterPipelineParallelism_Auto(t *testing.T) {
 	os.Setenv("REDIS_CLUSTER_PIPELINE_PARALLELISM", "0")
 	defer os.Unsetenv("REDIS_CLUSTER_PIPELINE_PARALLELISM")
 

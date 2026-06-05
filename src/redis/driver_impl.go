@@ -82,6 +82,27 @@ func checkError(err error) {
 	}
 }
 
+func effectiveClusterPipelineParallelism(configuredParallelism, poolSize int) int {
+	if configuredParallelism < 0 {
+		panic(RedisError("redis cluster pipeline parallelism must be >= 0"))
+	}
+
+	if configuredParallelism == 1 {
+		return 1
+	}
+
+	poolCeiling := poolSize
+	if poolCeiling < 1 {
+		poolCeiling = 1
+	}
+
+	if configuredParallelism == 0 || configuredParallelism > poolCeiling {
+		return poolCeiling
+	}
+
+	return configuredParallelism
+}
+
 // createDialer creates a radix.Dialer with timeout, TLS, and auth configuration
 // targetName is used for logging to identify the connection target (e.g., URL, "sentinel(url)")
 func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, auth string, targetName string) radix.Dialer {
@@ -169,16 +190,19 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		poolConfig.Dialer.WriteFlushInterval = pipelineWindow
 		logger.Debugf("Cluster mode: setting WriteFlushInterval to %v", pipelineWindow)
 	}
+
+	effectivePipelineParallelism := clusterPipelineParallelism
 	if isCluster {
+		effectivePipelineParallelism = effectiveClusterPipelineParallelism(clusterPipelineParallelism, poolSize)
 		switch {
-		case clusterPipelineParallelism < 0:
-			panic(RedisError("REDIS_CLUSTER_PIPELINE_PARALLELISM must be >= 0"))
 		case clusterPipelineParallelism == 0:
-			logger.Warnf("Redis cluster pipeline parallelism: unbounded")
-		case clusterPipelineParallelism == 1:
+			logger.Warnf("Redis cluster pipeline parallelism: auto bounded to Redis pool size (%d concurrent groups)", effectivePipelineParallelism)
+		case clusterPipelineParallelism != effectivePipelineParallelism:
+			logger.Warnf("Redis cluster pipeline parallelism: configured value %d exceeds Redis pool size %d; bounded to %d concurrent groups", clusterPipelineParallelism, poolSize, effectivePipelineParallelism)
+		case effectivePipelineParallelism == 1:
 			logger.Warnf("Redis cluster pipeline parallelism: disabled (serial legacy behavior)")
 		default:
-			logger.Warnf("Redis cluster pipeline parallelism: bounded to %d concurrent groups", clusterPipelineParallelism)
+			logger.Warnf("Redis cluster pipeline parallelism: bounded to %d concurrent groups", effectivePipelineParallelism)
 		}
 	}
 
@@ -307,7 +331,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		client:                     client,
 		stats:                      stats,
 		isCluster:                  isCluster,
-		clusterPipelineParallelism: clusterPipelineParallelism,
+		clusterPipelineParallelism: effectivePipelineParallelism,
 	}
 }
 
@@ -339,8 +363,7 @@ func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd, key str
 	})
 }
 
-func (c *clientImpl) PipeDo(pipeline Pipeline) error {
-	ctx := context.Background()
+func (c *clientImpl) PipeDo(ctx context.Context, pipeline Pipeline) error {
 	if c.isCluster {
 		// Cluster mode: group commands by key and execute each group as a pipeline.
 		// This ensures INCRBY + EXPIRE for the same key are pipelined together (same slot),
@@ -364,8 +387,8 @@ func (c *clientImpl) PipeDo(pipeline Pipeline) error {
 //     the pre-parallelization behavior.
 //  3. General path: group actions by key (same-key commands like INCRBY +
 //     EXPIRE are still pipelined together) and execute groups concurrently
-//     via errgroup. clusterPipelineParallelism == 0 is unbounded; values >1
-//     bound the number of concurrent groups.
+//     via errgroup with clusterPipelineParallelism as the max concurrent group
+//     count.
 func (c *clientImpl) executeGroupedPipeline(ctx context.Context, pipeline Pipeline) error {
 	// Tier 1: single action — skip grouping, skip map alloc.
 	if len(pipeline) == 1 {

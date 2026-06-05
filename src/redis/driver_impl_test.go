@@ -83,6 +83,58 @@ func (c *recordingRedisClient) maxConcurrentCalls() int {
 	return c.maxInFlight
 }
 
+func TestEffectiveClusterPipelineParallelism(t *testing.T) {
+	tests := []struct {
+		name                  string
+		configuredParallelism int
+		poolSize              int
+		want                  int
+	}{
+		{
+			name:                  "serial legacy behavior",
+			configuredParallelism: 1,
+			poolSize:              10,
+			want:                  1,
+		},
+		{
+			name:                  "auto uses pool size",
+			configuredParallelism: 0,
+			poolSize:              10,
+			want:                  10,
+		},
+		{
+			name:                  "bounded below pool size",
+			configuredParallelism: 8,
+			poolSize:              10,
+			want:                  8,
+		},
+		{
+			name:                  "configured value is capped to pool size",
+			configuredParallelism: 20,
+			poolSize:              10,
+			want:                  10,
+		},
+		{
+			name:                  "pool ceiling never produces zero",
+			configuredParallelism: 0,
+			poolSize:              0,
+			want:                  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, effectiveClusterPipelineParallelism(tt.configuredParallelism, tt.poolSize))
+		})
+	}
+}
+
+func TestEffectiveClusterPipelineParallelismRejectsNegativeConfig(t *testing.T) {
+	assert.Panics(t, func() {
+		effectiveClusterPipelineParallelism(-1, 10)
+	})
+}
+
 func TestExecuteGroupedPipelineSingleActionFastPath(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
@@ -120,7 +172,7 @@ func TestExecuteGroupedPipelineGroupsSameKeyActions(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
-		clusterPipelineParallelism: 0,
+		clusterPipelineParallelism: 2,
 	}
 
 	err := client.executeGroupedPipeline(context.Background(), Pipeline{
@@ -132,11 +184,11 @@ func TestExecuteGroupedPipelineGroupsSameKeyActions(t *testing.T) {
 	assert.Equal(t, 1, fakeClient.callCount())
 }
 
-func TestExecuteGroupedPipelineUnboundedParallelism(t *testing.T) {
+func TestExecuteGroupedPipelineParallelismAllowsConcurrentGroups(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
-		clusterPipelineParallelism: 0,
+		clusterPipelineParallelism: 3,
 	}
 
 	err := client.executeGroupedPipeline(context.Background(), Pipeline{
