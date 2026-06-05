@@ -1,6 +1,10 @@
 package redis
 
-import "github.com/mediocregopher/radix/v4"
+import (
+	"context"
+
+	"github.com/mediocregopher/radix/v4"
+)
 
 // Errors that may be raised during config parsing.
 type RedisError string
@@ -32,8 +36,9 @@ type Client interface {
 	// a single write, then reads their responses in a single read. This reduces
 	// network delay into a single round-trip.
 	//
+	// @param ctx supplies the context for Redis I/O.
 	// @param pipeline supplies the queue for pending commands.
-	PipeDo(pipeline Pipeline) error
+	PipeDo(ctx context.Context, pipeline Pipeline) error
 
 	// Once Close() is called all future method calls on the Client will return
 	// an error

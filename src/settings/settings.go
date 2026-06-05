@@ -149,14 +149,20 @@ type Settings struct {
 	// RedisPipelineLimit is DEPRECATED and unused in radix v4.
 	// This setting has no effect. Radix v4 does not support explicit pipeline size limits.
 	// Write buffering is controlled solely by RedisPipelineWindow (WriteFlushInterval).
-	RedisPipelineLimit       int    `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
-	RedisPerSecond           bool   `envconfig:"REDIS_PERSECOND" default:"false"`
-	RedisPerSecondSocketType string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
-	RedisPerSecondType       string `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`
-	RedisPerSecondUrl        string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
-	RedisPerSecondPoolSize   int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
-	RedisPerSecondAuth       string `envconfig:"REDIS_PERSECOND_AUTH" default:""`
-	RedisPerSecondTls        bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
+	RedisPipelineLimit int `envconfig:"REDIS_PIPELINE_LIMIT" default:"0"`
+	// RedisClusterPipelineParallelism controls how many per-key pipeline groups
+	// can be executed concurrently in Redis Cluster mode.
+	//   - 0: auto, bounded to REDIS_POOL_SIZE
+	//   - 1: serial legacy behavior (default)
+	//   - >1: bounded parallelism, capped to REDIS_POOL_SIZE
+	RedisClusterPipelineParallelism int    `envconfig:"REDIS_CLUSTER_PIPELINE_PARALLELISM" default:"1"`
+	RedisPerSecond                  bool   `envconfig:"REDIS_PERSECOND" default:"false"`
+	RedisPerSecondSocketType        string `envconfig:"REDIS_PERSECOND_SOCKET_TYPE" default:"unix"`
+	RedisPerSecondType              string `envconfig:"REDIS_PERSECOND_TYPE" default:"SINGLE"`
+	RedisPerSecondUrl               string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
+	RedisPerSecondPoolSize          int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
+	RedisPerSecondAuth              string `envconfig:"REDIS_PERSECOND_AUTH" default:""`
+	RedisPerSecondTls               bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
 	// RedisSentinelAuth is the password for authenticating to Redis Sentinel nodes (not the Redis master/replica).
 	// This is separate from RedisAuth which is used for authenticating to the Redis master/replica nodes.
 	// If empty, no authentication will be attempted when connecting to Sentinel nodes.
@@ -171,6 +177,10 @@ type Settings struct {
 	// RedisPerSecondPipelineLimit is DEPRECATED and unused in radix v4.
 	// See comments of RedisPipelineLimit for details.
 	RedisPerSecondPipelineLimit int `envconfig:"REDIS_PERSECOND_PIPELINE_LIMIT" default:"0"`
+	// RedisPerSecondClusterPipelineParallelism controls per-key pipeline group
+	// concurrency for per-second Redis Cluster mode.
+	// See comments of RedisClusterPipelineParallelism for details.
+	RedisPerSecondClusterPipelineParallelism int `envconfig:"REDIS_PERSECOND_CLUSTER_PIPELINE_PARALLELISM" default:"1"`
 	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
 	RedisHealthCheckActiveConnection bool `envconfig:"REDIS_HEALTH_CHECK_ACTIVE_CONNECTION" default:"false"`
 	// RedisTimeout sets the timeout for Redis connection and I/O operations.
