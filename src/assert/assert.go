@@ -7,10 +7,10 @@ import (
 
 func Assert(something bool) {
 	if !something {
-		pc := make([]uintptr, 10)
-		runtime.Callers(2, pc)
-		f := runtime.FuncForPC(pc[0])
-		file, line := f.FileLine(pc[0])
-		panic(fmt.Sprintf("assertion failed at %s:%d %s\n", file, line, f.Name()))
+		pc := make([]uintptr, 1)
+		n := runtime.Callers(2, pc)
+		frames := runtime.CallersFrames(pc[:n])
+		frame, _ := frames.Next()
+		panic(fmt.Sprintf("assertion failed at %s:%d %s\n", frame.File, frame.Line, frame.Function))
 	}
 }
