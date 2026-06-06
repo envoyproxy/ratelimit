@@ -225,7 +225,7 @@ func (this *service) shouldRateLimitWorker(
 
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		// Keep track of the descriptor closest to hit the ratelimit
-		if this.customHeadersEnabled &&
+		if (this.customHeadersEnabled || this.requestHeadersEnabled) &&
 			descriptorStatus.CurrentLimit != nil &&
 			descriptorStatus.LimitRemaining < minLimitRemaining {
 			minimumDescriptor = descriptorStatus
@@ -271,6 +271,15 @@ func (this *service) shouldRateLimitWorker(
 			this.rateLimitLimitHeader(minimumDescriptor),
 			this.rateLimitRemainingHeader(minimumDescriptor),
 			this.rateLimitResetHeader(minimumDescriptor),
+		}
+	}
+
+	// Add request headers if requested
+	if this.requestHeadersEnabled && minimumDescriptor != nil {
+		response.RequestHeadersToAdd = []*core.HeaderValue{
+			{Key: this.requestHeaderLimitHeader, Value: strconv.FormatUint(uint64(minimumDescriptor.CurrentLimit.RequestsPerUnit), 10)},
+			{Key: this.requestHeaderRemainingHeader, Value: strconv.FormatUint(uint64(minimumDescriptor.LimitRemaining), 10)},
+			{Key: this.requestHeaderResetHeader, Value: strconv.FormatInt(utils.CalculateReset(&minimumDescriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10)},
 		}
 	}
 
