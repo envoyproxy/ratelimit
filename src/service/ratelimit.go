@@ -105,8 +105,8 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
 	}
 
+	this.requestHeadersEnabled = rlSettings.RateLimitRequestHeadersEnabled
 	if rlSettings.RateLimitRequestHeadersEnabled {
-		this.requestHeadersEnabled = true
 		this.requestHeaderLimitHeader = rlSettings.HeaderRequestRatelimitLimit
 		this.requestHeaderRemainingHeader = rlSettings.HeaderRequestRatelimitRemaining
 		this.requestHeaderResetHeader = rlSettings.HeaderRequestRatelimitReset
