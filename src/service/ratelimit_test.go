@@ -256,6 +256,30 @@ func newMinimalService(t *testing.T) *service {
 	}
 }
 
+// TestResponseHeadersEnabledResetToFalseOnHotReload verifies that customHeadersEnabled
+// is unconditionally assigned on every SetConfig call, not only set to true.
+// Without the fix, the flag is only ever set to true and never cleared, so a
+// hot-reload that turns off LIMIT_RESPONSE_HEADERS_ENABLED has no effect.
+func TestResponseHeadersEnabledResetToFalseOnHotReload(t *testing.T) {
+	// Start with the feature enabled.
+	os.Setenv("LIMIT_RESPONSE_HEADERS_ENABLED", "true")
+	defer os.Unsetenv("LIMIT_RESPONSE_HEADERS_ENABLED")
+
+	svc := newMinimalService(t)
+
+	// First load: env var ON → flag must become true.
+	svc.SetConfig(stubConfigEvent{}, false)
+	assert.True(t, svc.customHeadersEnabled, "customHeadersEnabled should be true after initial load with env var on")
+
+	// Operator turns off the env var; next hot-reload must clear the flag.
+	os.Unsetenv("LIMIT_RESPONSE_HEADERS_ENABLED")
+	svc.SetConfig(stubConfigEvent{}, false)
+
+	// Bug: without the fix, this assertion fails because the if-only guard never
+	// resets the field to false.
+	assert.False(t, svc.customHeadersEnabled, "customHeadersEnabled should be false after reload with env var off")
+}
+
 // TestRequestHeadersEnabledResetToFalseOnHotReload verifies that requestHeadersEnabled
 // is unconditionally assigned on every SetConfig call, not only set to true.
 // Without the fix, the flag is only ever set to true and never cleared, so a

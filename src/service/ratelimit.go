@@ -95,9 +95,8 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 	this.globalQuotaMode = rlSettings.GlobalQuotaMode
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
 
+	this.customHeadersEnabled = rlSettings.RateLimitResponseHeadersEnabled
 	if rlSettings.RateLimitResponseHeadersEnabled {
-		this.customHeadersEnabled = true
-
 		this.customHeaderLimitHeader = rlSettings.HeaderRatelimitLimit
 
 		this.customHeaderRemainingHeader = rlSettings.HeaderRatelimitRemaining
