@@ -276,9 +276,9 @@ func (this *service) shouldRateLimitWorker(
 	// Add request headers if requested
 	if this.requestHeadersEnabled && minimumDescriptor != nil {
 		response.RequestHeadersToAdd = []*core.HeaderValue{
-			{Key: this.requestHeaderLimitHeader, Value: strconv.FormatUint(uint64(minimumDescriptor.CurrentLimit.RequestsPerUnit), 10)},
-			{Key: this.requestHeaderRemainingHeader, Value: strconv.FormatUint(uint64(minimumDescriptor.LimitRemaining), 10)},
-			{Key: this.requestHeaderResetHeader, Value: strconv.FormatInt(utils.CalculateReset(&minimumDescriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10)},
+			this.rateLimitRequestLimitHeader(minimumDescriptor),
+			this.rateLimitRequestRemainingHeader(minimumDescriptor),
+			this.rateLimitRequestResetHeader(minimumDescriptor),
 		}
 	}
 
@@ -412,6 +412,27 @@ func (this *service) rateLimitResetHeader(
 ) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
+	}
+}
+
+func (this *service) rateLimitRequestLimitHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+	return &core.HeaderValue{
+		Key:   this.requestHeaderLimitHeader,
+		Value: strconv.FormatUint(uint64(descriptor.CurrentLimit.RequestsPerUnit), 10),
+	}
+}
+
+func (this *service) rateLimitRequestRemainingHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+	return &core.HeaderValue{
+		Key:   this.requestHeaderRemainingHeader,
+		Value: strconv.FormatUint(uint64(descriptor.LimitRemaining), 10),
+	}
+}
+
+func (this *service) rateLimitRequestResetHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
+	return &core.HeaderValue{
+		Key:   this.requestHeaderResetHeader,
 		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
 	}
 }
