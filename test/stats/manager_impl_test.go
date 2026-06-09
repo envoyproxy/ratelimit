@@ -12,6 +12,19 @@ import (
 	"github.com/envoyproxy/ratelimit/src/stats"
 )
 
+func TestNewStatsCreatesRateLimitGauge(t *testing.T) {
+	mockSink := gostatsMock.NewSink()
+	statsStore := gostats.NewStore(mockSink, false)
+	statsManager := stats.NewStatManager(statsStore, settings.Settings{})
+
+	s := statsManager.NewStats("test-domain.key1")
+	assert.NotNil(t, s.RateLimit)
+
+	s.RateLimit.Set(100)
+	statsManager.GetStatsStore().Flush()
+	mockSink.AssertGaugeEquals(t, "ratelimit.service.rate_limit.test-domain.key1.rate_limit", 100)
+}
+
 func TestEscapingInvalidChartersInMetricName(t *testing.T) {
 	mockSink := gostatsMock.NewSink()
 	statsStore := gostats.NewStore(mockSink, false)
