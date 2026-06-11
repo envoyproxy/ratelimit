@@ -11,6 +11,10 @@ static_resources:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 codec_type: AUTO
                 stat_prefix: ingress
+                # Access log for integration testing: logs the default RateLimit-* request headers
+                # injected by Envoy when LIMIT_REQUEST_HEADERS_ENABLED=true.
+                # If you configure custom header names via LIMIT_REQUEST_*_HEADER env vars,
+                # update the %REQ(...)% references below accordingly.
                 access_log:
                   - name: envoy.access_loggers.stdout
                     typed_config:

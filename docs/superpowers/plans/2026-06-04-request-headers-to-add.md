@@ -43,13 +43,13 @@ func TestRequestHeadersSettingsDefaults(test *testing.T) {
 Add `"github.com/envoyproxy/ratelimit/src/settings"` to the import block if not already present. Check with:
 
 ```bash
-head -30 /Users/yganji/workplace/ratelimit-fork/test/service/ratelimit_test.go
+head -30 test/service/ratelimit_test.go
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./test/service/... -run TestRequestHeadersSettingsDefaults -v
+go test ./test/service/... -run TestRequestHeadersSettingsDefaults -v
 ```
 
 Expected: compile error — `s.RateLimitRequestHeadersEnabled` undefined.
@@ -72,7 +72,7 @@ HeaderRequestRatelimitReset string `envconfig:"LIMIT_REQUEST_RESET_HEADER" defau
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./test/service/... -run TestRequestHeadersSettingsDefaults -v
+go test ./test/service/... -run TestRequestHeadersSettingsDefaults -v
 ```
 
 Expected: PASS.
@@ -80,7 +80,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && git add src/settings/settings.go test/service/ratelimit_test.go
+git add src/settings/settings.go test/service/ratelimit_test.go
 git commit -m "feat: add RequestHeaders settings fields"
 ```
 
@@ -129,7 +129,7 @@ func TestRequestHeadersDisabledByDefault(test *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./test/service/... -run TestRequestHeadersDisabledByDefault -v
+go test ./test/service/... -run TestRequestHeadersDisabledByDefault -v
 ```
 
 Expected: compile error — `response.RequestHeadersToAdd` doesn't exist yet on the struct... actually this test will pass immediately since `RequestHeadersToAdd` already exists on the proto. Confirm by running — if it passes, proceed to step 3.
@@ -161,7 +161,7 @@ if rlSettings.RateLimitRequestHeadersEnabled {
 - [ ] **Step 5: Run tests to verify nothing is broken**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./test/service/... -run "TestRequestHeadersDisabledByDefault|TestRequestHeadersSettingsDefaults" -v
+go test ./test/service/... -run "TestRequestHeadersDisabledByDefault|TestRequestHeadersSettingsDefaults" -v
 ```
 
 Expected: both PASS.
@@ -169,7 +169,7 @@ Expected: both PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && git add src/service/ratelimit.go test/service/ratelimit_test.go
+git add src/service/ratelimit.go test/service/ratelimit_test.go
 git commit -m "feat: wire request headers settings into service struct"
 ```
 
@@ -242,7 +242,7 @@ Note: `Value: "58"` is the reset seconds computed from `MockClock{now: 2222}` wi
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./test/service/... -run TestServiceWithDefaultRequestHeaders -v
+go test ./test/service/... -run TestServiceWithDefaultRequestHeaders -v
 ```
 
 Expected: FAIL — `RequestHeadersToAdd` is nil.
@@ -265,7 +265,7 @@ if this.requestHeadersEnabled && minimumDescriptor != nil {
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./test/service/... -run TestServiceWithDefaultRequestHeaders -v
+go test ./test/service/... -run TestServiceWithDefaultRequestHeaders -v
 ```
 
 Expected: PASS.
@@ -273,7 +273,7 @@ Expected: PASS.
 - [ ] **Step 5: Run all existing tests to verify no regressions**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./test/service/... -v 2>&1 | tail -20
+go test ./test/service/... -v 2>&1 | tail -20
 ```
 
 Expected: all PASS.
@@ -281,7 +281,7 @@ Expected: all PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && git add src/service/ratelimit.go test/service/ratelimit_test.go
+git add src/service/ratelimit.go test/service/ratelimit_test.go
 git commit -m "feat: populate RequestHeadersToAdd in shouldRateLimitWorker"
 ```
 
@@ -479,7 +479,7 @@ func TestServiceWithBothRequestAndResponseHeaders(test *testing.T) {
 - [ ] **Step 4: Run all four new tests**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./test/service/... -run "TestServiceWithDefaultRequestHeaders|TestServiceWithCustomRequestHeaders|TestServiceWithRequestHeadersWithinLimit|TestServiceWithBothRequestAndResponseHeaders" -v
+go test ./test/service/... -run "TestServiceWithDefaultRequestHeaders|TestServiceWithCustomRequestHeaders|TestServiceWithRequestHeadersWithinLimit|TestServiceWithBothRequestAndResponseHeaders" -v
 ```
 
 Expected: all 4 PASS.
@@ -487,7 +487,7 @@ Expected: all 4 PASS.
 - [ ] **Step 5: Run the full test suite**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./... 2>&1 | tail -20
+go test ./... 2>&1 | tail -20
 ```
 
 Expected: all PASS.
@@ -495,7 +495,7 @@ Expected: all PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && git add test/service/ratelimit_test.go
+git add test/service/ratelimit_test.go
 git commit -m "test: add RequestHeadersToAdd test cases"
 ```
 
@@ -523,7 +523,7 @@ The following environment variables control the custom request header feature (h
 - [ ] **Step 2: Verify the section reads correctly**
 
 ```bash
-grep -A 10 "LIMIT_REQUEST_HEADERS_ENABLED" /Users/yganji/workplace/ratelimit-fork/README.md
+grep -A 10 "LIMIT_REQUEST_HEADERS_ENABLED" README.md
 ```
 
 Expected: the 4 env vars appear with their descriptions.
@@ -531,7 +531,7 @@ Expected: the 4 env vars appear with their descriptions.
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && git add README.md
+git add README.md
 git commit -m "docs: add RequestHeadersToAdd documentation to README"
 ```
 
@@ -542,7 +542,7 @@ git commit -m "docs: add RequestHeadersToAdd documentation to README"
 - [ ] **Step 1: Run the full test suite one more time**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go test ./... 2>&1 | grep -E "FAIL|ok"
+go test ./... 2>&1 | grep -E "FAIL|ok"
 ```
 
 Expected: all lines show `ok`, no `FAIL`.
@@ -550,7 +550,7 @@ Expected: all lines show `ok`, no `FAIL`.
 - [ ] **Step 2: Check the build**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && go build ./...
+go build ./...
 ```
 
 Expected: exits with code 0, no output.
@@ -558,7 +558,7 @@ Expected: exits with code 0, no output.
 - [ ] **Step 3: Review the diff**
 
 ```bash
-cd /Users/yganji/workplace/ratelimit-fork && git diff origin/main..HEAD --stat
+git diff origin/main..HEAD --stat
 ```
 
 Confirm only these files changed: `src/settings/settings.go`, `src/service/ratelimit.go`, `test/service/ratelimit_test.go`, `README.md`, `docs/`.

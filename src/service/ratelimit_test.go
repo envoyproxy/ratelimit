@@ -8,7 +8,6 @@ import (
 
 	ratelimitv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
-	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	"github.com/google/go-cmp/cmp"
 	gostats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
@@ -241,7 +240,7 @@ func (s stubConfigEvent) GetConfig() (config.RateLimitConfig, any) {
 type stubRLConfig struct{}
 
 func (s *stubRLConfig) Dump() string { return "" }
-func (s *stubRLConfig) GetLimit(_ context.Context, _ string, _ *pb_struct.RateLimitDescriptor) *config.RateLimit {
+func (s *stubRLConfig) GetLimit(_ context.Context, _ string, _ *ratelimitv3.RateLimitDescriptor) *config.RateLimit {
 	return nil
 }
 func (s *stubRLConfig) IsEmptyDomains() bool { return false }
