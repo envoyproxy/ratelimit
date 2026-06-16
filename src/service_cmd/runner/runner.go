@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/envoyproxy/ratelimit/src/filter"
 	"github.com/envoyproxy/ratelimit/src/metrics"
 	"github.com/envoyproxy/ratelimit/src/stats"
 	"github.com/envoyproxy/ratelimit/src/trace"
@@ -31,10 +32,11 @@ import (
 )
 
 type Runner struct {
-	statsManager stats.Manager
-	settings     settings.Settings
-	srv          server.Server
-	mu           sync.Mutex
+	statsManager   stats.Manager
+	settings       settings.Settings
+	srv            server.Server
+	filterProvider filter.Provider
+	mu             sync.Mutex
 }
 
 func NewRunner(s settings.Settings) Runner {
@@ -115,6 +117,11 @@ func (runner *Runner) Run() {
 	runner.srv = srv
 	runner.mu.Unlock()
 
+	filterProvider := buildFilterProvider(s, runner.statsManager.GetStatsStore())
+	runner.mu.Lock()
+	runner.filterProvider = filterProvider
+	runner.mu.Unlock()
+
 	service := ratelimit.NewService(
 		createLimiter(srv, s, localCache, runner.statsManager),
 		srv.Provider(),
@@ -124,6 +131,9 @@ func (runner *Runner) Run() {
 		s.GlobalShadowMode,
 		s.ForceStartWithoutInitialConfig,
 		s.HealthyWithAtLeastOneConfigLoaded,
+		filterProvider,
+		s.ForceFlag,
+		s.OnlyLogOnLimit,
 	)
 
 	srv.AddDebugHttpEndpoint(
@@ -148,8 +158,37 @@ func (runner *Runner) Run() {
 func (runner *Runner) Stop() {
 	runner.mu.Lock()
 	srv := runner.srv
+	fp := runner.filterProvider
 	runner.mu.Unlock()
 	if srv != nil {
 		srv.Stop()
 	}
+	if fp != nil {
+		// Releases the fsnotify watcher fd + watch goroutine for the file
+		// provider; no-op for the static (env-var) fallback. Without this,
+		// in-process restart patterns or test harnesses leak a watcher per
+		// Run/Stop cycle.
+		fp.Stop()
+	}
+}
+
+// buildFilterProvider returns the filter.Provider used by the rate-limit
+// service. When FILTER_CONFIG_PATH is set, filters hot-reload from the file
+// at that path (typically a Kubernetes ConfigMap mount); otherwise filters
+// come from the BLACKLIST_*/WHITELIST_* env vars at startup and stay static
+// — fully backward compatible with deployments that haven't adopted the
+// file-based config.
+//
+// Initial load failure with FILTER_CONFIG_PATH set is treated as a hard
+// startup error (panic) — the same contract used for malformed CIDR env
+// vars in settings.NewSettings().
+func buildFilterProvider(s settings.Settings, store gostats.Store) filter.Provider {
+	if s.FilterConfigPath == "" {
+		return filter.NewStaticProvider(s.IPFilter, s.UIDFilter)
+	}
+	p, err := filter.NewFileProvider(s.FilterConfigPath, store.Scope("filter"), logger.StandardLogger())
+	if err != nil {
+		panic(err)
+	}
+	return p
 }

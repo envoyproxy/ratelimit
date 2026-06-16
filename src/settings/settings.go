@@ -167,13 +167,18 @@ type Settings struct {
 	TracingExporterProtocol string `envconfig:"TRACING_EXPORTER_PROTOCOL" default:"http"`
 	// detailed setting of exporter should refer to https://opentelemetry.io/docs/reference/specification/protocol/exporter/, e.g. OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_CERTIFICATE, OTEL_EXPORTER_OTLP_TIMEOUT
 	// TracingSamplingRate defaults to 1 which amounts to using the `AlwaysSample` sampler
-	TracingSamplingRate  float64 `envconfig:"TRACING_SAMPLING_RATE" default:"1"`
-	ForceFlag            bool    `envconfig:"FORCE_FLAG" default:"false"`
-	OnlyLogOnLimit       bool    `envconfig:"ONLY_LOG_ON_LIMIT" default:"false"`
-	BlackListIPNetString string  `envconfig:"BLACKLIST_IP_NET" default:""`
-	WhiteListIPNetString string  `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24,10.0.0.0/8"`
-	BlackListUIDString   string  `envconfig:"BLACKLIST_UID" default:"123,456,789"`
-	WhiteListUIDString   string  `envconfig:"WHITELIST_UID" default:""`
+	TracingSamplingRate float64 `envconfig:"TRACING_SAMPLING_RATE" default:"1"`
+	ForceFlag           bool    `envconfig:"FORCE_FLAG" default:"false"`
+	OnlyLogOnLimit      bool    `envconfig:"ONLY_LOG_ON_LIMIT" default:"false"`
+	// FilterConfigPath, when set, makes IP/UID filters hot-reload from a YAML
+	// file at the given path (typically a Kubernetes ConfigMap mount). When
+	// empty (default), filters are loaded from the BLACKLIST_*/WHITELIST_*
+	// env vars at startup and stay static — fully backward compatible.
+	FilterConfigPath     string `envconfig:"FILTER_CONFIG_PATH" default:""`
+	BlackListIPNetString string `envconfig:"BLACKLIST_IP_NET" default:""`
+	WhiteListIPNetString string `envconfig:"WHITELIST_IP_NET" default:"192.168.0.0/24,10.0.0.0/8"`
+	BlackListUIDString   string `envconfig:"BLACKLIST_UID" default:"123,456,789"`
+	WhiteListUIDString   string `envconfig:"WHITELIST_UID" default:""`
 	IPFilter             filter.Filter
 	UIDFilter            filter.Filter
 }

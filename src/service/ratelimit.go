@@ -23,6 +23,7 @@ import (
 
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/filter"
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/provider"
 	"github.com/envoyproxy/ratelimit/src/redis"
@@ -50,6 +51,15 @@ type service struct {
 	customHeaderResetHeader     string
 	customHeaderClock           utils.TimeSource
 	globalShadowMode            bool
+
+	// Per-request hot-path snapshot. ForceFlag / OnlyLogOnLimit come from env
+	// vars that never change at runtime, so they are read once at construction
+	// instead of via a fresh settings.NewSettings() on every request. The
+	// filterProvider exposes lock-free IP/UID filter reads (atomic.Pointer
+	// when backed by FILTER_CONFIG_PATH; immutable when backed by env vars).
+	filterProvider filter.Provider
+	forceFlag      bool
+	onlyLogOnLimit bool
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -185,8 +195,19 @@ func (this *service) shouldRateLimitWorker(
 	snappedConfig, globalShadowMode := this.GetCurrentConfig()
 	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx, snappedConfig)
 
-	s := settings.NewSettings()
-	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck, s.ForceFlag, s.IPFilter, s.UIDFilter, s.OnlyLogOnLimit)
+	// Hot-path: no settings.NewSettings() reflection per request. ForceFlag /
+	// OnlyLogOnLimit are env-derived and frozen at construction; IP/UID
+	// filters come from filterProvider, whose IPFilter()/UIDFilter() are
+	// lock-free reads (atomic.Pointer when hot-reload is enabled).
+	responseDescriptorStatuses := this.cache.DoLimit(
+		ctx,
+		request,
+		limitsToCheck,
+		this.forceFlag,
+		this.filterProvider.IPFilter(),
+		this.filterProvider.UIDFilter(),
+		this.onlyLogOnLimit,
+	)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
 
 	response := &pb.RateLimitResponse{}
@@ -317,7 +338,8 @@ func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool) {
 }
 
 func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
-	health *server.HealthChecker, clock utils.TimeSource, shadowMode, forceStart bool, healthyWithAtLeastOneConfigLoad bool) RateLimitServiceServer {
+	health *server.HealthChecker, clock utils.TimeSource, shadowMode, forceStart bool, healthyWithAtLeastOneConfigLoad bool,
+	filterProvider filter.Provider, forceFlag bool, onlyLogOnLimit bool) RateLimitServiceServer {
 
 	newService := &service{
 		configLock:        sync.RWMutex{},
@@ -328,6 +350,9 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 		health:            health,
 		globalShadowMode:  shadowMode,
 		customHeaderClock: clock,
+		filterProvider:    filterProvider,
+		forceFlag:         forceFlag,
+		onlyLogOnLimit:    onlyLogOnLimit,
 	}
 
 	if !forceStart {

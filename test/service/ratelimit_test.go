@@ -26,6 +26,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/trace"
 
 	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/filter"
 	"github.com/envoyproxy/ratelimit/src/redis"
 	server "github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
@@ -111,7 +112,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 
 	testSpanExporter.Reset()
 
-	svc := ratelimit.NewService(this.cache, this.configProvider, this.statsManager, this.health, MockClock{now: int64(2222)}, false, false, false)
+	svc := ratelimit.NewService(this.cache, this.configProvider, this.statsManager, this.health, MockClock{now: int64(2222)}, false, false, false, filter.NewStaticProvider(nil, nil), false, false)
 	barrier.wait() // wait for initial config load
 	return svc
 }
@@ -511,7 +512,7 @@ func TestInitialLoadError(test *testing.T) {
 		return nil, config.RateLimitConfigError("load error")
 	})
 	go func() { t.configUpdateEventChan <- t.configUpdateEvent }() // initial config update from provider
-	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, t.health, t.mockClock, false, false, false)
+	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, t.health, t.mockClock, false, false, false, filter.NewStaticProvider(nil, nil), false, false)
 	barrier.wait()
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
@@ -600,7 +601,7 @@ func TestServiceHealthStatus(test *testing.T) {
 
 	// Set up the service
 	t.configProvider.EXPECT().ConfigUpdateEvent().Return(t.configUpdateEventChan).Times(1)
-	_ = ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded)
+	_ = ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded, filter.NewStaticProvider(nil, nil), false, false)
 
 	// Health check request
 	req := &healthpb.HealthCheckRequest{
@@ -629,7 +630,7 @@ func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
 		return t.config, nil
 	}).Times(2)
-	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded)
+	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded, filter.NewStaticProvider(nil, nil), false, false)
 	// Health check request
 	req := &healthpb.HealthCheckRequest{
 		Service: "ratelimit",
