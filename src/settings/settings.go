@@ -237,14 +237,17 @@ type Settings struct {
 	// Allow merging of multiple yaml files referencing the same domain
 	MergeDomainConfigurations bool `envconfig:"MERGE_DOMAIN_CONFIG" default:"false"`
 
-	// OTLP trace settings
+	// OTLP trace settings. TRACING_* variables are supported directly. When a TRACING_*
+	// variable is not set, the service falls back to the equivalent OpenTelemetry SDK
+	// environment variables documented at https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/
 	TracingEnabled           bool   `envconfig:"TRACING_ENABLED" default:"false"`
 	TracingServiceName       string `envconfig:"TRACING_SERVICE_NAME" default:"RateLimit"`
 	TracingServiceNamespace  string `envconfig:"TRACING_SERVICE_NAMESPACE" default:""`
 	TracingServiceInstanceId string `envconfig:"TRACING_SERVICE_INSTANCE_ID" default:""`
 	// can only be http or gRPC
 	TracingExporterProtocol string `envconfig:"TRACING_EXPORTER_PROTOCOL" default:"http"`
-	// detailed setting of exporter should refer to https://opentelemetry.io/docs/reference/specification/protocol/exporter/, e.g. OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_CERTIFICATE, OTEL_EXPORTER_OTLP_TIMEOUT
+	// Exporter endpoint, TLS, and timeout settings are read directly from standard OTLP env vars
+	// such as OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_CERTIFICATE, and OTEL_EXPORTER_OTLP_TIMEOUT.
 	// TracingSamplingRate defaults to 1 which amounts to using the `AlwaysSample` sampler
 	TracingSamplingRate float64 `envconfig:"TRACING_SAMPLING_RATE" default:"1"`
 }
@@ -256,6 +259,7 @@ func NewSettings() Settings {
 	if err := envconfig.Process("", &s); err != nil {
 		panic(err)
 	}
+	ApplyOtelTracingFallbacks(&s)
 	// When we require TLS to connect to Redis, we check if we need to connect using the provided key-pair.
 	RedisTlsConfig(s.RedisTls || s.RedisPerSecondTls)(&s)
 	MemcacheTlsConfig(s.MemcacheTls)(&s)
