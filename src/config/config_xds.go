@@ -2,6 +2,7 @@ package config
 
 import (
 	rls_conf_v3 "github.com/envoyproxy/go-control-plane/ratelimit/config/ratelimit/v3"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // ConfigXdsProtoToYaml converts Xds Proto format to yamlRoot
@@ -23,10 +24,18 @@ func rateLimitDescriptorsPbToYaml(pb []*rls_conf_v3.RateLimitDescriptor) []YamlD
 			ShadowMode:     d.ShadowMode,
 			DetailedMetric: d.DetailedMetric,
 			QuotaMode:      d.QuotaMode,
+			Metadata:       structpbToMap(d.GetMetadata()),
 		}
 	}
 
 	return descriptors
+}
+
+func structpbToMap(s *structpb.Struct) map[string]interface{} {
+	if s == nil {
+		return nil
+	}
+	return s.AsMap()
 }
 
 func rateLimitPolicyPbToYaml(pb *rls_conf_v3.RateLimitPolicy) *YamlRateLimit {
