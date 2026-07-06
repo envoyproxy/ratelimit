@@ -23,7 +23,7 @@ services:
     networks:
       - ratelimit-network
     volumes:
-      - ./examples/prom-statsd-exporter/conf.yaml:/etc/statsd-exporter/conf.yaml
+      - ${PWD}/examples/prom-statsd-exporter/conf.yaml:/etc/statsd-exporter/conf.yaml
 
   ratelimit:
     build:
@@ -40,7 +40,7 @@ services:
     networks:
       - ratelimit-network
     volumes:
-      - ./examples/ratelimit/config:/data/ratelimit/config
+      - ${PWD}/examples/ratelimit/config:/data/ratelimit/config
     environment:
       - USE_STATSD=true
       - STATSD_HOST=statsd
@@ -52,6 +52,7 @@ services:
       - RUNTIME_SUBDIRECTORY=ratelimit
       - RUNTIME_WATCH_ROOT=false
       - RESPONSE_DYNAMIC_METADATA=true
+      - LIMIT_REQUEST_HEADERS_ENABLED=true
 
   envoy-proxy:
     image: envoyproxy/envoy:dev
@@ -66,7 +67,7 @@ services:
     depends_on:
       - ratelimit
     volumes:
-      - ./examples/envoy/proxy.yaml:/etc/envoy/envoy.yaml
+      - ${PWD}/examples/envoy/proxy.yaml:/etc/envoy/envoy.yaml
     networks:
       - ratelimit-network
     expose:
@@ -87,7 +88,7 @@ services:
       - "--mode serve"
       - "--log-level info"
     volumes:
-      - ./examples/envoy/mock.yaml:/etc/envoy/envoy.yaml
+      - ${PWD}/examples/envoy/mock.yaml:/etc/envoy/envoy.yaml
     networks:
       - ratelimit-network
     expose:

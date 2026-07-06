@@ -1,17 +1,23 @@
 package ratelimit
 
 import (
+	"context"
+	"os"
+	"sync"
 	"testing"
 
 	ratelimitv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/google/go-cmp/cmp"
+	gostats "github.com/lyft/gostats"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/envoyproxy/ratelimit/src/config"
+	mock_stats "github.com/envoyproxy/ratelimit/test/mocks/stats"
 )
 
 func TestRatelimitToMetadata(t *testing.T) {
@@ -220,4 +226,79 @@ func TestRatelimitToMetadata(t *testing.T) {
 			}
 		})
 	}
+}
+
+// stubConfigEvent is a minimal ConfigUpdateEvent that always returns a no-op config
+// with no error, allowing SetConfig to proceed to the settings-reading section.
+type stubConfigEvent struct{}
+
+func (s stubConfigEvent) GetConfig() (config.RateLimitConfig, any) {
+	return &stubRLConfig{}, nil
+}
+
+// stubRLConfig satisfies config.RateLimitConfig with no-op methods.
+type stubRLConfig struct{}
+
+func (s *stubRLConfig) Dump() string { return "" }
+func (s *stubRLConfig) GetLimit(_ context.Context, _ string, _ *ratelimitv3.RateLimitDescriptor) *config.RateLimit {
+	return nil
+}
+func (s *stubRLConfig) IsEmptyDomains() bool { return false }
+
+func newMinimalService(t *testing.T) *service {
+	t.Helper()
+	store := gostats.NewStore(gostats.NewNullSink(), false)
+	mgr := mock_stats.NewMockStatManager(store)
+	return &service{
+		configLock: sync.RWMutex{},
+		stats:      mgr.NewServiceStats(),
+	}
+}
+
+// TestResponseHeadersEnabledResetToFalseOnHotReload verifies that customHeadersEnabled
+// is unconditionally assigned on every SetConfig call, not only set to true.
+// Without the fix, the flag is only ever set to true and never cleared, so a
+// hot-reload that turns off LIMIT_RESPONSE_HEADERS_ENABLED has no effect.
+func TestResponseHeadersEnabledResetToFalseOnHotReload(t *testing.T) {
+	// Start with the feature enabled.
+	os.Setenv("LIMIT_RESPONSE_HEADERS_ENABLED", "true")
+	defer os.Unsetenv("LIMIT_RESPONSE_HEADERS_ENABLED")
+
+	svc := newMinimalService(t)
+
+	// First load: env var ON → flag must become true.
+	svc.SetConfig(stubConfigEvent{}, false)
+	assert.True(t, svc.customHeadersEnabled, "customHeadersEnabled should be true after initial load with env var on")
+
+	// Operator turns off the env var; next hot-reload must clear the flag.
+	os.Unsetenv("LIMIT_RESPONSE_HEADERS_ENABLED")
+	svc.SetConfig(stubConfigEvent{}, false)
+
+	// Bug: without the fix, this assertion fails because the if-only guard never
+	// resets the field to false.
+	assert.False(t, svc.customHeadersEnabled, "customHeadersEnabled should be false after reload with env var off")
+}
+
+// TestRequestHeadersEnabledResetToFalseOnHotReload verifies that requestHeadersEnabled
+// is unconditionally assigned on every SetConfig call, not only set to true.
+// Without the fix, the flag is only ever set to true and never cleared, so a
+// hot-reload that turns off LIMIT_REQUEST_HEADERS_ENABLED has no effect.
+func TestRequestHeadersEnabledResetToFalseOnHotReload(t *testing.T) {
+	// Start with the feature enabled.
+	os.Setenv("LIMIT_REQUEST_HEADERS_ENABLED", "true")
+	defer os.Unsetenv("LIMIT_REQUEST_HEADERS_ENABLED")
+
+	svc := newMinimalService(t)
+
+	// First load: env var ON → flag must become true.
+	svc.SetConfig(stubConfigEvent{}, false)
+	assert.True(t, svc.requestHeadersEnabled, "requestHeadersEnabled should be true after initial load with env var on")
+
+	// Operator turns off the env var; next hot-reload must clear the flag.
+	os.Unsetenv("LIMIT_REQUEST_HEADERS_ENABLED")
+	svc.SetConfig(stubConfigEvent{}, false)
+
+	// Bug: without the fix, this assertion fails because the if-only guard never
+	// resets the field to false.
+	assert.False(t, svc.requestHeadersEnabled, "requestHeadersEnabled should be false after reload with env var off")
 }

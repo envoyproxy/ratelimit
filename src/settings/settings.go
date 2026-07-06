@@ -120,6 +120,15 @@ type Settings struct {
 	// value: remaining seconds
 	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:"RateLimit-Reset"`
 
+	// Settings for optional injection of rate limit headers into the upstream request (request_headers_to_add)
+	RateLimitRequestHeadersEnabled bool `envconfig:"LIMIT_REQUEST_HEADERS_ENABLED" default:"false"`
+	// header name for the current limit value injected into the upstream request
+	HeaderRequestRatelimitLimit string `envconfig:"LIMIT_REQUEST_LIMIT_HEADER" default:"RateLimit-Limit"`
+	// header name for the remaining count injected into the upstream request
+	HeaderRequestRatelimitRemaining string `envconfig:"LIMIT_REQUEST_REMAINING_HEADER" default:"RateLimit-Remaining"`
+	// header name for the reset seconds injected into the upstream request
+	HeaderRequestRatelimitReset string `envconfig:"LIMIT_REQUEST_RESET_HEADER" default:"RateLimit-Reset"`
+
 	// Health-check settings
 	HealthyWithAtLeastOneConfigLoaded bool `envconfig:"HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED" default:"false"`
 
