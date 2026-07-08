@@ -83,6 +83,17 @@ func NewRateLimitRequestWithPerDescriptorHitsAddend(domain string, descriptors [
 	return request
 }
 
+func NewRateLimitRequestWithNegativeHits(domain string, descriptors [][][2]string,
+	hitsAddends []uint64, negativeFlags []bool,
+) *pb.RateLimitRequest {
+	request := NewRateLimitRequest(domain, descriptors, 1)
+	for i, hitsAddend := range hitsAddends {
+		request.Descriptors[i].HitsAddend = &wrapperspb.UInt64Value{Value: hitsAddend}
+		request.Descriptors[i].IsNegativeHits = negativeFlags[i]
+	}
+	return request
+}
+
 func AssertProtoEqual(assert *assert.Assertions, expected proto.Message, actual proto.Message) {
 	assert.True(proto.Equal(expected, actual),
 		fmt.Sprintf("These two protobuf messages are not equal:\nexpected: %v\nactual:  %v", expected, actual))

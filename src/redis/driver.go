@@ -32,6 +32,21 @@ type Client interface {
 	// @param args supplies the additional arguments.
 	PipeAppend(pipeline Pipeline, rcv interface{}, cmd, key string, args ...interface{}) Pipeline
 
+	// PipeAppendWithRoutingKey appends a command onto the pipeline queue whose
+	// Redis key differs from the command's first positional argument. This is
+	// needed for commands like EVAL, where the first argument is the script body
+	// and the actual key appears later in the argument list. In Redis Cluster
+	// mode the routing key determines which slot/node the command is sent to, so
+	// it must be the real key rather than the script text.
+	//
+	// @param pipeline supplies the queue for pending commands.
+	// @param routingKey supplies the key used for cluster slot routing/grouping.
+	// @param rcv supplies receiver for the result.
+	// @param cmd supplies the command to append.
+	// @param key supplies the first positional argument of the command.
+	// @param args supplies the additional arguments.
+	PipeAppendWithRoutingKey(pipeline Pipeline, routingKey string, rcv interface{}, cmd, key string, args ...interface{}) Pipeline
+
 	// PipeDo writes multiple commands to a Conn in
 	// a single write, then reads their responses in a single read. This reduces
 	// network delay into a single round-trip.
