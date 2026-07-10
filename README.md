@@ -1416,17 +1416,42 @@ The following environment variables control the custom response feature:
 
 # Tracing
 
-Ratelimit service supports exporting spans in OLTP format. See [OpenTelemetry](https://opentelemetry.io/) for more information.
+Ratelimit service supports exporting spans in OTLP format. See [OpenTelemetry](https://opentelemetry.io/) for more information.
 
-The following environment variables control the tracing feature:
+Tracing can be configured with either the service-specific `TRACING_*` variables below or the standard [OpenTelemetry SDK environment variables](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/). When both are set, `TRACING_*` takes precedence.
+
+## Service-specific variables
 
 1. `TRACING_ENABLED` - Enables the tracing feature. Only "true" and "false"(default) are allowed in this field.
 1. `TRACING_EXPORTER_PROTOCOL` - Controls the protocol of exporter in tracing feature. Only "http"(default) and "grpc" are allowed in this field.
 1. `TRACING_SERVICE_NAME` - Controls the service name appears in tracing span. The default value is "RateLimit".
 1. `TRACING_SERVICE_NAMESPACE` - Controls the service namespace appears in tracing span. The default value is empty.
 1. `TRACING_SERVICE_INSTANCE_ID` - Controls the service instance id appears in tracing span. It is recommended to put the pod name or container name in this field. The default value is a randomly generated version 4 uuid if unspecified.
-1. Other fields in [OTLP Exporter Documentation](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.8.0/specification/protocol/exporter.md). These section needs to be correctly configured in order to enable the exporter to export span to the correct destination.
 1. `TRACING_SAMPLING_RATE` - Controls the sampling rate, defaults to 1 which means always sample. Valid range: 0.0-1.0. For high volume services, adjusting the sampling rate is recommended.
+
+## OpenTelemetry SDK variables
+
+When the matching `TRACING_*` variable above is not set, the service uses these standard OpenTelemetry variables instead:
+
+| Setting | OpenTelemetry variable | Notes |
+| --- | --- | --- |
+| Enable tracing | `OTEL_TRACES_EXPORTER` | Set to `otlp` to enable tracing. Set to `none` to disable. |
+| Disable SDK | `OTEL_SDK_DISABLED` | Set to `true` to disable tracing even if `OTEL_TRACES_EXPORTER=otlp`. |
+| Exporter protocol | `OTEL_EXPORTER_OTLP_PROTOCOL` | Accepts `grpc`, `http/protobuf`, or `http/protobuf+json`. |
+| Service name | `OTEL_SERVICE_NAME` | Appears on exported spans. |
+| Service namespace | `OTEL_RESOURCE_ATTRIBUTES` | Use `service.namespace=<value>`. |
+| Service instance id | `OTEL_RESOURCE_ATTRIBUTES` | Use `service.instance.id=<value>`. |
+| Sampling rate | `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | Supported samplers: `always_on`, `always_off`, `traceidratio`, `parentbased_traceidratio`. |
+
+The OTLP exporter also reads the standard exporter settings directly from the OpenTelemetry SDK, including:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_CERTIFICATE`
+- `OTEL_EXPORTER_OTLP_TIMEOUT`
+- `OTEL_EXPORTER_OTLP_HEADERS`
+
+See the [OTLP exporter documentation](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#exporter-configuration) for the full list.
 
 You may use the following commands to quickly setup a openTelemetry collector together with a Jaeger all-in-one binary for quickstart:
 
