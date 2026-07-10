@@ -99,6 +99,7 @@ var validKeys = map[string]bool{
 func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Unit, rlStats stats.RateLimitStats,
 	unlimited bool, shadowMode bool, quotaMode bool, name string, replaces []string, detailedMetric bool,
 ) *RateLimit {
+	rlStats.RateLimit.Set(uint64(requestsPerUnit))
 	return &RateLimit{
 		FullKey: rlStats.GetKey(),
 		Stats:   rlStats,

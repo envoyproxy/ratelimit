@@ -54,6 +54,7 @@ type RateLimitStats struct {
 	OverLimitWithLocalCache gostats.Counter
 	WithinLimit             gostats.Counter
 	ShadowMode              gostats.Counter
+	RateLimit               gostats.Gauge
 }
 
 // Stats for a domain entry
