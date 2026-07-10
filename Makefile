@@ -137,6 +137,10 @@ docker_image: docker_tests
 docker_push: docker_image
 	docker push $(IMAGE):$(VERSION)
 
+.PHONY: docker_config_check_image
+docker_config_check_image:
+	docker build -f Dockerfile.config-check . -t $(IMAGE)-config-check:$(VERSION)	
+
 .PHONY: docker_multiarch_image
 docker_multiarch_image: docker_tests
 	docker buildx build -t $(IMAGE):$(VERSION) --platform $(BUILDX_PLATFORMS) .
@@ -144,6 +148,10 @@ docker_multiarch_image: docker_tests
 .PHONY: docker_multiarch_push
 docker_multiarch_push: docker_multiarch_image
 	docker buildx build -t $(IMAGE):$(VERSION) --platform $(BUILDX_PLATFORMS) --push .
+
+.PHONY: docker_multiarch_config_check_image
+docker_multiarch_config_check_image: docker_config_check_image
+	docker buildx build -t $(IMAGE)-config-check:$(VERSION) --platform $(BUILDX_PLATFORMS) .
 
 .PHONY: integration_tests
 integration_tests:
