@@ -128,6 +128,24 @@ func TestRedisClusterPipelineParallelism_Auto(t *testing.T) {
 	assert.Equal(t, 0, settings.RedisClusterPipelineParallelism)
 }
 
+// Tests for GrpcMaxConcurrentStreams
+func TestGrpcMaxConcurrentStreams_Default(t *testing.T) {
+	os.Unsetenv("GRPC_MAX_CONCURRENT_STREAMS")
+
+	settings := NewSettings()
+
+	assert.Equal(t, uint32(0), settings.GrpcMaxConcurrentStreams)
+}
+
+func TestGrpcMaxConcurrentStreams_Configured(t *testing.T) {
+	os.Setenv("GRPC_MAX_CONCURRENT_STREAMS", "100")
+	defer os.Unsetenv("GRPC_MAX_CONCURRENT_STREAMS")
+
+	settings := NewSettings()
+
+	assert.Equal(t, uint32(100), settings.GrpcMaxConcurrentStreams)
+}
+
 // Test both pools can be configured independently
 func TestRedisPoolOnEmptyBehavior_IndependentConfiguration(t *testing.T) {
 	os.Setenv("REDIS_POOL_ON_EMPTY_BEHAVIOR", "ERROR")

@@ -33,6 +33,9 @@ type Settings struct {
 	GrpcMaxConnectionAge time.Duration `envconfig:"GRPC_MAX_CONNECTION_AGE" default:"24h" description:"Duration a connection may exist before it will be closed by sending a GoAway."`
 	// GrpcMaxConnectionAgeGrace is an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 	GrpcMaxConnectionAgeGrace time.Duration `envconfig:"GRPC_MAX_CONNECTION_AGE_GRACE" default:"1h" description:"Period after MaxConnectionAge after which the connection will be forcibly closed."`
+	// GrpcMaxConcurrentStreams caps the maximum number of concurrent gRPC streams the server allows PER HTTP/2 connection.
+	// 0 disables the cap, leaving the grpc-go default (unlimited) in place.
+	GrpcMaxConcurrentStreams uint32 `envconfig:"GRPC_MAX_CONCURRENT_STREAMS" default:"0" description:"Maximum number of concurrent gRPC streams allowed per HTTP/2 connection. 0 disables the cap (grpc-go default, unlimited)."`
 	// GrpcServerUseTLS enables gprc connections to server over TLS
 	GrpcServerUseTLS bool `envconfig:"GRPC_SERVER_USE_TLS" default:"false"`
 	// Allow to set the server certificate and key for TLS connections.
