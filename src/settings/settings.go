@@ -183,10 +183,21 @@ type Settings struct {
 	RedisPerSecondClusterPipelineParallelism int `envconfig:"REDIS_PERSECOND_CLUSTER_PIPELINE_PARALLELISM" default:"1"`
 	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
 	RedisHealthCheckActiveConnection bool `envconfig:"REDIS_HEALTH_CHECK_ACTIVE_CONNECTION" default:"false"`
-	// RedisTimeout sets the timeout for Redis connection and I/O operations.
+	// RedisTimeout sets the dial/connection timeout used when establishing a new Redis
+	// connection (net.Dialer.Timeout). It does NOT bound per-command read/write latency;
+	// once connected, radix v4 has no built-in read/write timeout, so individual commands
+	// are only bounded by the context deadline passed to them. See RedisOpTimeout.
 	RedisTimeout time.Duration `envconfig:"REDIS_TIMEOUT" default:"10s"`
-	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.
+	// RedisPerSecondTimeout sets the dial/connection timeout for the per-second Redis pool.
+	// See RedisTimeout for details; it does not bound per-command latency.
 	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
+	// RedisOpTimeout wraps the context passed to each Redis command (DoCmd/PipeDo) with a
+	// deadline of this duration, bounding how long a single call can park when Redis is slow
+	// or unreachable. 0 (default) disables this and preserves prior behavior, where commands
+	// are bounded only by the caller's inbound context (which may have no deadline at all).
+	RedisOpTimeout time.Duration `envconfig:"REDIS_OP_TIMEOUT" default:"0"`
+	// RedisPerSecondOpTimeout is the equivalent of RedisOpTimeout for the per-second Redis pool.
+	RedisPerSecondOpTimeout time.Duration `envconfig:"REDIS_PERSECOND_OP_TIMEOUT" default:"0"`
 
 	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
 	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).

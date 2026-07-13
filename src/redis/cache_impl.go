@@ -22,7 +22,7 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 			s.RedisPerSecondType, s.RedisPerSecondUrl, s.RedisPerSecondPoolSize, s.RedisPerSecondPipelineWindow, s.RedisPerSecondPipelineLimit, s.RedisTlsConfig, s.RedisHealthCheckActiveConnection, srv, s.RedisPerSecondTimeout,
 			s.RedisPerSecondPoolOnEmptyBehavior, s.RedisPerSecondSentinelAuth,
 			s.RedisStartupInitialInterval, s.RedisStartupMaxInterval, s.RedisStartupMaxElapsedTime,
-			s.RedisPerSecondClusterPipelineParallelism)
+			s.RedisPerSecondClusterPipelineParallelism, s.RedisPerSecondOpTimeout)
 		closer.Closers = append(closer.Closers, perSecondPool)
 	}
 
@@ -30,7 +30,7 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		s.RedisPipelineWindow, s.RedisPipelineLimit, s.RedisTlsConfig, s.RedisHealthCheckActiveConnection, srv, s.RedisTimeout,
 		s.RedisPoolOnEmptyBehavior, s.RedisSentinelAuth,
 		s.RedisStartupInitialInterval, s.RedisStartupMaxInterval, s.RedisStartupMaxElapsedTime,
-		s.RedisClusterPipelineParallelism)
+		s.RedisClusterPipelineParallelism, s.RedisOpTimeout)
 	closer.Closers = append(closer.Closers, otherPool)
 
 	return NewFixedRateLimitCacheImpl(
