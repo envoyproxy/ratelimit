@@ -338,3 +338,42 @@ func TestDoCmdWithoutOpTimeoutLeavesContextUnbounded(t *testing.T) {
 	_, ok := ctx.Deadline()
 	assert.False(t, ok, "expected ctx to have no deadline when opTimeout == 0 (preserves current behavior, matches context.Background() used today)")
 }
+
+// The opTimeout wrap happens before the isCluster branch in PipeDo, so it
+// should also bound the cluster grouped-pipeline path (executeGroupedPipeline
+// / doPipelineGroup), not just the single/sentinel pipeline. These two tests
+// cover that path explicitly with clusterPipelineParallelism > 1 so multiple
+// keys are grouped and dispatched concurrently via errgroup.
+
+func TestPipeDoClusterReturnsWithinOpTimeoutWhenRedisHangs(t *testing.T) {
+	fakeClient := &recordingRedisClient{blockDelay: time.Hour}
+	client := &clientImpl{client: fakeClient, opTimeout: 30 * time.Millisecond, isCluster: true, clusterPipelineParallelism: 2}
+
+	start := time.Now()
+	err := client.PipeDo(context.Background(), Pipeline{
+		{Key: "a", Action: &testAction{key: "a"}},
+		{Key: "b", Action: &testAction{key: "b"}},
+	})
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 500*time.Millisecond, "cluster PipeDo should return promptly once opTimeout elapses instead of blocking indefinitely")
+}
+
+func TestPipeDoClusterAppliesOpTimeoutDeadlineToContext(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	client := &clientImpl{client: fakeClient, opTimeout: 50 * time.Millisecond, isCluster: true, clusterPipelineParallelism: 2}
+
+	err := client.PipeDo(context.Background(), Pipeline{
+		{Key: "a", Action: &testAction{key: "a"}},
+		{Key: "b", Action: &testAction{key: "b"}},
+	})
+	require.NoError(t, err)
+
+	ctx := fakeClient.getLastCtx()
+	require.NotNil(t, ctx)
+	deadline, ok := ctx.Deadline()
+	assert.True(t, ok, "expected ctx passed to the underlying client to carry a deadline in cluster mode when opTimeout > 0")
+	assert.True(t, time.Until(deadline) <= 50*time.Millisecond)
+}
