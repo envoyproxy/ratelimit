@@ -1316,10 +1316,39 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 
 ### Connection Timeout
 
-Controls the maximum duration for Redis connection establishment, read operations, and write operations.
+1. `REDIS_TIMEOUT`: sets the dial (connection establishment) timeout used when opening a new
+   Redis connection. It does **not** bound how long an individual command can take once
+   connected: the underlying radix v4 client has no built-in read/write timeout, so a command
+   sent on an established connection is only bounded by the context deadline passed to it (see
+   `REDIS_OP_TIMEOUT` below). Default: `10s`
+1. `REDIS_PERSECOND_TIMEOUT`: same as `REDIS_TIMEOUT`, for the per-second Redis pool. Default: `10s`
 
-1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
-1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
+### Per-Operation Timeout
+
+Controls how long a single Redis command or pipeline is allowed to park waiting on Redis before
+it is aborted. Unlike `REDIS_TIMEOUT` (dial-only), this bounds the actual command round-trip, so
+it protects against a Redis that is slow, paused, or unreachable *after* the connection has
+already been established, which is the case where `ratelimit` is most exposed: on the hot rate
+limit path, commands are issued with the inbound gRPC request's context, which typically carries
+no deadline of its own.
+
+1. `REDIS_OP_TIMEOUT`: wraps the context used for each Redis command/pipeline with a deadline of
+   this duration. `0` (default) disables this and preserves the current behavior of relying
+   solely on the caller's context. Recommended production value: a small duration such as `50ms`,
+   to bound per-call latency and prevent goroutine buildup during Redis slowness without
+   noticeably affecting p99 latency under healthy conditions.
+1. `REDIS_PERSECOND_OP_TIMEOUT`: same as `REDIS_OP_TIMEOUT`, for the per-second Redis pool.
+   Default: `0`
+
+Note the two timeouts operate on very different time scales: `REDIS_TIMEOUT` is a one-time,
+per-connection cost so it is typically set in seconds, while `REDIS_OP_TIMEOUT` applies to every
+command so it should be set much smaller (tens of milliseconds) to avoid adding latency to normal
+traffic.
+
+When a command exceeds `REDIS_OP_TIMEOUT`, the request fails fast with a Redis error rather than
+returning an over-limit or under-limit response: it is counted in the `redis_error` stat and
+returned to the caller as a gRPC error, the same as any other Redis failure. Expect this stat to
+rise (instead of requests hanging) during Redis slowness once this timeout is enabled.
 
 ### Pool On-Empty Behavior
 

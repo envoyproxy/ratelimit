@@ -74,6 +74,11 @@ type clientImpl struct {
 	stats                      poolStats
 	isCluster                  bool
 	clusterPipelineParallelism int
+	// opTimeout, when > 0, bounds how long a single Redis command (DoCmd) or
+	// pipeline (PipeDo) is allowed to park waiting on Redis by wrapping the
+	// context passed to the underlying radix client with a deadline. When 0,
+	// no deadline is added and callers' context governs command duration as before.
+	opTimeout time.Duration
 }
 
 func checkError(err error) {
@@ -147,18 +152,19 @@ func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
+	opTimeout time.Duration,
 ) Client {
 	return newClientImpl(ctx, scope, useTls, auth, redisSocketType, redisType, url, poolSize,
 		pipelineWindow, pipelineLimit, tlsConfig, healthCheckActiveConnection, srv,
 		timeout, poolOnEmptyBehavior, sentinelAuth,
-		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1)
+		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1, opTimeout)
 }
 
 func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
-	clusterPipelineParallelism int,
+	clusterPipelineParallelism int, opTimeout time.Duration,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
@@ -332,11 +338,17 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		stats:                      stats,
 		isCluster:                  isCluster,
 		clusterPipelineParallelism: effectivePipelineParallelism,
+		opTimeout:                  opTimeout,
 	}
 }
 
 func (c *clientImpl) DoCmd(rcv interface{}, cmd, key string, args ...interface{}) error {
 	ctx := context.Background()
+	if c.opTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.opTimeout)
+		defer cancel()
+	}
 	// Combine key and args into a single slice
 	allArgs := make([]interface{}, 0, 1+len(args))
 	allArgs = append(allArgs, key)
@@ -364,6 +376,12 @@ func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd, key str
 }
 
 func (c *clientImpl) PipeDo(ctx context.Context, pipeline Pipeline) error {
+	if c.opTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.opTimeout)
+		defer cancel()
+	}
+
 	if c.isCluster {
 		// Cluster mode: group commands by key and execute each group as a pipeline.
 		// This ensures INCRBY + EXPIRE for the same key are pipelined together (same slot),

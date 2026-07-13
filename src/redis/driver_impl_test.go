@@ -44,11 +44,19 @@ type recordingRedisClient struct {
 	calls       []radix.Action
 	inFlight    int
 	maxInFlight int
+	// blockDelay, when > 0, makes Do block until ctx is done or blockDelay
+	// elapses, regardless of the action type. Used to simulate a Redis
+	// server that never responds (e.g. paused/unreachable).
+	blockDelay time.Duration
+	// lastCtx records the context passed to the most recent Do call, so
+	// tests can assert whether a deadline was attached to it.
+	lastCtx context.Context
 }
 
 func (c *recordingRedisClient) Do(ctx context.Context, action radix.Action) error {
 	c.mu.Lock()
 	c.calls = append(c.calls, action)
+	c.lastCtx = ctx
 	c.inFlight++
 	if c.inFlight > c.maxInFlight {
 		c.maxInFlight = c.inFlight
@@ -61,10 +69,27 @@ func (c *recordingRedisClient) Do(ctx context.Context, action radix.Action) erro
 		c.mu.Unlock()
 	}()
 
+	if c.blockDelay > 0 {
+		timer := time.NewTimer(c.blockDelay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return nil
+		}
+	}
+
 	if action, ok := action.(*testAction); ok {
 		return action.Perform(ctx, nil)
 	}
 	return nil
+}
+
+func (c *recordingRedisClient) getLastCtx() context.Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lastCtx
 }
 
 func (c *recordingRedisClient) Close() error {
@@ -218,4 +243,137 @@ func TestExecuteGroupedPipelineBoundedParallelism(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, fakeClient.callCount())
 	assert.Equal(t, 2, fakeClient.maxConcurrentCalls())
+}
+
+// --- opTimeout tests ---
+//
+// These verify that clientImpl.opTimeout bounds how long a single Redis
+// command/pipeline is allowed to park when the underlying Redis connection
+// never responds (simulated via recordingRedisClient.blockDelay), rather
+// than parking indefinitely on the caller's context (which may have no
+// deadline at all, as is the case on the hot DoLimit path today).
+
+func TestPipeDoReturnsWithinOpTimeoutWhenRedisHangs(t *testing.T) {
+	fakeClient := &recordingRedisClient{blockDelay: time.Hour}
+	client := &clientImpl{client: fakeClient, opTimeout: 30 * time.Millisecond}
+
+	start := time.Now()
+	err := client.PipeDo(context.Background(), Pipeline{
+		{Key: "a", Action: &testAction{key: "a"}},
+	})
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 500*time.Millisecond, "PipeDo should return promptly once opTimeout elapses instead of blocking indefinitely")
+}
+
+func TestDoCmdReturnsWithinOpTimeoutWhenRedisHangs(t *testing.T) {
+	fakeClient := &recordingRedisClient{blockDelay: time.Hour}
+	client := &clientImpl{client: fakeClient, opTimeout: 30 * time.Millisecond}
+
+	start := time.Now()
+	err := client.DoCmd(nil, "GET", "foo")
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 500*time.Millisecond, "DoCmd should return promptly once opTimeout elapses instead of blocking indefinitely")
+}
+
+func TestPipeDoAppliesOpTimeoutDeadlineToContext(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	client := &clientImpl{client: fakeClient, opTimeout: 50 * time.Millisecond}
+
+	err := client.PipeDo(context.Background(), Pipeline{
+		{Key: "a", Action: &testAction{key: "a"}},
+	})
+	require.NoError(t, err)
+
+	ctx := fakeClient.getLastCtx()
+	require.NotNil(t, ctx)
+	deadline, ok := ctx.Deadline()
+	assert.True(t, ok, "expected ctx passed to the underlying client to carry a deadline when opTimeout > 0")
+	assert.True(t, time.Until(deadline) <= 50*time.Millisecond)
+}
+
+func TestPipeDoWithoutOpTimeoutLeavesContextUnbounded(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	client := &clientImpl{client: fakeClient, opTimeout: 0}
+
+	err := client.PipeDo(context.Background(), Pipeline{
+		{Key: "a", Action: &testAction{key: "a"}},
+	})
+	require.NoError(t, err)
+
+	ctx := fakeClient.getLastCtx()
+	require.NotNil(t, ctx)
+	_, ok := ctx.Deadline()
+	assert.False(t, ok, "expected ctx to have no deadline when opTimeout == 0 (preserves current behavior)")
+}
+
+func TestDoCmdAppliesOpTimeoutDeadlineToContext(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	client := &clientImpl{client: fakeClient, opTimeout: 50 * time.Millisecond}
+
+	err := client.DoCmd(nil, "GET", "foo")
+	require.NoError(t, err)
+
+	ctx := fakeClient.getLastCtx()
+	require.NotNil(t, ctx)
+	deadline, ok := ctx.Deadline()
+	assert.True(t, ok, "expected ctx passed to the underlying client to carry a deadline when opTimeout > 0")
+	assert.True(t, time.Until(deadline) <= 50*time.Millisecond)
+}
+
+func TestDoCmdWithoutOpTimeoutLeavesContextUnbounded(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	client := &clientImpl{client: fakeClient, opTimeout: 0}
+
+	err := client.DoCmd(nil, "GET", "foo")
+	require.NoError(t, err)
+
+	ctx := fakeClient.getLastCtx()
+	require.NotNil(t, ctx)
+	_, ok := ctx.Deadline()
+	assert.False(t, ok, "expected ctx to have no deadline when opTimeout == 0 (preserves current behavior, matches context.Background() used today)")
+}
+
+// The opTimeout wrap happens before the isCluster branch in PipeDo, so it
+// should also bound the cluster grouped-pipeline path (executeGroupedPipeline
+// / doPipelineGroup), not just the single/sentinel pipeline. These two tests
+// cover that path explicitly with clusterPipelineParallelism > 1 so multiple
+// keys are grouped and dispatched concurrently via errgroup.
+
+func TestPipeDoClusterReturnsWithinOpTimeoutWhenRedisHangs(t *testing.T) {
+	fakeClient := &recordingRedisClient{blockDelay: time.Hour}
+	client := &clientImpl{client: fakeClient, opTimeout: 30 * time.Millisecond, isCluster: true, clusterPipelineParallelism: 2}
+
+	start := time.Now()
+	err := client.PipeDo(context.Background(), Pipeline{
+		{Key: "a", Action: &testAction{key: "a"}},
+		{Key: "b", Action: &testAction{key: "b"}},
+	})
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 500*time.Millisecond, "cluster PipeDo should return promptly once opTimeout elapses instead of blocking indefinitely")
+}
+
+func TestPipeDoClusterAppliesOpTimeoutDeadlineToContext(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	client := &clientImpl{client: fakeClient, opTimeout: 50 * time.Millisecond, isCluster: true, clusterPipelineParallelism: 2}
+
+	err := client.PipeDo(context.Background(), Pipeline{
+		{Key: "a", Action: &testAction{key: "a"}},
+		{Key: "b", Action: &testAction{key: "b"}},
+	})
+	require.NoError(t, err)
+
+	ctx := fakeClient.getLastCtx()
+	require.NotNil(t, ctx)
+	deadline, ok := ctx.Deadline()
+	assert.True(t, ok, "expected ctx passed to the underlying client to carry a deadline in cluster mode when opTimeout > 0")
+	assert.True(t, time.Until(deadline) <= 50*time.Millisecond)
 }

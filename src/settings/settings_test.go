@@ -3,6 +3,7 @@ package settings
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -142,4 +143,27 @@ func TestRedisPoolOnEmptyBehavior_IndependentConfiguration(t *testing.T) {
 
 	// Per-second pool configured differently
 	assert.Equal(t, "CREATE", settings.RedisPerSecondPoolOnEmptyBehavior)
+}
+
+// Tests for RedisOpTimeout / RedisPerSecondOpTimeout
+func TestRedisOpTimeout_Default(t *testing.T) {
+	os.Unsetenv("REDIS_OP_TIMEOUT")
+	os.Unsetenv("REDIS_PERSECOND_OP_TIMEOUT")
+
+	settings := NewSettings()
+
+	assert.Equal(t, time.Duration(0), settings.RedisOpTimeout)
+	assert.Equal(t, time.Duration(0), settings.RedisPerSecondOpTimeout)
+}
+
+func TestRedisOpTimeout_Configured(t *testing.T) {
+	os.Setenv("REDIS_OP_TIMEOUT", "50ms")
+	os.Setenv("REDIS_PERSECOND_OP_TIMEOUT", "25ms")
+	defer os.Unsetenv("REDIS_OP_TIMEOUT")
+	defer os.Unsetenv("REDIS_PERSECOND_OP_TIMEOUT")
+
+	settings := NewSettings()
+
+	assert.Equal(t, 50*time.Millisecond, settings.RedisOpTimeout)
+	assert.Equal(t, 25*time.Millisecond, settings.RedisPerSecondOpTimeout)
 }
