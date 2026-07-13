@@ -1345,6 +1345,11 @@ per-connection cost so it is typically set in seconds, while `REDIS_OP_TIMEOUT` 
 command so it should be set much smaller (tens of milliseconds) to avoid adding latency to normal
 traffic.
 
+When a command exceeds `REDIS_OP_TIMEOUT`, the request fails fast with a Redis error rather than
+returning an over-limit or under-limit response: it is counted in the `redis_error` stat and
+returned to the caller as a gRPC error, the same as any other Redis failure. Expect this stat to
+rise (instead of requests hanging) during Redis slowness once this timeout is enabled.
+
 ### Pool On-Empty Behavior
 
 Controls what happens when all connections in the pool are in use and a new request arrives.
