@@ -54,6 +54,7 @@ type service struct {
 	globalShadowMode               bool
 	globalQuotaMode                bool
 	responseDynamicMetadataEnabled bool
+	allDescriptorsHeadersEnabled   bool
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -100,6 +101,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 
 		this.customHeaderResetHeader = rlSettings.HeaderRatelimitReset
 	}
+	this.allDescriptorsHeadersEnabled = rlSettings.RateLimitAllDescriptorsHeadersEnabled
 	this.configLock.Unlock()
 	logger.Info("Successfully loaded new configuration")
 }
@@ -255,7 +257,9 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	// Add Headers if requested
-	if this.customHeadersEnabled && minimumDescriptor != nil {
+	if this.allDescriptorsHeadersEnabled {
+		response.ResponseHeadersToAdd = this.allDescriptorsHeaders(responseDescriptorStatuses)
+	} else if this.customHeadersEnabled && minimumDescriptor != nil {
 		response.ResponseHeadersToAdd = []*core.HeaderValue{
 			this.rateLimitLimitHeader(minimumDescriptor),
 			this.rateLimitRemainingHeader(minimumDescriptor),
@@ -395,6 +399,56 @@ func (this *service) rateLimitResetHeader(
 		Key:   this.customHeaderResetHeader,
 		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
 	}
+}
+
+// unitToHeaderSuffix converts a rate limit unit enum to a lowercase plural suffix
+// used in per-unit response header names (e.g., "seconds", "minutes").
+func unitToHeaderSuffix(unit pb.RateLimitResponse_RateLimit_Unit) string {
+	switch unit {
+	case pb.RateLimitResponse_RateLimit_SECOND:
+		return "seconds"
+	case pb.RateLimitResponse_RateLimit_MINUTE:
+		return "minutes"
+	case pb.RateLimitResponse_RateLimit_HOUR:
+		return "hours"
+	case pb.RateLimitResponse_RateLimit_DAY:
+		return "days"
+	case pb.RateLimitResponse_RateLimit_WEEK:
+		return "weeks"
+	case pb.RateLimitResponse_RateLimit_MONTH:
+		return "months"
+	case pb.RateLimitResponse_RateLimit_YEAR:
+		return "years"
+	default:
+		return strings.ToLower(unit.String()) + "s"
+	}
+}
+
+// allDescriptorsHeaders generates per-unit limit and remaining response headers
+// for every descriptor status that has a configured limit. This produces headers like:
+//   - ratelimit-limit-seconds: 10
+//   - ratelimit-remaining-seconds: 9
+//   - ratelimit-limit-minutes: 1000
+//   - ratelimit-remaining-minutes: 999
+func (this *service) allDescriptorsHeaders(
+	descriptorStatuses []*pb.RateLimitResponse_DescriptorStatus,
+) []*core.HeaderValue {
+	var headers []*core.HeaderValue
+	for _, status := range descriptorStatuses {
+		if status.CurrentLimit == nil {
+			continue
+		}
+		unitSuffix := unitToHeaderSuffix(status.CurrentLimit.Unit)
+		headers = append(headers, &core.HeaderValue{
+			Key:   "ratelimit-limit-" + unitSuffix,
+			Value: strconv.FormatUint(uint64(status.CurrentLimit.RequestsPerUnit), 10),
+		})
+		headers = append(headers, &core.HeaderValue{
+			Key:   "ratelimit-remaining-" + unitSuffix,
+			Value: strconv.FormatUint(uint64(status.LimitRemaining), 10),
+		})
+	}
+	return headers
 }
 
 func (this *service) ShouldRateLimit(

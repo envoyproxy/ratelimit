@@ -1292,3 +1292,163 @@ func TestServiceMixedModeWithShadowMode(test *testing.T) {
 	// Verify global shadow mode counter is incremented
 	t.assert.EqualValues(1, t.statStore.NewCounter("global_shadow_mode").Value())
 }
+
+func TestServiceWithAllDescriptorsHeaders(test *testing.T) {
+	os.Setenv("LIMIT_ALL_DESCRIPTORS_HEADERS_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("LIMIT_ALL_DESCRIPTORS_HEADERS_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload to pick up the env var.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Two descriptors with different time units (SECOND and MINUTE)
+	request := common.NewRateLimitRequest(
+		"test-domain", [][][2]string{{{"remote_address", "10.0.0.1"}}, {{"remote_address", "10.0.0.1"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("key1"), false, false, false, "", nil, false),
+		config.NewRateLimit(1000, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: nil},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 999, DurationUntilReset: nil},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 999},
+			},
+			ResponseHeadersToAdd: []*core.HeaderValue{
+				{Key: "ratelimit-limit-seconds", Value: "10"},
+				{Key: "ratelimit-remaining-seconds", Value: "9"},
+				{Key: "ratelimit-limit-minutes", Value: "1000"},
+				{Key: "ratelimit-remaining-minutes", Value: "999"},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestServiceWithAllDescriptorsHeadersOverLimit(test *testing.T) {
+	os.Setenv("LIMIT_ALL_DESCRIPTORS_HEADERS_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("LIMIT_ALL_DESCRIPTORS_HEADERS_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload to pick up the env var.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Two descriptors: SECOND is over limit, MINUTE is OK
+	request := common.NewRateLimitRequest(
+		"test-domain", [][][2]string{{{"remote_address", "10.0.0.1"}}, {{"remote_address", "10.0.0.1"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("key1"), false, false, false, "", nil, false),
+		config.NewRateLimit(1000, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, false, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 500},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 500},
+			},
+			ResponseHeadersToAdd: []*core.HeaderValue{
+				{Key: "ratelimit-limit-seconds", Value: "10"},
+				{Key: "ratelimit-remaining-seconds", Value: "0"},
+				{Key: "ratelimit-limit-minutes", Value: "1000"},
+				{Key: "ratelimit-remaining-minutes", Value: "500"},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+func TestServiceWithAllDescriptorsHeadersSkipsNilLimits(test *testing.T) {
+	os.Setenv("LIMIT_ALL_DESCRIPTORS_HEADERS_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("LIMIT_ALL_DESCRIPTORS_HEADERS_ENABLED")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// Config reload to pick up the env var.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// One descriptor with limit, one without (nil limit)
+	request := common.NewRateLimitRequest(
+		"test-domain", [][][2]string{{{"remote_address", "10.0.0.1"}}, {{"other_key", "value"}}}, 1)
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("key1"), false, false, false, "", nil, false),
+		nil,
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+			},
+			ResponseHeadersToAdd: []*core.HeaderValue{
+				{Key: "ratelimit-limit-seconds", Value: "10"},
+				{Key: "ratelimit-remaining-seconds", Value: "9"},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
