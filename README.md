@@ -923,6 +923,7 @@ The behavior can be fixed by configuring the following env variables for the rat
 
 - `GRPC_MAX_CONNECTION_AGE`: a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway. A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
 - `GRPC_MAX_CONNECTION_AGE_GRACE`: an additive period after MaxConnectionAge after which the connection will be forcibly closed.
+- `GRPC_MAX_CONCURRENT_STREAMS`: caps the maximum number of concurrent gRPC streams the server allows **per HTTP/2 connection**. Defaults to `0`, which leaves the grpc-go server default (unlimited, `math.MaxUint32`) in place. This is a per-connection limit, so the aggregate number of concurrent streams a pod can process is roughly `(number of active connections) x GRPC_MAX_CONCURRENT_STREAMS`. Setting this gives operators a lever to bound the number of handler goroutines spawned during a downstream stall (e.g. a slow Redis), preventing unbounded goroutine growth and OOMs.
 
 ## Health-check
 

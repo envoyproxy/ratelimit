@@ -231,6 +231,15 @@ func NewServer(s settings.Settings, name string, statsManager stats.Manager, loc
 	return newServer(s, name, statsManager, localCache, opts...)
 }
 
+// maxConcurrentStreamsOptions returns the ServerOption that caps concurrent gRPC
+// streams per HTTP/2 connection, or no options when the cap is disabled (0).
+func maxConcurrentStreamsOptions(maxStreams uint32) []grpc.ServerOption {
+	if maxStreams > 0 {
+		return []grpc.ServerOption{grpc.MaxConcurrentStreams(maxStreams)}
+	}
+	return nil
+}
+
 func newServer(s settings.Settings, name string, statsManager stats.Manager, localCache *freecache.Cache, opts ...settings.Option) *server {
 	for _, opt := range opts {
 		opt(&s)
@@ -258,6 +267,7 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		),
 		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
 	}
+	grpcOptions = append(grpcOptions, maxConcurrentStreamsOptions(s.GrpcMaxConcurrentStreams)...)
 	if s.GrpcServerUseTLS {
 		grpcServerTlsConfig := s.GrpcServerTlsConfig
 		ret.grpcCertProvider = provider.NewCertProvider(s, ret.store, s.GrpcServerTlsCert, s.GrpcServerTlsKey)
