@@ -183,6 +183,14 @@ type Settings struct {
 	RedisPerSecondClusterPipelineParallelism int `envconfig:"REDIS_PERSECOND_CLUSTER_PIPELINE_PARALLELISM" default:"1"`
 	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
 	RedisHealthCheckActiveConnection bool `envconfig:"REDIS_HEALTH_CHECK_ACTIVE_CONNECTION" default:"false"`
+	// RedisCloseConnectionOnReadOnlyError closes a pooled Redis connection when a command
+	// on it fails with a READONLY error reply, so the pool re-dials through the configured
+	// address. After a master->replica failover in deployments that fail over by repointing
+	// an address at the new master (a Kubernetes Service, DNS, or a proxy), the demoted
+	// master keeps established connections open and every write on them fails with READONLY
+	// until they reconnect; enabling this makes the pool recover automatically. Applies to
+	// both the main and the per-second Redis clients.
+	RedisCloseConnectionOnReadOnlyError bool `envconfig:"REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR" default:"false"`
 	// RedisTimeout sets the timeout for Redis connection and I/O operations.
 	RedisTimeout time.Duration `envconfig:"REDIS_TIMEOUT" default:"10s"`
 	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.

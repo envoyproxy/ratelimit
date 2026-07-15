@@ -147,11 +147,13 @@ func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
+	closeConnectionOnReadOnlyError bool,
 ) Client {
 	return newClientImpl(ctx, scope, useTls, auth, redisSocketType, redisType, url, poolSize,
 		pipelineWindow, pipelineLimit, tlsConfig, healthCheckActiveConnection, srv,
 		timeout, poolOnEmptyBehavior, sentinelAuth,
-		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1)
+		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1,
+		closeConnectionOnReadOnlyError)
 }
 
 func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
@@ -159,6 +161,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
 	clusterPipelineParallelism int,
+	closeConnectionOnReadOnlyError bool,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
@@ -189,6 +192,16 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	if isCluster && pipelineWindow > 0 {
 		poolConfig.Dialer.WriteFlushInterval = pipelineWindow
 		logger.Debugf("Cluster mode: setting WriteFlushInterval to %v", pipelineWindow)
+	}
+
+	// Discard pooled connections whose commands fail with READONLY (the server
+	// behind them was demoted to replica by a failover) so the pool re-dials
+	// and reaches the current master. Installed last because CustomConn
+	// replaces every other Dialer field (TLS, auth, write buffering), which
+	// must all be final before being captured.
+	if closeConnectionOnReadOnlyError {
+		logger.Warnf("Redis pool %s: closing connections on READONLY error replies", maskedUrl)
+		poolConfig.Dialer = wrapDialerCloseOnReadOnly(poolConfig.Dialer)
 	}
 
 	effectivePipelineParallelism := clusterPipelineParallelism
