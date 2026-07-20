@@ -102,8 +102,8 @@ github.com/lyft/goruntime v0.3.0/go.mod h1:BW1gngSpMJR9P9w23BPUPdhdbUWhpirl98TQh
 github.com/lyft/gostats v0.4.1/go.mod h1:Tpx2xRzz4t+T2Tx0xdVgIoBdR2UMVz+dKnE3X01XSd8=
 github.com/lyft/gostats v0.4.14 h1:xmP4yMfDvEKtlNZEcS2sYz0cvnps1ri337ZEEbw3ab8=
 github.com/lyft/gostats v0.4.14/go.mod h1:cJWqEVL8JIewIJz/olUIios2F1q06Nc51hXejPQmBH0=
-github.com/mediocregopher/radix/v4 v4.1.4 h1:Uze6DEbEAvL+VHXUEu/EDBTkUk5CLct5h3nVSGpc6Ts=
-github.com/mediocregopher/radix/v4 v4.1.4/go.mod h1:ajchozX/6ELmydxWeWM6xCFHVpZ4+67LXHOTOVR0nCE=
+github.com/mediocregopher/radix/v4 v4.1.5 h1:4tJp2WPovvb9pVAKCMiZa6DJZBLSUAPj+Fnf0wGuEFw=
+github.com/mediocregopher/radix/v4 v4.1.5/go.mod h1:ajchozX/6ELmydxWeWM6xCFHVpZ4+67LXHOTOVR0nCE=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
