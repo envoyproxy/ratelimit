@@ -69,6 +69,7 @@
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
+  - [Recovering from a failover (READONLY errors)](#recovering-from-a-failover-readonly-errors)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
 - [Tracing](#tracing)
