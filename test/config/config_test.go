@@ -286,6 +286,18 @@ func TestConfigLimitOverride(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.near_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something.within_limit").Value())
 
+	// Undefined or unknown unit override is ignored and falls back to config
+	rl = rlConfig.GetLimit(
+		context.Background(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey1", Value: "something"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 10, Unit: pb_type.RateLimitUnit_UNKNOWN,
+			},
+		})
+	assert.NotNil(rl)
+	assert.Equal(pb.RateLimitResponse_RateLimit_SECOND, rl.Limit.Unit)
+
 	// Change in override value doesn't erase stats
 	rl = rlConfig.GetLimit(
 		context.TODO(), "test-domain",

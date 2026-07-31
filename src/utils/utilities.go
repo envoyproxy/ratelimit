@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	logger "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -35,7 +36,8 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 		return 60 * 60 * 24 * 365
 	}
 
-	panic("should not get here")
+	logger.Errorf("unknown rate limit unit: %v, defaulting to 1 second divider", unit)
+	return 1
 }
 
 func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource) *durationpb.Duration {

@@ -457,21 +457,25 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
-		rateLimitKey := descriptorKey(domain, descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
-		// When limit override is provided by envoy config, we don't want to enable shadow_mode
-		rateLimit = NewRateLimit(
-			descriptor.GetLimit().GetRequestsPerUnit(),
-			rateLimitOverrideUnit,
-			this.statsManager.NewStats(rateLimitKey),
-			false,
-			false,
-			false,
-			"",
-			[]string{},
-			false,
-		)
-		return rateLimit
+		if rateLimitOverrideUnit != pb.RateLimitResponse_RateLimit_UNKNOWN {
+			rateLimitKey := descriptorKey(domain, descriptor)
+			// When limit override is provided by envoy config, we don't want to enable shadow_mode
+			rateLimit = NewRateLimit(
+				descriptor.GetLimit().GetRequestsPerUnit(),
+				rateLimitOverrideUnit,
+				this.statsManager.NewStats(rateLimitKey),
+				false,
+				false,
+				false,
+				"",
+				[]string{},
+				false,
+			)
+			return rateLimit
+		} else {
+			logger.Warnf("ignoring rate limit override with undefined or unknown unit")
+		}
 	}
 
 	descriptorsMap := value.descriptors
