@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jpillora/backoff"
@@ -23,6 +24,7 @@ type poolStats struct {
 	connectionActive stats.Gauge
 	connectionTotal  stats.Counter
 	connectionClose  stats.Counter
+	hadConnError     *atomic.Bool
 }
 
 func newPoolStats(scope stats.Scope) poolStats {
@@ -30,6 +32,7 @@ func newPoolStats(scope stats.Scope) poolStats {
 	ret.connectionActive = scope.NewGauge("cx_active")
 	ret.connectionTotal = scope.NewCounter("cx_total")
 	ret.connectionClose = scope.NewCounter("cx_local_close")
+	ret.hadConnError = new(atomic.Bool)
 	return ret
 }
 
@@ -39,6 +42,9 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 			if newConn.Err == nil {
 				ps.connectionTotal.Add(1)
 				ps.connectionActive.Add(1)
+				if ps.hadConnError.CompareAndSwap(true, false) {
+					logger.Infof("redis connection re-established after previous error")
+				}
 				if healthCheckActiveConnection && srv != nil {
 					err := srv.HealthChecker().Ok(server.RedisHealthComponentName)
 					if err != nil {
@@ -46,6 +52,7 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 					}
 				}
 			} else {
+				ps.hadConnError.Store(true)
 				logger.Errorf("creating redis connection error : %v", newConn.Err)
 			}
 		},
