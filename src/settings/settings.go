@@ -110,6 +110,13 @@ type Settings struct {
 	CacheKeyPrefix                     string  `envconfig:"CACHE_KEY_PREFIX" default:""`
 	BackendType                        string  `envconfig:"BACKEND_TYPE" default:"redis"`
 	StopCacheKeyIncrementWhenOverlimit bool    `envconfig:"STOP_CACHE_KEY_INCREMENT_WHEN_OVERLIMIT" default:"false"`
+	// UseCalendarMonthRateLimit switches MONTH-unit rate limits to a true calendar
+	// month window (the 1st through the last day of the month, UTC) for cache key
+	// bucketing, TTL/expiration, and the reported reset time. Defaults to false,
+	// which preserves the legacy behavior of a fixed 30-day rolling window counted
+	// from the Unix epoch, so enabling this for existing MONTH limits changes when
+	// they reset and is opt-in.
+	UseCalendarMonthRateLimit bool `envconfig:"USE_CALENDAR_MONTH_RATE_LIMIT" default:"false"`
 
 	// Settings for optional returning of custom headers
 	RateLimitResponseHeadersEnabled bool `envconfig:"LIMIT_RESPONSE_HEADERS_ENABLED" default:"false"`

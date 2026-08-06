@@ -1396,6 +1396,19 @@ configured address and reaches the current master. The failing command still ret
 to the caller; only the connection handling changes. Applies to both the main and the
 per-second Redis clients.
 
+## Calendar-aligned MONTH rate limits
+
+1. `USE_CALENDAR_MONTH_RATE_LIMIT` : (default is "false")
+
+By default, a `unit: month` rate limit uses a fixed 30-day window counted from the Unix epoch,
+which does not line up with real calendar months (it drifts, and treats every month as 30 days
+regardless of its actual length).
+
+Setting `USE_CALENDAR_MONTH_RATE_LIMIT` to `"true"` switches `MONTH` limits to a true calendar
+month window instead: the cache key bucket, TTL/expiration, and reported reset time all cover
+the 1st through the last day of the month (UTC). This is opt-in because it changes when
+existing `MONTH` limits reset and is therefore not enabled by default.
+
 # Memcache
 
 Experimental Memcache support has been added as an alternative to Redis in v1.5.

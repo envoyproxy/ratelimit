@@ -161,7 +161,7 @@ func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, i
 
 		_, err := this.client.Increment(cacheKey.Key, hitsAddends[i])
 		if err == memcache.ErrCacheMiss {
-			expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
+			expirationSeconds := this.baseRateLimiter.ExpirationSeconds(limits[i].Limit.Unit)
 			if this.expirationJitterMaxSeconds > 0 {
 				expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 			}
@@ -304,6 +304,7 @@ func runAsync(task func()) {
 
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
 	expirationJitterMaxSeconds int64, localCache *freecache.Cache, statsManager stats.Manager, nearLimitRatio float32, cacheKeyPrefix string,
+	useCalendarMonth bool,
 ) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
@@ -312,7 +313,7 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager),
+		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth),
 	}
 }
 
@@ -328,5 +329,6 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 		statsManager,
 		s.NearLimitRatio,
 		s.CacheKeyPrefix,
+		s.UseCalendarMonthRateLimit,
 	)
 }

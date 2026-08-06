@@ -38,10 +38,25 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 	panic("should not get here")
 }
 
-func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource) *durationpb.Duration {
+// ExpirationSeconds returns the number of seconds, evaluated from the
+// current time, until the given rate limit unit's window ends. When
+// useCalendarMonth is true, MONTH reflects the actual calendar-aligned
+// window (the 1st through the last day of the month, UTC) instead of the
+// fixed-length UnitToDivider approximation.
+func ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool) int64 {
+	if useCalendarMonth && unit == pb.RateLimitResponse_RateLimit_MONTH {
+		return MonthExpirationSeconds(timeSource.UnixNow())
+	}
+	return UnitToDivider(unit)
+}
+
+func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool) *durationpb.Duration {
+	nowUnix := timeSource.UnixNow()
+	if useCalendarMonth && *unit == pb.RateLimitResponse_RateLimit_MONTH {
+		return &durationpb.Duration{Seconds: MonthExpirationSeconds(nowUnix)}
+	}
 	sec := UnitToDivider(*unit)
-	now := timeSource.UnixNow()
-	return &durationpb.Duration{Seconds: sec - now%sec}
+	return &durationpb.Duration{Seconds: sec - nowUnix%sec}
 }
 
 // Mask credentials from a redis connection string like

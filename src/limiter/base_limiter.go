@@ -22,6 +22,9 @@ type BaseRateLimiter struct {
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
 	StatsManager               stats.Manager
+	// useCalendarMonth gates the MONTH-unit fix (calendar-aligned window
+	// instead of a fixed 30-day divider) for expiration/TTL computations.
+	useCalendarMonth bool
 }
 
 type LimitInfo struct {
@@ -59,6 +62,12 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 		}
 	}
 	return cacheKeys
+}
+
+// ExpirationSeconds returns the number of seconds, evaluated from the current
+// time, until the given rate limit unit's window ends.
+func (this *BaseRateLimiter) ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
+	return utils.ExpirationSeconds(unit, this.timeSource, this.useCalendarMonth)
 }
 
 // Returns `true` in case local cache is enabled and contains value for provided cache key, `false` otherwise.
@@ -116,7 +125,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
 				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
 				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
-				err := this.localCache.Set([]byte(key), []byte{}, int(utils.UnitToDivider(limitInfo.limit.Limit.Unit)))
+				err := this.localCache.Set([]byte(key), []byte{}, int(this.ExpirationSeconds(limitInfo.limit.Limit.Unit)))
 				if err != nil {
 					logger.Errorf("Failing to set local cache key: %s", key)
 				}
@@ -144,15 +153,17 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
 	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
+	useCalendarMonth bool,
 ) *BaseRateLimiter {
 	return &BaseRateLimiter{
 		timeSource:                 timeSource,
 		JitterRand:                 jitterRand,
 		ExpirationJitterMaxSeconds: expirationJitterMaxSeconds,
-		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix),
+		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix, useCalendarMonth),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 		StatsManager:               statsManager,
+		useCalendarMonth:           useCalendarMonth,
 	}
 }
 
@@ -205,7 +216,7 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource),
+			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource, this.useCalendarMonth),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{

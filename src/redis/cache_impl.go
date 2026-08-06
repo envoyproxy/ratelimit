@@ -46,5 +46,6 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		s.CacheKeyPrefix,
 		statsManager,
 		s.StopCacheKeyIncrementWhenOverlimit,
+		s.UseCalendarMonthRateLimit,
 	), closer
 }
