@@ -70,6 +70,7 @@
   - [Two Redis Instances](#two-redis-instances)
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
   - [Recovering from a failover (READONLY errors)](#recovering-from-a-failover-readonly-errors)
+  - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
 - [Tracing](#tracing)
