@@ -256,15 +256,25 @@ func (this *service) shouldRateLimitWorker(
 		finalCode = pb.RateLimitResponse_OVER_LIMIT
 	}
 
+	response.ResponseHeadersToAdd = []*core.HeaderValue{}
 	// Add Headers if requested
 	if this.allDescriptorsHeadersEnabled {
 		response.ResponseHeadersToAdd = this.allDescriptorsHeaders(responseDescriptorStatuses)
-	} else if this.customHeadersEnabled && minimumDescriptor != nil {
-		response.ResponseHeadersToAdd = []*core.HeaderValue{
+		// Also include the standard min-descriptor headers for backwards compatibility
+		if this.customHeadersEnabled && minimumDescriptor != nil {
+			response.ResponseHeadersToAdd = append(response.ResponseHeadersToAdd,
+				this.rateLimitLimitHeader(minimumDescriptor),
+				this.rateLimitRemainingHeader(minimumDescriptor),
+				this.rateLimitResetHeader(minimumDescriptor),
+			)
+		}
+	}
+	if this.customHeadersEnabled && minimumDescriptor != nil {
+		response.ResponseHeadersToAdd = append(response.ResponseHeadersToAdd,
 			this.rateLimitLimitHeader(minimumDescriptor),
 			this.rateLimitRemainingHeader(minimumDescriptor),
 			this.rateLimitResetHeader(minimumDescriptor),
-		}
+		)
 	}
 
 	// If there is a global shadow_mode, it should always return OK
