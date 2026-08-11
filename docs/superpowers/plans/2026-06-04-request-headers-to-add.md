@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add `RequestHeadersToAdd` support so the ratelimit service can inject RateLimit-* headers into the forwarded request (upstream direction), mirroring the existing `ResponseHeadersToAdd` feature.
+**Goal:** Add `RequestHeadersToAdd` support so the ratelimit service can inject RateLimit-\* headers into the forwarded request (upstream direction), mirroring the existing `ResponseHeadersToAdd` feature.
 
 **Architecture:** Four new env vars (`LIMIT_REQUEST_HEADERS_ENABLED`, `LIMIT_REQUEST_LIMIT_HEADER`, `LIMIT_REQUEST_REMAINING_HEADER`, `LIMIT_REQUEST_RESET_HEADER`) control the feature. When enabled, `shouldRateLimitWorker` populates `response.RequestHeadersToAdd` using the same `minimumDescriptor` logic already used for `ResponseHeadersToAdd`. The two features are independently controlled.
 
@@ -12,18 +12,19 @@
 
 ## File Map
 
-| File | Change |
-|---|---|
-| `src/settings/settings.go` | Add 4 new env var fields |
-| `src/service/ratelimit.go` | Add 4 struct fields, wire in `SetConfig`, populate `RequestHeadersToAdd` in `shouldRateLimitWorker` |
-| `test/service/ratelimit_test.go` | Add 4 new test functions |
-| `README.md` | Add `Global Rate Limit Request Headers` section after existing `Custom headers` section |
+| File                             | Change                                                                                              |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `src/settings/settings.go`       | Add 4 new env var fields                                                                            |
+| `src/service/ratelimit.go`       | Add 4 struct fields, wire in `SetConfig`, populate `RequestHeadersToAdd` in `shouldRateLimitWorker` |
+| `test/service/ratelimit_test.go` | Add 4 new test functions                                                                            |
+| `README.md`                      | Add `Global Rate Limit Request Headers` section after existing `Custom headers` section             |
 
 ---
 
 ## Task 1: Add settings fields
 
 **Files:**
+
 - Modify: `src/settings/settings.go:114-121`
 
 - [ ] **Step 1: Write a failing test that reads the new settings fields**
@@ -89,6 +90,7 @@ git commit -m "feat: add RequestHeaders settings fields"
 ## Task 2: Wire settings into service struct
 
 **Files:**
+
 - Modify: `src/service/ratelimit.go:42-57` (struct), `src/service/ratelimit.go:89-103` (SetConfig)
 
 - [ ] **Step 1: Write a failing test — request headers disabled by default**
@@ -178,6 +180,7 @@ git commit -m "feat: wire request headers settings into service struct"
 ## Task 3: Populate RequestHeadersToAdd in shouldRateLimitWorker
 
 **Files:**
+
 - Modify: `src/service/ratelimit.go:258-264`
 
 - [ ] **Step 1: Write failing test — default header names, over limit**
@@ -290,6 +293,7 @@ git commit -m "feat: populate RequestHeadersToAdd in shouldRateLimitWorker"
 ## Task 4: Add remaining test cases
 
 **Files:**
+
 - Modify: `test/service/ratelimit_test.go`
 
 - [ ] **Step 1: Add test — custom header names**
@@ -504,6 +508,7 @@ git commit -m "test: add RequestHeadersToAdd test cases"
 ## Task 5: Update README
 
 **Files:**
+
 - Modify: `README.md:1406-1416`
 
 - [ ] **Step 1: Insert the new section after the existing `Custom headers` section**
@@ -511,7 +516,6 @@ git commit -m "test: add RequestHeadersToAdd test cases"
 In `README.md`, after line 1415 (`1. \`LIMIT_RESET_HEADER\` ...`) and before line 1417 (`# Tracing`), insert:
 
 ```markdown
-
 The following environment variables control the custom request header feature (headers injected into the forwarded request sent to upstream services by Envoy):
 
 1. `LIMIT_REQUEST_HEADERS_ENABLED` - Enables the custom request headers. When enabled, Envoy injects these headers into the forwarded request, allowing upstream services to inspect rate limit state and make per-request routing decisions (e.g. skip a hot path when quota is exhausted) without the request being blocked.

@@ -1,7 +1,7 @@
 # Design: `RequestHeadersToAdd` Support
 
-**Date:** 2026-06-04  
-**Repo:** github.com/envoyproxy/ratelimit  
+**Date:** 2026-06-04
+**Repo:** github.com/envoyproxy/ratelimit
 **Scope:** Open source contribution
 
 ## Problem
@@ -28,12 +28,12 @@ Add a `RequestHeadersToAdd` feature that mirrors `ResponseHeadersToAdd` exactly:
 
 Four new env vars added to `src/settings/settings.go`, parallel to the existing response header settings:
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `LIMIT_REQUEST_HEADERS_ENABLED` | `false` | Master on/off switch |
-| `LIMIT_REQUEST_LIMIT_HEADER` | `RateLimit-Limit` | Header name for the limit value |
+| Env var                          | Default               | Purpose                         |
+| -------------------------------- | --------------------- | ------------------------------- |
+| `LIMIT_REQUEST_HEADERS_ENABLED`  | `false`               | Master on/off switch            |
+| `LIMIT_REQUEST_LIMIT_HEADER`     | `RateLimit-Limit`     | Header name for the limit value |
 | `LIMIT_REQUEST_REMAINING_HEADER` | `RateLimit-Remaining` | Header name for remaining count |
-| `LIMIT_REQUEST_RESET_HEADER` | `RateLimit-Reset` | Header name for reset seconds |
+| `LIMIT_REQUEST_RESET_HEADER`     | `RateLimit-Reset`     | Header name for reset seconds   |
 
 Default names match the response header defaults. Operators can set different names to distinguish upstream vs downstream headers (e.g. `x-grls-ratelimit-remaining` upstream vs `RateLimit-Remaining` downstream).
 
