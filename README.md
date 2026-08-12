@@ -44,6 +44,7 @@
     - [Health-check configurations](#health-check-configurations)
   - [GRPC server](#grpc-server)
 - [Request Fields](#request-fields)
+  - [Negative hits](#negative-hits)
 - [GRPC Client](#grpc-client)
   - [Commandline flags](#commandline-flags)
 - [Global ShadowMode](#global-shadowmode)
@@ -961,6 +962,21 @@ socket then set `GRPC_UDS`, e.g. `GRPC_UDS=/<dir>/ratelimit.sock` and leave
 For information on the fields of a Ratelimit gRPC request please read the information
 on the RateLimitRequest message type in the Ratelimit [proto file.](https://github.com/envoyproxy/envoy/blob/master/api/envoy/service/ratelimit/v3/rls.proto)
 
+## Negative hits
+
+Each descriptor entry may set the `is_negative_hits` field. When it is `true`, the descriptor's
+`hits_addend` is subtracted from the rate limit counter instead of being added to it, effectively
+refunding previously consumed capacity.
+
+Negative-hit behavior:
+
+- The counter is floored at `0` and can never go negative. Redis performs the decrement-and-floor
+  atomically via a Lua script; Memcached uses its native `Decrement`, which floors at `0` by default.
+- A negative-hit descriptor always returns `OK`. It bypasses the over-limit and near-limit checks and
+  does not trigger any over-limit side effects (over-limit stats or local-cache poisoning), even when
+  the counter is still above the limit after the decrement.
+- The requested decrement is counted in the `total_negative_hits` statistic (see [Statistics](#statistics-1)).
+
 # GRPC Client
 
 The [gRPC client](https://github.com/envoyproxy/ratelimit/blob/master/src/client_cmd/main.go) will interact with ratelimit server and tell you if the requests are over limit.
@@ -1026,6 +1042,7 @@ STAT:
 - near_limit: Number of rule hits over the NearLimit ratio threshold (currently 80%) but under the threshold rate.
 - over_limit: Number of rule hits exceeding the threshold rate
 - total_hits: Number of rule hits in total
+- total_negative_hits: Number of rule hits requested as negative hits (decrements/refunds via `is_negative_hits`)
 - shadow_mode: Number of rule hits where shadow_mode would trigger and override the over_limit result
 
 To use a custom near_limit ratio threshold, you can specify with `NEAR_LIMIT_RATIO` environment variable. It defaults to `0.8` (0-1 scale). These are examples of generated stats for some configured rate limit rules from the above examples:
