@@ -120,6 +120,11 @@ type Settings struct {
 	// value: remaining seconds
 	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:"RateLimit-Reset"`
 
+	// When enabled, response headers include per-unit limit and remaining headers for ALL descriptors
+	// (e.g., ratelimit-limit-seconds, ratelimit-remaining-seconds, ratelimit-limit-minutes, ratelimit-remaining-minutes)
+	// instead of only returning headers for the single descriptor closest to hitting the rate limit.
+	RateLimitAllDescriptorsHeadersEnabled bool `envconfig:"LIMIT_ALL_DESCRIPTORS_HEADERS_ENABLED" default:"false"`
+
 	// Health-check settings
 	HealthyWithAtLeastOneConfigLoaded bool `envconfig:"HEALTHY_WITH_AT_LEAST_ONE_CONFIG_LOADED" default:"false"`
 
