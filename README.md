@@ -1022,6 +1022,13 @@ Configure statistics output frequency with `STATS_FLUSH_INTERVAL`, where the typ
 
 To disable statistics entirely, set env var `DISABLE_STATS` to `true`
 
+To sanitize `.` characters in descriptor keys and values before they are published as metrics, set env var
+`SANITIZE_DESCRIPTOR_METRIC_DOTS` to `true` (default `false`). When enabled, each `.` in a descriptor key or value is
+replaced with `_` in the emitted metric name. Because `.` is the statsd metric-hierarchy separator, a dotted value
+(e.g. a gRPC path like `/helloworld.Greeter/SayHello`) would otherwise inject unintended extra hierarchy levels —
+which breaks the Prometheus `statsd_exporter` metric-name-to-label mapping. This only affects metric names; rate limit
+matching (which keys off the raw descriptor) is unchanged. It is disabled by default for backward compatibility.
+
 Rate Limit Statistic Path:
 
 ```

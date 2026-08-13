@@ -209,6 +209,68 @@ func TestBasicConfig_ExtraTags(t *testing.T) {
 	})
 }
 
+// TestSanitizeDescriptorMetricDots exercises the SANITIZE_DESCRIPTOR_METRIC_DOTS setting
+// end-to-end: a descriptor value carrying '.' characters (a gRPC path) is sent through the
+// real gRPC server, and we assert the emitted metric name has the dots replaced with '_'
+// while rate limiting still works (the request is served, not rejected).
+func TestSanitizeDescriptorMetricDots(t *testing.T) {
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6383},
+	}, func() {
+		s := makeSimpleRedisSettings(6383, 6380, false, 0)
+		s.SanitizeDescriptorMetricDots = true
+		runner := startTestRunner(t, s)
+		defer runner.Stop()
+
+		assert := assert.New(t)
+		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", s.GrpcPort), grpc.WithInsecure())
+		assert.NoError(err)
+		defer conn.Close()
+		c := pb.NewRateLimitServiceClient(conn)
+
+		// The sanitize domain has a value_to_metric descriptor on key "grpc_path", so the
+		// runtime value flows into the metric name. The value contains dots.
+		grpcPath := "/helloworld.Greeter/SayHello"
+		response, err := c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("sanitize", [][][2]string{{{"grpc_path", grpcPath}}}, 1))
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+
+		runner.GetStatsStore().Flush()
+
+		// Dots in the value are replaced with '_' in the emitted metric name.
+		sanitizedValue := utils.SanitizeStatKeyValue(grpcPath)
+		sanitizedCounter := runner.GetStatsStore().NewCounter(
+			fmt.Sprintf("ratelimit.service.rate_limit.sanitize.grpc_path_%s.total_hits", sanitizedValue))
+		assert.Equal(1, int(sanitizedCounter.Value()))
+
+		// The un-sanitized (dotted) metric name is NOT emitted.
+		unsanitizedCounter := runner.GetStatsStore().NewCounter(
+			fmt.Sprintf("ratelimit.service.rate_limit.sanitize.grpc_path_%s.total_hits", grpcPath))
+		assert.Equal(0, int(unsanitizedCounter.Value()))
+
+		// The sanitize domain also has a detailed_metric descriptor on key "detailed_path".
+		// detailed_metric folds the runtime value into the metric name via a different builder
+		// than value_to_metric, so exercise that path too.
+		detailedResponse, err := c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("sanitize", [][][2]string{{{"detailed_path", grpcPath}}}, 1))
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OK, detailedResponse.OverallCode)
+
+		runner.GetStatsStore().Flush()
+
+		detailedSanitizedCounter := runner.GetStatsStore().NewCounter(
+			fmt.Sprintf("ratelimit.service.rate_limit.sanitize.detailed_path_%s.total_hits", sanitizedValue))
+		assert.Equal(1, int(detailedSanitizedCounter.Value()))
+
+		detailedUnsanitizedCounter := runner.GetStatsStore().NewCounter(
+			fmt.Sprintf("ratelimit.service.rate_limit.sanitize.detailed_path_%s.total_hits", grpcPath))
+		assert.Equal(0, int(detailedUnsanitizedCounter.Value()))
+	})
+}
+
 func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS(false, 0))
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS(true, 0))
