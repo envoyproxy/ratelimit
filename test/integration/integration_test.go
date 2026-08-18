@@ -89,6 +89,52 @@ func makeSimpleRedisSettingsWithStopCacheKeyIncrementWhenOverlimit(redisPort int
 	return s
 }
 
+func TestNegativeHitsIntegration(t *testing.T) {
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6383},
+	}, func() {
+		t.Run("Redis", testNegativeHits(makeSimpleRedisSettings(6383, 6380, false, 0)))
+	})
+}
+
+func testNegativeHits(s settings.Settings) func(*testing.T) {
+	return func(t *testing.T) {
+		runner := startTestRunner(t, s)
+		defer runner.Stop()
+
+		assert := assert.New(t)
+		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", s.GrpcPort), grpc.WithInsecure())
+		assert.NoError(err)
+		defer conn.Close()
+		c := pb.NewRateLimitServiceClient(conn)
+
+		// Consume 5 hits from a limit of 50/second.
+		response, err := c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("basic", [][][2]string{{{"key1", "foo"}}}, 5))
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+		assert.Equal(uint32(45), response.Statuses[0].LimitRemaining)
+
+		// Now send a negative hits request to refill 3 tokens.
+		response, err = c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequestWithNegativeHits("basic", [][][2]string{{{"key1", "foo"}}}, []uint64{3}, []bool{true}))
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+		// Counter was 5, decremented by 3 = 2. Remaining = 50 - 2 = 48.
+		assert.Equal(uint32(48), response.Statuses[0].LimitRemaining)
+
+		// Verify by consuming 1 more hit - remaining should be 47.
+		response, err = c.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("basic", [][][2]string{{{"key1", "foo"}}}, 1))
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+		assert.Equal(uint32(47), response.Statuses[0].LimitRemaining)
+	}
+}
+
 func TestBasicConfig(t *testing.T) {
 	common.WithMultiRedis(t, []common.RedisConfig{
 		{Port: 6383},

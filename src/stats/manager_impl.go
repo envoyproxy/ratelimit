@@ -36,6 +36,7 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret.OverLimitWithLocalCache = this.rlStatsScope.NewCounter(key + ".over_limit_with_local_cache")
 	ret.WithinLimit = this.rlStatsScope.NewCounter(key + ".within_limit")
 	ret.ShadowMode = this.rlStatsScope.NewCounter(key + ".shadow_mode")
+	ret.TotalNegativeHits = this.rlStatsScope.NewCounter(key + ".total_negative_hits")
 	return ret
 }
 

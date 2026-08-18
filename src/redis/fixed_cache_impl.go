@@ -37,11 +37,32 @@ func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend ui
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
+func pipelineAppendDecrement(client Client, pipeline *Pipeline, key string, hitsAddend uint64, result *uint64, expirationSeconds int64) {
+	// EVAL's first positional argument is the script body, not the key, so the
+	// real cache key must be passed explicitly as the routing key. Otherwise, in
+	// Redis Cluster mode the command would be routed using the script text,
+	// causing MOVED/CROSSSLOT errors or misrouting.
+	*pipeline = client.PipeAppendWithRoutingKey(*pipeline, key, result, "EVAL", limiter.DecrementScript, 1, key, hitsAddend, expirationSeconds)
+}
+
+func (this *fixedRateLimitCacheImpl) selectPipeline(cacheKey limiter.CacheKey, pipeline *Pipeline, perSecondPipeline *Pipeline) (Client, *Pipeline) {
+	if this.perSecondClient != nil && cacheKey.PerSecond {
+		if *perSecondPipeline == nil {
+			*perSecondPipeline = Pipeline{}
+		}
+		return this.perSecondClient, perSecondPipeline
+	}
+	if *pipeline == nil {
+		*pipeline = Pipeline{}
+	}
+	return this.client, pipeline
+}
+
 func pipelineAppendtoGet(client Client, pipeline *Pipeline, key string, result *uint64) {
 	*pipeline = client.PipeAppend(*pipeline, result, "GET", key)
 }
 
-func (this *fixedRateLimitCacheImpl) getHitsAddend(hitsAddend uint64, isCacheKeyOverlimit, isCacheKeyNearlimit,
+func (this *fixedRateLimitCacheImpl) getHitsAddendValue(hitsAddend uint64, isCacheKeyOverlimit, isCacheKeyNearlimit,
 	isNearLimit bool,
 ) uint64 {
 	// If stopCacheKeyIncrementWhenOverlimit is false, then we always increment the cache key.
@@ -94,8 +115,9 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	isCacheKeyNearlimit := false
 
 	// Check if any of the keys are already to the over limit in cache.
+	// Negative hits (decrements) skip this check — they always proceed.
 	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" {
+		if cacheKey.Key == "" || hitsAddends[i].IsNegative {
 			continue
 		}
 
@@ -116,7 +138,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	// then we check if any of the keys are near limit in redis cache.
 	if this.stopCacheKeyIncrementWhenOverlimit && !isCacheKeyOverlimit {
 		for i, cacheKey := range cacheKeys {
-			if cacheKey.Key == "" {
+			if cacheKey.Key == "" || hitsAddends[i].IsNegative {
 				continue
 			}
 
@@ -141,12 +163,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		}
 
 		for i, cacheKey := range cacheKeys {
-			if cacheKey.Key == "" {
+			if cacheKey.Key == "" || hitsAddends[i].IsNegative {
 				continue
 			}
 			// Now fetch the pipeline.
 			limitBeforeIncrease := currentCount[i]
-			limitAfterIncrease := limitBeforeIncrease + hitsAddends[i]
+			limitAfterIncrease := limitBeforeIncrease + hitsAddends[i].Value
 
 			limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
@@ -157,7 +179,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		}
 	}
 
-	// Now, actually setup the pipeline to increase the usage of cache key, skipping empty cache keys.
+	// Now, actually setup the pipeline to increase/decrease the usage of cache key, skipping empty cache keys.
 	for i, cacheKey := range cacheKeys {
 		if cacheKey.Key == "" || overlimitIndexes[i] {
 			continue
@@ -170,19 +192,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			expirationSeconds += this.baseRateLimiter.JitterRand.Int63n(this.baseRateLimiter.ExpirationJitterMaxSeconds)
 		}
 
-		// Use the perSecondConn if it is not nil and the cacheKey represents a per second Limit.
-		if this.perSecondClient != nil && cacheKey.PerSecond {
-			if perSecondPipeline == nil {
-				perSecondPipeline = Pipeline{}
-			}
-			pipelineAppend(this.perSecondClient, &perSecondPipeline, cacheKey.Key, this.getHitsAddend(hitsAddends[i],
-				isCacheKeyOverlimit, isCacheKeyNearlimit, nearlimitIndexes[i]), &results[i], expirationSeconds)
+		client, p := this.selectPipeline(cacheKey, &pipeline, &perSecondPipeline)
+		if hitsAddends[i].IsNegative {
+			pipelineAppendDecrement(client, p, cacheKey.Key, hitsAddends[i].Value, &results[i], expirationSeconds)
 		} else {
-			if pipeline == nil {
-				pipeline = Pipeline{}
-			}
-			pipelineAppend(this.client, &pipeline, cacheKey.Key, this.getHitsAddend(hitsAddends[i], isCacheKeyOverlimit,
-				isCacheKeyNearlimit, nearlimitIndexes[i]), &results[i], expirationSeconds)
+			pipelineAppend(client, p, cacheKey.Key, this.getHitsAddendValue(hitsAddends[i].Value,
+				isCacheKeyOverlimit, isCacheKeyNearlimit, nearlimitIndexes[i]), &results[i], expirationSeconds)
 		}
 	}
 
@@ -207,14 +222,20 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	responseDescriptorStatuses := make([]*pb.RateLimitResponse_DescriptorStatus,
 		len(request.Descriptors))
 	for i, cacheKey := range cacheKeys {
+		if hitsAddends[i].IsNegative {
+			// Negative hits (refunds) always return OK with the remaining capacity,
+			// even if the post-decrement counter is still above the limit.
+			responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatusForNegativeHits(
+				cacheKey.Key, limits[i], results[i])
+		} else {
+			limitAfterIncrease := results[i]
+			limitBeforeIncrease := limitAfterIncrease - hitsAddends[i].Value
 
-		limitAfterIncrease := results[i]
-		limitBeforeIncrease := limitAfterIncrease - hitsAddends[i]
+			limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
-		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
-
-		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-			limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i])
+			responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
+				limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i].Value)
+		}
 	}
 
 	return responseDescriptorStatuses
