@@ -641,6 +641,49 @@ func TestMemcacheAdd(t *testing.T) {
 	cache.Flush()
 }
 
+// Memcached interprets any expiration greater than 30 days (2,592,000 seconds) as an absolute
+// Unix timestamp rather than a relative offset. A calendar-aligned MONTH limit falling in a
+// 31-day month produces a relative expiration of 2,678,400 seconds, so it must be converted to
+// an absolute Unix timestamp before being handed to the memcached client.
+func TestMemcacheCalendarMonthExpirationAboveThirtyDaysIsAbsoluteTimestamp(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	client := mock_memcached.NewMockClient(controller)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	sm := mockstats.NewMockStatManager(statsStore)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", true)
+
+	// 2024-01-01T00:00:00Z: January has 31 days, so the relative expiration until the end of
+	// the month is 31 * 86400 = 2,678,400 seconds, which is above memcached's 30-day threshold.
+	nowUnix := int64(1704067200)
+	timeSource.EXPECT().UnixNow().Return(nowUnix).AnyTimes()
+
+	client.EXPECT().GetMulti([]string{"domain_key_value_1704067200"}).Return(nil, nil)
+	client.EXPECT().Increment("domain_key_value_1704067200", uint64(1)).Return(
+		uint64(0), memcache.ErrCacheMiss,
+	)
+	client.EXPECT().Add(
+		&memcache.Item{
+			Key:        "domain_key_value_1704067200",
+			Value:      []byte(strconv.FormatUint(1, 10)),
+			Expiration: int32(nowUnix + 2678400),
+		},
+	).Return(nil)
+
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MONTH, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	assert.Equal(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, true)}},
+		cache.DoLimit(context.Background(), request, limits),
+	)
+
+	cache.Flush()
+}
+
 func TestNewRateLimitCacheImplFromSettingsWhenSrvCannotBeResolved(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
