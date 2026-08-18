@@ -33,6 +33,19 @@ import (
 
 var tracer = otel.Tracer("ratelimit")
 
+// PLA-8128 fork: soft-breach header threshold, 0 disables. Ratio semantics
+// match NEAR_LIMIT_RATIO (e.g. 0.7 = header once 70% of the budget is used).
+// Set from settings by the runner at startup via SetSoftBreachHeaderRatio.
+var softBreachHeaderRatio float64
+
+func SetSoftBreachHeaderRatio(ratio float64) {
+	if ratio > 0 && ratio < 1 {
+		softBreachHeaderRatio = ratio
+	} else {
+		softBreachHeaderRatio = 0
+	}
+}
+
 type RateLimitServiceServer interface {
 	pb.RateLimitServiceServer
 	GetCurrentConfig() (config.RateLimitConfig, bool, bool)
@@ -260,6 +273,25 @@ func (this *service) shouldRateLimitWorker(
 			this.rateLimitLimitHeader(minimumDescriptor),
 			this.rateLimitRemainingHeader(minimumDescriptor),
 			this.rateLimitResetHeader(minimumDescriptor),
+		}
+	}
+
+	// PLA-8128 fork: client-visible soft-breach signal. When the request is
+	// admitted but any checked descriptor is inside the soft band
+	// (remaining <= (1-ratio)*limit), emit a response header so downstream
+	// can degrade gracefully before a hard 429. Parity with depop-routing's
+	// rate_limit_soft_breached nginx variable.
+	if softBreachHeaderRatio > 0 && finalCode == pb.RateLimitResponse_OK {
+		for i, status := range response.Statuses {
+			if isUnlimited[i] || status.CurrentLimit == nil {
+				continue
+			}
+			softBand := float64(status.CurrentLimit.RequestsPerUnit) * (1 - softBreachHeaderRatio)
+			if float64(status.LimitRemaining) <= softBand {
+				response.ResponseHeadersToAdd = append(response.ResponseHeadersToAdd,
+					&core.HeaderValue{Key: "x-ratelimit-soft-breach", Value: "1"})
+				break
+			}
 		}
 	}
 

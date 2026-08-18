@@ -107,6 +107,7 @@ type Settings struct {
 	ExpirationJitterMaxSeconds         int64   `envconfig:"EXPIRATION_JITTER_MAX_SECONDS" default:"300"`
 	LocalCacheSizeInBytes              int     `envconfig:"LOCAL_CACHE_SIZE_IN_BYTES" default:"0"`
 	NearLimitRatio                     float32 `envconfig:"NEAR_LIMIT_RATIO" default:"0.8"`
+	SoftBreachHeaderRatio              float64 `envconfig:"SOFT_BREACH_HEADER_RATIO" default:"0"`
 	CacheKeyPrefix                     string  `envconfig:"CACHE_KEY_PREFIX" default:""`
 	BackendType                        string  `envconfig:"BACKEND_TYPE" default:"redis"`
 	StopCacheKeyIncrementWhenOverlimit bool    `envconfig:"STOP_CACHE_KEY_INCREMENT_WHEN_OVERLIMIT" default:"false"`
