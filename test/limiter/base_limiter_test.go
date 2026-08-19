@@ -49,7 +49,7 @@ func TestGenerateCacheKeysNegativeHits(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false)
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
@@ -103,13 +103,13 @@ func TestGenerateCacheKeysMonth(t *testing.T) {
 	startOfFebruary := time.Date(2024, time.February, 1, 0, 0, 0, 0, time.UTC).Unix()
 
 	timeSource.EXPECT().UnixNow().Return(monthStart)
-	cacheKeysStart := baseRateLimit.GenerateCacheKeys(request, limits, []uint64{1})
+	cacheKeysStart := baseRateLimit.GenerateCacheKeys(request, limits, []utils.HitsAddend{{Value: 1}})
 
 	timeSource.EXPECT().UnixNow().Return(endOfJanuary)
-	cacheKeysEndOfMonth := baseRateLimit.GenerateCacheKeys(request, limits, []uint64{1})
+	cacheKeysEndOfMonth := baseRateLimit.GenerateCacheKeys(request, limits, []utils.HitsAddend{{Value: 1}})
 
 	timeSource.EXPECT().UnixNow().Return(startOfFebruary)
-	cacheKeysNextMonth := baseRateLimit.GenerateCacheKeys(request, limits, []uint64{1})
+	cacheKeysNextMonth := baseRateLimit.GenerateCacheKeys(request, limits, []utils.HitsAddend{{Value: 1}})
 
 	assert.Equal(cacheKeysStart[0].Key, cacheKeysEndOfMonth[0].Key)
 	assert.NotEqual(cacheKeysStart[0].Key, cacheKeysNextMonth[0].Key)

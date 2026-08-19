@@ -775,7 +775,7 @@ func TestMemcachedNegativeHits(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "")
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
 
 	// Counter at 7, requesting -3. Memcached Decrement floors at 0 natively.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -808,7 +808,7 @@ func TestMemcachedNegativeHitsFloorAtZero(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "")
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
 
 	// Counter at 2, requesting -5. Floor at 0.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -842,7 +842,7 @@ func TestMemcachedNegativeHitsStillOverLimitReturnsOK(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "")
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
 
 	// Counter at 15, requesting -3. Predicted post-decrement value is 12, still above the limit of 10.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -874,7 +874,7 @@ func TestMemcachedNegativeHitsSkipsOverLimitCheck(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
 	localCache := freecache.NewCache(100)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, localCache, sm, 0.8, "")
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, localCache, sm, 0.8, "", false)
 
 	// Set the key as over-limit in local cache.
 	localCache.Set([]byte("domain_key_value_1234"), []byte{}, 60)

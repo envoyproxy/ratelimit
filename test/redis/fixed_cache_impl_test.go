@@ -38,7 +38,7 @@ func TestNegativeHits(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
 
 	// Decrement from a counter at 5, requesting -3. Lua returns 2 (5-3=2).
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -67,7 +67,7 @@ func TestNegativeHitsFloorAtZero(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
 
 	// Counter at 2, requesting -5. Lua floors at 0 and returns 0.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -95,7 +95,7 @@ func TestNegativeHitsSkipsOverLimitCheck(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false, false)
 
 	// Set the key as over-limit in local cache.
 	localCache.Set([]byte("domain_key_value_1234"), []byte{}, 60)
@@ -128,7 +128,7 @@ func TestNegativeHitsStillOverLimitReturnsOK(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
 
 	// Counter at 15, requesting -3. Lua returns 12, which is still above the limit of 10.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -159,7 +159,7 @@ func TestNegativeHitsWithStopCacheKeyIncrementWhenOverlimit(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, true)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, true, false)
 
 	// Counter at 5, requesting -3. Lua returns 2. No GET pre-check should be issued for
 	// the negative hit, only the EVAL decrement.
