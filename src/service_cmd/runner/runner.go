@@ -42,6 +42,8 @@ type Runner struct {
 }
 
 func NewRunner(s settings.Settings) Runner {
+	configureLogger(s)
+
 	var store gostats.Store
 
 	switch {
@@ -88,6 +90,24 @@ func NewRunner(s settings.Settings) Runner {
 		statsManager: stats.NewStatManager(store, s),
 		settings:     s,
 		done:         make(chan struct{}),
+	}
+}
+
+func configureLogger(s settings.Settings) {
+	logLevel, err := logger.ParseLevel(s.LogLevel)
+	if err != nil {
+		logger.Fatalf("Could not parse log level. %v\n", err)
+	}
+	logger.SetLevel(logLevel)
+
+	if strings.ToLower(s.LogFormat) == "json" {
+		logger.SetFormatter(&logger.JSONFormatter{
+			TimestampFormat: time.RFC3339Nano,
+			FieldMap: logger.FieldMap{
+				logger.FieldKeyTime: "@timestamp",
+				logger.FieldKeyMsg:  "@message",
+			},
+		})
 	}
 }
 
@@ -155,22 +175,6 @@ func (runner *Runner) Run() {
 		}()
 	} else {
 		logger.Infof("Tracing disabled")
-	}
-
-	logLevel, err := logger.ParseLevel(s.LogLevel)
-	if err != nil {
-		logger.Fatalf("Could not parse log level. %v\n", err)
-	} else {
-		logger.SetLevel(logLevel)
-	}
-	if strings.ToLower(s.LogFormat) == "json" {
-		logger.SetFormatter(&logger.JSONFormatter{
-			TimestampFormat: time.RFC3339Nano,
-			FieldMap: logger.FieldMap{
-				logger.FieldKeyTime: "@timestamp",
-				logger.FieldKeyMsg:  "@message",
-			},
-		})
 	}
 
 	var localCache *freecache.Cache
