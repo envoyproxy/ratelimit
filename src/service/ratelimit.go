@@ -33,6 +33,11 @@ import (
 
 var tracer = otel.Tracer("ratelimit")
 
+// Header added to the UPSTREAM request when an admitted request is above a
+// descriptor's soft_requests_per_unit threshold, so the backend can degrade
+// before clients start seeing 429s.
+const softBreachHeaderName = "x-ratelimit-soft-breached"
+
 type RateLimitServiceServer interface {
 	pb.RateLimitServiceServer
 	GetCurrentConfig() (config.RateLimitConfig, bool, bool)
@@ -262,6 +267,29 @@ func (this *service) shouldRateLimitWorker(
 			this.rateLimitLimitHeader(minimumDescriptor),
 			this.rateLimitRemainingHeader(minimumDescriptor),
 			this.rateLimitResetHeader(minimumDescriptor),
+		}
+	}
+
+	// Soft-breach signal. When the request is admitted but a descriptor that
+	// configures soft_requests_per_unit is above that threshold, flag it to the
+	// UPSTREAM service so it can degrade before clients start seeing 429s.
+	// Only descriptors carrying a soft threshold participate; the rest can
+	// never soft-breach.
+	if finalCode == pb.RateLimitResponse_OK {
+		for i, status := range response.Statuses {
+			if isUnlimited[i] || status.CurrentLimit == nil || limitsToCheck[i] == nil {
+				continue
+			}
+			soft := limitsToCheck[i].SoftRequestsPerUnit
+			if soft == 0 {
+				continue
+			}
+			used := status.CurrentLimit.RequestsPerUnit - status.LimitRemaining
+			if used > soft {
+				response.RequestHeadersToAdd = append(response.RequestHeadersToAdd,
+					&core.HeaderValue{Key: softBreachHeaderName, Value: "1"})
+				break
+			}
 		}
 	}
 

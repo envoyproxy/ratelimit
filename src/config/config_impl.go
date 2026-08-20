@@ -20,10 +20,14 @@ type yamlReplaces struct {
 
 type YamlRateLimit struct {
 	RequestsPerUnit uint32 `yaml:"requests_per_unit"`
-	Unit            string
-	Unlimited       bool `yaml:"unlimited"`
-	Name            string
-	Replaces        []yamlReplaces
+	// SoftRequestsPerUnit, when non-zero, marks a threshold below the hard limit.
+	// Requests above it are still admitted but carry a soft-breach header upstream
+	// so the backend can degrade before clients start seeing 429s. Zero disables it.
+	SoftRequestsPerUnit uint32 `yaml:"soft_requests_per_unit"`
+	Unit                string
+	Unlimited           bool `yaml:"unlimited"`
+	Name                string
+	Replaces            []yamlReplaces
 }
 
 type YamlDescriptor struct {
@@ -72,22 +76,23 @@ type rateLimitConfigImpl struct {
 }
 
 var validKeys = map[string]bool{
-	"domain":            true,
-	"key":               true,
-	"value":             true,
-	"descriptors":       true,
-	"rate_limit":        true,
-	"unit":              true,
-	"requests_per_unit": true,
-	"unlimited":         true,
-	"shadow_mode":       true,
-	"quota_mode":        true,
-	"name":              true,
-	"replaces":          true,
-	"detailed_metric":   true,
-	"value_to_metric":   true,
-	"share_threshold":   true,
-	"metadata":          true,
+	"domain":                 true,
+	"key":                    true,
+	"value":                  true,
+	"descriptors":            true,
+	"rate_limit":             true,
+	"unit":                   true,
+	"requests_per_unit":      true,
+	"soft_requests_per_unit": true,
+	"unlimited":              true,
+	"shadow_mode":            true,
+	"quota_mode":             true,
+	"name":                   true,
+	"replaces":               true,
+	"detailed_metric":        true,
+	"value_to_metric":        true,
+	"share_threshold":        true,
+	"metadata":               true,
 }
 
 // Create a new rate limit config entry.
@@ -290,9 +295,15 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 				statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode, descriptorConfig.QuotaMode,
 				descriptorConfig.RateLimit.Name, replaces, descriptorConfig.DetailedMetric,
 			)
+			rateLimit.SoftRequestsPerUnit = descriptorConfig.RateLimit.SoftRequestsPerUnit
+			if rateLimit.SoftRequestsPerUnit >= rateLimit.Limit.RequestsPerUnit && rateLimit.SoftRequestsPerUnit != 0 {
+				panic(newRateLimitConfigError(
+					config.Name,
+					"soft_requests_per_unit must be below requests_per_unit"))
+			}
 			rateLimitDebugString = fmt.Sprintf(
-				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t, quota_mode=%t}", rateLimit.Limit.RequestsPerUnit,
-				rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode)
+				" ratelimit={requests_per_unit=%d, soft_requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t, quota_mode=%t}", rateLimit.Limit.RequestsPerUnit,
+				rateLimit.SoftRequestsPerUnit, rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode)
 
 			for _, replaces := range descriptorConfig.RateLimit.Replaces {
 				if replaces.Name == "" {
@@ -578,15 +589,16 @@ func (this *rateLimitConfigImpl) GetLimit(
 				// Create a copy of the rate limit to avoid modifying the shared object
 				originalLimit := nextDescriptor.limit
 				rateLimit = &RateLimit{
-					FullKey:        originalLimit.FullKey,
-					Stats:          originalLimit.Stats,
-					Limit:          originalLimit.Limit,
-					Unlimited:      originalLimit.Unlimited,
-					ShadowMode:     originalLimit.ShadowMode,
-					QuotaMode:      originalLimit.QuotaMode,
-					Name:           originalLimit.Name,
-					Replaces:       originalLimit.Replaces,
-					DetailedMetric: originalLimit.DetailedMetric,
+					FullKey:             originalLimit.FullKey,
+					Stats:               originalLimit.Stats,
+					Limit:               originalLimit.Limit,
+					SoftRequestsPerUnit: originalLimit.SoftRequestsPerUnit,
+					Unlimited:           originalLimit.Unlimited,
+					ShadowMode:          originalLimit.ShadowMode,
+					QuotaMode:           originalLimit.QuotaMode,
+					Name:                originalLimit.Name,
+					Replaces:            originalLimit.Replaces,
+					DetailedMetric:      originalLimit.DetailedMetric,
 					// Initialize ShareThresholdKeyPattern with correct length, empty strings for entries without share_threshold
 					ShareThresholdKeyPattern: nil,
 					Metadata:                 nextDescriptor.metadata,
@@ -614,7 +626,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 			if rateLimit != nil && rateLimit.DetailedMetric {
 				// Preserve ShareThresholdKeyPattern when recreating rate limit
 				originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
+				soft := rateLimit.SoftRequestsPerUnit
 				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
+				rateLimit.SoftRequestsPerUnit = soft
 				rateLimit.ShareThresholdKeyPattern = originalShareThresholdKeyPattern
 			}
 
@@ -664,7 +678,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 		if enhancedKey != rateLimit.FullKey {
 			// Recreate to ensure a clean stats struct, then set to enhanced stats
 			originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
+			soft := rateLimit.SoftRequestsPerUnit
 			rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(enhancedKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
+			rateLimit.SoftRequestsPerUnit = soft
 			rateLimit.ShareThresholdKeyPattern = originalShareThresholdKeyPattern
 		}
 	}

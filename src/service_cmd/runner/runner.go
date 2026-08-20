@@ -22,6 +22,7 @@ import (
 	"github.com/envoyproxy/ratelimit/src/memcached"
 	"github.com/envoyproxy/ratelimit/src/metrics"
 	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/redis_decay"
 	"github.com/envoyproxy/ratelimit/src/server"
 	ratelimit "github.com/envoyproxy/ratelimit/src/service"
 	"github.com/envoyproxy/ratelimit/src/settings"
@@ -108,6 +109,8 @@ func createLimiter(ctx context.Context, srv server.Server, s settings.Settings, 
 			s.ExpirationJitterMaxSeconds,
 			statsManager,
 		)
+	case "redis_decay":
+		return redis_decay.NewFromSettings(ctx, s, srv, utils.NewTimeSourceImpl())
 	case "memcache":
 		return memcached.NewRateLimitCacheImplFromSettings(
 			s,

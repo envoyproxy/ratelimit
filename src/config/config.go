@@ -18,15 +18,19 @@ func (e RateLimitConfigError) Error() string {
 
 // Wrapper for an individual rate limit config entry which includes the defined limit and stats.
 type RateLimit struct {
-	FullKey        string
-	Stats          stats.RateLimitStats
-	Limit          *pb.RateLimitResponse_RateLimit
-	Unlimited      bool
-	ShadowMode     bool
-	QuotaMode      bool
-	Name           string
-	Replaces       []string
-	DetailedMetric bool
+	FullKey string
+	Stats   stats.RateLimitStats
+	Limit   *pb.RateLimitResponse_RateLimit
+	// SoftRequestsPerUnit is a threshold below Limit.RequestsPerUnit. Requests
+	// above it are admitted but flagged upstream via a soft-breach header.
+	// Zero means no soft threshold for this descriptor.
+	SoftRequestsPerUnit uint32
+	Unlimited           bool
+	ShadowMode          bool
+	QuotaMode           bool
+	Name                string
+	Replaces            []string
+	DetailedMetric      bool
 	// ShareThresholdKeyPattern is a slice of wildcard patterns for descriptor entries
 	// The slice index corresponds to the descriptor entry index.
 	ShareThresholdKeyPattern []string
