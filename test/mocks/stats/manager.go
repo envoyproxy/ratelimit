@@ -9,11 +9,16 @@ import (
 )
 
 type MockStatManager struct {
-	store gostats.Store
+	store                        gostats.Store
+	sanitizeDescriptorMetricDots bool
 }
 
 func (m *MockStatManager) GetStatsStore() gostats.Store {
 	return m.store
+}
+
+func (m *MockStatManager) SanitizeDescriptorMetricDots() bool {
+	return m.sanitizeDescriptorMetricDots
 }
 
 func (m *MockStatManager) NewShouldRateLimitStats() stats.ShouldRateLimitStats {
@@ -60,4 +65,10 @@ func (m *MockStatManager) NewDomainStats(key string) stats.DomainStats {
 
 func NewMockStatManager(store gostats.Store) stats.Manager {
 	return &MockStatManager{store: store}
+}
+
+// NewMockStatManagerWithSanitize builds a mock stat manager with the
+// SANITIZE_DESCRIPTOR_METRIC_DOTS behavior toggled on/off.
+func NewMockStatManagerWithSanitize(store gostats.Store, sanitizeDescriptorMetricDots bool) stats.Manager {
+	return &MockStatManager{store: store, sanitizeDescriptorMetricDots: sanitizeDescriptorMetricDots}
 }

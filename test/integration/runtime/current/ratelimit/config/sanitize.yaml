@@ -1,0 +1,12 @@
+domain: sanitize
+descriptors:
+  - key: grpc_path
+    value_to_metric: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 50
+  - key: detailed_path
+    detailed_metric: true
+    rate_limit:
+      unit: minute
+      requests_per_unit: 50

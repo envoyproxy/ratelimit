@@ -87,6 +87,13 @@ func SanitizeStatName(s string) string {
 	})
 }
 
+// SanitizeStatKeyValue replaces the statsd hierarchy separator '.' with '_' so that
+// dots in a descriptor key or value do not create unintended metric hierarchy levels
+// (which, for example, break the Prometheus statsd_exporter metric-name -> label mapping).
+func SanitizeStatKeyValue(s string) string {
+	return strings.ReplaceAll(s, ".", "_")
+}
+
 type HitsAddend struct {
 	Value      uint64
 	IsNegative bool

@@ -138,3 +138,21 @@ func TestExpirationSecondsNonMonthDoesNotUseTimeSource(t *testing.T) {
 	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_DAY, timeSource, true)
 	assert.EqualValues(t, 60*60*24, seconds)
 }
+
+func TestSanitizeStatKeyValue(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"a.b.c", "a_b_c"},
+		{"nodots", "nodots"},
+		{"", ""},
+		{"10.0.0.1", "10_0_0_1"},
+		{"foo.bar", "foo_bar"},
+		{".leading", "_leading"},
+		{"trailing.", "trailing_"},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, utils.SanitizeStatKeyValue(c.in))
+	}
+}

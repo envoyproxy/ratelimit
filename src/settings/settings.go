@@ -90,6 +90,7 @@ type Settings struct {
 	ExtraTags                            map[string]string `envconfig:"EXTRA_TAGS" default:""`
 	StatsFlushInterval                   time.Duration     `envconfig:"STATS_FLUSH_INTERVAL" default:"10s"`
 	DisableStats                         bool              `envconfig:"DISABLE_STATS" default:"false"`
+	SanitizeDescriptorMetricDots         bool              `envconfig:"SANITIZE_DESCRIPTOR_METRIC_DOTS" default:"false"`
 	UsePrometheus                        bool              `envconfig:"USE_PROMETHEUS" default:"false"`
 	PrometheusAddr                       string            `envconfig:"PROMETHEUS_ADDR" default:":9090"`
 	PrometheusPath                       string            `envconfig:"PROMETHEUS_PATH" default:"/metrics"`

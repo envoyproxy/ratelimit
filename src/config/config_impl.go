@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/envoyproxy/ratelimit/src/stats"
+	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
 type yamlReplaces struct {
@@ -443,6 +444,17 @@ func (this *rateLimitConfigImpl) Dump() string {
 	return ret
 }
 
+// maybeSanitize replaces '.' with '_' in a descriptor key or value fragment when the
+// SANITIZE_DESCRIPTOR_METRIC_DOTS setting is enabled, so dotted values don't inject extra
+// metric hierarchy levels. It must only be applied to fragments written into metric names,
+// never to keys used for descriptor map lookups (that would break rate limit matching).
+func (this *rateLimitConfigImpl) maybeSanitize(s string) string {
+	if this.statsManager.SanitizeDescriptorMetricDots() {
+		return utils.SanitizeStatKeyValue(s)
+	}
+	return s
+}
+
 func (this *rateLimitConfigImpl) GetLimit(
 	ctx context.Context, domain string, descriptor *pb_struct.RateLimitDescriptor,
 ) *RateLimit {
@@ -457,7 +469,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if descriptor.GetLimit() != nil {
-		rateLimitKey := descriptorKey(domain, descriptor)
+		rateLimitKey := this.descriptorKey(domain, descriptor)
 		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
 		// When limit override is provided by envoy config, we don't want to enable shadow_mode
 		rateLimit = NewRateLimit(
@@ -494,8 +506,12 @@ func (this *rateLimitConfigImpl) GetLimit(
 		// to check for a default value.
 		finalKey := entry.Key + "_" + entry.Value
 
+		// Write the sanitized fragments (never finalKey itself, which is reused for the
+		// descriptor map lookup below and must stay verbatim for rate limit matching).
 		detailedMetricFullKey.WriteString(".")
-		detailedMetricFullKey.WriteString(finalKey)
+		detailedMetricFullKey.WriteString(this.maybeSanitize(entry.Key))
+		detailedMetricFullKey.WriteString("_")
+		detailedMetricFullKey.WriteString(this.maybeSanitize(entry.Value))
 
 		logger.Debugf("looking up key: %s", finalKey)
 		nextDescriptor := descriptorsMap[finalKey]
@@ -561,14 +577,14 @@ func (this *rateLimitConfigImpl) GetLimit(
 			}
 
 			// Write key and value (if any)
-			valueToMetricFullKey.WriteString(entry.Key)
+			valueToMetricFullKey.WriteString(this.maybeSanitize(entry.Key))
 			if valueToUse != "" {
 				valueToMetricFullKey.WriteString("_")
-				valueToMetricFullKey.WriteString(valueToUse)
+				valueToMetricFullKey.WriteString(this.maybeSanitize(valueToUse))
 			}
 		} else {
 			// No next descriptor found; still append something deterministic
-			valueToMetricFullKey.WriteString(entry.Key)
+			valueToMetricFullKey.WriteString(this.maybeSanitize(entry.Key))
 		}
 
 		if nextDescriptor != nil && nextDescriptor.limit != nil {
@@ -635,15 +651,15 @@ func (this *rateLimitConfigImpl) GetLimit(
 			for i, entry := range descriptor.Entries {
 				shareThresholdMetricKey.WriteString(".")
 				if i < len(rateLimit.ShareThresholdKeyPattern) && rateLimit.ShareThresholdKeyPattern[i] != "" {
-					shareThresholdMetricKey.WriteString(entry.Key)
+					shareThresholdMetricKey.WriteString(this.maybeSanitize(entry.Key))
 					shareThresholdMetricKey.WriteString("_")
-					shareThresholdMetricKey.WriteString(rateLimit.ShareThresholdKeyPattern[i])
+					shareThresholdMetricKey.WriteString(this.maybeSanitize(rateLimit.ShareThresholdKeyPattern[i]))
 				} else {
 					// Include full key_value for entries without share_threshold
-					shareThresholdMetricKey.WriteString(entry.Key)
+					shareThresholdMetricKey.WriteString(this.maybeSanitize(entry.Key))
 					if entry.Value != "" {
 						shareThresholdMetricKey.WriteString("_")
-						shareThresholdMetricKey.WriteString(entry.Value)
+						shareThresholdMetricKey.WriteString(this.maybeSanitize(entry.Value))
 					}
 				}
 			}
@@ -676,15 +692,15 @@ func (this *rateLimitConfigImpl) IsEmptyDomains() bool {
 	return len(this.domains) == 0
 }
 
-func descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
+func (this *rateLimitConfigImpl) descriptorKey(domain string, descriptor *pb_struct.RateLimitDescriptor) string {
 	rateLimitKey := ""
 	for _, entry := range descriptor.Entries {
 		if rateLimitKey != "" {
 			rateLimitKey += "."
 		}
-		rateLimitKey += entry.Key
+		rateLimitKey += this.maybeSanitize(entry.Key)
 		if entry.Value != "" {
-			rateLimitKey += "_" + entry.Value
+			rateLimitKey += "_" + this.maybeSanitize(entry.Value)
 		}
 	}
 	return domain + "." + rateLimitKey

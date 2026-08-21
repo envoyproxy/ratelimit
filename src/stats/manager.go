@@ -20,13 +20,17 @@ type Manager interface {
 	NewServiceStats() ServiceStats
 	// Returns the stats.Store wrapped by the Manager.
 	GetStatsStore() gostats.Store
+	// SanitizeDescriptorMetricDots reports whether '.' in descriptor keys/values should be
+	// replaced with '_' when building metric names (SANITIZE_DESCRIPTOR_METRIC_DOTS).
+	SanitizeDescriptorMetricDots() bool
 }
 
 type ManagerImpl struct {
-	store                gostats.Store
-	rlStatsScope         gostats.Scope
-	serviceStatsScope    gostats.Scope
-	shouldRateLimitScope gostats.Scope
+	store                        gostats.Store
+	rlStatsScope                 gostats.Scope
+	serviceStatsScope            gostats.Scope
+	shouldRateLimitScope         gostats.Scope
+	sanitizeDescriptorMetricDots bool
 }
 
 // Stats for panic recoveries.
