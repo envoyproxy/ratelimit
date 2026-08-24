@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/envoyproxy/go-control-plane v0.14.0
-	github.com/envoyproxy/go-control-plane/envoy v1.37.0
+	github.com/envoyproxy/go-control-plane/envoy v1.39.0
 	github.com/envoyproxy/go-control-plane/ratelimit v0.1.0
 	google.golang.org/grpc v1.83.0
 )
