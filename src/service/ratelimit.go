@@ -435,7 +435,7 @@ func (this *service) rateLimitRequestRemainingHeader(descriptor *pb.RateLimitRes
 func (this *service) rateLimitRequestResetHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.requestHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit).GetSeconds(), 10),
 	}
 }
 
