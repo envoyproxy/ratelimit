@@ -71,6 +71,7 @@
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
+  - [RequestHeadersToAdd](#requestheaderstoadd)
 - [Tracing](#tracing)
 - [TLS](#tls)
 - [mTLS](#mtls)
