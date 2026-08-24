@@ -58,6 +58,7 @@ type service struct {
 	globalShadowMode               bool
 	globalQuotaMode                bool
 	responseDynamicMetadataEnabled bool
+	useCalendarMonthRateLimit      bool
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -94,6 +95,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 	this.globalShadowMode = rlSettings.GlobalShadowMode
 	this.globalQuotaMode = rlSettings.GlobalQuotaMode
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
+	this.useCalendarMonthRateLimit = rlSettings.UseCalendarMonthRateLimit
 
 	this.customHeadersEnabled = rlSettings.RateLimitResponseHeadersEnabled
 	if rlSettings.RateLimitResponseHeadersEnabled {
@@ -412,7 +414,7 @@ func (this *service) rateLimitResetHeader(
 ) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit).GetSeconds(), 10),
 	}
 }
 

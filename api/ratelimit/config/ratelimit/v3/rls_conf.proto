@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package ratelimit.config.ratelimit.v3;
 
+import "google/protobuf/struct.proto";
+
 option java_package = "io.envoyproxy.ratelimit.config.ratelimit.v3";
 option java_outer_classname = "RlsConfigProto";
 option java_multiple_files = true;
@@ -49,6 +51,10 @@ message RateLimitDescriptor {
   // Mark the descriptor as quota mode. When quota_mode is true, the rate limit service will allow
   // requests until all quota descriptors are over the limit.
   bool quota_mode = 7;
+
+  // Optional metadata associated with the descriptor. When a rate limit match occurs,
+  // this metadata is included in the rate limit response's DynamicMetadata field.
+  google.protobuf.Struct metadata = 8;
 }
 
 // Rate-limit policy.

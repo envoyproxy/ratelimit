@@ -54,3 +54,11 @@ func TestEscapingInvalidChartersInMetricName(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitizeDescriptorMetricDotsAccessor(t *testing.T) {
+	statsStore := gostats.NewStore(gostatsMock.NewSink(), false)
+
+	assert.False(t, stats.NewStatManager(statsStore, settings.Settings{}).SanitizeDescriptorMetricDots(),
+		"defaults to off for backward compatibility")
+	assert.True(t, stats.NewStatManager(statsStore, settings.Settings{SanitizeDescriptorMetricDots: true}).SanitizeDescriptorMetricDots())
+}

@@ -11,15 +11,20 @@ import (
 func NewStatManager(store gostats.Store, settings settings.Settings) *ManagerImpl {
 	serviceScope := store.ScopeWithTags("ratelimit", settings.ExtraTags).Scope("service")
 	return &ManagerImpl{
-		store:                store,
-		rlStatsScope:         serviceScope.Scope("rate_limit"),
-		serviceStatsScope:    serviceScope,
-		shouldRateLimitScope: serviceScope.Scope("call.should_rate_limit"),
+		store:                        store,
+		rlStatsScope:                 serviceScope.Scope("rate_limit"),
+		serviceStatsScope:            serviceScope,
+		shouldRateLimitScope:         serviceScope.Scope("call.should_rate_limit"),
+		sanitizeDescriptorMetricDots: settings.SanitizeDescriptorMetricDots,
 	}
 }
 
 func (this *ManagerImpl) GetStatsStore() gostats.Store {
 	return this.store
+}
+
+func (this *ManagerImpl) SanitizeDescriptorMetricDots() bool {
+	return this.sanitizeDescriptorMetricDots
 }
 
 // Create new rate descriptor stats for a descriptor tuple.
@@ -36,6 +41,7 @@ func (this *ManagerImpl) NewStats(key string) RateLimitStats {
 	ret.OverLimitWithLocalCache = this.rlStatsScope.NewCounter(key + ".over_limit_with_local_cache")
 	ret.WithinLimit = this.rlStatsScope.NewCounter(key + ".within_limit")
 	ret.ShadowMode = this.rlStatsScope.NewCounter(key + ".shadow_mode")
+	ret.TotalNegativeHits = this.rlStatsScope.NewCounter(key + ".total_negative_hits")
 	return ret
 }
 

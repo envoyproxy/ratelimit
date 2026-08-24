@@ -90,6 +90,7 @@ type Settings struct {
 	ExtraTags                            map[string]string `envconfig:"EXTRA_TAGS" default:""`
 	StatsFlushInterval                   time.Duration     `envconfig:"STATS_FLUSH_INTERVAL" default:"10s"`
 	DisableStats                         bool              `envconfig:"DISABLE_STATS" default:"false"`
+	SanitizeDescriptorMetricDots         bool              `envconfig:"SANITIZE_DESCRIPTOR_METRIC_DOTS" default:"false"`
 	UsePrometheus                        bool              `envconfig:"USE_PROMETHEUS" default:"false"`
 	PrometheusAddr                       string            `envconfig:"PROMETHEUS_ADDR" default:":9090"`
 	PrometheusPath                       string            `envconfig:"PROMETHEUS_PATH" default:"/metrics"`
@@ -110,6 +111,13 @@ type Settings struct {
 	CacheKeyPrefix                     string  `envconfig:"CACHE_KEY_PREFIX" default:""`
 	BackendType                        string  `envconfig:"BACKEND_TYPE" default:"redis"`
 	StopCacheKeyIncrementWhenOverlimit bool    `envconfig:"STOP_CACHE_KEY_INCREMENT_WHEN_OVERLIMIT" default:"false"`
+	// UseCalendarMonthRateLimit switches MONTH-unit rate limits to a true calendar
+	// month window (the 1st through the last day of the month, UTC) for cache key
+	// bucketing, TTL/expiration, and the reported reset time. Defaults to false,
+	// which preserves the legacy behavior of a fixed 30-day rolling window counted
+	// from the Unix epoch, so enabling this for existing MONTH limits changes when
+	// they reset and is opt-in.
+	UseCalendarMonthRateLimit bool `envconfig:"USE_CALENDAR_MONTH_RATE_LIMIT" default:"false"`
 
 	// Settings for optional returning of custom headers
 	RateLimitResponseHeadersEnabled bool `envconfig:"LIMIT_RESPONSE_HEADERS_ENABLED" default:"false"`
@@ -192,6 +200,14 @@ type Settings struct {
 	RedisPerSecondClusterPipelineParallelism int `envconfig:"REDIS_PERSECOND_CLUSTER_PIPELINE_PARALLELISM" default:"1"`
 	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
 	RedisHealthCheckActiveConnection bool `envconfig:"REDIS_HEALTH_CHECK_ACTIVE_CONNECTION" default:"false"`
+	// RedisCloseConnectionOnReadOnlyError closes a pooled Redis connection when a command
+	// on it fails with a READONLY error reply, so the pool re-dials through the configured
+	// address. After a master->replica failover in deployments that fail over by repointing
+	// an address at the new master (a Kubernetes Service, DNS, or a proxy), the demoted
+	// master keeps established connections open and every write on them fails with READONLY
+	// until they reconnect; enabling this makes the pool recover automatically. Applies to
+	// both the main and the per-second Redis clients.
+	RedisCloseConnectionOnReadOnlyError bool `envconfig:"REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR" default:"false"`
 	// RedisTimeout sets the timeout for Redis connection and I/O operations.
 	RedisTimeout time.Duration `envconfig:"REDIS_TIMEOUT" default:"10s"`
 	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.

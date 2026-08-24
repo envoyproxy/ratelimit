@@ -69,3 +69,9 @@ descriptors:
     rate_limit:
       unit: minute
       requests_per_unit: 70
+
+  - key: key8
+    rate_limit:
+      name: key8_rate_limit
+      unit: month
+      requests_per_unit: 200

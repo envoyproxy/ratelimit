@@ -2261,3 +2261,168 @@ func TestMetadata(t *testing.T) {
 
 // share_threshold parity (middle+trailing wildcards produce the same shared-counter
 // behaviour as trailing-only) is covered by TestShareThreshold Cases 5-7.
+
+// TestSanitizeDescriptorMetricDots verifies the SANITIZE_DESCRIPTOR_METRIC_DOTS behavior:
+// when enabled, '.' in descriptor keys/values is replaced with '_' in emitted metric names,
+// while rate-limit matching (which keys off the un-sanitized descriptor) is unaffected.
+func TestSanitizeDescriptorMetricDots(t *testing.T) {
+	// A config whose leaf key/value are looked up by the un-sanitized descriptor. The
+	// descriptor value carries dots (an IP and a dotted host) to exercise the metric path.
+	basicCfg := func() []config.RateLimitConfigToLoad {
+		return []config.RateLimitConfigToLoad{{
+			Name: "inline",
+			ConfigYaml: &config.YamlRoot{
+				Domain: "domain",
+				Descriptors: []config.YamlDescriptor{
+					{
+						Key:   "source_ip",
+						Value: "10.0.0.1",
+						RateLimit: &config.YamlRateLimit{
+							RequestsPerUnit: 5,
+							Unit:            "minute",
+						},
+					},
+				},
+			},
+		}}
+	}
+	ipDescriptor := &pb_struct.RateLimitDescriptor{
+		Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "source_ip", Value: "10.0.0.1"}},
+	}
+
+	t.Run("flag off keeps dots (backward compatible)", func(t *testing.T) {
+		asrt := assert.New(t)
+		store := stats.NewStore(stats.NewNullSink(), false)
+		rlConfig := config.NewRateLimitConfigImpl(basicCfg(), mockstats.NewMockStatManagerWithSanitize(store, false), false)
+		rl := rlConfig.GetLimit(context.TODO(), "domain", ipDescriptor)
+		asrt.NotNil(rl)
+		asrt.Equal("domain.source_ip_10.0.0.1", rl.Stats.Key)
+	})
+
+	t.Run("flag on sanitizes dotted value", func(t *testing.T) {
+		asrt := assert.New(t)
+		store := stats.NewStore(stats.NewNullSink(), false)
+		rlConfig := config.NewRateLimitConfigImpl(basicCfg(), mockstats.NewMockStatManagerWithSanitize(store, true), false)
+		rl := rlConfig.GetLimit(context.TODO(), "domain", ipDescriptor)
+		asrt.NotNil(rl)
+		expectedKey := "domain.source_ip_10_0_0_1"
+		asrt.Equal(expectedKey, rl.Stats.Key)
+
+		// The sanitized key is the one actually registered as a counter.
+		rl.Stats.TotalHits.Inc()
+		asrt.EqualValues(1, store.NewCounter(expectedKey+".total_hits").Value())
+	})
+
+	t.Run("flag on sanitizes non-ipv4 dotted value", func(t *testing.T) {
+		asrt := assert.New(t)
+		store := stats.NewStore(stats.NewNullSink(), false)
+		cfg := []config.RateLimitConfigToLoad{{
+			Name: "inline",
+			ConfigYaml: &config.YamlRoot{
+				Domain: "domain",
+				Descriptors: []config.YamlDescriptor{
+					{
+						Key:   "host",
+						Value: "foo.bar",
+						RateLimit: &config.YamlRateLimit{
+							RequestsPerUnit: 5,
+							Unit:            "minute",
+						},
+					},
+				},
+			},
+		}}
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManagerWithSanitize(store, true), false)
+		rl := rlConfig.GetLimit(context.TODO(), "domain",
+			&pb_struct.RateLimitDescriptor{Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "host", Value: "foo.bar"}}})
+		asrt.NotNil(rl)
+		asrt.Equal("domain.host_foo_bar", rl.Stats.Key)
+	})
+
+	t.Run("flag on sanitizes dotted key", func(t *testing.T) {
+		asrt := assert.New(t)
+		store := stats.NewStore(stats.NewNullSink(), false)
+		cfg := []config.RateLimitConfigToLoad{{
+			Name: "inline",
+			ConfigYaml: &config.YamlRoot{
+				Domain: "domain",
+				Descriptors: []config.YamlDescriptor{
+					{
+						Key:   "a.b",
+						Value: "v",
+						RateLimit: &config.YamlRateLimit{
+							RequestsPerUnit: 5,
+							Unit:            "minute",
+						},
+					},
+				},
+			},
+		}}
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManagerWithSanitize(store, true), false)
+		rl := rlConfig.GetLimit(context.TODO(), "domain",
+			&pb_struct.RateLimitDescriptor{Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "a.b", Value: "v"}}})
+		asrt.NotNil(rl)
+		asrt.Equal("domain.a_b_v", rl.Stats.Key)
+	})
+
+	t.Run("matching still works with dotted value when flag on", func(t *testing.T) {
+		asrt := assert.New(t)
+		store := stats.NewStore(stats.NewNullSink(), false)
+		rlConfig := config.NewRateLimitConfigImpl(basicCfg(), mockstats.NewMockStatManagerWithSanitize(store, true), false)
+		// The descriptor still carries the un-sanitized dotted value; if sanitization had
+		// leaked into the map lookup key, this would fail to match and return nil.
+		rl := rlConfig.GetLimit(context.TODO(), "domain", ipDescriptor)
+		asrt.NotNil(rl)
+		asrt.EqualValues(5, rl.Limit.RequestsPerUnit)
+	})
+
+	t.Run("flag on sanitizes detailed_metric path", func(t *testing.T) {
+		asrt := assert.New(t)
+		store := stats.NewStore(stats.NewNullSink(), false)
+		cfg := []config.RateLimitConfigToLoad{{
+			Name: "inline",
+			ConfigYaml: &config.YamlRoot{
+				Domain: "domain",
+				Descriptors: []config.YamlDescriptor{
+					{
+						Key:            "source_ip",
+						DetailedMetric: true,
+						RateLimit: &config.YamlRateLimit{
+							RequestsPerUnit: 5,
+							Unit:            "minute",
+						},
+					},
+				},
+			},
+		}}
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManagerWithSanitize(store, true), false)
+		rl := rlConfig.GetLimit(context.TODO(), "domain", ipDescriptor)
+		asrt.NotNil(rl)
+		asrt.Equal("domain.source_ip_10_0_0_1", rl.Stats.Key)
+	})
+
+	t.Run("flag on sanitizes value_to_metric path", func(t *testing.T) {
+		asrt := assert.New(t)
+		store := stats.NewStore(stats.NewNullSink(), false)
+		cfg := []config.RateLimitConfigToLoad{{
+			Name: "inline",
+			ConfigYaml: &config.YamlRoot{
+				Domain: "domain",
+				Descriptors: []config.YamlDescriptor{
+					{
+						Key:           "source_ip",
+						ValueToMetric: true,
+						RateLimit: &config.YamlRateLimit{
+							RequestsPerUnit: 5,
+							Unit:            "minute",
+						},
+					},
+				},
+			},
+		}}
+		rlConfig := config.NewRateLimitConfigImpl(cfg, mockstats.NewMockStatManagerWithSanitize(store, true), false)
+		rl := rlConfig.GetLimit(context.TODO(), "domain", ipDescriptor)
+		asrt.NotNil(rl)
+		asrt.Equal("domain.source_ip_10_0_0_1", rl.Stats.Key)
+	})
+}

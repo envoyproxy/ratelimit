@@ -14,13 +14,17 @@ import (
 
 type CacheKeyGenerator struct {
 	prefix string
+	// useCalendarMonth gates bucketing MONTH-unit limits by real calendar
+	// month (UTC) instead of the legacy fixed 30-day divider.
+	useCalendarMonth bool
 	// bytes.Buffer pool used to efficiently generate cache keys.
 	bufferPool sync.Pool
 }
 
-func NewCacheKeyGenerator(prefix string) CacheKeyGenerator {
+func NewCacheKeyGenerator(prefix string, useCalendarMonth bool) CacheKeyGenerator {
 	return CacheKeyGenerator{
-		prefix: prefix,
+		prefix:           prefix,
+		useCalendarMonth: useCalendarMonth,
 		bufferPool: sync.Pool{
 			New: func() interface{} {
 				return new(bytes.Buffer)
@@ -78,8 +82,16 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 		b.WriteByte('_')
 	}
 
-	divider := utils.UnitToDivider(limit.Limit.Unit)
-	b.WriteString(strconv.FormatInt((now/divider)*divider, 10))
+	var bucketStart int64
+	if this.useCalendarMonth && limit.Limit.Unit == pb.RateLimitResponse_RateLimit_MONTH {
+		// Calendar months vary in length, so bucket by the start of the
+		// current UTC calendar month rather than a fixed-size divider.
+		bucketStart = utils.MonthStartUnix(now)
+	} else {
+		divider := utils.UnitToDivider(limit.Limit.Unit)
+		bucketStart = (now / divider) * divider
+	}
+	b.WriteString(strconv.FormatInt(bucketStart, 10))
 
 	return CacheKey{
 		Key:       b.String(),

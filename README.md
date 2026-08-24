@@ -44,6 +44,7 @@
     - [Health-check configurations](#health-check-configurations)
   - [GRPC server](#grpc-server)
 - [Request Fields](#request-fields)
+  - [Negative hits](#negative-hits)
 - [GRPC Client](#grpc-client)
   - [Commandline flags](#commandline-flags)
 - [Global ShadowMode](#global-shadowmode)
@@ -69,6 +70,8 @@
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
+  - [Recovering from a failover (READONLY errors)](#recovering-from-a-failover-readonly-errors)
+  - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
   - [RequestHeadersToAdd](#requestheaderstoadd)
@@ -962,6 +965,21 @@ socket then set `GRPC_UDS`, e.g. `GRPC_UDS=/<dir>/ratelimit.sock` and leave
 For information on the fields of a Ratelimit gRPC request please read the information
 on the RateLimitRequest message type in the Ratelimit [proto file.](https://github.com/envoyproxy/envoy/blob/master/api/envoy/service/ratelimit/v3/rls.proto)
 
+## Negative hits
+
+Each descriptor entry may set the `is_negative_hits` field. When it is `true`, the descriptor's
+`hits_addend` is subtracted from the rate limit counter instead of being added to it, effectively
+refunding previously consumed capacity.
+
+Negative-hit behavior:
+
+- The counter is floored at `0` and can never go negative. Redis performs the decrement-and-floor
+  atomically via a Lua script; Memcached uses its native `Decrement`, which floors at `0` by default.
+- A negative-hit descriptor always returns `OK`. It bypasses the over-limit and near-limit checks and
+  does not trigger any over-limit side effects (over-limit stats or local-cache poisoning), even when
+  the counter is still above the limit after the decrement.
+- The requested decrement is counted in the `total_negative_hits` statistic (see [Statistics](#statistics-1)).
+
 # GRPC Client
 
 The [gRPC client](https://github.com/envoyproxy/ratelimit/blob/master/src/client_cmd/main.go) will interact with ratelimit server and tell you if the requests are over limit.
@@ -1005,6 +1023,13 @@ Configure statistics output frequency with `STATS_FLUSH_INTERVAL`, where the typ
 
 To disable statistics entirely, set env var `DISABLE_STATS` to `true`
 
+To sanitize `.` characters in descriptor keys and values before they are published as metrics, set env var
+`SANITIZE_DESCRIPTOR_METRIC_DOTS` to `true` (default `false`). When enabled, each `.` in a descriptor key or value is
+replaced with `_` in the emitted metric name. Because `.` is the statsd metric-hierarchy separator, a dotted value
+(e.g. a gRPC path like `/helloworld.Greeter/SayHello`) would otherwise inject unintended extra hierarchy levels —
+which breaks the Prometheus `statsd_exporter` metric-name-to-label mapping. This only affects metric names; rate limit
+matching (which keys off the raw descriptor) is unchanged. It is disabled by default for backward compatibility.
+
 Rate Limit Statistic Path:
 
 ```
@@ -1027,6 +1052,7 @@ STAT:
 - near_limit: Number of rule hits over the NearLimit ratio threshold (currently 80%) but under the threshold rate.
 - over_limit: Number of rule hits exceeding the threshold rate
 - total_hits: Number of rule hits in total
+- total_negative_hits: Number of rule hits requested as negative hits (decrements/refunds via `is_negative_hits`)
 - shadow_mode: Number of rule hits where shadow_mode would trigger and override the over_limit result
 
 To use a custom near_limit ratio threshold, you can specify with `NEAR_LIMIT_RATIO` environment variable. It defaults to `0.8` (0-1 scale). These are examples of generated stats for some configured rate limit rules from the above examples:
@@ -1378,6 +1404,36 @@ per second limits, and the other Redis server for all other limits.
 To configure whether to return health check failure if there is no active redis connection
 
 1. `REDIS_HEALTH_CHECK_ACTIVE_CONNECTION` : (default is "false")
+
+## Recovering from a failover (READONLY errors)
+
+1. `REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR` : (default is "false")
+
+When a Redis master is failed over by repointing an address at the new master (a Kubernetes
+Service, DNS, or a proxy — common with Redis-compatible servers like Dragonfly, or Redis
+deployments without Sentinel), the demoted master keeps already-established connections open.
+Pooled connections are only discarded on IO errors, so every write on those stale connections
+keeps failing with `READONLY You can't write against a read only replica.` until the process
+restarts.
+
+Setting `REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR` to `"true"` closes a pooled connection
+whenever a command on it fails with a READONLY error reply, so the pool reconnects through the
+configured address and reaches the current master. The failing command still returns its error
+to the caller; only the connection handling changes. Applies to both the main and the
+per-second Redis clients.
+
+## Calendar-aligned MONTH rate limits
+
+1. `USE_CALENDAR_MONTH_RATE_LIMIT` : (default is "false")
+
+By default, a `unit: month` rate limit uses a fixed 30-day window counted from the Unix epoch,
+which does not line up with real calendar months (it drifts, and treats every month as 30 days
+regardless of its actual length).
+
+Setting `USE_CALENDAR_MONTH_RATE_LIMIT` to `"true"` switches `MONTH` limits to a true calendar
+month window instead: the cache key bucket, TTL/expiration, and reported reset time all cover
+the 1st through the last day of the month (UTC). This is opt-in because it changes when
+existing `MONTH` limits reset and is therefore not enabled by default.
 
 # Memcache
 

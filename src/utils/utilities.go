@@ -38,10 +38,25 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 	panic("should not get here")
 }
 
-func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource) *durationpb.Duration {
+// ExpirationSeconds returns the number of seconds, evaluated from the
+// current time, until the given rate limit unit's window ends. When
+// useCalendarMonth is true, MONTH reflects the actual calendar-aligned
+// window (the 1st through the last day of the month, UTC) instead of the
+// fixed-length UnitToDivider approximation.
+func ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool) int64 {
+	if useCalendarMonth && unit == pb.RateLimitResponse_RateLimit_MONTH {
+		return MonthExpirationSeconds(timeSource.UnixNow())
+	}
+	return UnitToDivider(unit)
+}
+
+func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool) *durationpb.Duration {
+	nowUnix := timeSource.UnixNow()
+	if useCalendarMonth && *unit == pb.RateLimitResponse_RateLimit_MONTH {
+		return &durationpb.Duration{Seconds: MonthExpirationSeconds(nowUnix)}
+	}
 	sec := UnitToDivider(*unit)
-	now := timeSource.UnixNow()
-	return &durationpb.Duration{Seconds: sec - now%sec}
+	return &durationpb.Duration{Seconds: sec - nowUnix%sec}
 }
 
 // Mask credentials from a redis connection string like
@@ -72,19 +87,32 @@ func SanitizeStatName(s string) string {
 	})
 }
 
-func GetHitsAddends(request *pb.RateLimitRequest) []uint64 {
-	hitsAddends := make([]uint64, len(request.Descriptors))
+// SanitizeStatKeyValue replaces the statsd hierarchy separator '.' with '_' so that
+// dots in a descriptor key or value do not create unintended metric hierarchy levels
+// (which, for example, break the Prometheus statsd_exporter metric-name -> label mapping).
+func SanitizeStatKeyValue(s string) string {
+	return strings.ReplaceAll(s, ".", "_")
+}
+
+type HitsAddend struct {
+	Value      uint64
+	IsNegative bool
+}
+
+func GetHitsAddends(request *pb.RateLimitRequest) []HitsAddend {
+	hitsAddends := make([]HitsAddend, len(request.Descriptors))
 
 	for i, descriptor := range request.Descriptors {
 		if descriptor.HitsAddend != nil {
 			// If the per descriptor hits_addend is set, use that. It allows to be zero. The zero value is
 			// means check only by no increment the hits.
-			hitsAddends[i] = descriptor.HitsAddend.Value
+			hitsAddends[i].Value = descriptor.HitsAddend.Value
 		} else {
 			// If the per descriptor hits_addend is not set, use the request's hits_addend. If the value is
 			// zero (default value if not specified by the caller), use 1 for backward compatibility.
-			hitsAddends[i] = uint64(max(1, uint64(request.HitsAddend)))
+			hitsAddends[i].Value = uint64(max(1, uint64(request.HitsAddend)))
 		}
+		hitsAddends[i].IsNegative = descriptor.GetIsNegativeHits()
 	}
 	return hitsAddends
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jpillora/backoff"
@@ -23,6 +24,7 @@ type poolStats struct {
 	connectionActive stats.Gauge
 	connectionTotal  stats.Counter
 	connectionClose  stats.Counter
+	hadConnError     *atomic.Bool
 }
 
 func newPoolStats(scope stats.Scope) poolStats {
@@ -30,6 +32,7 @@ func newPoolStats(scope stats.Scope) poolStats {
 	ret.connectionActive = scope.NewGauge("cx_active")
 	ret.connectionTotal = scope.NewCounter("cx_total")
 	ret.connectionClose = scope.NewCounter("cx_local_close")
+	ret.hadConnError = new(atomic.Bool)
 	return ret
 }
 
@@ -39,6 +42,9 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 			if newConn.Err == nil {
 				ps.connectionTotal.Add(1)
 				ps.connectionActive.Add(1)
+				if ps.hadConnError.CompareAndSwap(true, false) {
+					logger.Infof("redis connection re-established after previous error")
+				}
 				if healthCheckActiveConnection && srv != nil {
 					err := srv.HealthChecker().Ok(server.RedisHealthComponentName)
 					if err != nil {
@@ -46,6 +52,7 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 					}
 				}
 			} else {
+				ps.hadConnError.Store(true)
 				logger.Errorf("creating redis connection error : %v", newConn.Err)
 			}
 		},
@@ -147,11 +154,13 @@ func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	pipelineWindow time.Duration, pipelineLimit int, tlsConfig *tls.Config, healthCheckActiveConnection bool, srv server.Server,
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
+	closeConnectionOnReadOnlyError bool,
 ) Client {
 	return newClientImpl(ctx, scope, useTls, auth, redisSocketType, redisType, url, poolSize,
 		pipelineWindow, pipelineLimit, tlsConfig, healthCheckActiveConnection, srv,
 		timeout, poolOnEmptyBehavior, sentinelAuth,
-		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1)
+		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1,
+		closeConnectionOnReadOnlyError)
 }
 
 func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
@@ -159,6 +168,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
 	clusterPipelineParallelism int,
+	closeConnectionOnReadOnlyError bool,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
@@ -189,6 +199,16 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	if isCluster && pipelineWindow > 0 {
 		poolConfig.Dialer.WriteFlushInterval = pipelineWindow
 		logger.Debugf("Cluster mode: setting WriteFlushInterval to %v", pipelineWindow)
+	}
+
+	// Discard pooled connections whose commands fail with READONLY (the server
+	// behind them was demoted to replica by a failover) so the pool re-dials
+	// and reaches the current master. Installed last because CustomConn
+	// replaces every other Dialer field (TLS, auth, write buffering), which
+	// must all be final before being captured.
+	if closeConnectionOnReadOnlyError {
+		logger.Warnf("Redis pool %s: closing connections on READONLY error replies", maskedUrl)
+		poolConfig.Dialer = wrapDialerCloseOnReadOnly(poolConfig.Dialer)
 	}
 
 	effectivePipelineParallelism := clusterPipelineParallelism
@@ -353,13 +373,17 @@ func (c *clientImpl) NumActiveConns() int {
 }
 
 func (c *clientImpl) PipeAppend(pipeline Pipeline, rcv interface{}, cmd, key string, args ...interface{}) Pipeline {
+	return c.PipeAppendWithRoutingKey(pipeline, key, rcv, cmd, key, args...)
+}
+
+func (c *clientImpl) PipeAppendWithRoutingKey(pipeline Pipeline, routingKey string, rcv interface{}, cmd, key string, args ...interface{}) Pipeline {
 	// Combine key and args into a single slice
 	allArgs := make([]interface{}, 0, 1+len(args))
 	allArgs = append(allArgs, key)
 	allArgs = append(allArgs, args...)
 	return append(pipeline, PipelineAction{
 		Action: radix.FlatCmd(rcv, cmd, allArgs...),
-		Key:    key,
+		Key:    routingKey,
 	})
 }
 

@@ -14,6 +14,18 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
+// DecrementScript atomically decrements a rate limit counter, floored at 0.
+// If the key does not exist there is nothing to refund, so it returns 0 without
+// creating a phantom key.
+const DecrementScript = `
+local current = redis.call('GET', KEYS[1])                   -- get current count
+if current == false then return 0 end                        -- key absent: nothing to refund
+local new_val = math.floor(math.max(0, tonumber(current) - tonumber(ARGV[1]))) -- subtract hits, floor at 0
+redis.call('SET', KEYS[1], tostring(new_val))                -- persist new value
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))             -- reset TTL
+return new_val                                               -- return count after decrement
+`
+
 type BaseRateLimiter struct {
 	timeSource                 utils.TimeSource
 	JitterRand                 *rand.Rand
@@ -22,6 +34,9 @@ type BaseRateLimiter struct {
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
 	StatsManager               stats.Manager
+	// useCalendarMonth gates the MONTH-unit fix (calendar-aligned window
+	// instead of a fixed 30-day divider) for expiration/TTL computations.
+	useCalendarMonth bool
 }
 
 type LimitInfo struct {
@@ -44,7 +59,7 @@ func NewRateLimitInfo(limit *config.RateLimit, limitBeforeIncrease uint64, limit
 // Generates cache keys for given rate limit request. Each cache key is represented by a concatenation of
 // domain, descriptor and current timestamp.
 func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
-	limits []*config.RateLimit, hitsAddends []uint64,
+	limits []*config.RateLimit, hitsAddends []utils.HitsAddend,
 ) []CacheKey {
 	assert.Assert(len(request.Descriptors) == len(limits))
 	cacheKeys := make([]CacheKey, len(request.Descriptors))
@@ -55,10 +70,20 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 		cacheKeys[i] = this.cacheKeyGenerator.GenerateCacheKey(request.Domain, request.Descriptors[i], limits[i], now)
 		// Increase statistics for limits hit by their respective requests.
 		if limits[i] != nil {
-			limits[i].Stats.TotalHits.Add(hitsAddends[i])
+			if hitsAddends[i].IsNegative {
+				limits[i].Stats.TotalNegativeHits.Add(hitsAddends[i].Value)
+			} else {
+				limits[i].Stats.TotalHits.Add(hitsAddends[i].Value)
+			}
 		}
 	}
 	return cacheKeys
+}
+
+// ExpirationSeconds returns the number of seconds, evaluated from the current
+// time, until the given rate limit unit's window ends.
+func (this *BaseRateLimiter) ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
+	return utils.ExpirationSeconds(unit, this.timeSource, this.useCalendarMonth)
 }
 
 // Returns `true` in case local cache is enabled and contains value for provided cache key, `false` otherwise.
@@ -116,7 +141,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
 				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
 				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
-				err := this.localCache.Set([]byte(key), []byte{}, int(utils.UnitToDivider(limitInfo.limit.Limit.Unit)))
+				err := this.localCache.Set([]byte(key), []byte{}, int(this.ExpirationSeconds(limitInfo.limit.Limit.Unit)))
 				if err != nil {
 					logger.Errorf("Failing to set local cache key: %s", key)
 				}
@@ -142,17 +167,41 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 	return responseDescriptorStatus
 }
 
+// GetResponseDescriptorStatusForNegativeHits generates a response for a negative-hit
+// (decrement/refund) request. Refunds release capacity rather than consuming it, so they
+// always return OK regardless of the counter value and never trigger over-limit side
+// effects (over-limit stats, local-cache poisoning). currentValue is the counter value
+// after the decrement; LimitRemaining is reported as the remaining capacity, clamped at 0
+// in case the counter is still above the limit.
+func (this *BaseRateLimiter) GetResponseDescriptorStatusForNegativeHits(key string, limit *config.RateLimit,
+	currentValue uint64,
+) *pb.RateLimitResponse_DescriptorStatus {
+	if key == "" {
+		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK, nil, 0)
+	}
+
+	overLimitThreshold := uint64(limit.Limit.RequestsPerUnit)
+	var limitRemaining uint64
+	if overLimitThreshold > currentValue {
+		limitRemaining = overLimitThreshold - currentValue
+	}
+
+	return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK, limit.Limit, uint32(limitRemaining))
+}
+
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
 	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
+	useCalendarMonth bool,
 ) *BaseRateLimiter {
 	return &BaseRateLimiter{
 		timeSource:                 timeSource,
 		JitterRand:                 jitterRand,
 		ExpirationJitterMaxSeconds: expirationJitterMaxSeconds,
-		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix),
+		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix, useCalendarMonth),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 		StatsManager:               statsManager,
+		useCalendarMonth:           useCalendarMonth,
 	}
 }
 
@@ -205,7 +254,7 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource),
+			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource, this.useCalendarMonth),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{
