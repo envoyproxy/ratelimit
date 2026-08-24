@@ -74,6 +74,7 @@
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
+  - [RequestHeadersToAdd](#requestheaderstoadd)
 - [Tracing](#tracing)
 - [TLS](#tls)
 - [mTLS](#mtls)
@@ -1469,6 +1470,15 @@ The following environment variables control the custom response feature:
 1. `LIMIT_LIMIT_HEADER` - The default value is "RateLimit-Limit", setting the environment variable will specify an alternative header name
 1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
 1. `LIMIT_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
+
+## RequestHeadersToAdd
+
+The following environment variables control the custom request header feature. When enabled, Envoy injects these headers into the forwarded request before it reaches the upstream service, allowing upstream services to inspect rate limit state and make per-request routing decisions (e.g. skip a hot path when quota is exhausted) without the request being blocked.
+
+1. `LIMIT_REQUEST_HEADERS_ENABLED` - Enables the custom request headers
+1. `LIMIT_REQUEST_LIMIT_HEADER` - The default value is "RateLimit-Limit", setting the environment variable will specify an alternative header name
+1. `LIMIT_REQUEST_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
+1. `LIMIT_REQUEST_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
 
 # Tracing
 
