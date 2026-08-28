@@ -179,14 +179,14 @@ func TestFileCredentialProviderRejectsEmptyFile(t *testing.T) {
 }
 
 func TestCredentialProviderFromSettingsIsNilWhenUnconfigured(t *testing.T) {
-	assert.Nil(t, newCredentialProviderFromSettings(settings.Settings{}, false))
-	assert.Nil(t, newCredentialProviderFromSettings(settings.Settings{RedisAuth: "s3cret"}, false))
+	assert.Nil(t, newCredentialProviderFromSettings(context.Background(), settings.Settings{}, false))
+	assert.Nil(t, newCredentialProviderFromSettings(context.Background(), settings.Settings{RedisAuth: "s3cret"}, false))
 }
 
 func TestCredentialProviderFromSettingsUsesTheCredentialFile(t *testing.T) {
 	path := writeAuthFile(t, "cache-user:s3cret")
 
-	provider := newCredentialProviderFromSettings(settings.Settings{RedisAuthFile: path}, false)
+	provider := newCredentialProviderFromSettings(context.Background(), settings.Settings{RedisAuthFile: path}, false)
 	require.NotNil(t, provider)
 
 	user, pass, err := provider.Credentials(context.Background())
@@ -201,7 +201,7 @@ func TestCredentialProviderFromSettingsReadsPerSecondSettings(t *testing.T) {
 		RedisPerSecondAuthFile: writeAuthFile(t, "per-second-password"),
 	}
 
-	provider := newCredentialProviderFromSettings(s, true)
+	provider := newCredentialProviderFromSettings(context.Background(), s, true)
 	require.NotNil(t, provider)
 
 	_, pass, err := provider.Credentials(context.Background())
@@ -213,13 +213,13 @@ func TestCredentialProviderFromSettingsRejectsTwoCredentialSources(t *testing.T)
 	s := settings.Settings{RedisAuth: "s3cret", RedisAuthFile: "/run/secrets/redis-auth"}
 
 	assert.PanicsWithError(t, "REDIS_AUTH and REDIS_AUTH_FILE are mutually exclusive", func() {
-		newCredentialProviderFromSettings(s, false)
+		newCredentialProviderFromSettings(context.Background(), s, false)
 	})
 
 	perSecond := settings.Settings{RedisPerSecondAuth: "s3cret", RedisPerSecondAuthFile: "/run/secrets/redis-auth"}
 
 	assert.PanicsWithError(t, "REDIS_PERSECOND_AUTH and REDIS_PERSECOND_AUTH_FILE are mutually exclusive", func() {
-		newCredentialProviderFromSettings(perSecond, true)
+		newCredentialProviderFromSettings(context.Background(), perSecond, true)
 	})
 }
 

@@ -72,6 +72,7 @@
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
   - [Recovering from a failover (READONLY errors)](#recovering-from-a-failover-readonly-errors)
   - [Credentials that expire or rotate](#credentials-that-expire-or-rotate)
+    - [AWS ElastiCache IAM authentication](#aws-elasticache-iam-authentication)
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
@@ -1441,6 +1442,41 @@ credential from that file on every connection attempt instead. The file holds th
 Whatever writes the file — a secret-manager agent, a CSI driver, a sidecar that mints tokens, a
 rotation job — controls the credential's lifetime, and a new value takes effect on the next
 connection without restarting ratelimit.
+
+### AWS ElastiCache IAM authentication
+
+1. `REDIS_AWS_IAM_AUTH` : (default is "false")
+1. `REDIS_AWS_IAM_CACHE_NAME` : (default is "")
+1. `REDIS_AWS_IAM_USER_ID` : (default is "")
+1. `REDIS_AWS_IAM_SERVERLESS` : (default is "false")
+1. `REDIS_AWS_IAM_REGION` : (default is "", shared by both Redis clients)
+1. `REDIS_PERSECOND_AWS_IAM_AUTH`, `REDIS_PERSECOND_AWS_IAM_CACHE_NAME`, `REDIS_PERSECOND_AWS_IAM_USER_ID`, `REDIS_PERSECOND_AWS_IAM_SERVERLESS` : the same, for the per-second client
+
+Setting `REDIS_AWS_IAM_AUTH` to `"true"` authenticates to AWS ElastiCache with IAM instead of a
+password. The password becomes a short-lived authentication token that ratelimit signs itself from
+the credentials the AWS SDK resolves, so no credential is configured here at all: an EKS Pod
+Identity association, an IRSA role, an ECS task role, an instance profile, or the usual AWS
+environment variables all work. `REDIS_AWS_IAM_CACHE_NAME` is a serverless cache's name, or a
+node-based cache's replication group ID — never the endpoint hostname — and
+`REDIS_AWS_IAM_USER_ID` is the ElastiCache user to connect as. Set `REDIS_AWS_IAM_SERVERLESS` to
+`"true"` for a serverless cache, whose tokens are signed differently. `REDIS_AWS_IAM_REGION` is
+only needed when the SDK cannot resolve a region on its own.
+
+On the AWS side the cache needs an ElastiCache user created with `authentication_mode` type `iam`,
+whose user name equals its user id, attached to the cache through a user group; the IAM role
+ratelimit runs as needs `elasticache:Connect` on both the cache ARN and the user ARN.
+[ElastiCache requires in-transit encryption to be enabled on the cache for IAM authentication](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth-iam.html),
+so `REDIS_TLS` (or `REDIS_PERSECOND_TLS`) has to be `"true"` too, unless something between
+ratelimit and the cache originates the TLS connection on its behalf.
+
+One token is signed locally — no API call — and shared by every connection in the pool for most of
+its 15-minute validity, because ElastiCache throttles authentication requests. Reuse also stops
+early when the AWS credentials that signed the token are close to expiring, since
+[a presigned request expires with the credentials behind its signature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html).
+
+ElastiCache force-closes IAM-authenticated connections after 12 hours. Ratelimit handles that the
+same way it handles any dropped connection: the pool discards it and reconnects, authenticating
+with a fresh token. Nothing needs to be configured for it, and no restart is involved.
 
 ## Calendar-aligned MONTH rate limits
 
