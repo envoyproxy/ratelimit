@@ -71,6 +71,7 @@
   - [Two Redis Instances](#two-redis-instances)
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
   - [Recovering from a failover (READONLY errors)](#recovering-from-a-failover-readonly-errors)
+  - [Credentials that expire or rotate](#credentials-that-expire-or-rotate)
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
@@ -1311,6 +1312,7 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_TLS_SKIP_HOSTNAME_VERIFICATION` set to `"true"` will skip hostname verification in environments where the certificate has an invalid hostname, such as GCP Memorystore.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable password-only authentication to the Redis master/replica nodes.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"username:password"` to enable username-password authentication to the Redis master/replica nodes.
+1. `REDIS_AUTH_FILE` & `REDIS_PERSECOND_AUTH_FILE`: set to the path of a file holding `"password"` or `"username:password"`. The file is re-read on every connection attempt, so a credential that expires or rotates keeps working. Mutually exclusive with `REDIS_AUTH`/`REDIS_PERSECOND_AUTH`. See [Credentials that expire or rotate](#credentials-that-expire-or-rotate).
 1. `REDIS_SENTINEL_AUTH` & `REDIS_PERSECOND_SENTINEL_AUTH`: set to `"password"` or `"username:password"` to enable authentication to Redis Sentinel nodes. This is separate from `REDIS_AUTH`/`REDIS_PERSECOND_AUTH` which authenticate to the Redis master/replica nodes. Only used when `REDIS_TYPE` or `REDIS_PERSECOND_TYPE` is set to `"sentinel"`. If not set, no authentication will be attempted when connecting to Sentinel nodes.
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
@@ -1421,6 +1423,24 @@ whenever a command on it fails with a READONLY error reply, so the pool reconnec
 configured address and reaches the current master. The failing command still returns its error
 to the caller; only the connection handling changes. Applies to both the main and the
 per-second Redis clients.
+
+## Credentials that expire or rotate
+
+1. `REDIS_AUTH_FILE` : (default is "")
+1. `REDIS_PERSECOND_AUTH_FILE` : (default is "")
+
+`REDIS_AUTH` is read once, at startup, and replayed on every connection the pool ever opens. Any
+credential with a lifetime shorter than the process cannot be used through it: once it expires, every
+new connection fails to authenticate and the pool cannot recover without a restart. That covers
+short-lived credentials issued by a secret manager, passwords rotated on a schedule, and cloud
+providers whose authentication tokens are valid for minutes.
+
+Setting `REDIS_AUTH_FILE` (or `REDIS_PERSECOND_AUTH_FILE`) to a file path makes ratelimit read the
+credential from that file on every connection attempt instead. The file holds the same
+`password` or `username:password` value `REDIS_AUTH` would take; surrounding whitespace is ignored.
+Whatever writes the file — a secret-manager agent, a CSI driver, a sidecar that mints tokens, a
+rotation job — controls the credential's lifetime, and a new value takes effect on the next
+connection without restarting ratelimit.
 
 ## Calendar-aligned MONTH rate limits
 

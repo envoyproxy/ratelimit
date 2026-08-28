@@ -146,6 +146,7 @@ type Settings struct {
 	RedisUrl        string `envconfig:"REDIS_URL" default:"/var/run/nutcracker/ratelimit.sock"`
 	RedisPoolSize   int    `envconfig:"REDIS_POOL_SIZE" default:"10"`
 	RedisAuth       string `envconfig:"REDIS_AUTH" default:""`
+	RedisAuthFile   string `envconfig:"REDIS_AUTH_FILE" default:""`
 	RedisTls        bool   `envconfig:"REDIS_TLS" default:"false"`
 	// TODO: Make this setting configurable out of the box instead of having to provide it through code.
 	RedisTlsConfig *tls.Config
@@ -179,6 +180,7 @@ type Settings struct {
 	RedisPerSecondUrl               string `envconfig:"REDIS_PERSECOND_URL" default:"/var/run/nutcracker/ratelimitpersecond.sock"`
 	RedisPerSecondPoolSize          int    `envconfig:"REDIS_PERSECOND_POOL_SIZE" default:"10"`
 	RedisPerSecondAuth              string `envconfig:"REDIS_PERSECOND_AUTH" default:""`
+	RedisPerSecondAuthFile          string `envconfig:"REDIS_PERSECOND_AUTH_FILE" default:""`
 	RedisPerSecondTls               bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
 	// RedisSentinelAuth is the password for authenticating to Redis Sentinel nodes (not the Redis master/replica).
 	// This is separate from RedisAuth which is used for authenticating to the Redis master/replica nodes.

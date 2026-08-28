@@ -136,7 +136,7 @@ func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, aut
 
 	// Setup auth if provided
 	if auth != "" {
-		user, pass, found := strings.Cut(auth, ":")
+		user, pass, found := splitAuth(auth)
 		if found {
 			logger.Warnf("enabling authentication to redis %s with user %s", targetName, user)
 			dialer.AuthUser = user
@@ -160,7 +160,7 @@ func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		pipelineWindow, pipelineLimit, tlsConfig, healthCheckActiveConnection, srv,
 		timeout, poolOnEmptyBehavior, sentinelAuth,
 		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1,
-		closeConnectionOnReadOnlyError)
+		closeConnectionOnReadOnlyError, nil)
 }
 
 func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
@@ -169,6 +169,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
 	clusterPipelineParallelism int,
 	closeConnectionOnReadOnlyError bool,
+	credentialProvider CredentialProvider,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
@@ -199,6 +200,11 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	if isCluster && pipelineWindow > 0 {
 		poolConfig.Dialer.WriteFlushInterval = pipelineWindow
 		logger.Debugf("Cluster mode: setting WriteFlushInterval to %v", pipelineWindow)
+	}
+
+	if credentialProvider != nil {
+		logger.Warnf("Redis pool %s: resolving credentials on every connection attempt", maskedUrl)
+		poolConfig.Dialer = wrapDialerCredentialProvider(poolConfig.Dialer, credentialProvider)
 	}
 
 	// Discard pooled connections whose commands fail with READONLY (the server
