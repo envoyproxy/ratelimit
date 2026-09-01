@@ -23,6 +23,8 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
@@ -62,6 +64,7 @@ type service struct {
 	useCalendarMonthRateLimit      bool
 	weekStart                      time.Weekday
 	perUnitHeadersEnabled          bool
+	enableNegativeHits             bool
 	// redisErrorLogLimiter keeps a Redis outage from logging once per call.
 	redisErrorLogLimiter *utils.LogLimiter
 }
@@ -126,6 +129,14 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 type serviceError string
 
 func (e serviceError) Error() string {
+	return string(e)
+}
+
+// negativeHitsDisabledError rejects requests containing negative-hit
+// descriptors while ENABLE_NEGATIVE_HITS is off; mapped to UNIMPLEMENTED.
+type negativeHitsDisabledError string
+
+func (e negativeHitsDisabledError) Error() string {
 	return string(e)
 }
 
@@ -213,6 +224,16 @@ func (this *service) shouldRateLimitWorker(
 ) *pb.RateLimitResponse {
 	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
 	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
+
+	// A negative hit must never fall through as a positive hit: the whole
+	// request is rejected before the cache call.
+	if !this.enableNegativeHits {
+		for _, descriptor := range request.Descriptors {
+			if descriptor.GetIsNegativeHits() {
+				panic(negativeHitsDisabledError("negative hits are not enabled on this server"))
+			}
+		}
+	}
 
 	snappedConfig, globalShadowMode, globalQuotaMode := this.GetCurrentConfig()
 	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx, snappedConfig)
@@ -662,6 +683,13 @@ func (this *service) ShouldRateLimit(
 				this.stats.ShouldRateLimit.ServiceError.Inc()
 				finalError = t
 			}
+		case negativeHitsDisabledError:
+			{
+				if this.stats.NegativeHitsRejected != nil {
+					this.stats.NegativeHitsRejected.Inc()
+				}
+				finalError = status.Error(codes.Unimplemented, t.Error())
+			}
 		default:
 			panic(err)
 		}
@@ -681,17 +709,19 @@ func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool, bool) {
 
 func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
 	health *server.HealthChecker, clock utils.TimeSource, shadowMode, forceStart bool, healthyWithAtLeastOneConfigLoad bool,
+	enableNegativeHits bool,
 ) RateLimitServiceServer {
 	newService := &service{
-		configLock:        sync.RWMutex{},
-		configUpdateEvent: configProvider.ConfigUpdateEvent(),
-		config:            nil,
-		cache:             cache,
-		stats:             statsManager.NewServiceStats(),
-		health:            health,
-		globalShadowMode:  shadowMode,
-		globalQuotaMode:   false,
-		customHeaderClock: clock,
+		configLock:         sync.RWMutex{},
+		configUpdateEvent:  configProvider.ConfigUpdateEvent(),
+		config:             nil,
+		cache:              cache,
+		stats:              statsManager.NewServiceStats(),
+		health:             health,
+		globalShadowMode:   shadowMode,
+		globalQuotaMode:    false,
+		customHeaderClock:  clock,
+		enableNegativeHits: enableNegativeHits,
 
 		redisErrorLogLimiter: utils.NewLogLimiter(10 * time.Second),
 	}
