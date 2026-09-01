@@ -65,6 +65,7 @@ func (this *ManagerImpl) NewServiceStats() ServiceStats {
 	ret.ConfigLoadError = this.serviceStatsScope.NewCounter("config_load_error")
 	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
 	ret.GlobalShadowMode = this.serviceStatsScope.NewCounter("global_shadow_mode")
+	ret.NegativeHitsRejected = this.serviceStatsScope.NewCounter("negative_hits_rejected")
 	return ret
 }
 
