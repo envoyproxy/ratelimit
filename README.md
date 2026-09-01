@@ -1311,6 +1311,7 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_TLS_SKIP_HOSTNAME_VERIFICATION` set to `"true"` will skip hostname verification in environments where the certificate has an invalid hostname, such as GCP Memorystore.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable password-only authentication to the Redis master/replica nodes.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"username:password"` to enable username-password authentication to the Redis master/replica nodes.
+1. `REDIS_AUTH_FILE` & `REDIS_PERSECOND_AUTH_FILE`: read the corresponding authentication value from a file when the Redis client is created, so only the path, not the credential, needs to be stored in an environment variable. The file must be readable and non-empty; only trailing CR/LF characters are removed. A file setting cannot be combined with its corresponding `REDIS_AUTH` or `REDIS_PERSECOND_AUTH` setting. File changes require a process restart.
 1. `REDIS_SENTINEL_AUTH` & `REDIS_PERSECOND_SENTINEL_AUTH`: set to `"password"` or `"username:password"` to enable authentication to Redis Sentinel nodes. This is separate from `REDIS_AUTH`/`REDIS_PERSECOND_AUTH` which authenticate to the Redis master/replica nodes. Only used when `REDIS_TYPE` or `REDIS_PERSECOND_TYPE` is set to `"sentinel"`. If not set, no authentication will be attempted when connecting to Sentinel nodes.
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
