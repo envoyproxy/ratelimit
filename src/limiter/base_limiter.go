@@ -4,7 +4,6 @@ import (
 	"math"
 	"math/rand"
 
-	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	logger "github.com/sirupsen/logrus"
 
@@ -14,24 +13,12 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
-// DecrementScript atomically decrements a rate limit counter, floored at 0.
-// If the key does not exist there is nothing to refund, so it returns 0 without
-// creating a phantom key.
-const DecrementScript = `
-local current = redis.call('GET', KEYS[1])                   -- get current count
-if current == false then return 0 end                        -- key absent: nothing to refund
-local new_val = math.floor(math.max(0, tonumber(current) - tonumber(ARGV[1]))) -- subtract hits, floor at 0
-redis.call('SET', KEYS[1], tostring(new_val))                -- persist new value
-redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))             -- reset TTL
-return new_val                                               -- return count after decrement
-`
-
 type BaseRateLimiter struct {
 	timeSource                 utils.TimeSource
 	JitterRand                 *rand.Rand
 	ExpirationJitterMaxSeconds int64
 	cacheKeyGenerator          CacheKeyGenerator
-	localCache                 *freecache.Cache
+	localCache                 *LocalCacheGuard
 	nearLimitRatio             float32
 	StatsManager               stats.Manager
 	// useCalendarMonth gates the MONTH-unit fix (calendar-aligned window
@@ -103,10 +90,20 @@ func (this *BaseRateLimiter) IsOverLimitThresholdReached(limitInfo *LimitInfo) b
 	return limitInfo.limitAfterIncrease > limitInfo.overLimitThreshold
 }
 
+// GetLocalCacheGenSnapshot returns the invalidation generation to pass into
+// GetResponseDescriptorStatus; take it before the backend read.
+func (this *BaseRateLimiter) GetLocalCacheGenSnapshot() uint64 {
+	if this.localCache == nil {
+		return 0
+	}
+	return this.localCache.GenSnapshot()
+}
+
 // Generates response descriptor status based on cache key, over the limit with local cache, over the limit and
 // near the limit thresholds. Thresholds are checked in order and are mutually exclusive.
+// localCacheGen must be the LocalCacheGenSnapshot value taken before the backend read.
 func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *LimitInfo,
-	isOverLimitWithLocalCache bool, hitsAddend uint64,
+	isOverLimitWithLocalCache bool, hitsAddend uint64, localCacheGen uint64,
 ) *pb.RateLimitResponse_DescriptorStatus {
 	if key == "" {
 		return this.generateResponseDescriptorStatus(pb.RateLimitResponse_OK,
@@ -141,9 +138,12 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
 				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
 				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
-				err := this.localCache.Set([]byte(key), []byte{}, int(this.ExpirationSeconds(limitInfo.limit.Limit.Unit)))
+				inserted, err := this.localCache.SetIfUnchanged([]byte(key), []byte{},
+					int(this.ExpirationSeconds(limitInfo.limit.Limit.Unit)), localCacheGen)
 				if err != nil {
 					logger.Errorf("Failing to set local cache key: %s", key)
+				} else if !inserted {
+					logger.Debugf("skipped local cache set for %s: invalidation raced the backend read", key)
 				}
 			}
 		} else {
@@ -190,7 +190,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatusForNegativeHits(key stri
 }
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
-	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
+	localCache *LocalCacheGuard, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
 	useCalendarMonth bool,
 ) *BaseRateLimiter {
 	return &BaseRateLimiter{
