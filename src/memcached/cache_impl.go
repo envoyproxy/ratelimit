@@ -70,6 +70,8 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 ) []*pb.RateLimitResponse_DescriptorStatus {
 	logger.Debugf("starting cache lookup")
 
+	localCacheGen := this.baseRateLimiter.GetLocalCacheGenSnapshot()
+
 	// request.HitsAddend could be 0 (default value) if not specified by the caller in the Ratelimit request.
 	hitsAddends := utils.GetHitsAddends(request)
 
@@ -154,7 +156,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 			limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 			responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-				limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i].Value)
+				limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i].Value, localCacheGen)
 		}
 	}
 
@@ -355,7 +357,7 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth),
+		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, limiter.NewLocalCacheGuard(localCache), nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth),
 	}
 }
 

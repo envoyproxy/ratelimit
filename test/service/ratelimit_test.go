@@ -20,8 +20,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/envoyproxy/ratelimit/src/trace"
@@ -77,6 +79,7 @@ type rateLimitServiceTestSuite struct {
 	statsManager          stats.Manager
 	statStore             gostats.Store
 	mockClock             utils.TimeSource
+	enableNegativeHits    bool
 }
 
 type MockClock struct {
@@ -115,7 +118,7 @@ func (this *rateLimitServiceTestSuite) setupBasicService() ratelimit.RateLimitSe
 
 	testSpanExporter.Reset()
 
-	svc := ratelimit.NewService(this.cache, this.configProvider, this.statsManager, this.health, MockClock{now: int64(2222)}, false, false, false)
+	svc := ratelimit.NewService(this.cache, this.configProvider, this.statsManager, this.health, MockClock{now: int64(2222)}, false, false, false, this.enableNegativeHits)
 	barrier.wait() // wait for initial config load
 	return svc
 }
@@ -811,7 +814,7 @@ func TestInitialLoadError(test *testing.T) {
 		return nil, config.RateLimitConfigError("load error")
 	})
 	go func() { t.configUpdateEventChan <- t.configUpdateEvent }() // initial config update from provider
-	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, t.health, t.mockClock, false, false, false)
+	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, t.health, t.mockClock, false, false, false, false)
 	barrier.wait()
 
 	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"hello", "world"}}}, 1)
@@ -902,7 +905,7 @@ func TestServiceHealthStatus(test *testing.T) {
 
 	// Set up the service
 	t.configProvider.EXPECT().ConfigUpdateEvent().Return(t.configUpdateEventChan).Times(1)
-	_ = ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded)
+	_ = ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded, false)
 
 	// Health check request
 	req := &healthpb.HealthCheckRequest{
@@ -933,7 +936,7 @@ func TestServiceHealthStatusAtLeastOneConfigLoaded(test *testing.T) {
 	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
 		return t.config, nil
 	}).Times(2)
-	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded)
+	service := ratelimit.NewService(t.cache, t.configProvider, t.statsManager, hc, MockClock{now: int64(2222)}, false, true, healthyWithAtLeastOneConfigLoaded, false)
 	// Health check request
 	req := &healthpb.HealthCheckRequest{
 		Service: "ratelimit",
@@ -1588,4 +1591,61 @@ func TestServiceMixedModeWithShadowMode(test *testing.T) {
 
 	// Verify global shadow mode counter is incremented
 	t.assert.EqualValues(1, t.statStore.NewCounter("global_shadow_mode").Value())
+}
+
+func TestNegativeHitsRejectedWhenFlagOff(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// The rejection happens before the config lookup and the cache call, so
+	// neither the config nor the cache mock expects any call here.
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"test-domain", [][][2]string{{{"hello", "world"}}}, []uint64{3}, []bool{true})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(response)
+	t.assert.Equal(codes.Unimplemented, status.Code(err))
+	t.assert.EqualValues(1, t.statStore.NewCounter("negative_hits_rejected").Value())
+	t.assert.EqualValues(0, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
+}
+
+func TestNegativeHitsRejectedWhenFlagOffMixedBatch(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	service := t.setupBasicService()
+
+	// A single negative-hit descriptor fails the whole batch, including the
+	// positive descriptor in it.
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"test-domain", [][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}}, []uint64{1, 3}, []bool{false, true})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(response)
+	t.assert.Equal(codes.Unimplemented, status.Code(err))
+	t.assert.EqualValues(1, t.statStore.NewCounter("negative_hits_rejected").Value())
+}
+
+func TestNegativeHitsAllowedWhenFlagOn(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+	t.enableNegativeHits = true
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"test-domain", [][][2]string{{{"hello", "world"}}}, []uint64{3}, []bool{true})
+	t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(nil)
+	t.cache.EXPECT().DoLimit(context.Background(), request, []*config.RateLimit{nil}).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OK,
+			Statuses:    []*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0}},
+		},
+		response)
+	t.assert.Nil(err)
+	t.assert.EqualValues(0, t.statStore.NewCounter("negative_hits_rejected").Value())
 }

@@ -45,6 +45,8 @@
   - [GRPC server](#grpc-server)
 - [Request Fields](#request-fields)
   - [Negative hits](#negative-hits)
+    - [Local cache invalidation](#local-cache-invalidation)
+      - [Required Redis permissions](#required-redis-permissions)
 - [GRPC Client](#grpc-client)
   - [Commandline flags](#commandline-flags)
 - [Global ShadowMode](#global-shadowmode)
@@ -971,6 +973,19 @@ Each descriptor entry may set the `is_negative_hits` field. When it is `true`, t
 `hits_addend` is subtracted from the rate limit counter instead of being added to it, effectively
 refunding previously consumed capacity.
 
+The feature is gated by the `ENABLE_NEGATIVE_HITS` environment variable, which defaults to `false`.
+While it is off, any request containing a negative-hit descriptor is rejected as a whole with the
+gRPC `UNIMPLEMENTED` code; a negative-hit descriptor is never silently processed as a positive hit.
+Because a rejected batch fails every descriptor in it, callers should send refunds in dedicated
+requests rather than mixing them with positive hits. Rejections are counted in the
+`ratelimit.service.negative_hits_rejected` statistic.
+
+The combination `ENABLE_NEGATIVE_HITS=true`, `BACKEND_TYPE=memcache` and
+`LOCAL_CACHE_SIZE_IN_BYTES>0` refuses to boot: an over-limit counter poisons the local cache and
+there is no invalidation path for memcached, so a refund could leave replicas answering
+`OVER_LIMIT` from the local cache until the window ends. Memcached with negative hits and no local
+cache keeps working.
+
 Negative-hit behavior:
 
 - The counter is floored at `0` and can never go negative. Redis performs the decrement-and-floor
@@ -978,7 +993,47 @@ Negative-hit behavior:
 - A negative-hit descriptor always returns `OK`. It bypasses the over-limit and near-limit checks and
   does not trigger any over-limit side effects (over-limit stats or local-cache poisoning), even when
   the counter is still above the limit after the decrement.
+- Refunds apply to the current window only; the service does not validate which window the original
+  hit was charged in.
 - The requested decrement is counted in the `total_negative_hits` statistic (see [Statistics](#statistics-1)).
+
+### Local cache invalidation
+
+With the Redis backend, a counter that goes over the limit poisons the local cache of the replica
+that observed it: the over-limit answer is then served locally until the window ends. Since a
+refund can bring the counter back under the limit, negative hits combined with a local cache use
+Redis pub/sub to invalidate those entries across replicas: a refund that crosses the counter back
+under its limit publishes the cache key on the `ratelimit:local_cache_invalidation` channel, and
+every replica with a local cache subscribes and deletes the key from its local cache.
+
+- Invalidation is best-effort / at-most-once: messages are never buffered or replayed, so a replica
+  that misses a message (e.g. while reconnecting) keeps the stale entry until the window ends.
+- The subscriber re-dials every `LOCAL_CACHE_INVALIDATION_RESUBSCRIBE_INTERVAL` (default `5m`),
+  re-resolving the sentinel master and refreshing cluster topology. This bounds how long a
+  subscription can stay silently attached to a demoted or removed node (e.g. after a sentinel
+  failover that left the old master reachable but unlinked from the new one).
+- Invalidation is ordered against poisoning: a request whose over-limit verdict was read from Redis
+  before an invalidation arrived does not write the (possibly stale) entry into the local cache.
+  The suppressed insert only costs one extra Redis lookup on a later request.
+- Decrements routed to the dedicated per-second Redis (`REDIS_PERSECOND`) never publish: the
+  subscriber listens only on the main Redis, and per-second windows expire before a stale entry
+  matters.
+- Subscriber statistics: `ratelimit.localcache.invalidation.subscribed` (gauge, 0/1 live
+  subscription state), `ratelimit.localcache.invalidation.received` (messages received) and
+  `ratelimit.localcache.invalidation.deleted` (messages that deleted a local cache entry).
+
+#### Required Redis permissions
+
+With `ENABLE_NEGATIVE_HITS=true`, the identity configured by `REDIS_AUTH` needs the `EVAL`, `GET`
+and `SET` commands for the refund script. With the local cache additionally enabled, the same
+identity also needs `PUBLISH` and `SUBSCRIBE`, and with Redis 7 channel ACLs, access to the
+`&ratelimit:local_cache_invalidation` channel — it is used by both the refund script (publisher)
+and the invalidation subscriber.
+
+A missing `SUBSCRIBE` permission keeps publishing enabled while the subscriber retries forever —
+watch the `subscribed` gauge, every invalidation published in that state is lost. The refund
+script publishes before mutating the counter and mutates it with a single `SET ... EX`, so an ACL
+error at any command fails the refund without applying it.
 
 # GRPC Client
 
@@ -1222,6 +1277,34 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
 
   - match: "ratelimit.service.rate_limit.*.*.*.shadow_mode"
     name: "ratelimit_service_rate_limit_shadow_mode"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+      key2: "$3"
+  - match: "ratelimit.service.negative_hits_rejected"
+    name: "ratelimit_service_negative_hits_rejected"
+    match_metric_type: counter
+
+  - match: "ratelimit.localcache.invalidation.subscribed"
+    name: "ratelimit_localcache_invalidation_subscribed"
+    match_metric_type: gauge
+  - match: "ratelimit.localcache.invalidation.received"
+    name: "ratelimit_localcache_invalidation_received"
+    match_metric_type: counter
+  - match: "ratelimit.localcache.invalidation.deleted"
+    name: "ratelimit_localcache_invalidation_deleted"
+    match_metric_type: counter
+
+  - match: "ratelimit.service.rate_limit.*.*.total_negative_hits"
+    name: "ratelimit_service_rate_limit_total_negative_hits"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+  - match: "ratelimit\\.service\\.rate_limit\\.([^\\.]*)\\.([^\\.]*)\\.([^\\.]*)(\\..*)?\\.total_negative_hits"
+    match_type: regex
+    name: "ratelimit_service_rate_limit_total_negative_hits"
     timer_type: "histogram"
     labels:
       domain: "$1"

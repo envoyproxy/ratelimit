@@ -110,6 +110,16 @@ func effectiveClusterPipelineParallelism(configuredParallelism, poolSize int) in
 	return configuredParallelism
 }
 
+// parseSentinelUrl splits a sentinel REDIS_URL of the form
+// <redis master name>,<sentinel1>,...,<sentineln>.
+func parseSentinelUrl(url string) (masterName string, sentinelAddrs []string, err error) {
+	urls := strings.Split(url, ",")
+	if len(urls) < 2 {
+		return "", nil, fmt.Errorf("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>")
+	}
+	return urls[0], urls[1:], nil
+}
+
 // createDialer creates a radix.Dialer with timeout, TLS, and auth configuration
 // targetName is used for logging to identify the connection target (e.g., URL, "sentinel(url)")
 func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, auth string, targetName string) radix.Dialer {
@@ -264,10 +274,13 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	}
 
 	// Validate sentinel URL format early (before retry loop) since it's a configuration error.
+	var sentinelMasterName string
+	var sentinelAddrs []string
 	if strings.ToLower(redisType) == "sentinel" {
-		urls := strings.Split(url, ",")
-		if len(urls) < 2 {
-			panic(RedisError("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>"))
+		var parseErr error
+		sentinelMasterName, sentinelAddrs, parseErr = parseSentinelUrl(url)
+		if parseErr != nil {
+			panic(RedisError(parseErr.Error()))
 		}
 	}
 
@@ -309,13 +322,12 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 			}
 			client, err = clusterConfig.New(ctx, urls)
 		case "sentinel":
-			urls := strings.Split(url, ",")
 			sentinelDialer := createDialer(timeout, useTls, tlsConfig, sentinelAuth, fmt.Sprintf("sentinel(%s)", maskedUrl))
 			sentinelConfig := radix.SentinelConfig{
 				PoolConfig:     poolConfig,
 				SentinelDialer: sentinelDialer,
 			}
-			client, err = sentinelConfig.New(ctx, urls[0], urls[1:])
+			client, err = sentinelConfig.New(ctx, sentinelMasterName, sentinelAddrs)
 		default:
 			panic(RedisError("Unrecognized redis type " + redisType))
 		}
@@ -381,8 +393,17 @@ func (c *clientImpl) PipeAppendWithRoutingKey(pipeline Pipeline, routingKey stri
 	allArgs := make([]interface{}, 0, 1+len(args))
 	allArgs = append(allArgs, key)
 	allArgs = append(allArgs, args...)
+	// The cluster client routes by ActionProperties.Keys, and radix's default
+	// resolver classifies EVAL/EVALSHA as keyless.
+	cfg := radix.CmdConfig{
+		ActionProperties: func(cmd string, args ...string) radix.ActionProperties {
+			props := radix.DefaultActionProperties(cmd, args...)
+			props.Keys = []string{routingKey}
+			return props
+		},
+	}
 	return append(pipeline, PipelineAction{
-		Action: radix.FlatCmd(rcv, cmd, allArgs...),
+		Action: cfg.FlatCmd(rcv, cmd, allArgs...),
 		Key:    routingKey,
 	})
 }

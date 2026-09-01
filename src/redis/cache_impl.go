@@ -35,17 +35,33 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		s.RedisCloseConnectionOnReadOnlyError)
 	closer.Closers = append(closer.Closers, otherPool)
 
+	var (
+		withLocalCache       = localCache != nil
+		localCacheGuard      *limiter.LocalCacheGuard
+		publishInvalidations bool
+	)
+	if withLocalCache {
+		localCacheGuard = limiter.NewLocalCacheGuard(localCache)
+		publishInvalidations = s.EnableNegativeHits && localCacheGuard != nil
+		if publishInvalidations {
+			// pub-sub based invalidator for local over limit caches
+			localCacheInvalidator := StartLocalCacheInvalidator(ctx, s, localCacheGuard, srv.Scope())
+			closer.Closers = append(closer.Closers, localCacheInvalidator)
+		}
+	}
+
 	return NewFixedRateLimitCacheImpl(
 		otherPool,
 		perSecondPool,
 		timeSource,
 		jitterRand,
 		expirationJitterMaxSeconds,
-		localCache,
+		localCacheGuard,
 		s.NearLimitRatio,
 		s.CacheKeyPrefix,
 		statsManager,
 		s.StopCacheKeyIncrementWhenOverlimit,
 		s.UseCalendarMonthRateLimit,
+		publishInvalidations,
 	), closer
 }

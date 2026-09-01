@@ -47,6 +47,8 @@ type ServiceStats struct {
 	ConfigLoadError   gostats.Counter
 	ShouldRateLimit   ShouldRateLimitStats
 	GlobalShadowMode  gostats.Counter
+	// Requests rejected while ENABLE_NEGATIVE_HITS is off.
+	NegativeHitsRejected gostats.Counter
 }
 
 // Stats for an individual rate limit config entry.

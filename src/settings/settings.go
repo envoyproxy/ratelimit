@@ -2,6 +2,7 @@ package settings
 
 import (
 	"crypto/tls"
+	"errors"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -111,6 +112,14 @@ type Settings struct {
 	CacheKeyPrefix                     string  `envconfig:"CACHE_KEY_PREFIX" default:""`
 	BackendType                        string  `envconfig:"BACKEND_TYPE" default:"redis"`
 	StopCacheKeyIncrementWhenOverlimit bool    `envconfig:"STOP_CACHE_KEY_INCREMENT_WHEN_OVERLIMIT" default:"false"`
+	// EnableNegativeHits gates the `is_negative_hits` descriptor feature (refunds).
+	// When false, requests containing negative-hit descriptors are rejected with
+	// UNIMPLEMENTED — never processed as positive hits.
+	EnableNegativeHits bool `envconfig:"ENABLE_NEGATIVE_HITS" default:"false"`
+	// LocalCacheInvalidationResubscribeInterval bounds one invalidation pub/sub
+	// session, capping how long a subscription can stay silently stranded on a
+	// demoted or removed node.
+	LocalCacheInvalidationResubscribeInterval time.Duration `envconfig:"LOCAL_CACHE_INVALIDATION_RESUBSCRIBE_INTERVAL" default:"5m"`
 	// UseCalendarMonthRateLimit switches MONTH-unit rate limits to a true calendar
 	// month window (the 1st through the last day of the month, UTC) for cache key
 	// bucketing, TTL/expiration, and the reported reset time. Defaults to false,
@@ -275,6 +284,22 @@ type Settings struct {
 }
 
 type Option func(*Settings)
+
+// Validate checks for setting combinations that must not be allowed to boot.
+func (s Settings) Validate() error {
+	// The runner creates a cache for any non-zero size and freecache clamps
+	// sub-minimum sizes up, so a negative value would silently enable the
+	// local cache behind the check below.
+	if s.LocalCacheSizeInBytes < 0 {
+		return errors.New("LOCAL_CACHE_SIZE_IN_BYTES must not be negative")
+	}
+	// Refunds cannot invalidate memcached-backed local cache entries, so an
+	// over-limit key would keep blocking until the window ends.
+	if s.EnableNegativeHits && s.BackendType == "memcache" && s.LocalCacheSizeInBytes > 0 {
+		return errors.New("negative hits cannot be combined with memcached and local cache")
+	}
+	return nil
+}
 
 func NewSettings() Settings {
 	var s Settings
