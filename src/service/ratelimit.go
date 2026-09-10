@@ -214,6 +214,8 @@ func (this *service) shouldRateLimitWorker(
 	response := &pb.RateLimitResponse{}
 	response.Statuses = make([]*pb.RateLimitResponse_DescriptorStatus, len(request.Descriptors))
 
+	overLimitSeen := false
+
 	// Keep track of the descriptor which is closest to hit the ratelimit
 	minLimitRemaining := MaxUint32
 	var minimumDescriptor *pb.RateLimitResponse_DescriptorStatus = nil
@@ -242,6 +244,7 @@ func (this *service) shouldRateLimitWorker(
 			response.Statuses[i] = descriptorStatus
 			isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
 			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
+				overLimitSeen = true
 				if isQuotaMode {
 					failedQuotaDescriptors += 1
 				} else {
@@ -290,16 +293,15 @@ func (this *service) shouldRateLimitWorker(
 		this.stats.GlobalShadowMode.Inc()
 	}
 
-	// If response dynamic data enabled, set dynamic data on response.
-	if this.responseDynamicMetadataEnabled {
-		response.DynamicMetadata = ratelimitToMetadata(request, passedDescriptors, limitsToCheck)
+	if this.responseDynamicMetadataEnabled && overLimitSeen {
+		response.DynamicMetadata = ratelimitToMetadata(request, response.Statuses, passedDescriptors, limitsToCheck)
 	}
 
 	response.OverallCode = finalCode
 	return response
 }
 
-func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limitsToCheck []*config.RateLimit) *structpb.Struct {
+func ratelimitToMetadata(req *pb.RateLimitRequest, statuses []*pb.RateLimitResponse_DescriptorStatus, passedDescriptors []int, limitsToCheck []*config.RateLimit) *structpb.Struct {
 	fields := make(map[string]*structpb.Value)
 
 	// Domain
@@ -307,8 +309,12 @@ func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limi
 
 	// Descriptors
 	descriptorsValues := make([]*structpb.Value, 0, len(req.Descriptors))
-	for _, descriptor := range req.Descriptors {
-		s := descriptorToStruct(descriptor)
+	for i, descriptor := range req.Descriptors {
+		var status *pb.RateLimitResponse_DescriptorStatus
+		if i < len(statuses) {
+			status = statuses[i]
+		}
+		s := descriptorToStruct(descriptor, status)
 		if s == nil {
 			continue
 		}
@@ -340,7 +346,7 @@ func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limi
 	return &structpb.Struct{Fields: fields}
 }
 
-func descriptorToStruct(descriptor *ratelimitv3.RateLimitDescriptor) *structpb.Struct {
+func descriptorToStruct(descriptor *ratelimitv3.RateLimitDescriptor, status *pb.RateLimitResponse_DescriptorStatus) *structpb.Struct {
 	if descriptor == nil {
 		return nil
 	}
@@ -365,6 +371,14 @@ func descriptorToStruct(descriptor *ratelimitv3.RateLimitDescriptor) *structpb.S
 	// HitsAddend
 	if hitsAddend := descriptor.GetHitsAddend(); hitsAddend != nil {
 		fields["hitsAddend"] = structpb.NewNumberValue(float64(hitsAddend.GetValue()))
+	}
+
+	// Per-descriptor shadow_mode rewrites code to OK, so shadowed over-limit is not visible.
+	if status != nil {
+		fields["code"] = structpb.NewStringValue(status.GetCode().String())
+		if name := status.GetCurrentLimit().GetName(); name != "" {
+			fields["limitName"] = structpb.NewStringValue(name)
+		}
 	}
 
 	return &structpb.Struct{Fields: fields}
