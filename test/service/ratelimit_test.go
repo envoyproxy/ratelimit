@@ -1084,7 +1084,7 @@ func TestMetadataReturnedForPassedDescriptors(test *testing.T) {
 	t.assert.Equal("service_1", nameVal.GetStringValue())
 }
 
-func TestMetadataReturnedForAllPassedDescriptors(test *testing.T) {
+func TestMetadataNotReturnedWhenAllDescriptorsPass(test *testing.T) {
 	os.Setenv("QUOTA_MODE", "true")
 	os.Setenv("RESPONSE_DYNAMIC_METADATA", "true")
 	defer func() {
@@ -1125,27 +1125,86 @@ func TestMetadataReturnedForAllPassedDescriptors(test *testing.T) {
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 6},
 		})
 	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	// Dynamic metadata is not built when no descriptor is over the limit
+	t.assert.Nil(response.DynamicMetadata)
+}
+
+func TestMetadataReturnedWithCodeAndLimitName(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	os.Setenv("RESPONSE_DYNAMIC_METADATA", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+		os.Unsetenv("RESPONSE_DYNAMIC_METADATA")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload to pick up environment variables.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Make a request.
+	request := common.NewRateLimitRequest(
+		"quota-domain", [][][2]string{{{"regular", "limit"}}, {{"quota", "limit"}}}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, true, "first-limit", nil, false),
+		config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, true, "second-limit", nil, false),
+	}
+	limits[0].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("service_1")}}
+	limits[1].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"some_other_name": structpb.NewStringValue("service_2")}}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
 	test.Logf("DynamicMetadata: %+v", response.DynamicMetadata)
 
-	// Verify response includes metadata about quota violations
 	t.assert.Nil(err)
+	// Quota mode: OVER_LIMIT on quota descriptor alone doesn't cause overall OVER_LIMIT
 	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
 	t.assert.NotNil(response.DynamicMetadata)
 
-	// Verify metadata for passed limits
+	// Verify descriptors include code and limitName
+	descriptorsVal, ok := response.DynamicMetadata.GetFields()["descriptors"]
+	t.assert.True(ok)
+	descriptors := descriptorsVal.GetListValue().GetValues()
+	t.assert.Equal(2, len(descriptors))
+
+	// First descriptor: OK
+	desc0 := descriptors[0].GetStructValue().GetFields()
+	t.assert.Equal("OK", desc0["code"].GetStringValue())
+	t.assert.Equal("first-limit", desc0["limitName"].GetStringValue())
+
+	// Second descriptor: OVER_LIMIT
+	desc1 := descriptors[1].GetStructValue().GetFields()
+	t.assert.Equal("OVER_LIMIT", desc1["code"].GetStringValue())
+	t.assert.Equal("second-limit", desc1["limitName"].GetStringValue())
+
+	// Verify passed metadata still works
 	passedMetadataVal, ok := response.DynamicMetadata.GetFields()["metadata"]
 	t.assert.True(ok)
 	passedMetadata := passedMetadataVal.GetStructValue()
 	t.assert.NotNil(passedMetadata)
-
 	fields := passedMetadata.GetFields()
 	nameVal, ok := fields["name"]
 	t.assert.True(ok)
-	// Both descriptors have passed metadata should contain values from both descriptors
 	t.assert.Equal("service_1", nameVal.GetStringValue())
-	nameVal, ok = fields["some_other_name"]
-	t.assert.True(ok)
-	t.assert.Equal("service_2", nameVal.GetStringValue())
 }
 
 func TestOverlappingMetadataReturnsTheFirstValue(test *testing.T) {
@@ -1183,20 +1242,20 @@ func TestOverlappingMetadataReturnsTheFirstValue(test *testing.T) {
 
 	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
 	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	// Need at least one OVER_LIMIT to trigger metadata building
 	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5},
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 6},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
 		})
 	response, err := service.ShouldRateLimit(context.Background(), request)
 	test.Logf("DynamicMetadata: %+v", response.DynamicMetadata)
 
-	// Verify response includes metadata about quota violations
 	t.assert.Nil(err)
 	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
 	t.assert.NotNil(response.DynamicMetadata)
 
-	// Verify metadata for passed limits
+	// Verify metadata for passed limits - first descriptor's metadata takes precedence
 	passedMetadataVal, ok := response.DynamicMetadata.GetFields()["metadata"]
 	t.assert.True(ok)
 	passedMetadata := passedMetadataVal.GetStructValue()
@@ -1205,7 +1264,7 @@ func TestOverlappingMetadataReturnsTheFirstValue(test *testing.T) {
 	fields := passedMetadata.GetFields()
 	nameVal, ok := fields["name"]
 	t.assert.True(ok)
-	// Metadata from the first descriptor takes precendence
+	// Metadata from the first descriptor takes precedence
 	t.assert.Equal("service_1", nameVal.GetStringValue())
 }
 
