@@ -79,6 +79,7 @@ type redisClient interface {
 type clientImpl struct {
 	client                     redisClient
 	stats                      poolStats
+	operations                 operationStats
 	isCluster                  bool
 	clusterPipelineParallelism int
 }
@@ -177,6 +178,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	dialer := createDialer(timeout, useTls, tlsConfig, auth, maskedUrl)
 
 	stats := newPoolStats(scope)
+	operations := newOperationStats(scope)
 
 	// Create PoolConfig
 	poolConfig := radix.PoolConfig{
@@ -326,7 +328,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		}
 
 		var pingResponse string
-		if pingErr := client.Do(ctx, radix.Cmd(&pingResponse, "PING")); pingErr != nil {
+		if pingErr := operations.startupPing.do(ctx, client, radix.Cmd(&pingResponse, "PING"), 1); pingErr != nil {
 			_ = client.Close()
 			retryOrDie(pingErr)
 			continue
@@ -350,6 +352,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	return &clientImpl{
 		client:                     client,
 		stats:                      stats,
+		operations:                 operations,
 		isCluster:                  isCluster,
 		clusterPipelineParallelism: effectivePipelineParallelism,
 	}
@@ -361,7 +364,7 @@ func (c *clientImpl) DoCmd(rcv interface{}, cmd, key string, args ...interface{}
 	allArgs := make([]interface{}, 0, 1+len(args))
 	allArgs = append(allArgs, key)
 	allArgs = append(allArgs, args...)
-	return c.client.Do(ctx, radix.FlatCmd(rcv, cmd, allArgs...))
+	return c.operations.command.do(ctx, c.client, radix.FlatCmd(rcv, cmd, allArgs...), 1)
 }
 
 func (c *clientImpl) Close() error {
@@ -400,7 +403,7 @@ func (c *clientImpl) PipeDo(ctx context.Context, pipeline Pipeline) error {
 	for _, pipelineAction := range pipeline {
 		p.Append(pipelineAction.Action)
 	}
-	return c.client.Do(ctx, p)
+	return c.operations.pipeline.do(ctx, c.client, p, len(pipeline))
 }
 
 // executeGroupedPipeline routes a pipeline of Redis actions in cluster mode
@@ -416,7 +419,7 @@ func (c *clientImpl) PipeDo(ctx context.Context, pipeline Pipeline) error {
 func (c *clientImpl) executeGroupedPipeline(ctx context.Context, pipeline Pipeline) error {
 	// Tier 1: single action — skip grouping, skip map alloc.
 	if len(pipeline) == 1 {
-		return c.client.Do(ctx, pipeline[0].Action)
+		return c.operations.pipeline.do(ctx, c.client, pipeline[0].Action, 1)
 	}
 
 	// Tier 2: group by key, preserving first-occurrence order.
@@ -461,11 +464,11 @@ func (c *clientImpl) doPipelineGroupsSerial(ctx context.Context, groups [][]radi
 
 func (c *clientImpl) doPipelineGroup(ctx context.Context, actions []radix.Action) error {
 	if len(actions) == 1 {
-		return c.client.Do(ctx, actions[0])
+		return c.operations.pipeline.do(ctx, c.client, actions[0], 1)
 	}
 	p := radix.NewPipeline()
 	for _, action := range actions {
 		p.Append(action)
 	}
-	return c.client.Do(ctx, p)
+	return c.operations.pipeline.do(ctx, c.client, p, len(actions))
 }

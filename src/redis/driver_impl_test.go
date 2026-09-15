@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	stats "github.com/lyft/gostats"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -139,6 +140,7 @@ func TestExecuteGroupedPipelineSingleActionFastPath(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 1,
 	}
 
@@ -155,6 +157,7 @@ func TestExecuteGroupedPipelineSerialCompatibilityStopsOnFirstError(t *testing.T
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 1,
 	}
 
@@ -172,6 +175,7 @@ func TestExecuteGroupedPipelineGroupsSameKeyActions(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 2,
 	}
 
@@ -188,6 +192,7 @@ func TestExecuteGroupedPipelineParallelismAllowsConcurrentGroups(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 3,
 	}
 
@@ -206,6 +211,7 @@ func TestExecuteGroupedPipelineBoundedParallelism(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 2,
 	}
 
