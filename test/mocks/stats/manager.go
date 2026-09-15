@@ -35,6 +35,7 @@ func (m *MockStatManager) NewServiceStats() stats.ServiceStats {
 	ret.ConfigLoadError = m.store.NewCounter("config_load_error")
 	ret.ShouldRateLimit = m.NewShouldRateLimitStats()
 	ret.GlobalShadowMode = m.store.NewCounter("global_shadow_mode")
+	ret.RequestAdmission = stats.NewRequestAdmissionStats(m.store.Scope("request_admission"))
 	return ret
 }
 

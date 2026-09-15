@@ -206,6 +206,7 @@ func (runner *Runner) Run() {
 		s.GlobalShadowMode,
 		s.ForceStartWithoutInitialConfig,
 		s.HealthyWithAtLeastOneConfigLoaded,
+		ratelimit.WithRequestLimits(s.MaxConcurrentRequests, s.RequestTimeout),
 	)
 
 	srv.AddDebugHttpEndpoint(

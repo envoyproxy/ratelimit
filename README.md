@@ -960,6 +960,32 @@ By default the ratelimit gRPC server binds to `0.0.0.0:8081`. To change this set
 socket then set `GRPC_UDS`, e.g. `GRPC_UDS=/<dir>/ratelimit.sock` and leave
 `GRPC_HOST` and `GRPC_PORT` unmodified.
 
+**Request admission and deadlines**
+
+The following settings can protect the service from accumulating synchronous request handlers when its cache is slow:
+
+1. `MAX_CONCURRENT_REQUESTS`: maximum admitted `ShouldRateLimit` calls per service instance, shared by gRPC and HTTP. Default: `0` (disabled). Excess calls fail immediately; there is no admission queue.
+1. `REQUEST_TIMEOUT`: deadline budget passed to admitted calls and their cache operations. Default: `0` (use only the caller's deadline). An earlier caller deadline is preserved. This setting alone does not limit concurrency.
+
+Both settings must be non-negative and take effect at process startup. Reloading descriptor configuration does not reset the admission limit or release occupied slots. Admission occurs after the request has been decoded, before configuration lookup, tracing attributes, or cache work. It does not limit connection counts, request sizes, descriptor counts, or work a backend starts asynchronously.
+
+A slot stays occupied until the synchronous cache call and handler processing return, including after caller cancellation. `REQUEST_TIMEOUT` supplies a cancellation signal; it is **not a guarantee of prompt backend cleanup**. In particular, Radix can continue draining a cancelled response after returning one call and can hold later calls behind that response even after their deadlines expire. Such later handlers retain their slots. Commands already sent to Redis may still execute. Recovery must be checked by observing completed calls and successful new requests after the backend recovers.
+
+Overload returns gRPC `ResourceExhausted`, not an `OVER_LIMIT` quota decision. Cancellation and expiry return `Canceled` and `DeadlineExceeded` after the synchronous work returns. Global and descriptor shadow modes do not override these service errors. Envoy handles them according to its separate `failure_mode_deny` setting; check that policy before enabling admission limits, and avoid immediate retry loops.
+
+HTTP `/json` now preserves its request context, including when both limits are disabled. Service error codes `ResourceExhausted`, `DeadlineExceeded`, and `Canceled` map to HTTP `503`, `504`, and `408` respectively. A successful quota rejection continues to use `429`.
+
+With either request limit enabled, the service records the following metrics without per-request or per-descriptor labels. The names below are exported by the default Prometheus mapper; custom mappers need equivalent entries.
+
+| Metric                                                           | Meaning                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ratelimit_service_request_admission_admitted_total`             | Calls admitted for processing.                                                                                                                                                                                                             |
+| `ratelimit_service_request_admission_rejected_total`             | Calls rejected because all admission slots were occupied; excludes already-cancelled callers and quota decisions.                                                                                                                          |
+| `ratelimit_service_request_admission_in_flight`                  | Admitted handlers whose synchronous processing and completion-metric recording have not finished. This is not a count of all outstanding Redis operations or internally retained responses.                                                |
+| `ratelimit_service_request_admission_completed_duration_seconds` | Histogram of admitted synchronous processing time up to recording the completion metric, including time retained after caller cancellation. It excludes the recording call's own wait and has no sample while cache work is still blocked. |
+
+The corresponding StatsD prefix is `ratelimit.service.request_admission`, with suffixes `admitted`, `rejected`, `in_flight`, and `completed_duration`. The duration is emitted in milliseconds and converted to seconds by the default Prometheus mapper, independently of `PROMETHEUS_RESPONSE_TIME_AS_MILLISECONDS`.
+
 # Request Fields
 
 For information on the fields of a Ratelimit gRPC request please read the information
@@ -1343,10 +1369,10 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 
 ### Connection Timeout
 
-Controls the maximum duration for Redis connection establishment, read operations, and write operations.
+Controls the timeout for Redis connection establishment, not command I/O. `REQUEST_TIMEOUT` supplies a request deadline subject to the cancellation and cleanup limitations described above.
 
-1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
-1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
+1. `REDIS_TIMEOUT`: timeout for Redis connection establishment. Default: `10s`
+1. `REDIS_PERSECOND_TIMEOUT`: timeout for per-second Redis connection establishment. Default: `10s`
 
 ### Pool On-Empty Behavior
 

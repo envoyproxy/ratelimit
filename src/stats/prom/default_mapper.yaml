@@ -90,6 +90,20 @@ mappings:
     labels:
       grpc_method: "$1"
 
+  - match: "ratelimit.service.request_admission.admitted"
+    name: "ratelimit_service_request_admission_admitted_total"
+    match_metric_type: counter
+  - match: "ratelimit.service.request_admission.rejected"
+    name: "ratelimit_service_request_admission_rejected_total"
+    match_metric_type: counter
+  - match: "ratelimit.service.request_admission.in_flight"
+    name: "ratelimit_service_request_admission_in_flight"
+    match_metric_type: gauge
+  - match: "ratelimit.service.request_admission.completed_duration"
+    name: "ratelimit_service_request_admission_completed_duration_seconds"
+    timer_type: histogram
+    scale: 0.001
+
   - match: "ratelimit.service.config_load_success"
     name: "ratelimit_service_config_load_success"
     match_metric_type: counter

@@ -26,8 +26,10 @@ import (
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/status"
 
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
@@ -85,7 +87,7 @@ func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *ht
 	return func(writer http.ResponseWriter, request *http.Request) {
 		var req pb.RateLimitRequest
 
-		ctx := context.Background()
+		ctx := request.Context()
 
 		body, err := io.ReadAll(request.Body)
 		if err != nil {
@@ -103,7 +105,16 @@ func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *ht
 		resp, err := svc.ShouldRateLimit(ctx, &req)
 		if err != nil {
 			logger.Warnf("error: %s", err.Error())
-			writeHttpStatus(writer, http.StatusBadRequest)
+			httpStatus := http.StatusBadRequest
+			switch status.Code(err) {
+			case codes.ResourceExhausted:
+				httpStatus = http.StatusServiceUnavailable
+			case codes.DeadlineExceeded:
+				httpStatus = http.StatusGatewayTimeout
+			case codes.Canceled:
+				httpStatus = http.StatusRequestTimeout
+			}
+			writeHttpStatus(writer, httpStatus)
 			return
 		}
 

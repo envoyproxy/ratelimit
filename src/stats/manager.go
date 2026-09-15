@@ -47,6 +47,24 @@ type ServiceStats struct {
 	ConfigLoadError   gostats.Counter
 	ShouldRateLimit   ShouldRateLimitStats
 	GlobalShadowMode  gostats.Counter
+	RequestAdmission  RequestAdmissionStats
+}
+
+// Request admission metrics count handler calls, not Redis commands or quota hits.
+type RequestAdmissionStats struct {
+	Admitted          gostats.Counter
+	Rejected          gostats.Counter
+	InFlight          gostats.Gauge
+	CompletedDuration gostats.Timer
+}
+
+func NewRequestAdmissionStats(scope gostats.Scope) RequestAdmissionStats {
+	return RequestAdmissionStats{
+		Admitted:          scope.NewCounter("admitted"),
+		Rejected:          scope.NewCounter("rejected"),
+		InFlight:          scope.NewGauge("in_flight"),
+		CompletedDuration: scope.NewMilliTimer("completed_duration"),
+	}
 }
 
 // Stats for an individual rate limit config entry.

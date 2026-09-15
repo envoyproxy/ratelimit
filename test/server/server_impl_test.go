@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -83,4 +85,27 @@ func TestJsonHandler(t *testing.T) {
 		OverallCode: pb.RateLimitResponse_OVER_LIMIT,
 	}, nil)
 	assertHttpResponse(t, handler, `{"domain": "foo"}`, 429, "application/json", `{"overallCode":"OVER_LIMIT"}`)
+}
+
+func TestJsonHandlerPreservesRequestContextAndServiceFailures(t *testing.T) {
+	for _, tc := range []struct {
+		code       codes.Code
+		httpStatus int
+	}{
+		{codes.ResourceExhausted, http.StatusServiceUnavailable},
+		{codes.DeadlineExceeded, http.StatusGatewayTimeout},
+		{codes.Canceled, http.StatusRequestTimeout},
+	} {
+		t.Run(tc.code.String(), func(t *testing.T) {
+			controller := gomock.NewController(t)
+			rls := mock_v3.NewMockRateLimitServiceServer(controller)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			rls.EXPECT().ShouldRateLimit(ctx, gomock.Any()).Return(nil, status.Error(tc.code, "service failure"))
+			req := httptest.NewRequest(http.MethodPost, "/json", strings.NewReader(`{"domain":"test"}`)).WithContext(ctx)
+			response := httptest.NewRecorder()
+			server.NewJsonHandler(rls)(response, req)
+			assert.Equal(t, tc.httpStatus, response.Code)
+		})
+	}
 }
