@@ -228,6 +228,67 @@ func TestRatelimitToMetadata(t *testing.T) {
 	}
 }
 
+func TestQuotaGroupKey(t *testing.T) {
+	entry := func(k, v string) *ratelimitv3.RateLimitDescriptor_Entry {
+		return &ratelimitv3.RateLimitDescriptor_Entry{Key: k, Value: v}
+	}
+
+	cases := []struct {
+		name     string
+		entries  []*ratelimitv3.RateLimitDescriptor_Entry
+		expected string
+	}{
+		{
+			name: "backend and model identify the group",
+			entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+				entry("backend_name", "ns/be"),
+				entry("model_name_override", "gpt-4o-mini"),
+				entry("rule-0-x-api-key|premium-match-0", "rule-0-x-api-key|premium-match-0"),
+			},
+			expected: "ns/be|gpt-4o-mini",
+		},
+		{
+			name: "default bucket shares the group with a tenant rule",
+			entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+				entry("backend_name", "ns/be"),
+				entry("model_name_override", "gpt-4o-mini"),
+				entry("rule-1-match--1", "rule-1-match--1"),
+			},
+			expected: "ns/be|gpt-4o-mini",
+		},
+		{
+			name: "different model is a different group",
+			entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+				entry("backend_name", "ns/be"),
+				entry("model_name_override", "gpt-5-mini"),
+				entry("rule-1-match--1", "rule-1-match--1"),
+			},
+			expected: "ns/be|gpt-5-mini",
+		},
+		{
+			name: "backend only",
+			entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+				entry("backend_name", "ns/be"),
+			},
+			expected: "ns/be|",
+		},
+		{
+			name: "no backend or model falls back to full entry list",
+			entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+				entry("quota_key", "quota_val"),
+			},
+			expected: "quota_key=quota_val;",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := quotaGroupKey(&ratelimitv3.RateLimitDescriptor{Entries: tc.entries})
+			require.Equal(t, tc.expected, got)
+		})
+	}
+}
+
 // stubConfigEvent is a minimal ConfigUpdateEvent that always returns a no-op config
 // with no error, allowing SetConfig to proceed to the settings-reading section.
 type stubConfigEvent struct{}
