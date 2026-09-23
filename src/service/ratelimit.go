@@ -231,7 +231,7 @@ func (this *service) shouldRateLimitWorker(
 	// Quota-mode descriptors are grouped by their enforcement scope (the model,
 	// identified by the backend_name + model_name_override descriptor entries).
 	// A group is over the limit if ANY of its descriptors is over
-	// (e.g. the per-tenant bucket OR the model's default bucket). 
+	// (e.g. the per-tenant bucket OR the model's default bucket).
 	// The overall request is OVER_LIMIT only when EVERY quota group is
 	// over, which preserves cross-model failover while still enforcing each
 	// model's buckets independently.
