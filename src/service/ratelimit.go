@@ -345,7 +345,7 @@ func (this *service) shouldRateLimitWorker(
 				availableDescriptors = append(availableDescriptors, idx)
 			}
 		}
-		response.DynamicMetadata = ratelimitToMetadata(request, availableDescriptors, limitsToCheck)
+		response.DynamicMetadata = ratelimitToMetadata(request, availableDescriptors, limitsToCheck, len(quotaGroups) > 0)
 	}
 
 	response.OverallCode = finalCode
@@ -380,7 +380,7 @@ func quotaGroupKey(descriptor *ratelimitv3.RateLimitDescriptor) string {
 	return all.String()
 }
 
-func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limitsToCheck []*config.RateLimit) *structpb.Struct {
+func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limitsToCheck []*config.RateLimit, quotaMode bool) *structpb.Struct {
 	fields := make(map[string]*structpb.Value)
 
 	// Domain
@@ -418,7 +418,54 @@ func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limi
 		fields["metadata"] = structpb.NewStructValue(passedMetadata)
 	}
 
+	// In quota mode, advertise the unique (backend_name, model_name_override) pairs
+	// that still have quota so the data plane can make a routing decision and send the
+	// request to a non-exhausted model/backend pair.
+	if quotaMode {
+		if backends := passedBackendsList(req, passedDescriptors); len(backends) > 0 {
+			fields["passedBackends"] = structpb.NewListValue(&structpb.ListValue{Values: backends})
+		}
+	}
+
 	return &structpb.Struct{Fields: fields}
+}
+
+// passedBackendsList builds the list of (backend_name, model_name_override)
+// pairs for the passed quota descriptors. Entries are deduplicated by quotaGroupKey so
+// that each model/backend pair appears at most once.
+func passedBackendsList(req *pb.RateLimitRequest, passedDescriptors []int) []*structpb.Value {
+	seen := make(map[string]bool)
+	backends := make([]*structpb.Value, 0, len(passedDescriptors))
+	for _, idx := range passedDescriptors {
+		if idx < 0 || idx >= len(req.GetDescriptors()) {
+			continue
+		}
+		descriptor := req.Descriptors[idx]
+		groupKey := quotaGroupKey(descriptor)
+		if seen[groupKey] {
+			continue
+		}
+		var backend, model string
+		for _, entry := range descriptor.GetEntries() {
+			switch entry.GetKey() {
+			case backendNameDescriptorKey:
+				backend = entry.GetValue()
+			case modelNameOverrideDescriptorKey:
+				model = entry.GetValue()
+			}
+		}
+		if backend == "" && model == "" {
+			continue
+		}
+		seen[groupKey] = true
+		backends = append(backends, structpb.NewStructValue(&structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				backendNameDescriptorKey:       structpb.NewStringValue(backend),
+				modelNameOverrideDescriptorKey: structpb.NewStringValue(model),
+			},
+		}))
+	}
+	return backends
 }
 
 func descriptorToStruct(descriptor *ratelimitv3.RateLimitDescriptor) *structpb.Struct {

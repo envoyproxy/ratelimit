@@ -1713,6 +1713,87 @@ func TestQuotaMetadataExcludesExhaustedGroup(test *testing.T) {
 	// Only model-b (the group that still has quota) is advertised; model-a's
 	// passed default bucket is excluded because model-a's group is exhausted.
 	t.assert.Equal("model_b", nameVal.GetStringValue())
+
+	// The passedBackends list advertises only the non-exhausted (backend, model)
+	// pair. model-a is excluded entirely (its group is exhausted) even though its
+	// default bucket individually passed, and its two buckets never produce more
+	// than one entry.
+	t.assert.Equal([][2]string{
+		{"ns/be", "model-b"},
+	}, passedBackendsPairs(response.DynamicMetadata))
+}
+
+// passedBackendsPairs extracts the (backend_name, model_name_override) pairs from
+// the passedBackends field of the response dynamic metadata, preserving order.
+func passedBackendsPairs(metadata *structpb.Struct) [][2]string {
+	val, ok := metadata.GetFields()["passedBackends"]
+	if !ok {
+		return nil
+	}
+	var pairs [][2]string
+	for _, entry := range val.GetListValue().GetValues() {
+		fields := entry.GetStructValue().GetFields()
+		pairs = append(pairs, [2]string{
+			fields["backend_name"].GetStringValue(),
+			fields["model_name_override"].GetStringValue(),
+		})
+	}
+	return pairs
+}
+
+// TestQuotaMetadataSameModelDifferentBackends verifies that backend_name is part
+// of the quota group identity. If one backend is exhausted and another backend
+// serving the same model remains available, the request stays OK and only the
+// live backend/model pair is advertised.
+func TestQuotaMetadataSameModelDifferentBackends(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	os.Setenv("RESPONSE_DYNAMIC_METADATA", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+		os.Unsetenv("RESPONSE_DYNAMIC_METADATA")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload to pick up environment variables.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	request := common.NewRateLimitRequest("quota-domain", [][][2]string{
+		quotaGroupDescriptor("ns/backend-a", "gpt-4o-mini", "rule-0-match--1"),
+		quotaGroupDescriptor("ns/backend-b", "gpt-4o-mini", "rule-0-match--1"),
+	}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(100, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("backend_a"), false, false, true, "", nil, false),
+		config.NewRateLimit(100, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("backend_b"), false, false, true, "", nil, false),
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			// backend-a's group is exhausted.
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			// backend-b serves the same model and still has quota.
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 99},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.NotNil(response.DynamicMetadata)
+	t.assert.Equal([][2]string{
+		{"ns/backend-b", "gpt-4o-mini"},
+	}, passedBackendsPairs(response.DynamicMetadata))
 }
 
 func TestServiceQuotaModeWithShadowMode(test *testing.T) {

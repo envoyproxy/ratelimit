@@ -26,6 +26,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 		req               *pb.RateLimitRequest
 		passedDescriptors []int
 		limitsToCheck     []*config.RateLimit
+		quotaMode         bool
 		expected          string
 	}{
 		{
@@ -82,6 +83,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 					},
 				},
 			},
+			quotaMode: true,
 			expected: `{
     "descriptors": [
         {
@@ -128,6 +130,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 				},
 			},
 			passedDescriptors: []int{1, 2},
+			quotaMode:         true,
 			limitsToCheck: []*config.RateLimit{
 				{
 					QuotaMode: false,
@@ -195,6 +198,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 				},
 			},
 			passedDescriptors: []int{0},
+			quotaMode:         true,
 			limitsToCheck: []*config.RateLimit{
 				{
 					QuotaMode: true,
@@ -212,11 +216,169 @@ func TestRatelimitToMetadata(t *testing.T) {
     "hitsAddend": 5
 }`,
 		},
+		{
+			name: "Quota mode passed backends deduped by group",
+			req: &pb.RateLimitRequest{
+				Domain: "quota-domain",
+				Descriptors: []*ratelimitv3.RateLimitDescriptor{
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "backend_name", Value: "ns/be"},
+							{Key: "model_name_override", Value: "gpt-4o-mini"},
+							{Key: "rule-0-x-api-key|premium-match-0", Value: "rule-0-x-api-key|premium-match-0"},
+						},
+					},
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "backend_name", Value: "ns/be"},
+							{Key: "model_name_override", Value: "gpt-4o-mini"},
+							{Key: "rule-1-match--1", Value: "rule-1-match--1"},
+						},
+					},
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "backend_name", Value: "ns/be"},
+							{Key: "model_name_override", Value: "gpt-5-mini"},
+							{Key: "rule-1-match--1", Value: "rule-1-match--1"},
+						},
+					},
+				},
+			},
+			passedDescriptors: []int{0, 1, 2},
+			quotaMode:         true,
+			limitsToCheck: []*config.RateLimit{
+				{QuotaMode: true},
+				{QuotaMode: true},
+				{QuotaMode: true},
+			},
+			expected: `{
+    "descriptors": [
+        {
+            "entries": [
+                "backend_name=ns/be",
+                "model_name_override=gpt-4o-mini",
+                "rule-0-x-api-key|premium-match-0=rule-0-x-api-key|premium-match-0"
+            ]
+        },
+        {
+            "entries": [
+                "backend_name=ns/be",
+                "model_name_override=gpt-4o-mini",
+                "rule-1-match--1=rule-1-match--1"
+            ]
+        },
+        {
+            "entries": [
+                "backend_name=ns/be",
+                "model_name_override=gpt-5-mini",
+                "rule-1-match--1=rule-1-match--1"
+            ]
+        }
+    ],
+    "domain": "quota-domain",
+    "passedBackends": [
+        {
+            "backend_name": "ns/be",
+            "model_name_override": "gpt-4o-mini"
+        },
+        {
+            "backend_name": "ns/be",
+            "model_name_override": "gpt-5-mini"
+        }
+    ]
+}`,
+		},
+		{
+			name: "Passed backends omitted when not quota mode",
+			req: &pb.RateLimitRequest{
+				Domain: "regular-domain",
+				Descriptors: []*ratelimitv3.RateLimitDescriptor{
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "backend_name", Value: "ns/be"},
+							{Key: "model_name_override", Value: "gpt-4o-mini"},
+						},
+					},
+				},
+			},
+			passedDescriptors: []int{0},
+			quotaMode:         false,
+			limitsToCheck:     []*config.RateLimit{nil},
+			expected: `{
+    "descriptors": [
+        {
+            "entries": [
+                "backend_name=ns/be",
+                "model_name_override=gpt-4o-mini"
+            ]
+        }
+    ],
+    "domain": "regular-domain"
+}`,
+		},
+		{
+			name: "Quota mode backend only pair",
+			req: &pb.RateLimitRequest{
+				Domain: "quota-domain",
+				Descriptors: []*ratelimitv3.RateLimitDescriptor{
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "backend_name", Value: "ns/be"},
+						},
+					},
+				},
+			},
+			passedDescriptors: []int{0},
+			quotaMode:         true,
+			limitsToCheck:     []*config.RateLimit{{QuotaMode: true}},
+			expected: `{
+    "descriptors": [
+        {
+            "entries": [
+                "backend_name=ns/be"
+            ]
+        }
+    ],
+    "domain": "quota-domain",
+    "passedBackends": [
+        {
+            "backend_name": "ns/be",
+            "model_name_override": ""
+        }
+    ]
+}`,
+		},
+		{
+			name: "Quota mode skips descriptors without backend or model",
+			req: &pb.RateLimitRequest{
+				Domain: "quota-domain",
+				Descriptors: []*ratelimitv3.RateLimitDescriptor{
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "quota_key", Value: "quota_val"},
+						},
+					},
+				},
+			},
+			passedDescriptors: []int{0},
+			quotaMode:         true,
+			limitsToCheck:     []*config.RateLimit{{QuotaMode: true}},
+			expected: `{
+    "descriptors": [
+        {
+            "entries": [
+                "quota_key=quota_val"
+            ]
+        }
+    ],
+    "domain": "quota-domain"
+}`,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ratelimitToMetadata(tc.req, tc.passedDescriptors, tc.limitsToCheck)
+			got := ratelimitToMetadata(tc.req, tc.passedDescriptors, tc.limitsToCheck, tc.quotaMode)
 			expected := &structpb.Struct{}
 			err := protojson.Unmarshal([]byte(tc.expected), expected)
 			require.NoError(t, err)
