@@ -24,6 +24,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 	cases := []struct {
 		name              string
 		req               *pb.RateLimitRequest
+		statuses          []*pb.RateLimitResponse_DescriptorStatus
 		passedDescriptors []int
 		limitsToCheck     []*config.RateLimit
 		expected          string
@@ -43,6 +44,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 					},
 				},
 			},
+			statuses:          nil,
 			passedDescriptors: nil,
 			limitsToCheck:     []*config.RateLimit{nil},
 			expected: `{
@@ -71,6 +73,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 					},
 				},
 			},
+			statuses:          nil,
 			passedDescriptors: []int{0},
 			limitsToCheck: []*config.RateLimit{
 				{
@@ -127,6 +130,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 					},
 				},
 			},
+			statuses:          nil,
 			passedDescriptors: []int{1, 2},
 			limitsToCheck: []*config.RateLimit{
 				{
@@ -194,6 +198,7 @@ func TestRatelimitToMetadata(t *testing.T) {
 					},
 				},
 			},
+			statuses:          nil,
 			passedDescriptors: []int{0},
 			limitsToCheck: []*config.RateLimit{
 				{
@@ -212,11 +217,131 @@ func TestRatelimitToMetadata(t *testing.T) {
     "hitsAddend": 5
 }`,
 		},
+		{
+			name: "Statuses carry outcome and matched limit name",
+			req: &pb.RateLimitRequest{
+				Domain: "fake-domain",
+				Descriptors: []*ratelimitv3.RateLimitDescriptor{
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "key1", Value: "val1"},
+						},
+					},
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "key2", Value: "val2"},
+						},
+					},
+				},
+			},
+			statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{
+					Code:         pb.RateLimitResponse_OK,
+					CurrentLimit: &pb.RateLimitResponse_RateLimit{Name: "within-limit-rule"},
+				},
+				{
+					Code:         pb.RateLimitResponse_OVER_LIMIT,
+					CurrentLimit: &pb.RateLimitResponse_RateLimit{Name: "over-limit-rule"},
+				},
+			},
+			passedDescriptors: nil,
+			limitsToCheck:     nil,
+			expected: `{
+    "descriptors": [
+        {
+            "entries": [
+                "key1=val1"
+            ],
+            "code": "OK",
+            "limitName": "within-limit-rule"
+        },
+        {
+            "entries": [
+                "key2=val2"
+            ],
+            "code": "OVER_LIMIT",
+            "limitName": "over-limit-rule"
+        }
+    ],
+    "domain": "fake-domain"
+}`,
+		},
+		{
+			name: "Unnamed limit omits limitName",
+			req: &pb.RateLimitRequest{
+				Domain: "fake-domain",
+				Descriptors: []*ratelimitv3.RateLimitDescriptor{
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "key1", Value: "val1"},
+						},
+					},
+				},
+			},
+			statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{
+					Code:         pb.RateLimitResponse_OVER_LIMIT,
+					CurrentLimit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 10},
+				},
+			},
+			passedDescriptors: nil,
+			limitsToCheck:     nil,
+			expected: `{
+    "descriptors": [
+        {
+            "entries": [
+                "key1=val1"
+            ],
+            "code": "OVER_LIMIT"
+        }
+    ],
+    "domain": "fake-domain"
+}`,
+		},
+		{
+			name: "Fewer statuses than descriptors omits outcome",
+			req: &pb.RateLimitRequest{
+				Domain: "fake-domain",
+				Descriptors: []*ratelimitv3.RateLimitDescriptor{
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "key1", Value: "val1"},
+						},
+					},
+					{
+						Entries: []*ratelimitv3.RateLimitDescriptor_Entry{
+							{Key: "key2", Value: "val2"},
+						},
+					},
+				},
+			},
+			statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT},
+			},
+			passedDescriptors: nil,
+			limitsToCheck:     nil,
+			expected: `{
+    "descriptors": [
+        {
+            "entries": [
+                "key1=val1"
+            ],
+            "code": "OVER_LIMIT"
+        },
+        {
+            "entries": [
+                "key2=val2"
+            ]
+        }
+    ],
+    "domain": "fake-domain"
+}`,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ratelimitToMetadata(tc.req, tc.passedDescriptors, tc.limitsToCheck)
+			got := ratelimitToMetadata(tc.req, tc.statuses, tc.passedDescriptors, tc.limitsToCheck)
 			expected := &structpb.Struct{}
 			err := protojson.Unmarshal([]byte(tc.expected), expected)
 			require.NoError(t, err)
