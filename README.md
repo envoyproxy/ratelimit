@@ -1069,6 +1069,62 @@ ratelimit.service.rate_limit.messaging.auth-service.over_limit.over_limit: 1
 ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 ```
 
+## Redis client statistics
+
+Redis client calls expose the following metrics with the built-in Prometheus mapper:
+
+| Metric                                           | Type      | Meaning                                                                            |
+| ------------------------------------------------ | --------- | ---------------------------------------------------------------------------------- |
+| `ratelimit_redis_client_calls_started_total`     | Counter   | Calls made to the Radix client.                                                    |
+| `ratelimit_redis_client_calls_completed_total`   | Counter   | Calls for which Radix returned, separated by outcome.                              |
+| `ratelimit_redis_client_calls_in_flight`         | Gauge     | Instrumented calls that have not returned, including synchronous metric reporting. |
+| `ratelimit_redis_client_call_duration_seconds`   | Histogram | Time inside the Radix client call, in seconds, excluding metric reporting.         |
+| `ratelimit_redis_client_actions_attempted_total` | Counter   | Planned action entries passed to those calls.                                      |
+
+The fixed labels are `pool` (`redis_pool` or `redis_per_second_pool`) and `operation`
+(`command`, `pipeline`, or `startup_ping`). Only the completed counter also has an
+`outcome`: `success`, `canceled`, `deadline`, `redis_error`, `network_error`, or
+`other_error`. Outcomes describe the returned error, including wrapped errors.
+For example, a network timeout is a `network_error`; a returned context deadline
+is `deadline`. A successful return remains `success` if the context was canceled
+independently. Keys, command arguments, credentials, and error text are never labels.
+
+The Redis pools also expose connection statistics at their existing StatsD-derived
+names, for example `ratelimit_redis_pool_cx_active`, `ratelimit_redis_pool_cx_total`,
+`ratelimit_redis_pool_cx_local_close`, and `ratelimit_redis_pool_cx_connect_fail`.
+The per-second pool uses the `ratelimit_redis_per_second_pool_` prefix. `cx_total`
+counts successfully created connections, while `cx_connect_fail` counts failed
+connection creation attempts.
+
+One `pipeline` call represents the full pipeline for a single Redis server or
+Sentinel, or one executed key group for Redis Cluster. A group containing one
+action is still a `pipeline` call. Groups skipped after an earlier error do not
+count as attempted calls or actions. An empty single-server pipeline makes one
+client call with zero actions; an empty cluster pipeline makes no client calls.
+Startup health PING calls are separate from request processing. Radix-internal
+health checks, discovery, redirects, and retries are not separate observations.
+
+These measurements are client activity, not counts of commands received or
+completed by Redis. Calls may fail before sending, and retries may send an action
+more than once. A context cancellation alone does not decrement the gauge: the
+synchronous call must return. Even after it returns, Radix may still consume and
+discard a pending response in the background; zero in-flight calls does not prove
+that all work has drained from the connection or server. Compare these metrics
+with server measurements when investigating connection churn or recovery.
+
+StatsD paths are `ratelimit.<pool>.client.<operation>.<stat>`, where `<stat>`
+is `calls_started`, `calls_completed.<outcome>`, `calls_in_flight`, `call_duration`,
+or `actions_attempted`. The StatsD duration is in milliseconds, with fractional
+values preserved. The built-in mapper converts it to seconds regardless of
+`PROMETHEUS_RESPONSE_TIME_AS_MILLISECONDS`. Custom mappers must provide the same
+conversion. Counters and gauges are published at `STATS_FLUSH_INTERVAL`; durations
+are reported as calls complete, so a scrape is not an atomic snapshot of all five
+measurements.
+Gostats omits counters until their first nonzero increment and histograms until
+their first sample. The in-flight gauge is published even at zero and identifies
+an initialized client metrics scope; it does not establish Redis connectivity or
+readiness.
+
 ## Statistics options
 
 1. `EXTRA_TAGS`: set to `"<k1:v1>,<k2:v2>"` to tag all emitted stats with the provided tags. You might want to tag build commit or release version, for example.
