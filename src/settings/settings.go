@@ -208,10 +208,17 @@ type Settings struct {
 	// until they reconnect; enabling this makes the pool recover automatically. Applies to
 	// both the main and the per-second Redis clients.
 	RedisCloseConnectionOnReadOnlyError bool `envconfig:"REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR" default:"false"`
-	// RedisTimeout sets the timeout for Redis connection and I/O operations.
+	// RedisTimeout sets the TCP dial timeout. With REDIS_CLOSE_ON_CANCEL it also
+	// bounds single/cluster startup attempts and pooled AUTH/READONLY commands.
+	// Sentinel control-connection bootstrap remains under Radix's own behavior.
 	RedisTimeout time.Duration `envconfig:"REDIS_TIMEOUT" default:"10s"`
-	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.
-	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
+	// RedisCloseOnCancel closes a socket when any command is canceled, including
+	// Radix pool PING and cluster topology checks. This is experimental: an
+	// unrelated timed-out shared command can fail other calls on the socket.
+	RedisCloseOnCancel bool `envconfig:"REDIS_CLOSE_ON_CANCEL" default:"false"`
+	// RedisPerSecondTimeout has the corresponding per-second client semantics.
+	RedisPerSecondTimeout       time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
+	RedisPerSecondCloseOnCancel bool          `envconfig:"REDIS_PERSECOND_CLOSE_ON_CANCEL" default:"false"`
 
 	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
 	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).
