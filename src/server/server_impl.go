@@ -257,18 +257,7 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
 	}
 
-	keepaliveOpt := grpc.KeepaliveParams(keepalive.ServerParameters{
-		MaxConnectionAge:      s.GrpcMaxConnectionAge,
-		MaxConnectionAgeGrace: s.GrpcMaxConnectionAgeGrace,
-	})
-	grpcOptions := []grpc.ServerOption{
-		keepaliveOpt,
-		grpc.ChainUnaryInterceptor(
-			s.GrpcUnaryInterceptor, // chain otel interceptor after the input interceptor
-			otelgrpc.UnaryServerInterceptor(),
-		),
-		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
-	}
+	grpcOptions := grpcServerOptions(s)
 	if s.GrpcServerUseTLS {
 		grpcServerTlsConfig := s.GrpcServerTlsConfig
 		ret.grpcCertProvider = provider.NewCertProvider(s, ret.store, s.GrpcServerTlsCert, s.GrpcServerTlsKey)
@@ -358,6 +347,25 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		})
 
 	return ret
+}
+
+func grpcServerOptions(s settings.Settings) []grpc.ServerOption {
+	keepaliveOpt := grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionAge:      s.GrpcMaxConnectionAge,
+		MaxConnectionAgeGrace: s.GrpcMaxConnectionAgeGrace,
+	})
+	grpcOptions := []grpc.ServerOption{
+		keepaliveOpt,
+		grpc.ChainUnaryInterceptor(
+			s.GrpcUnaryInterceptor, // chain otel interceptor after the input interceptor
+			otelgrpc.UnaryServerInterceptor(),
+		),
+		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+	}
+	if s.GrpcMaxConcurrentStreams > 0 {
+		grpcOptions = append(grpcOptions, grpc.MaxConcurrentStreams(s.GrpcMaxConcurrentStreams))
+	}
+	return grpcOptions
 }
 
 func (server *server) Stop() {

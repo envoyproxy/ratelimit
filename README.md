@@ -960,6 +960,19 @@ By default the ratelimit gRPC server binds to `0.0.0.0:8081`. To change this set
 socket then set `GRPC_UDS`, e.g. `GRPC_UDS=/<dir>/ratelimit.sock` and leave
 `GRPC_HOST` and `GRPC_PORT` unmodified.
 
+`GRPC_MAX_CONCURRENT_STREAMS` limits active streams **per gRPC connection**.
+It defaults to `0`, which leaves grpc-go's effectively unlimited default in
+place. Valid caps are `1` through `4294967294`; grpc-go treats `4294967295` as
+unlimited, so that value is rejected. A valid cap is advertised in HTTP/2
+SETTINGS. A client respecting that setting waits for stream capacity or its own
+deadline; it does not receive an immediate `ResourceExhausted` response from
+this limit. A peer that sends streams past the advertised cap can instead receive
+HTTP/2 `REFUSED_STREAM`.
+Size the cap using the number of upstream connections and the desired
+per-instance memory budget. This setting does not limit HTTP `/json` or the
+number of connections; use `MAX_CONCURRENT_REQUESTS` for a per-instance bound
+on admitted calls.
+
 **Request admission and deadlines**
 
 The following settings can protect the service from accumulating synchronous request handlers when its cache is slow:
@@ -967,7 +980,7 @@ The following settings can protect the service from accumulating synchronous req
 1. `MAX_CONCURRENT_REQUESTS`: maximum admitted `ShouldRateLimit` calls per service instance, shared by gRPC and HTTP. Default: `0` (disabled). Excess calls fail immediately; there is no admission queue.
 1. `REQUEST_TIMEOUT`: deadline budget passed to admitted calls and their cache operations. Default: `0` (use only the caller's deadline). An earlier caller deadline is preserved. This setting alone does not limit concurrency.
 
-Both settings must be non-negative and take effect at process startup. Reloading descriptor configuration does not reset the admission limit or release occupied slots. Admission occurs after the request has been decoded, before configuration lookup, tracing attributes, or cache work. It does not limit connection counts, request sizes, descriptor counts, or work a backend starts asynchronously.
+Both settings must be non-negative and take effect at process startup. Reloading descriptor configuration does not reset the admission limit or release occupied slots. Admission occurs after the request has been decoded, before configuration lookup, tracing attributes, or cache work. It does not limit connection counts, request sizes, descriptor counts, or work a backend starts asynchronously. Set `GRPC_MAX_CONCURRENT_STREAMS` separately to limit how many gRPC streams each connection can have open before calls reach admission.
 
 A slot stays occupied until the synchronous cache call and handler processing return, including after caller cancellation. `REQUEST_TIMEOUT` supplies a cancellation signal; it is **not a guarantee of prompt backend cleanup**. In particular, Radix can continue draining a cancelled response after returning one call and can hold later calls behind that response even after their deadlines expire. Such later handlers retain their slots. Commands already sent to Redis may still execute. Recovery must be checked by observing completed calls and successful new requests after the backend recovers.
 
