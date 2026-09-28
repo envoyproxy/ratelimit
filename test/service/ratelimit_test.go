@@ -1460,6 +1460,342 @@ func TestServiceQuotaModeOnlySomeOverTheLimit(test *testing.T) {
 	t.assert.Nil(err)
 }
 
+// quotaGroupDescriptors returns a two-level model descriptor (backend_name +
+// model_name_override) with a trailing bucket entry, used to exercise quota
+// grouping where several buckets share one model group.
+func quotaGroupDescriptor(backend, model, bucketKey string) [][2]string {
+	return [][2]string{
+		{"backend_name", backend},
+		{"model_name_override", model},
+		{bucketKey, bucketKey},
+	}
+}
+
+// TestServiceQuotaModeSameGroupTenantOverDefaultOk verifies
+// within a single model group, if the per-tenant bucket is over the limit the
+// whole group (and therefore the request) is OVER_LIMIT even though the model's
+// default bucket still has quota.
+func TestServiceQuotaModeSameGroupTenantOverDefaultOk(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest("quota-domain", [][][2]string{
+		quotaGroupDescriptor("ns/be", "gpt-4o-mini", "rule-0-tenant-match-0"),
+		quotaGroupDescriptor("ns/be", "gpt-4o-mini", "rule-1-match--1"),
+	}, 1)
+
+	limits := []*config.RateLimit{
+		{
+			FullKey:    "tenant_bucket",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 100, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+		{
+			FullKey:    "default_bucket",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 150, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 90},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 90},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+// TestServiceQuotaModeSameGroupDefaultOverTenantOk verifies that
+// the model's default (ceiling) bucket being over the limit
+// makes the group OVER_LIMIT even though the per-tenant bucket still has quota.
+func TestServiceQuotaModeSameGroupDefaultOverTenantOk(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest("quota-domain", [][][2]string{
+		quotaGroupDescriptor("ns/be", "gpt-4o-mini", "rule-0-tenant-match-0"),
+		quotaGroupDescriptor("ns/be", "gpt-4o-mini", "rule-1-match--1"),
+	}, 1)
+
+	limits := []*config.RateLimit{
+		{
+			FullKey:    "tenant_bucket",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 100, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+		{
+			FullKey:    "default_bucket",
+			Limit:      &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 150, Unit: pb.RateLimitResponse_RateLimit_MINUTE},
+			QuotaMode:  true,
+			ShadowMode: false,
+		},
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 40},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	common.AssertProtoEqual(
+		t.assert,
+		&pb.RateLimitResponse{
+			OverallCode: pb.RateLimitResponse_OVER_LIMIT,
+			Statuses: []*pb.RateLimitResponse_DescriptorStatus{
+				{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 40},
+				{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			},
+		},
+		response)
+	t.assert.Nil(err)
+}
+
+// TestServiceQuotaModeMultiModelFailover verifies that with two model groups on a
+// route, one model being fully exhausted does not reject the request while
+// another model still has quota (AND across groups → failover preserved).
+func TestServiceQuotaModeMultiModelFailover(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest("quota-domain", [][][2]string{
+		quotaGroupDescriptor("ns/be", "gpt-4o-mini", "rule-0-tenant-match-0"),
+		quotaGroupDescriptor("ns/be", "gpt-4o-mini", "rule-1-match--1"),
+		quotaGroupDescriptor("ns/be", "gpt-5-mini", "rule-0-match--1"),
+	}, 1)
+
+	limits := []*config.RateLimit{
+		{FullKey: "a_tenant", Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 100, Unit: pb.RateLimitResponse_RateLimit_MINUTE}, QuotaMode: true},
+		{FullKey: "a_default", Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 150, Unit: pb.RateLimitResponse_RateLimit_MINUTE}, QuotaMode: true},
+		{FullKey: "b_default", Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 250, Unit: pb.RateLimitResponse_RateLimit_MINUTE}, QuotaMode: true},
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[2]).Return(limits[2])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[2].Limit, LimitRemaining: 200},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	// Model A group is fully exhausted, but model B still has quota → overall OK.
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.Nil(err)
+}
+
+// TestServiceQuotaModeMultiModelAllOver verifies that when every model group is
+// exhausted the request is OVER_LIMIT.
+func TestServiceQuotaModeMultiModelAllOver(test *testing.T) {
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	request := common.NewRateLimitRequest("quota-domain", [][][2]string{
+		quotaGroupDescriptor("ns/be", "gpt-4o-mini", "rule-0-tenant-match-0"),
+		quotaGroupDescriptor("ns/be", "gpt-4o-mini", "rule-1-match--1"),
+		quotaGroupDescriptor("ns/be", "gpt-5-mini", "rule-0-match--1"),
+	}, 1)
+
+	limits := []*config.RateLimit{
+		{FullKey: "a_tenant", Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 100, Unit: pb.RateLimitResponse_RateLimit_MINUTE}, QuotaMode: true},
+		{FullKey: "a_default", Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 150, Unit: pb.RateLimitResponse_RateLimit_MINUTE}, QuotaMode: true},
+		{FullKey: "b_default", Limit: &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 250, Unit: pb.RateLimitResponse_RateLimit_MINUTE}, QuotaMode: true},
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[2]).Return(limits[2])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[2].Limit, LimitRemaining: 0},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+
+	t.assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
+	t.assert.Nil(err)
+}
+
+// TestQuotaMetadataExcludesExhaustedGroup verifies a passed descriptor
+// whose model group is exhausted is not advertised in the response dynamic
+// metadata, while an available model group still is.
+func TestQuotaMetadataExcludesExhaustedGroup(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	os.Setenv("RESPONSE_DYNAMIC_METADATA", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+		os.Unsetenv("RESPONSE_DYNAMIC_METADATA")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload to pick up environment variables.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	request := common.NewRateLimitRequest("quota-domain", [][][2]string{
+		quotaGroupDescriptor("ns/be", "model-a", "rule-0-tenant-match-0"),
+		quotaGroupDescriptor("ns/be", "model-a", "rule-1-match--1"),
+		quotaGroupDescriptor("ns/be", "model-b", "rule-0-match--1"),
+	}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(100, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("a_tenant"), false, false, true, "", nil, false),
+		config.NewRateLimit(150, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("a_default"), false, false, true, "", nil, false),
+		config.NewRateLimit(250, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("b_default"), false, false, true, "", nil, false),
+	}
+	limits[0].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("model_a_tenant")}}
+	limits[1].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("model_a_default")}}
+	limits[2].Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("model_b")}}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[2]).Return(limits[2])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			// model-a tenant bucket exhausted → model-a group is over.
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			// model-a default bucket passed, but its group is exhausted.
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 90},
+			// model-b default bucket passed and its group still has quota.
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[2].Limit, LimitRemaining: 200},
+		})
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(err)
+
+	// model-b still has quota, so overall is OK.
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.NotNil(response.DynamicMetadata)
+
+	passedMetadataVal, ok := response.DynamicMetadata.GetFields()["metadata"]
+	t.assert.True(ok)
+	fields := passedMetadataVal.GetStructValue().GetFields()
+	nameVal, ok := fields["name"]
+	t.assert.True(ok)
+	// Only model-b (the group that still has quota) is advertised; model-a's
+	// passed default bucket is excluded because model-a's group is exhausted.
+	t.assert.Equal("model_b", nameVal.GetStringValue())
+
+	// The passedBackends list advertises only the non-exhausted (backend, model)
+	// pair. model-a is excluded entirely (its group is exhausted) even though its
+	// default bucket individually passed, and its two buckets never produce more
+	// than one entry.
+	t.assert.Equal([][2]string{
+		{"ns/be", "model-b"},
+	}, passedBackendsPairs(response.DynamicMetadata))
+}
+
+// passedBackendsPairs extracts the (backend_name, model_name_override) pairs from
+// the passedBackends field of the response dynamic metadata, preserving order.
+func passedBackendsPairs(metadata *structpb.Struct) [][2]string {
+	val, ok := metadata.GetFields()["passedBackends"]
+	if !ok {
+		return nil
+	}
+	var pairs [][2]string
+	for _, entry := range val.GetListValue().GetValues() {
+		fields := entry.GetStructValue().GetFields()
+		pairs = append(pairs, [2]string{
+			fields["backend_name"].GetStringValue(),
+			fields["model_name_override"].GetStringValue(),
+		})
+	}
+	return pairs
+}
+
+// TestQuotaMetadataSameModelDifferentBackends verifies that backend_name is part
+// of the quota group identity. If one backend is exhausted and another backend
+// serving the same model remains available, the request stays OK and only the
+// live backend/model pair is advertised.
+func TestQuotaMetadataSameModelDifferentBackends(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	os.Setenv("RESPONSE_DYNAMIC_METADATA", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+		os.Unsetenv("RESPONSE_DYNAMIC_METADATA")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload to pick up environment variables.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	request := common.NewRateLimitRequest("quota-domain", [][][2]string{
+		quotaGroupDescriptor("ns/backend-a", "gpt-4o-mini", "rule-0-match--1"),
+		quotaGroupDescriptor("ns/backend-b", "gpt-4o-mini", "rule-0-match--1"),
+	}, 1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(100, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("backend_a"), false, false, true, "", nil, false),
+		config.NewRateLimit(100, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("backend_b"), false, false, true, "", nil, false),
+	}
+
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			// backend-a's group is exhausted.
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			// backend-b serves the same model and still has quota.
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 99},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(err)
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+	t.assert.NotNil(response.DynamicMetadata)
+	t.assert.Equal([][2]string{
+		{"ns/backend-b", "gpt-4o-mini"},
+	}, passedBackendsPairs(response.DynamicMetadata))
+}
+
 func TestServiceQuotaModeWithShadowMode(test *testing.T) {
 	os.Setenv("SHADOW_MODE", "true")
 	defer func() {

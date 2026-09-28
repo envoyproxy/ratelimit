@@ -195,6 +195,12 @@ func (this *service) constructLimitsToCheck(request *pb.RateLimitRequest, ctx co
 
 const MaxUint32 = uint32(1<<32 - 1)
 
+// Descriptor entry keys used to identify a quota enforcement group (one model).
+const (
+	backendNameDescriptorKey       = "backend_name"
+	modelNameOverrideDescriptorKey = "model_name_override"
+)
+
 func (this *service) shouldRateLimitWorker(
 	ctx context.Context, request *pb.RateLimitRequest,
 ) *pb.RateLimitResponse {
@@ -221,8 +227,22 @@ func (this *service) shouldRateLimitWorker(
 	// Track quota mode violations for metadata
 	var passedDescriptors []int
 	failedRateLimitDescriptors := 0
-	failedQuotaDescriptors := 0
-	totalQuotaDescriptors := 0
+
+	// Quota-mode descriptors are grouped by their enforcement scope (the model,
+	// identified by the backend_name + model_name_override descriptor entries).
+	// A group is over the limit if ANY of its descriptors is over
+	// (e.g. the per-tenant bucket OR the model's default bucket).
+	// The overall request is OVER_LIMIT only when EVERY quota group is
+	// over, which preserves cross-model failover while still enforcing each
+	// model's buckets independently.
+	type quotaGroupState struct {
+		over bool
+	}
+	quotaGroups := make(map[string]*quotaGroupState)
+	// descriptorGroupKey[i] holds the group key for quota descriptor i (empty for
+	// non-quota descriptors) so that passed descriptors belonging to an exhausted
+	// group can be excluded from the failover metadata below.
+	descriptorGroupKey := make([]string, len(responseDescriptorStatuses))
 
 	for i, descriptorStatus := range responseDescriptorStatuses {
 		// Keep track of the descriptor closest to hit the ratelimit
@@ -238,31 +258,50 @@ func (this *service) shouldRateLimitWorker(
 				Code:           pb.RateLimitResponse_OK,
 				LimitRemaining: math.MaxUint32,
 			}
-		} else {
-			response.Statuses[i] = descriptorStatus
-			isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
-			if descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT {
-				if isQuotaMode {
-					failedQuotaDescriptors += 1
-				} else {
-					failedRateLimitDescriptors += 1
-					minimumDescriptor = descriptorStatus
-					minLimitRemaining = 0
-				}
-			} else {
-				// Keep track of the descriptors that have passed
-				passedDescriptors = append(passedDescriptors, i)
+			continue
+		}
+
+		response.Statuses[i] = descriptorStatus
+		isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
+		over := descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT
+		if !over {
+			// Keep track of the descriptors that have passed
+			passedDescriptors = append(passedDescriptors, i)
+		}
+
+		if isQuotaMode {
+			groupKey := quotaGroupKey(request.Descriptors[i])
+			descriptorGroupKey[i] = groupKey
+			group := quotaGroups[groupKey]
+			if group == nil {
+				group = &quotaGroupState{}
+				quotaGroups[groupKey] = group
 			}
-			if isQuotaMode {
-				totalQuotaDescriptors += 1
+			// OR the statuses within a quota group.
+			if over {
+				group.over = true
 			}
+		} else if over {
+			failedRateLimitDescriptors += 1
+			minimumDescriptor = descriptorStatus
+			minLimitRemaining = 0
+		}
+	}
+
+	// Quota is over the limit only when there is at least one quota group and
+	// every quota group is over its limit (AND across model groups → failover).
+	quotaOverLimit := len(quotaGroups) > 0
+	for _, group := range quotaGroups {
+		if !group.over {
+			quotaOverLimit = false
+			break
 		}
 	}
 
 	finalCode := pb.RateLimitResponse_OK
-	// The final code is OVER_LIMIT iff at least one rate limit descriptor is over the limit
-	// or all quota descriptors are over the limit.
-	if failedRateLimitDescriptors > 0 || (totalQuotaDescriptors > 0 && totalQuotaDescriptors == failedQuotaDescriptors) {
+	// The final code is OVER_LIMIT iff at least one non-quota rate limit descriptor
+	// is over the limit, or every quota group is over its limit.
+	if failedRateLimitDescriptors > 0 || quotaOverLimit {
 		finalCode = pb.RateLimitResponse_OVER_LIMIT
 	}
 
@@ -292,14 +331,56 @@ func (this *service) shouldRateLimitWorker(
 
 	// If response dynamic data enabled, set dynamic data on response.
 	if this.responseDynamicMetadataEnabled {
-		response.DynamicMetadata = ratelimitToMetadata(request, passedDescriptors, limitsToCheck)
+		// Only advertise descriptors that still have quota. A passed descriptor
+		// whose quota group is exhausted must not be offered as an available routing target.
+		availableDescriptors := passedDescriptors
+		if len(quotaGroups) > 0 {
+			availableDescriptors = make([]int, 0, len(passedDescriptors))
+			for _, idx := range passedDescriptors {
+				if groupKey := descriptorGroupKey[idx]; groupKey != "" {
+					if group := quotaGroups[groupKey]; group != nil && group.over {
+						continue
+					}
+				}
+				availableDescriptors = append(availableDescriptors, idx)
+			}
+		}
+		response.DynamicMetadata = ratelimitToMetadata(request, availableDescriptors, limitsToCheck, len(quotaGroups) > 0)
 	}
 
 	response.OverallCode = finalCode
 	return response
 }
 
-func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limitsToCheck []*config.RateLimit) *structpb.Struct {
+// quotaGroupKey returns the enforcement scope ("group") for a quota-mode
+// descriptor. Descriptors that belong to the same model share a group, so their
+// buckets (for example a per-tenant bucket rule and the model's default bucket)
+// are evaluated together. The group is identified by the backend_name and
+// model_name_override descriptor entries. If neither entry is present (for
+// example a service-level catch-all quota), the full entry list is used so that
+// unrelated descriptors are never accidentally merged into the same group.
+func quotaGroupKey(descriptor *ratelimitv3.RateLimitDescriptor) string {
+	var backend, model string
+	var all strings.Builder
+	for _, entry := range descriptor.GetEntries() {
+		switch entry.GetKey() {
+		case backendNameDescriptorKey:
+			backend = entry.GetValue()
+		case modelNameOverrideDescriptorKey:
+			model = entry.GetValue()
+		}
+		all.WriteString(entry.GetKey())
+		all.WriteString("=")
+		all.WriteString(entry.GetValue())
+		all.WriteString(";")
+	}
+	if backend != "" || model != "" {
+		return backend + "|" + model
+	}
+	return all.String()
+}
+
+func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limitsToCheck []*config.RateLimit, quotaMode bool) *structpb.Struct {
 	fields := make(map[string]*structpb.Value)
 
 	// Domain
@@ -337,7 +418,54 @@ func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limi
 		fields["metadata"] = structpb.NewStructValue(passedMetadata)
 	}
 
+	// In quota mode, advertise the unique (backend_name, model_name_override) pairs
+	// that still have quota so the data plane can make a routing decision and send the
+	// request to a non-exhausted model/backend pair.
+	if quotaMode {
+		if backends := passedBackendsList(req, passedDescriptors); len(backends) > 0 {
+			fields["passedBackends"] = structpb.NewListValue(&structpb.ListValue{Values: backends})
+		}
+	}
+
 	return &structpb.Struct{Fields: fields}
+}
+
+// passedBackendsList builds the list of (backend_name, model_name_override)
+// pairs for the passed quota descriptors. Entries are deduplicated by quotaGroupKey so
+// that each model/backend pair appears at most once.
+func passedBackendsList(req *pb.RateLimitRequest, passedDescriptors []int) []*structpb.Value {
+	seen := make(map[string]bool)
+	backends := make([]*structpb.Value, 0, len(passedDescriptors))
+	for _, idx := range passedDescriptors {
+		if idx < 0 || idx >= len(req.GetDescriptors()) {
+			continue
+		}
+		descriptor := req.Descriptors[idx]
+		groupKey := quotaGroupKey(descriptor)
+		if seen[groupKey] {
+			continue
+		}
+		var backend, model string
+		for _, entry := range descriptor.GetEntries() {
+			switch entry.GetKey() {
+			case backendNameDescriptorKey:
+				backend = entry.GetValue()
+			case modelNameOverrideDescriptorKey:
+				model = entry.GetValue()
+			}
+		}
+		if backend == "" && model == "" {
+			continue
+		}
+		seen[groupKey] = true
+		backends = append(backends, structpb.NewStructValue(&structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				backendNameDescriptorKey:       structpb.NewStringValue(backend),
+				modelNameOverrideDescriptorKey: structpb.NewStringValue(model),
+			},
+		}))
+	}
+	return backends
 }
 
 func descriptorToStruct(descriptor *ratelimitv3.RateLimitDescriptor) *structpb.Struct {
