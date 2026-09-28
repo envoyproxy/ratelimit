@@ -58,6 +58,82 @@ func TestReadOnlyClosingConnUnwrapsReadOnlyErrors(t *testing.T) {
 	assert.False(t, errors.As(err, new(resp.ErrConnUsable)))
 }
 
+func TestReadOnlyAwarePipelineDelegatesDoToEmbeddedConn(t *testing.T) {
+	conn := wrappedStubConn(func(ctx context.Context, args []string) interface{} {
+		assert.Equal(t, []string{"PING"}, args)
+		return "PONG"
+	})
+	defer conn.Close()
+
+	pipeline := newReadOnlyAwarePipeline()
+	pipeline.Conn = conn
+	defer func() { pipeline.Conn = nil }()
+
+	var res string
+	require.NoError(t, pipeline.Do(context.Background(), radix.Cmd(&res, "PING")))
+	assert.Equal(t, "PONG", res)
+}
+
+func TestReadOnlyAwarePipelineUnwrapsReadOnlyErrors(t *testing.T) {
+	conn := wrappedStubConn(func(ctx context.Context, args []string) interface{} {
+		switch args[0] {
+		case "INCRBY":
+			return resp3.SimpleError{S: readOnlyErrMsg}
+		case "EXPIRE":
+			return "OK"
+		default:
+			t.Fatalf("unexpected command: %v", args)
+			return nil
+		}
+	})
+	defer conn.Close()
+
+	var hits uint64
+	pipeline := newReadOnlyAwarePipeline()
+	pipeline.Append(radix.FlatCmd(&hits, "INCRBY", "foo", 1))
+	pipeline.Append(radix.FlatCmd(nil, "EXPIRE", "foo", 1))
+
+	err := conn.Do(context.Background(), pipeline)
+	require.Error(t, err)
+
+	var respErr resp3.SimpleError
+	assert.True(t, errors.As(err, &respErr))
+	assert.Equal(t, readOnlyErrMsg, respErr.S)
+
+	// A pipeline-level READONLY reply is still a demoted-master signal. It must
+	// strip ErrConnUsable so the enclosing pool discards the stale connection.
+	assert.False(t, errors.As(err, new(resp.ErrConnUsable)))
+}
+
+func TestReadOnlyAwarePipelineKeepsOtherErrorsUsable(t *testing.T) {
+	conn := wrappedStubConn(func(ctx context.Context, args []string) interface{} {
+		switch args[0] {
+		case "INCRBY":
+			return resp3.SimpleError{S: "ERR value is not an integer or out of range"}
+		case "EXPIRE":
+			return "OK"
+		default:
+			t.Fatalf("unexpected command: %v", args)
+			return nil
+		}
+	})
+	defer conn.Close()
+
+	var hits uint64
+	pipeline := newReadOnlyAwarePipeline()
+	pipeline.Append(radix.FlatCmd(&hits, "INCRBY", "foo", "not-a-number"))
+	pipeline.Append(radix.FlatCmd(nil, "EXPIRE", "foo", 1))
+
+	err := conn.Do(context.Background(), pipeline)
+	require.Error(t, err)
+
+	var respErr resp3.SimpleError
+	assert.True(t, errors.As(err, &respErr))
+	assert.Equal(t, "ERR value is not an integer or out of range", respErr.S)
+
+	assert.True(t, errors.As(err, new(resp.ErrConnUsable)))
+}
+
 func TestReadOnlyClosingConnKeepsOtherErrorsUsable(t *testing.T) {
 	conn := wrappedStubConn(func(ctx context.Context, args []string) interface{} {
 		return resp.ErrConnUsable{Err: resp3.SimpleError{S: "ERR value is not an integer or out of range"}}
@@ -135,4 +211,97 @@ func TestPoolDiscardsConnOnReadOnly(t *testing.T) {
 
 	assert.GreaterOrEqual(t, atomic.LoadInt64(&dials), int64(2))
 	assert.GreaterOrEqual(t, atomic.LoadInt64(&closes), int64(1))
+}
+
+func TestPoolDiscardsConnOnReadOnlyPipeline(t *testing.T) {
+	var dials, closes int64
+
+	dialer := wrapDialerCloseOnReadOnly(radix.Dialer{
+		CustomConn: func(ctx context.Context, network, addr string) (radix.Conn, error) {
+			demoted := atomic.AddInt64(&dials, 1) == 1
+			return radix.NewStubConn(network, addr, func(ctx context.Context, args []string) interface{} {
+				switch args[0] {
+				case "PING":
+					return "PONG"
+				case "INCRBY":
+					if demoted {
+						return resp3.SimpleError{S: readOnlyErrMsg}
+					}
+					return uint64(1)
+				case "EXPIRE":
+					if demoted {
+						return resp3.SimpleError{S: readOnlyErrMsg}
+					}
+					return int64(1)
+				default:
+					t.Fatalf("unexpected command: %v", args)
+					return nil
+				}
+			}), nil
+		},
+	})
+
+	pool, err := (radix.PoolConfig{
+		Dialer:       dialer,
+		Size:         1,
+		PingInterval: -1,
+		Trace: trace.PoolTrace{
+			ConnClosed: func(trace.PoolConnClosed) { atomic.AddInt64(&closes, 1) },
+		},
+	}).New(context.Background(), "tcp", "127.0.0.1:6379")
+	require.NoError(t, err)
+	defer pool.Close()
+
+	client := &clientImpl{
+		client:                         pool,
+		closeConnectionOnReadOnlyError: true,
+	}
+
+	var hits uint64
+	pipeline := client.PipeAppend(Pipeline{}, &hits, "INCRBY", "foo", 1)
+	pipeline = client.PipeAppend(pipeline, nil, "EXPIRE", "foo", 1)
+
+	err = client.PipeDo(context.Background(), pipeline)
+	require.Error(t, err)
+	var respErr resp3.SimpleError
+	assert.True(t, errors.As(err, &respErr))
+	assert.Equal(t, readOnlyErrMsg, respErr.S)
+
+	assert.Eventually(t, func() bool {
+		hits = 0
+		pipeline := client.PipeAppend(Pipeline{}, &hits, "INCRBY", "foo", 1)
+		pipeline = client.PipeAppend(pipeline, nil, "EXPIRE", "foo", 1)
+		return client.PipeDo(context.Background(), pipeline) == nil && hits == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	assert.GreaterOrEqual(t, atomic.LoadInt64(&dials), int64(2))
+	assert.GreaterOrEqual(t, atomic.LoadInt64(&closes), int64(1))
+}
+
+var benchmarkPipelineSink pipelineAction
+
+func BenchmarkNewPipelineAppendTwoActions(b *testing.B) {
+	var hits uint64
+	actions := []radix.Action{
+		radix.FlatCmd(&hits, "INCRBY", "foo", 1),
+		radix.FlatCmd(nil, "EXPIRE", "foo", 1),
+	}
+
+	b.Run("native", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			pipeline := radix.NewPipeline()
+			pipeline.Append(actions[0])
+			pipeline.Append(actions[1])
+			benchmarkPipelineSink = pipeline
+		}
+	})
+
+	b.Run("read-only-aware", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			pipeline := newReadOnlyAwarePipeline()
+			pipeline.Append(actions[0])
+			pipeline.Append(actions[1])
+			benchmarkPipelineSink = pipeline
+		}
+	})
 }
