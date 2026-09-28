@@ -274,6 +274,15 @@ func TestSanitizeDescriptorMetricDots(t *testing.T) {
 func TestBasicTLSConfig(t *testing.T) {
 	t.Run("WithoutPerSecondRedisTLS", testBasicConfigAuthTLS(false, 0))
 	t.Run("WithPerSecondRedisTLS", testBasicConfigAuthTLS(true, 0))
+	t.Run("WithMainAndPerSecondRedisAuthFiles", func(t *testing.T) {
+		s := makeSimpleRedisSettings(16381, 16382, true, 0)
+		s.RedisTlsConfig = &tls.Config{}
+		s.RedisTls = true
+		s.RedisPerSecondTls = true
+		s.RedisAuthFile = writeRedisAuthFile(t, "redis-auth")
+		s.RedisPerSecondAuthFile = writeRedisAuthFile(t, "redis-persecond-auth")
+		testBasicBaseConfig(s)(t)
+	})
 	t.Run("WithoutPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS(false, 1000))
 	t.Run("WithPerSecondRedisTLSWithLocalCache", testBasicConfigAuthTLS(true, 1000))
 
@@ -314,6 +323,17 @@ func writeRedisAuthFile(t *testing.T, name string) string {
 func TestBasicAuthConfigWithRedisCluster(t *testing.T) {
 	t.Run("WithoutPerSecondRedisAuth", testBasicConfigAuthWithRedisCluster(false, 0))
 	t.Run("WithPerSecondRedisAuth", testBasicConfigAuthWithRedisCluster(true, 0))
+	t.Run("WithMainAndPerSecondRedisAuthFiles", func(t *testing.T) {
+		s := defaultSettings()
+		s.RedisPerSecond = true
+		s.BackendType = "redis"
+		configRedisCluster(&s)
+		s.RedisAuth = ""
+		s.RedisPerSecondAuth = ""
+		s.RedisAuthFile = writeRedisAuthFile(t, "redis-auth")
+		s.RedisPerSecondAuthFile = writeRedisAuthFile(t, "redis-persecond-auth")
+		testBasicBaseConfig(s)(t)
+	})
 	t.Run("WithoutPerSecondRedisAuthWithLocalCache", testBasicConfigAuthWithRedisCluster(false, 1000))
 	t.Run("WithPerSecondRedisAuthWithLocalCache", testBasicConfigAuthWithRedisCluster(true, 1000))
 }
