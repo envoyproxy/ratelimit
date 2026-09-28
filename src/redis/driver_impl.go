@@ -138,7 +138,7 @@ func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, aut
 	if auth != "" {
 		user, pass, found := strings.Cut(auth, ":")
 		if found {
-			logger.Warnf("enabling authentication to redis %s with user %s", targetName, user)
+			logger.Warnf("enabling authentication to redis %s with username configured", targetName)
 			dialer.AuthUser = user
 			dialer.AuthPass = pass
 		} else {
