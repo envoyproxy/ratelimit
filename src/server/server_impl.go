@@ -26,8 +26,10 @@ import (
 	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/status"
 
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/settings"
@@ -85,7 +87,7 @@ func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *ht
 	return func(writer http.ResponseWriter, request *http.Request) {
 		var req pb.RateLimitRequest
 
-		ctx := context.Background()
+		ctx := request.Context()
 
 		body, err := io.ReadAll(request.Body)
 		if err != nil {
@@ -103,7 +105,16 @@ func NewJsonHandler(svc pb.RateLimitServiceServer) func(http.ResponseWriter, *ht
 		resp, err := svc.ShouldRateLimit(ctx, &req)
 		if err != nil {
 			logger.Warnf("error: %s", err.Error())
-			writeHttpStatus(writer, http.StatusBadRequest)
+			httpStatus := http.StatusBadRequest
+			switch status.Code(err) {
+			case codes.ResourceExhausted:
+				httpStatus = http.StatusServiceUnavailable
+			case codes.DeadlineExceeded:
+				httpStatus = http.StatusGatewayTimeout
+			case codes.Canceled:
+				httpStatus = http.StatusRequestTimeout
+			}
+			writeHttpStatus(writer, httpStatus)
 			return
 		}
 
@@ -246,18 +257,7 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		ret.store.AddStatGenerator(limiter.NewLocalCacheStats(localCache, ret.scope.Scope("localcache")))
 	}
 
-	keepaliveOpt := grpc.KeepaliveParams(keepalive.ServerParameters{
-		MaxConnectionAge:      s.GrpcMaxConnectionAge,
-		MaxConnectionAgeGrace: s.GrpcMaxConnectionAgeGrace,
-	})
-	grpcOptions := []grpc.ServerOption{
-		keepaliveOpt,
-		grpc.ChainUnaryInterceptor(
-			s.GrpcUnaryInterceptor, // chain otel interceptor after the input interceptor
-			otelgrpc.UnaryServerInterceptor(),
-		),
-		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
-	}
+	grpcOptions := grpcServerOptions(s)
 	if s.GrpcServerUseTLS {
 		grpcServerTlsConfig := s.GrpcServerTlsConfig
 		ret.grpcCertProvider = provider.NewCertProvider(s, ret.store, s.GrpcServerTlsCert, s.GrpcServerTlsKey)
@@ -347,6 +347,25 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		})
 
 	return ret
+}
+
+func grpcServerOptions(s settings.Settings) []grpc.ServerOption {
+	keepaliveOpt := grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionAge:      s.GrpcMaxConnectionAge,
+		MaxConnectionAgeGrace: s.GrpcMaxConnectionAgeGrace,
+	})
+	grpcOptions := []grpc.ServerOption{
+		keepaliveOpt,
+		grpc.ChainUnaryInterceptor(
+			s.GrpcUnaryInterceptor, // chain otel interceptor after the input interceptor
+			otelgrpc.UnaryServerInterceptor(),
+		),
+		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+	}
+	if s.GrpcMaxConcurrentStreams > 0 {
+		grpcOptions = append(grpcOptions, grpc.MaxConcurrentStreams(s.GrpcMaxConcurrentStreams))
+	}
+	return grpcOptions
 }
 
 func (server *server) Stop() {

@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/envoyproxy/ratelimit/src/settings"
@@ -59,6 +60,7 @@ type service struct {
 	globalQuotaMode                bool
 	responseDynamicMetadataEnabled bool
 	useCalendarMonthRateLimit      bool
+	requestLimits                  *requestLimits
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -571,6 +573,26 @@ func (this *service) ShouldRateLimit(
 	ctx context.Context,
 	request *pb.RateLimitRequest,
 ) (finalResponse *pb.RateLimitResponse, finalError error) {
+	if this.requestLimits != nil {
+		var release func()
+		ctx, release, finalError = this.requestLimits.acquire(ctx)
+		if finalError != nil {
+			return nil, finalError
+		}
+		defer release()
+		// Do not start cache work if cancellation raced with admission. Check
+		// again on return because a backend may finish after its deadline.
+		if err := ctx.Err(); err != nil {
+			return nil, status.FromContextError(err).Err()
+		}
+		defer func() {
+			if err := ctx.Err(); err != nil {
+				finalResponse = nil
+				finalError = status.FromContextError(err).Err()
+			}
+		}()
+	}
+
 	logger.Debugf("ShouldRateLimit: %+v", request)
 	// Generate trace
 	_, span := tracer.Start(
@@ -621,6 +643,7 @@ func (this *service) GetCurrentConfig() (config.RateLimitConfig, bool, bool) {
 
 func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitConfigProvider, statsManager stats.Manager,
 	health *server.HealthChecker, clock utils.TimeSource, shadowMode, forceStart bool, healthyWithAtLeastOneConfigLoad bool,
+	options ...ServiceOption,
 ) RateLimitServiceServer {
 	newService := &service{
 		configLock:        sync.RWMutex{},
@@ -632,6 +655,9 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 		globalShadowMode:  shadowMode,
 		globalQuotaMode:   false,
 		customHeaderClock: clock,
+	}
+	for _, option := range options {
+		option(newService)
 	}
 
 	if !forceStart {

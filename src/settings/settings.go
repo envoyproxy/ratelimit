@@ -2,6 +2,7 @@ package settings
 
 import (
 	"crypto/tls"
+	"math"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -26,6 +27,10 @@ type Settings struct {
 	GrpcUds  string `envconfig:"GRPC_UDS" default:""`
 	GrpcHost string `envconfig:"GRPC_HOST" default:"0.0.0.0"`
 	GrpcPort int    `envconfig:"GRPC_PORT" default:"8081"`
+	// GrpcMaxConcurrentStreams limits active gRPC streams per connection.
+	// Zero leaves grpc-go's default (no practical stream limit) in place;
+	// MaxUint32 is rejected because grpc-go also treats it as unlimited.
+	GrpcMaxConcurrentStreams uint32 `envconfig:"GRPC_MAX_CONCURRENT_STREAMS" default:"0"`
 	// GrpcServerTlsConfig configures grpc for the server
 	GrpcServerTlsConfig *tls.Config
 	// GrpcMaxConnectionAge is a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway.
@@ -54,6 +59,13 @@ type Settings struct {
 	ConfigType string `envconfig:"CONFIG_TYPE" default:"FILE"`
 	// ForceStartWithoutInitialConfig enables start the server without initial rate limit config event
 	ForceStartWithoutInitialConfig bool `envconfig:"FORCE_START_WITHOUT_INITIAL_CONFIG" default:"false"`
+	// MaxConcurrentRequests limits admitted ShouldRateLimit calls across both
+	// gRPC and HTTP. Excess calls fail immediately; zero disables the limit.
+	MaxConcurrentRequests int `envconfig:"MAX_CONCURRENT_REQUESTS" default:"0"`
+	// RequestTimeout supplies a deadline to cache work without extending an
+	// earlier caller deadline. Zero uses only the caller's deadline. A backend
+	// may continue running after cancellation and retains its admission slot.
+	RequestTimeout time.Duration `envconfig:"REQUEST_TIMEOUT" default:"0"`
 
 	// xDS rate limit configuration
 	// ConfigGrpcXdsNodeId is the Node ID. xDS server should set snapshots to this Node ID
@@ -280,6 +292,15 @@ func NewSettings() Settings {
 	var s Settings
 	if err := envconfig.Process("", &s); err != nil {
 		panic(err)
+	}
+	if s.MaxConcurrentRequests < 0 {
+		panic("MAX_CONCURRENT_REQUESTS must be >= 0")
+	}
+	if s.RequestTimeout < 0 {
+		panic("REQUEST_TIMEOUT must be >= 0")
+	}
+	if s.GrpcMaxConcurrentStreams == math.MaxUint32 {
+		panic("GRPC_MAX_CONCURRENT_STREAMS must be less than 4294967295")
 	}
 	// When we require TLS to connect to Redis, we check if we need to connect using the provided key-pair.
 	RedisTlsConfig(s.RedisTls || s.RedisPerSecondTls)(&s)
