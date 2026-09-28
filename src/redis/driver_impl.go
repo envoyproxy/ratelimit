@@ -24,6 +24,7 @@ type poolStats struct {
 	connectionActive stats.Gauge
 	connectionTotal  stats.Counter
 	connectionClose  stats.Counter
+	connectionFail   stats.Counter
 	hadConnError     *atomic.Bool
 }
 
@@ -32,6 +33,7 @@ func newPoolStats(scope stats.Scope) poolStats {
 	ret.connectionActive = scope.NewGauge("cx_active")
 	ret.connectionTotal = scope.NewCounter("cx_total")
 	ret.connectionClose = scope.NewCounter("cx_local_close")
+	ret.connectionFail = scope.NewCounter("cx_connect_fail")
 	ret.hadConnError = new(atomic.Bool)
 	return ret
 }
@@ -52,6 +54,7 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 					}
 				}
 			} else {
+				ps.connectionFail.Add(1)
 				ps.hadConnError.Store(true)
 				logger.Errorf("creating redis connection error : %v", newConn.Err)
 			}

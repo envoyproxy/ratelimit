@@ -1089,6 +1089,13 @@ For example, a network timeout is a `network_error`; a returned context deadline
 is `deadline`. A successful return remains `success` if the context was canceled
 independently. Keys, command arguments, credentials, and error text are never labels.
 
+The Redis pools also expose connection statistics at their existing StatsD-derived
+names, for example `ratelimit_redis_pool_cx_active`, `ratelimit_redis_pool_cx_total`,
+`ratelimit_redis_pool_cx_local_close`, and `ratelimit_redis_pool_cx_connect_fail`.
+The per-second pool uses the `ratelimit_redis_per_second_pool_` prefix. `cx_total`
+counts successfully created connections, while `cx_connect_fail` counts failed
+connection creation attempts.
+
 One `pipeline` call represents the full pipeline for a single Redis server or
 Sentinel, or one executed key group for Redis Cluster. A group containing one
 action is still a `pipeline` call. Groups skipped after an earlier error do not

@@ -236,6 +236,11 @@ func TestRedisClientMetricsNamesTypesAndUnits(t *testing.T) {
 					scope.NewMilliTimer("call_duration").AddValue(1250.5)
 				}
 			}
+			poolScope := store.Scope("ratelimit").Scope("redis_pool")
+			poolScope.NewGauge("cx_active").Set(3)
+			poolScope.NewCounter("cx_total").Add(5)
+			poolScope.NewCounter("cx_local_close").Add(4)
+			poolScope.NewCounter("cx_connect_fail").Add(2)
 			store.Flush()
 
 			var metrics map[string]*dto.MetricFamily
@@ -253,7 +258,11 @@ func TestRedisClientMetricsNamesTypesAndUnits(t *testing.T) {
 						return false
 					}
 				}
-				return len(metrics["ratelimit_redis_client_calls_completed_total"].GetMetric()) == 36
+				return len(metrics["ratelimit_redis_client_calls_completed_total"].GetMetric()) == 36 &&
+					metrics["ratelimit_redis_pool_cx_active"] != nil &&
+					metrics["ratelimit_redis_pool_cx_total"] != nil &&
+					metrics["ratelimit_redis_pool_cx_local_close"] != nil &&
+					metrics["ratelimit_redis_pool_cx_connect_fail"] != nil
 			}, time.Second, time.Millisecond)
 
 			for _, expected := range []struct {
@@ -288,6 +297,28 @@ func TestRedisClientMetricsNamesTypesAndUnits(t *testing.T) {
 						assert.Equal(t, uint64(1), metric.GetHistogram().GetSampleCount())
 						assert.InDelta(t, expected.value, metric.GetHistogram().GetSampleSum(), 1e-9)
 					}
+				}
+			}
+			for _, expected := range []struct {
+				name       string
+				metricType dto.MetricType
+				value      float64
+			}{
+				{"ratelimit_redis_pool_cx_active", dto.MetricType_GAUGE, 3},
+				{"ratelimit_redis_pool_cx_total", dto.MetricType_COUNTER, 5},
+				{"ratelimit_redis_pool_cx_local_close", dto.MetricType_COUNTER, 4},
+				{"ratelimit_redis_pool_cx_connect_fail", dto.MetricType_COUNTER, 2},
+			} {
+				family := metrics[expected.name]
+				require.Equal(t, expected.metricType, family.GetType(), expected.name)
+				require.Len(t, family.GetMetric(), 1)
+				metric := family.GetMetric()[0]
+				assert.Empty(t, metric.GetLabel())
+				switch expected.metricType {
+				case dto.MetricType_COUNTER:
+					assert.Equal(t, expected.value, metric.GetCounter().GetValue())
+				case dto.MetricType_GAUGE:
+					assert.Equal(t, expected.value, metric.GetGauge().GetValue())
 				}
 			}
 		})
