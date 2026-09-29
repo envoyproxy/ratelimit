@@ -59,6 +59,7 @@ type service struct {
 	globalQuotaMode                bool
 	responseDynamicMetadataEnabled bool
 	useCalendarMonthRateLimit      bool
+	allDescriptorsHeadersEnabled   bool
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -96,6 +97,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 	this.globalQuotaMode = rlSettings.GlobalQuotaMode
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
 	this.useCalendarMonthRateLimit = rlSettings.UseCalendarMonthRateLimit
+	this.allDescriptorsHeadersEnabled = rlSettings.RateLimitAllDescriptorsHeadersEnabled
 
 	this.customHeadersEnabled = rlSettings.RateLimitResponseHeadersEnabled
 	if rlSettings.RateLimitResponseHeadersEnabled {
@@ -306,12 +308,15 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	// Add Headers if requested
+	if this.allDescriptorsHeadersEnabled {
+		response.ResponseHeadersToAdd = this.allDescriptorsHeaders(responseDescriptorStatuses)
+	}
 	if this.customHeadersEnabled && minimumDescriptor != nil {
-		response.ResponseHeadersToAdd = []*core.HeaderValue{
+		response.ResponseHeadersToAdd = append(response.ResponseHeadersToAdd,
 			this.rateLimitLimitHeader(minimumDescriptor),
 			this.rateLimitRemainingHeader(minimumDescriptor),
 			this.rateLimitResetHeader(minimumDescriptor),
-		}
+		)
 	}
 
 	// Add request headers if requested
@@ -350,6 +355,31 @@ func (this *service) shouldRateLimitWorker(
 
 	response.OverallCode = finalCode
 	return response
+}
+
+func (this *service) allDescriptorsHeaders(
+	descriptorStatuses []*pb.RateLimitResponse_DescriptorStatus,
+) []*core.HeaderValue {
+	headers := make([]*core.HeaderValue, 0, len(descriptorStatuses)*2)
+	for _, status := range descriptorStatuses {
+		if status.CurrentLimit == nil {
+			continue
+		}
+
+		unitSuffix := strings.ToLower(status.CurrentLimit.Unit.String()) + "s"
+		headers = append(headers,
+			&core.HeaderValue{
+				Key:   "ratelimit-limit-" + unitSuffix,
+				Value: strconv.FormatUint(uint64(status.CurrentLimit.RequestsPerUnit), 10),
+			},
+			&core.HeaderValue{
+				Key:   "ratelimit-remaining-" + unitSuffix,
+				Value: strconv.FormatUint(uint64(status.LimitRemaining), 10),
+			},
+		)
+	}
+
+	return headers
 }
 
 // quotaGroupKey returns the enforcement scope ("group") for a quota-mode
