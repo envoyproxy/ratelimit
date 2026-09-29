@@ -59,7 +59,7 @@ type service struct {
 	globalQuotaMode                bool
 	responseDynamicMetadataEnabled bool
 	useCalendarMonthRateLimit      bool
-	allDescriptorsHeadersEnabled   bool
+	perUnitHeadersEnabled          bool
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -97,7 +97,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 	this.globalQuotaMode = rlSettings.GlobalQuotaMode
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
 	this.useCalendarMonthRateLimit = rlSettings.UseCalendarMonthRateLimit
-	this.allDescriptorsHeadersEnabled = rlSettings.RateLimitAllDescriptorsHeadersEnabled
+	this.perUnitHeadersEnabled = rlSettings.RateLimitPerUnitHeadersEnabled
 
 	this.customHeadersEnabled = rlSettings.RateLimitResponseHeadersEnabled
 	if rlSettings.RateLimitResponseHeadersEnabled {
@@ -308,8 +308,8 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	// Add Headers if requested
-	if this.allDescriptorsHeadersEnabled {
-		response.ResponseHeadersToAdd = this.allDescriptorsHeaders(responseDescriptorStatuses)
+	if this.perUnitHeadersEnabled {
+		response.ResponseHeadersToAdd = this.perUnitHeaders(responseDescriptorStatuses)
 	}
 	if this.customHeadersEnabled && minimumDescriptor != nil {
 		response.ResponseHeadersToAdd = append(response.ResponseHeadersToAdd,
@@ -357,29 +357,48 @@ func (this *service) shouldRateLimitWorker(
 	return response
 }
 
-func (this *service) allDescriptorsHeaders(
+func (this *service) perUnitHeaders(
 	descriptorStatuses []*pb.RateLimitResponse_DescriptorStatus,
 ) []*core.HeaderValue {
-	headers := make([]*core.HeaderValue, 0, len(descriptorStatuses)*2)
+	closestByUnit := make(map[pb.RateLimitResponse_RateLimit_Unit]*pb.RateLimitResponse_DescriptorStatus)
+	units := make([]pb.RateLimitResponse_RateLimit_Unit, 0, len(descriptorStatuses))
 	for _, status := range descriptorStatuses {
 		if status.CurrentLimit == nil {
 			continue
 		}
 
-		unitSuffix := strings.ToLower(status.CurrentLimit.Unit.String()) + "s"
+		unit := status.CurrentLimit.Unit
+		closest, found := closestByUnit[unit]
+		if !found {
+			units = append(units, unit)
+		}
+		if !found || status.LimitRemaining < closest.LimitRemaining {
+			closestByUnit[unit] = status
+		}
+	}
+
+	headers := make([]*core.HeaderValue, 0, len(units)*2)
+	for _, unit := range units {
+		status := closestByUnit[unit]
+		unitSuffix := unitToHeaderSuffix(unit)
 		headers = append(headers,
 			&core.HeaderValue{
-				Key:   "ratelimit-limit-" + unitSuffix,
+				Key:   "RateLimit-Limit-" + unitSuffix,
 				Value: strconv.FormatUint(uint64(status.CurrentLimit.RequestsPerUnit), 10),
 			},
 			&core.HeaderValue{
-				Key:   "ratelimit-remaining-" + unitSuffix,
+				Key:   "RateLimit-Remaining-" + unitSuffix,
 				Value: strconv.FormatUint(uint64(status.LimitRemaining), 10),
 			},
 		)
 	}
 
 	return headers
+}
+
+func unitToHeaderSuffix(unit pb.RateLimitResponse_RateLimit_Unit) string {
+	unitName := strings.ToLower(unit.String())
+	return strings.ToUpper(unitName[:1]) + unitName[1:] + "s"
 }
 
 // quotaGroupKey returns the enforcement scope ("group") for a quota-mode

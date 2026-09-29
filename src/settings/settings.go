@@ -127,8 +127,8 @@ type Settings struct {
 	HeaderRatelimitRemaining string `envconfig:"LIMIT_REMAINING_HEADER" default:"RateLimit-Remaining"`
 	// value: remaining seconds
 	HeaderRatelimitReset string `envconfig:"LIMIT_RESET_HEADER" default:"RateLimit-Reset"`
-	// Return per-unit limit and remaining headers for all configured descriptors.
-	RateLimitAllDescriptorsHeadersEnabled bool `envconfig:"LIMIT_ALL_DESCRIPTORS_HEADERS_ENABLED" default:"false"`
+	// Return limit and remaining headers for the closest descriptor of each unit.
+	RateLimitPerUnitHeadersEnabled bool `envconfig:"LIMIT_PER_UNIT_HEADERS_ENABLED" default:"false"`
 
 	// Settings for optional injection of rate limit headers into the upstream request (request_headers_to_add)
 	RateLimitRequestHeadersEnabled bool `envconfig:"LIMIT_REQUEST_HEADERS_ENABLED" default:"false"`
