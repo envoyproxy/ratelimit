@@ -83,6 +83,11 @@ type clientImpl struct {
 	clusterPipelineParallelism int
 }
 
+// ClientOptions preserve the existing constructor behavior when omitted.
+type ClientOptions struct {
+	CloseOnCancel bool
+}
+
 func checkError(err error) {
 	if err != nil {
 		panic(RedisError(err.Error()))
@@ -155,12 +160,13 @@ func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	timeout time.Duration, poolOnEmptyBehavior string, sentinelAuth string,
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
 	closeConnectionOnReadOnlyError bool,
+	options ...ClientOptions,
 ) Client {
 	return newClientImpl(ctx, scope, useTls, auth, redisSocketType, redisType, url, poolSize,
 		pipelineWindow, pipelineLimit, tlsConfig, healthCheckActiveConnection, srv,
 		timeout, poolOnEmptyBehavior, sentinelAuth,
 		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1,
-		closeConnectionOnReadOnlyError)
+		closeConnectionOnReadOnlyError, options...)
 }
 
 func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
@@ -169,6 +175,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	startupInitialInterval, startupMaxInterval, startupMaxElapsedTime time.Duration,
 	clusterPipelineParallelism int,
 	closeConnectionOnReadOnlyError bool,
+	options ...ClientOptions,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
@@ -189,6 +196,10 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	// - Cluster: uses grouped pipeline (same-key commands batched together)
 	// - Single/Sentinel: uses explicit pipeline (all commands batched together)
 	isCluster := strings.ToLower(redisType) == "cluster"
+	var opt ClientOptions
+	if len(options) > 0 {
+		opt = options[0]
+	}
 
 	// pipelineLimit parameter is deprecated and ignored in radix v4.
 	if pipelineLimit > 0 {
@@ -206,6 +217,9 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	// and reaches the current master. Installed last because CustomConn
 	// replaces every other Dialer field (TLS, auth, write buffering), which
 	// must all be final before being captured.
+	if opt.CloseOnCancel {
+		poolConfig.Dialer = wrapDialerCloseOnCancel(poolConfig.Dialer, isCluster, timeout)
+	}
 	if closeConnectionOnReadOnlyError {
 		logger.Warnf("Redis pool %s: closing connections on READONLY error replies", maskedUrl)
 		poolConfig.Dialer = wrapDialerCloseOnReadOnly(poolConfig.Dialer)
@@ -296,18 +310,27 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 
 	var client redisClient
 	for {
+		attemptCtx := ctx
+		cancelAttempt := func() {}
+		if opt.CloseOnCancel {
+			attemptTimeout := timeout
+			if attemptTimeout <= 0 {
+				attemptTimeout = 10 * time.Second
+			}
+			attemptCtx, cancelAttempt = context.WithTimeout(ctx, attemptTimeout)
+		}
 		var err error
 		switch strings.ToLower(redisType) {
 		case "single":
 			logger.Warnf("Creating single with urls %v", url)
-			client, err = poolFunc(ctx, redisSocketType, url)
+			client, err = poolFunc(attemptCtx, redisSocketType, url)
 		case "cluster":
 			urls := strings.Split(url, ",")
 			logger.Warnf("Creating cluster with urls %v", urls)
 			clusterConfig := radix.ClusterConfig{
 				PoolConfig: poolConfig,
 			}
-			client, err = clusterConfig.New(ctx, urls)
+			client, err = clusterConfig.New(attemptCtx, urls)
 		case "sentinel":
 			urls := strings.Split(url, ",")
 			sentinelDialer := createDialer(timeout, useTls, tlsConfig, sentinelAuth, fmt.Sprintf("sentinel(%s)", maskedUrl))
@@ -315,27 +338,32 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 				PoolConfig:     poolConfig,
 				SentinelDialer: sentinelDialer,
 			}
-			client, err = sentinelConfig.New(ctx, urls[0], urls[1:])
+			client, err = sentinelConfig.New(attemptCtx, urls[0], urls[1:])
 		default:
+			cancelAttempt()
 			panic(RedisError("Unrecognized redis type " + redisType))
 		}
 
 		if err != nil {
+			cancelAttempt()
 			retryOrDie(err)
 			continue
 		}
 
 		var pingResponse string
-		if pingErr := client.Do(ctx, radix.Cmd(&pingResponse, "PING")); pingErr != nil {
+		if pingErr := client.Do(attemptCtx, radix.Cmd(&pingResponse, "PING")); pingErr != nil {
+			cancelAttempt()
 			_ = client.Close()
 			retryOrDie(pingErr)
 			continue
 		}
 		if pingResponse != "PONG" {
+			cancelAttempt()
 			_ = client.Close()
 			retryOrDie(fmt.Errorf("unexpected PING response: %q", pingResponse))
 			continue
 		}
+		cancelAttempt()
 
 		// Successfully connected.
 		break

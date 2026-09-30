@@ -1343,10 +1343,20 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 
 ### Connection Timeout
 
-Controls the maximum duration for Redis connection establishment, read operations, and write operations.
+Controls Redis TCP connection establishment. It does not set a deadline on
+commands sent over an established connection.
 
-1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
-1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
+1. `REDIS_TIMEOUT`: timeout for main Redis TCP connection establishment. Default: `10s`
+1. `REDIS_PERSECOND_TIMEOUT`: timeout for per-second Redis TCP connection establishment. Default: `10s`
+
+### Retiring Canceled Redis Connections
+
+1. `REDIS_CLOSE_ON_CANCEL`: close a main Redis pool connection when a command's context is canceled. Default: `false`.
+1. `REDIS_PERSECOND_CLOSE_ON_CANCEL`: the same option for the per-second Redis pool. Default: `false`.
+
+These options also cover radix's pool maintenance `PING` and Redis Cluster topology checks. They require a caller deadline or cancellation; the flags do not add a request deadline. A command with no deadline can still wait indefinitely for a Redis reply. When enabled, `REDIS_TIMEOUT` also bounds each single/cluster startup attempt and pooled connection bootstrap commands such as `AUTH` and `READONLY`. Sentinel control-connection bootstrap is outside this protection.
+
+Closing a shared connection can fail other commands in flight on that connection, even when their own deadlines have not expired. The pool then reconnects, so frequent deadlines may increase reconnects and CPU/GC work. Enable this option only after checking request errors, connection churn, and throughput under the target load.
 
 ### Pool On-Empty Behavior
 
