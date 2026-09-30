@@ -1470,6 +1470,13 @@ The following environment variables control the custom response feature:
 1. `LIMIT_LIMIT_HEADER` - The default value is "RateLimit-Limit", setting the environment variable will specify an alternative header name
 1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
 1. `LIMIT_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
+1. `LIMIT_PER_UNIT_HEADERS_ENABLED` - When set to `true`, returns
+   `RateLimit-Limit-<Unit>` and `RateLimit-Remaining-<Unit>` headers for the
+   descriptor with the lowest remaining count for each rate-limit unit (for
+   example, `RateLimit-Limit-Seconds` and
+   `RateLimit-Remaining-Minutes`). This can be enabled together with
+   `LIMIT_RESPONSE_HEADERS_ENABLED`, which continues to add its three standard
+   headers for the descriptor closest to its limit.
 
 ## RequestHeadersToAdd
 
