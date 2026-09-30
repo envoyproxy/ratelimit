@@ -17,6 +17,16 @@ else
   DOCKER_COMPOSE=docker-compose
 endif
 
+# Server and CLI binaries used to stand up the counter store for the integration
+# tests. tests_with_valkey overrides these so that the same suite runs against
+# Valkey over the same Redis protocol. STORE_SERVER is exported because some
+# integration tests start their own servers through test/common.WithMultiRedis,
+# which reads it from the environment; without the export those tests would keep
+# using redis-server during the Valkey run.
+STORE_SERVER ?= redis-server
+STORE_CLI ?= redis-cli
+export STORE_SERVER
+
 .PHONY: bootstrap
 bootstrap: ;
 
@@ -93,41 +103,64 @@ tests_unit: compile
 tests: compile
 	go test -race -tags=integration $(MODULE)/...
 
-.PHONY: tests_with_redis
-tests_with_redis: bootstrap_redis_tls tests_unit
-	redis-server --port 6381 --requirepass password123 &
-	redis-server --port 6382 --requirepass password123 &
-	redis-server --port 6361 --requirepass password123 &
+# Stands up the counter store in every topology the service supports (single,
+# sentinel, cluster, and stunnel-fronted TLS) and runs the integration suite
+# against it. Parameterized over $(STORE_SERVER)/$(STORE_CLI) so that the Redis
+# and Valkey runs share one recipe.
+.PHONY: tests_with_store
+tests_with_store: bootstrap_redis_tls tests_unit
+	$(STORE_SERVER) --port 6381 --requirepass password123 &
+	$(STORE_SERVER) --port 6382 --requirepass password123 &
+	$(STORE_SERVER) --port 6361 --requirepass password123 &
 
-	redis-server --port 6392 --requirepass password123 &
-	redis-server --port 6393 --requirepass password123 --slaveof 127.0.0.1 6392 --masterauth password123 &
-	mkdir 26394 && cp test/integration/conf/sentinel.conf 26394/sentinel.conf && redis-server 26394/sentinel.conf --sentinel --port 26394 &
-	mkdir 26395 && cp test/integration/conf/sentinel.conf 26395/sentinel.conf && redis-server 26395/sentinel.conf --sentinel --port 26395 &
-	mkdir 26396 && cp test/integration/conf/sentinel.conf 26396/sentinel.conf && redis-server 26396/sentinel.conf --sentinel --port 26396 &
-	redis-server --port 6397 --requirepass password123 &
-	redis-server --port 6398 --requirepass password123 --slaveof 127.0.0.1 6397 --masterauth password123 &
-	mkdir 26399 && cp test/integration/conf/sentinel-pre-second.conf 26399/sentinel.conf && redis-server 26399/sentinel.conf --sentinel --port 26399 &
-	mkdir 26400 && cp test/integration/conf/sentinel-pre-second.conf 26400/sentinel.conf && redis-server 26400/sentinel.conf --sentinel --port 26400 &
-	mkdir 26401 && cp test/integration/conf/sentinel-pre-second.conf 26401/sentinel.conf && redis-server 26401/sentinel.conf --sentinel --port 26401 &
+	$(STORE_SERVER) --port 6392 --requirepass password123 &
+	$(STORE_SERVER) --port 6393 --requirepass password123 --slaveof 127.0.0.1 6392 --masterauth password123 &
+	mkdir 26394 && cp test/integration/conf/sentinel.conf 26394/sentinel.conf && $(STORE_SERVER) 26394/sentinel.conf --sentinel --port 26394 &
+	mkdir 26395 && cp test/integration/conf/sentinel.conf 26395/sentinel.conf && $(STORE_SERVER) 26395/sentinel.conf --sentinel --port 26395 &
+	mkdir 26396 && cp test/integration/conf/sentinel.conf 26396/sentinel.conf && $(STORE_SERVER) 26396/sentinel.conf --sentinel --port 26396 &
+	$(STORE_SERVER) --port 6397 --requirepass password123 &
+	$(STORE_SERVER) --port 6398 --requirepass password123 --slaveof 127.0.0.1 6397 --masterauth password123 &
+	mkdir 26399 && cp test/integration/conf/sentinel-pre-second.conf 26399/sentinel.conf && $(STORE_SERVER) 26399/sentinel.conf --sentinel --port 26399 &
+	mkdir 26400 && cp test/integration/conf/sentinel-pre-second.conf 26400/sentinel.conf && $(STORE_SERVER) 26400/sentinel.conf --sentinel --port 26400 &
+	mkdir 26401 && cp test/integration/conf/sentinel-pre-second.conf 26401/sentinel.conf && $(STORE_SERVER) 26401/sentinel.conf --sentinel --port 26401 &
 
-	mkdir 6386 && cd 6386 && redis-server --port 6386 --cluster-enabled yes --requirepass password123 &
-	mkdir 6387 && cd 6387 && redis-server --port 6387 --cluster-enabled yes --requirepass password123 &
-	mkdir 6388 && cd 6388 && redis-server --port 6388 --cluster-enabled yes --requirepass password123 &
-	mkdir 6389 && cd 6389 && redis-server --port 6389 --cluster-enabled yes --requirepass password123 &
-	mkdir 6390 && cd 6390 && redis-server --port 6390 --cluster-enabled yes --requirepass password123 &
-	mkdir 6391 && cd 6391 && redis-server --port 6391 --cluster-enabled yes --requirepass password123 &
+	mkdir 6386 && cd 6386 && $(STORE_SERVER) --port 6386 --cluster-enabled yes --requirepass password123 &
+	mkdir 6387 && cd 6387 && $(STORE_SERVER) --port 6387 --cluster-enabled yes --requirepass password123 &
+	mkdir 6388 && cd 6388 && $(STORE_SERVER) --port 6388 --cluster-enabled yes --requirepass password123 &
+	mkdir 6389 && cd 6389 && $(STORE_SERVER) --port 6389 --cluster-enabled yes --requirepass password123 &
+	mkdir 6390 && cd 6390 && $(STORE_SERVER) --port 6390 --cluster-enabled yes --requirepass password123 &
+	mkdir 6391 && cd 6391 && $(STORE_SERVER) --port 6391 --cluster-enabled yes --requirepass password123 &
 	sleep 2
-	echo "yes" | redis-cli --cluster create -a password123 127.0.0.1:6386 127.0.0.1:6387 127.0.0.1:6388 --cluster-replicas 0
-	echo "yes" | redis-cli --cluster create -a password123 127.0.0.1:6389 127.0.0.1:6390 127.0.0.1:6391 --cluster-replicas 0
-	redis-cli --cluster check -a password123 127.0.0.1:6386
-	redis-cli --cluster check -a password123 127.0.0.1:6389
+	echo "yes" | $(STORE_CLI) --cluster create -a password123 127.0.0.1:6386 127.0.0.1:6387 127.0.0.1:6388 --cluster-replicas 0
+	echo "yes" | $(STORE_CLI) --cluster create -a password123 127.0.0.1:6389 127.0.0.1:6390 127.0.0.1:6391 --cluster-replicas 0
+	$(STORE_CLI) --cluster check -a password123 127.0.0.1:6386
+	$(STORE_CLI) --cluster check -a password123 127.0.0.1:6389
 
 	go test -race -tags=integration $(MODULE)/...
+
+.PHONY: tests_with_redis
+tests_with_redis: tests_with_store
+
+# Runs the same suite as tests_with_redis against Valkey, which serves the same
+# Redis protocol. Nothing in src/ changes between the two runs. Invoke this on its
+# own rather than alongside tests_with_redis: both drive the shared tests_with_store
+# recipe on fixed ports and directories, so one invocation can only serve one store.
+.PHONY: tests_with_valkey
+tests_with_valkey: STORE_SERVER = valkey-server
+tests_with_valkey: STORE_CLI = valkey-cli
+tests_with_valkey: tests_with_store
 
 .PHONY: docker_tests
 docker_tests:
 	docker build -f Dockerfile.integration . -t $(INTEGRATION_IMAGE):$(VERSION) && \
 	docker run $$(tty -s && echo "-it" || echo) $(INTEGRATION_IMAGE):$(VERSION)
+
+# Same image as docker_tests, with the counter store swapped for Valkey. Run as a
+# separate container because the recipe writes fixed ports and directories.
+.PHONY: docker_tests_valkey
+docker_tests_valkey:
+	docker build -f Dockerfile.integration . -t $(INTEGRATION_IMAGE):$(VERSION) && \
+	docker run $$(tty -s && echo "-it" || echo) $(INTEGRATION_IMAGE):$(VERSION) make tests_with_valkey
 
 .PHONY: docker_image
 docker_image: docker_tests

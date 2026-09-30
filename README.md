@@ -62,6 +62,7 @@
 - [Local Cache](#local-cache)
 - [Redis](#redis)
   - [Redis type](#redis-type)
+  - [Valkey](#valkey)
   - [Connection Pool Settings](#connection-pool-settings)
     - [Pool Size](#pool-size)
     - [Connection Timeout](#connection-timeout)
@@ -165,6 +166,11 @@ Support for [v2 rls proto](https://github.com/envoyproxy/data-plane-api/blob/mas
 - To compile and run tests:
   ```bash
   make tests
+  ```
+- To run the full integration suite in a container, which is what CI does. The second target runs the same suite with Valkey serving the Redis protocol instead of Redis:
+  ```bash
+  make docker_tests
+  make docker_tests_valkey
   ```
 - To run the server locally using some sensible default settings you can do this (this will setup the server to read the configuration files from the path you specify):
   ```bash
@@ -1333,6 +1339,14 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 1. "single": Depending on the socket type defined, either a single hostname:port pair or a unix domain socket reference.
 1. "sentinel": A comma separated list with the first string as the master name of the sentinel cluster followed by hostname:port pairs. The list size should be >= 2. The first item is the name of the master and the rest are the sentinels.
 1. "cluster": A comma separated list of hostname:port pairs with all the nodes in the cluster.
+
+## Valkey
+
+Ratelimit reaches its caching layer over the Redis protocol, using [radix](https://github.com/mediocregopher/radix). Valkey serves that protocol, so it can be used in place of Redis without any configuration change: point `REDIS_URL` at the Valkey endpoint and leave the rest of the settings above as they are. There is no separate Valkey socket type, URL variable, or client.
+
+Redis and Valkey have developed independently since Redis 7.2, so this is asserted rather than assumed. `make tests_with_valkey` runs the same integration suite as `make tests_with_redis` with `valkey-server` in place of `redis-server`, and CI runs both on every pull request. What that covers is the single, sentinel, and cluster types described above, the stunnel-fronted TLS paths, and password authentication, against the `valkey-server` version packaged in the integration image (Valkey 8.1 at the time of writing).
+
+Redis remains the default everywhere: in `docker-compose.yml`, in the examples, and in `make tests_with_redis`.
 
 ## Connection Pool Settings
 
