@@ -12,7 +12,7 @@ import (
 
 type Settings struct {
 	// runtime options
-	// This value shall be imported into unary server interceptor in order to enable chaining
+	// Optional unary interceptor for the gRPC server; the runner installs its stats reporter here.
 	GrpcUnaryInterceptor grpc.UnaryServerInterceptor
 	// Server listen address config
 	Host      string `envconfig:"HOST" default:"0.0.0.0"`
