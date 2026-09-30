@@ -89,8 +89,7 @@ func main() {
 		}()
 	}
 	dialOptions := []grpc.DialOption{
-		grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
-		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	}
 	if *grpcUseTLS {
 		tlsConfig := utils.TlsConfigFromFiles(*grpcTlsCertFile, *grpcTlsKeyFile, *grpcServerTlsCACert, utils.ServerCA, false)
