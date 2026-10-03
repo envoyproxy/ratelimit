@@ -38,11 +38,11 @@ func TestNegativeHits(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false, false)
 
 	// Decrement from a counter at 5, requesting -3. Lua returns 2 (5-3=2).
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", limiter.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1)).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -67,11 +67,11 @@ func TestNegativeHitsFloorAtZero(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false, false)
 
 	// Counter at 2, requesting -5. Lua floors at 0 and returns 0.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", limiter.DecrementScript, 1, "domain_key_value_1234", uint64(5), int64(1)).SetArg(2, uint64(0)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(5), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(0)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -95,14 +95,13 @@ func TestNegativeHitsSkipsOverLimitCheck(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	localCache := freecache.NewCache(100)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, limiter.NewLocalCacheGuard(localCache), 0.8, "", sm, false, false, false)
 
-	// Set the key as over-limit in local cache.
 	localCache.Set([]byte("domain_key_value_1234"), []byte{}, 60)
 
 	// Even though the key is in the over-limit local cache, negative hits should still proceed.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", limiter.DecrementScript, 1, "domain_key_value_1234", uint64(2), int64(1)).SetArg(2, uint64(8)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(2), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(8)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -128,11 +127,11 @@ func TestNegativeHitsStillOverLimitReturnsOK(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false, false)
 
 	// Counter at 15, requesting -3. Lua returns 12, which is still above the limit of 10.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", limiter.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1)).SetArg(2, uint64(12)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(12)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -159,12 +158,12 @@ func TestNegativeHitsWithStopCacheKeyIncrementWhenOverlimit(t *testing.T) {
 
 	client := mock_redis.NewMockClient(controller)
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, true, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, true, false, false)
 
 	// Counter at 5, requesting -3. Lua returns 2. No GET pre-check should be issued for
 	// the negative hit, only the EVAL decrement.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", limiter.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1)).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -175,6 +174,63 @@ func TestNegativeHitsWithStopCacheKeyIncrementWhenOverlimit(t *testing.T) {
 	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
 	assert.Equal(uint64(8), uint64(result[0].LimitRemaining))
 	assert.Equal(uint64(3), limits[0].Stats.TotalNegativeHits.Value())
+}
+
+// TestNegativeHitsPublishInvalidation verifies that when the cache is built with
+// publishInvalidations=true, decrements pass the publish flag, the limit and the
+// invalidation channel to the Lua script.
+func TestNegativeHitsPublishInvalidation(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+
+	client := mock_redis.NewMockClient(controller)
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	localCache := freecache.NewCache(100)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, limiter.NewLocalCacheGuard(localCache), 0.8, "", sm, false, false, true)
+
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "1", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
+
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"domain", [][][2]string{{{"key", "value"}}}, []uint64{3}, []bool{true})
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	result := cache.DoLimit(context.Background(), request, limits)
+	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
+	assert.Equal(uint64(8), uint64(result[0].LimitRemaining))
+}
+
+// TestNegativeHitsPerSecondClientNeverPublishes verifies that decrements routed to
+// the dedicated per-second client always pass the publish flag as '0': the
+// invalidation subscriber listens only on the main Redis.
+func TestNegativeHitsPerSecondClientNeverPublishes(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(statsStore)
+
+	client := mock_redis.NewMockClient(controller)
+	perSecondClient := mock_redis.NewMockClient(controller)
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	localCache := freecache.NewCache(100)
+	cache := redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, limiter.NewLocalCacheGuard(localCache), 0.8, "", sm, false, false, true)
+
+	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
+	perSecondClient.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
+	perSecondClient.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
+
+	request := common.NewRateLimitRequestWithNegativeHits(
+		"domain", [][][2]string{{{"key", "value"}}}, []uint64{3}, []bool{true})
+	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	result := cache.DoLimit(context.Background(), request, limits)
+	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
+	assert.Equal(uint64(8), uint64(result[0].LimitRemaining))
 }
 
 func TestRedis(t *testing.T) {
@@ -209,9 +265,9 @@ func testRedis(usePerSecondRedis bool) func(*testing.T) {
 		timeSource := mock_utils.NewMockTimeSource(controller)
 		var cache limiter.RateLimitCache
 		if usePerSecondRedis {
-			cache = redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
+			cache = redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false, false)
 		} else {
-			cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
+			cache = redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false, false)
 		}
 
 		timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -356,7 +412,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	sink := common.NewTestStatSink()
 	statsStore := gostats.NewStore(sink, false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, limiter.NewLocalCacheGuard(localCache), 0.8, "", sm, false, false, false)
 
 	localCacheScopeName := "localcache"
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope(localCacheScopeName))
@@ -463,7 +519,7 @@ func TestNearLimit(t *testing.T) {
 	timeSource := mock_utils.NewMockTimeSource(controller)
 	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false, false)
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -646,7 +702,7 @@ func TestRedisWithJitter(t *testing.T) {
 	jitterSource := mock_utils.NewMockJitterRandSource(controller)
 	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false, false, false)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	jitterSource.EXPECT().Int63().Return(int64(100))
@@ -678,7 +734,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	sink := common.NewTestStatSink()
 	statsStore := gostats.NewStore(sink, false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, limiter.NewLocalCacheGuard(localCache), 0.8, "", sm, false, false, false)
 
 	localCacheScopeName := "localcache"
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope(localCacheScopeName))
@@ -796,7 +852,7 @@ func TestRedisTracer(t *testing.T) {
 	client := mock_redis.NewMockClient(controller)
 
 	timeSource := mock_utils.NewMockTimeSource(controller)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, nil, 0.8, "", sm, false, false, false)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 
@@ -825,7 +881,7 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 	sink := common.NewTestStatSink()
 	statsStore := gostats.NewStore(sink, false)
 	sm := stats.NewMockStatManager(statsStore)
-	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, true, false)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, limiter.NewLocalCacheGuard(localCache), 0.8, "", sm, true, false, false)
 
 	localCacheScopeName := "localcache"
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope(localCacheScopeName))
