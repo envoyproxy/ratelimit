@@ -71,6 +71,8 @@
   - [Two Redis Instances](#two-redis-instances)
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
   - [Recovering from a failover (READONLY errors)](#recovering-from-a-failover-readonly-errors)
+  - [Credentials that expire or rotate](#credentials-that-expire-or-rotate)
+    - [AWS ElastiCache IAM authentication](#aws-elasticache-iam-authentication)
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
@@ -1311,6 +1313,7 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_TLS_SKIP_HOSTNAME_VERIFICATION` set to `"true"` will skip hostname verification in environments where the certificate has an invalid hostname, such as GCP Memorystore.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable password-only authentication to the Redis master/replica nodes.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"username:password"` to enable username-password authentication to the Redis master/replica nodes.
+1. `REDIS_AUTH_FILE` & `REDIS_PERSECOND_AUTH_FILE`: set to the path of a file holding `"password"` or `"username:password"`. The file is re-read on every connection attempt, so a credential that expires or rotates keeps working. Mutually exclusive with `REDIS_AUTH`/`REDIS_PERSECOND_AUTH`. See [Credentials that expire or rotate](#credentials-that-expire-or-rotate).
 1. `REDIS_SENTINEL_AUTH` & `REDIS_PERSECOND_SENTINEL_AUTH`: set to `"password"` or `"username:password"` to enable authentication to Redis Sentinel nodes. This is separate from `REDIS_AUTH`/`REDIS_PERSECOND_AUTH` which authenticate to the Redis master/replica nodes. Only used when `REDIS_TYPE` or `REDIS_PERSECOND_TYPE` is set to `"sentinel"`. If not set, no authentication will be attempted when connecting to Sentinel nodes.
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
@@ -1421,6 +1424,59 @@ whenever a command on it fails with a READONLY error reply, so the pool reconnec
 configured address and reaches the current master. The failing command still returns its error
 to the caller; only the connection handling changes. Applies to both the main and the
 per-second Redis clients.
+
+## Credentials that expire or rotate
+
+1. `REDIS_AUTH_FILE` : (default is "")
+1. `REDIS_PERSECOND_AUTH_FILE` : (default is "")
+
+`REDIS_AUTH` is read once, at startup, and replayed on every connection the pool ever opens. Any
+credential with a lifetime shorter than the process cannot be used through it: once it expires, every
+new connection fails to authenticate and the pool cannot recover without a restart. That covers
+short-lived credentials issued by a secret manager, passwords rotated on a schedule, and cloud
+providers whose authentication tokens are valid for minutes.
+
+Setting `REDIS_AUTH_FILE` (or `REDIS_PERSECOND_AUTH_FILE`) to a file path makes ratelimit read the
+credential from that file on every connection attempt instead. The file holds the same
+`password` or `username:password` value `REDIS_AUTH` would take; surrounding whitespace is ignored.
+Whatever writes the file — a secret-manager agent, a CSI driver, a sidecar that mints tokens, a
+rotation job — controls the credential's lifetime, and a new value takes effect on the next
+connection without restarting ratelimit.
+
+### AWS ElastiCache IAM authentication
+
+1. `REDIS_AWS_IAM_AUTH` : (default is "false")
+1. `REDIS_AWS_IAM_CACHE_NAME` : (default is "")
+1. `REDIS_AWS_IAM_USER_ID` : (default is "")
+1. `REDIS_AWS_IAM_SERVERLESS` : (default is "false")
+1. `REDIS_AWS_IAM_REGION` : (default is "", shared by both Redis clients)
+1. `REDIS_PERSECOND_AWS_IAM_AUTH`, `REDIS_PERSECOND_AWS_IAM_CACHE_NAME`, `REDIS_PERSECOND_AWS_IAM_USER_ID`, `REDIS_PERSECOND_AWS_IAM_SERVERLESS` : the same, for the per-second client
+
+Setting `REDIS_AWS_IAM_AUTH` to `"true"` authenticates to AWS ElastiCache with IAM instead of a
+password. The password becomes a short-lived authentication token that ratelimit signs itself from
+the credentials the AWS SDK resolves, so no credential is configured here at all: an EKS Pod
+Identity association, an IRSA role, an ECS task role, an instance profile, or the usual AWS
+environment variables all work. `REDIS_AWS_IAM_CACHE_NAME` is a serverless cache's name, or a
+node-based cache's replication group ID — never the endpoint hostname — and
+`REDIS_AWS_IAM_USER_ID` is the ElastiCache user to connect as. Set `REDIS_AWS_IAM_SERVERLESS` to
+`"true"` for a serverless cache, whose tokens are signed differently. `REDIS_AWS_IAM_REGION` is
+only needed when the SDK cannot resolve a region on its own.
+
+On the AWS side the cache needs an ElastiCache user created with `authentication_mode` type `iam`,
+whose user name equals its user id, attached to the cache through a user group; the IAM role
+ratelimit runs as needs `elasticache:Connect` on both the cache ARN and the user ARN.
+[ElastiCache requires in-transit encryption to be enabled on the cache for IAM authentication](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth-iam.html),
+so `REDIS_TLS` (or `REDIS_PERSECOND_TLS`) has to be `"true"` too, unless something between
+ratelimit and the cache originates the TLS connection on its behalf.
+
+One token is signed locally — no API call — and shared by every connection in the pool for most of
+its 15-minute validity, because ElastiCache throttles authentication requests. Reuse also stops
+early when the AWS credentials that signed the token are close to expiring, since
+[a presigned request expires with the credentials behind its signature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html).
+
+ElastiCache force-closes IAM-authenticated connections after 12 hours. Ratelimit handles that the
+same way it handles any dropped connection: the pool discards it and reconnects, authenticating
+with a fresh token. Nothing needs to be configured for it, and no restart is involved.
 
 ## Calendar-aligned MONTH rate limits
 
