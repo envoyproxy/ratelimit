@@ -96,3 +96,36 @@ mappings:
   - match: "ratelimit.service.config_load_error"
     name: "ratelimit_service_config_load_error"
     match_metric_type: counter
+
+  - match: "ratelimit.*.client.*.calls_started"
+    name: "ratelimit_redis_client_calls_started_total"
+    match_metric_type: counter
+    labels:
+      pool: "$1"
+      operation: "$2"
+  - match: "ratelimit.*.client.*.calls_completed.*"
+    name: "ratelimit_redis_client_calls_completed_total"
+    match_metric_type: counter
+    labels:
+      pool: "$1"
+      operation: "$2"
+      outcome: "$3"
+  - match: "ratelimit.*.client.*.actions_attempted"
+    name: "ratelimit_redis_client_actions_attempted_total"
+    match_metric_type: counter
+    labels:
+      pool: "$1"
+      operation: "$2"
+  - match: "ratelimit.*.client.*.calls_in_flight"
+    name: "ratelimit_redis_client_calls_in_flight"
+    match_metric_type: gauge
+    labels:
+      pool: "$1"
+      operation: "$2"
+  - match: "ratelimit.*.client.*.call_duration"
+    name: "ratelimit_redis_client_call_duration_seconds"
+    timer_type: histogram
+    scale: 0.001
+    labels:
+      pool: "$1"
+      operation: "$2"
