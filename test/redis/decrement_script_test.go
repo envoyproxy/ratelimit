@@ -19,12 +19,12 @@ func mkSingleRedisClient(addr string) redis.Client {
 }
 
 func evalDecrementScript(t *testing.T, client redis.Client, key string, hitsAddend uint64, expirationSeconds int64,
-	publishFlag string, requestsPerUnit uint32,
+	publishFlag string,
 ) int64 {
 	t.Helper()
 	var result int64
 	err := client.DoCmd(&result, "EVAL", redis.DecrementScript, 1, key, hitsAddend, expirationSeconds, publishFlag,
-		requestsPerUnit, redis.LocalCacheInvalidationChannel)
+		redis.LocalCacheInvalidationChannel)
 	assert.NoError(t, err)
 	return result
 }
@@ -67,39 +67,51 @@ func TestDecrementScript(t *testing.T) {
 	messages := pumpMessages(sub)
 
 	t.Run("absent key returns 0 and does not publish", func(t *testing.T) {
-		assert.EqualValues(t, 0, evalDecrementScript(t, client, "absent_key", 3, 60, "1", 10))
+		assert.EqualValues(t, 0, evalDecrementScript(t, client, "absent_key", 3, 60, "1"))
 		assert.False(t, redisSrv.Exists("absent_key"))
 		assert.Empty(t, drainMessages(messages))
 	})
 
-	t.Run("crossing refund publishes the key and resets the TTL", func(t *testing.T) {
+	t.Run("refund publishes the key and resets the TTL", func(t *testing.T) {
 		assert.NoError(t, redisSrv.Set("crossing_key", "12"))
 		redisSrv.SetTTL("crossing_key", 5*time.Second)
 
-		assert.EqualValues(t, 9, evalDecrementScript(t, client, "crossing_key", 3, 60, "1", 10))
+		assert.EqualValues(t, 9, evalDecrementScript(t, client, "crossing_key", 3, 60, "1"))
 		assert.Equal(t, []string{"crossing_key"}, drainMessages(messages))
 		assert.Equal(t, 60*time.Second, redisSrv.TTL("crossing_key"))
 	})
 
-	t.Run("refund leaving the counter above the limit does not publish", func(t *testing.T) {
+	t.Run("every decrease publishes regardless of the threshold", func(t *testing.T) {
 		assert.NoError(t, redisSrv.Set("above_key", "20"))
 
-		assert.EqualValues(t, 17, evalDecrementScript(t, client, "above_key", 3, 60, "1", 10))
-		assert.Empty(t, drainMessages(messages))
-
-		// One message per poisoning cycle: only the refund that finally crosses
-		// back under the limit publishes.
-		assert.EqualValues(t, 10, evalDecrementScript(t, client, "above_key", 7, 60, "1", 10))
+		assert.EqualValues(t, 17, evalDecrementScript(t, client, "above_key", 3, 60, "1"))
 		assert.Equal(t, []string{"above_key"}, drainMessages(messages))
-		assert.EqualValues(t, 8, evalDecrementScript(t, client, "above_key", 2, 60, "1", 10))
-		assert.Empty(t, drainMessages(messages))
+
+		assert.EqualValues(t, 10, evalDecrementScript(t, client, "above_key", 7, 60, "1"))
+		assert.Equal(t, []string{"above_key"}, drainMessages(messages))
+		assert.EqualValues(t, 8, evalDecrementScript(t, client, "above_key", 2, 60, "1"))
+		assert.Equal(t, []string{"above_key"}, drainMessages(messages))
 	})
 
 	t.Run("counter floors at zero", func(t *testing.T) {
 		assert.NoError(t, redisSrv.Set("floor_key", "12"))
 
-		assert.EqualValues(t, 0, evalDecrementScript(t, client, "floor_key", 20, 60, "1", 10))
+		assert.EqualValues(t, 0, evalDecrementScript(t, client, "floor_key", 20, 60, "1"))
 		assert.Equal(t, []string{"floor_key"}, drainMessages(messages))
+	})
+
+	t.Run("unchanged counter does not publish", func(t *testing.T) {
+		assert.NoError(t, redisSrv.Set("unchanged_key", "5"))
+		assert.EqualValues(t, 5, evalDecrementScript(t, client, "unchanged_key", 0, 60, "1"))
+		assert.NoError(t, redisSrv.Set("unchanged_key", "0"))
+		assert.EqualValues(t, 0, evalDecrementScript(t, client, "unchanged_key", 3, 60, "1"))
+		assert.Empty(t, drainMessages(messages))
+	})
+
+	t.Run("publishing disabled", func(t *testing.T) {
+		assert.NoError(t, redisSrv.Set("disabled_key", "12"))
+		assert.EqualValues(t, 9, evalDecrementScript(t, client, "disabled_key", 3, 60, "0"))
+		assert.Empty(t, drainMessages(messages))
 	})
 }
 
@@ -112,7 +124,7 @@ func TestDecrementEvalRoutesByCacheKey(t *testing.T) {
 	defer client.Close()
 
 	p := client.PipeAppendWithRoutingKey(redis.Pipeline{}, "cache_key", nil, "EVAL",
-		redis.DecrementScript, 1, "cache_key", 3, 60, "1", 10, redis.LocalCacheInvalidationChannel)
+		redis.DecrementScript, 1, "cache_key", 3, 60, "1", redis.LocalCacheInvalidationChannel)
 	assert.Equal(t, []string{"cache_key"}, p[0].Action.Properties().Keys)
 	assert.True(t, p[0].Action.Properties().CanRetry)
 }

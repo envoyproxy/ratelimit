@@ -1003,34 +1003,36 @@ Negative-hit behavior:
 
 With the Redis backend, a counter that goes over the limit poisons the local cache of the replica
 that observed it: the over-limit answer is then served locally until the window ends. Since a
-refund can bring the counter back under the limit, negative hits combined with a local cache use
-Redis pub/sub to invalidate those entries across replicas: a refund that crosses the counter back
-under its limit publishes the cache key on the `ratelimit:local_cache_invalidation` channel, and
-every replica with a local cache subscribes and deletes the key from its local cache.
+refund can bring the counter back under the limit, negative hits use Redis pub/sub to invalidate
+those entries across replicas: every refund that decreases the counter publishes the cache key on
+the `ratelimit:local_cache_invalidation` channel, even if the refunding replica has no local cache.
+Request overrides can use different thresholds, so publication does not depend on crossing the
+refund's threshold. Replicas with `ENABLE_NEGATIVE_HITS=true` and a local cache subscribe and delete
+the key from their local caches. Enable negative hits on all replicas caching the shared counters,
+including replicas that only handle positive hits.
 
 - Invalidation is best-effort / at-most-once: messages are never buffered or replayed, so a replica
   that misses a message (e.g. while reconnecting) keeps the stale entry until the window ends.
 - The subscriber re-dials every `LOCAL_CACHE_INVALIDATION_RESUBSCRIBE_INTERVAL` (default `5m`),
-  re-resolving the sentinel master and refreshing cluster topology. This bounds how long a
+  selecting an endpoint from the main Redis client's current Sentinel/Cluster topology. This bounds how long a
   subscription can stay silently attached to a demoted or removed node (e.g. after a sentinel
   failover that left the old master reachable but unlinked from the new one).
 - Invalidation is ordered against poisoning: a request whose over-limit verdict was read from Redis
   before an invalidation arrived does not write the (possibly stale) entry into the local cache.
   The suppressed insert only costs one extra Redis lookup on a later request.
 - Decrements routed to the dedicated per-second Redis (`REDIS_PERSECOND`) never publish: the
-  subscriber listens only on the main Redis, and per-second windows expire before a stale entry
-  matters.
+  subscriber listens only on the main Redis. Refunds still apply, but a stale local-cache rejection
+  can persist for the remainder of the one-second window.
 - Subscriber statistics: `ratelimit.localcache.invalidation.subscribed` (gauge, 0/1 live
   subscription state), `ratelimit.localcache.invalidation.received` (messages received) and
   `ratelimit.localcache.invalidation.deleted` (messages that deleted a local cache entry).
 
 #### Required Redis permissions
 
-With `ENABLE_NEGATIVE_HITS=true`, the identity configured by `REDIS_AUTH` needs the `EVAL`, `GET`
-and `SET` commands for the refund script. With the local cache additionally enabled, the same
-identity also needs `PUBLISH` and `SUBSCRIBE`, and with Redis 7 channel ACLs, access to the
-`&ratelimit:local_cache_invalidation` channel — it is used by both the refund script (publisher)
-and the invalidation subscriber.
+With `ENABLE_NEGATIVE_HITS=true`, the identity configured by `REDIS_AUTH` needs the `EVAL`, `GET`,
+`SET` and `PUBLISH` commands for the refund script, including when the refunding replica has no local
+cache. With the local cache additionally enabled, it also needs `SUBSCRIBE`. With Redis 7 channel
+ACLs, grant access to `&ratelimit:local_cache_invalidation` for both publishers and subscribers.
 
 A missing `SUBSCRIBE` permission keeps publishing enabled while the subscriber retries forever —
 watch the `subscribed` gauge, every invalidation published in that state is lost. The refund

@@ -40,15 +40,15 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 	var (
 		withLocalCache       = localCache != nil
 		localCacheGuard      *limiter.LocalCacheGuard
-		publishInvalidations bool
+		publishInvalidations = s.EnableNegativeHits
 	)
 	if withLocalCache {
 		localCacheGuard = limiter.NewLocalCacheGuard(localCache)
-		publishInvalidations = s.EnableNegativeHits && localCacheGuard != nil
 		if publishInvalidations {
 			// pub-sub based invalidator for local over limit caches
-			localCacheInvalidator := StartLocalCacheInvalidator(ctx, s, localCacheGuard, srv.Scope())
-			closer.Closers = append(closer.Closers, localCacheInvalidator)
+			localCacheInvalidator := StartLocalCacheInvalidator(ctx, s, localCacheGuard, srv.Scope(), otherPool.dialPubSub)
+			// Stop the subscriber before closing the client that supplies its topology.
+			closer.Closers = append([]io.Closer{localCacheInvalidator}, closer.Closers...)
 		}
 	}
 

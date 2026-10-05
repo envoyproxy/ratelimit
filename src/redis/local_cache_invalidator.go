@@ -2,9 +2,6 @@ package redis
 
 import (
 	"context"
-	"fmt"
-	"net"
-	"strings"
 	"time"
 
 	"github.com/jpillora/backoff"
@@ -40,24 +37,14 @@ func newLocalCacheInvalidationStats(scope gostats.Scope) localCacheInvalidationS
 // channel from this replica's local cache. Best-effort, at-most-once: a
 // missed message leaves the stale entry until the window ends.
 //
-// It owns one raw connection instead of reusing the driver's clients: radix
-// pub/sub wraps a single Conn (pooled clients cannot subscribe), and losing
-// it must never take the process down — the loop reconnects forever.
+// It uses the driver's dialer and current topology for a dedicated raw Conn:
+// pooled clients cannot subscribe. The loop provides nonfatal retries with
+// backoff and rotation of healthy-looking but obsolete subscriptions.
 type LocalCacheInvalidator struct {
 	localCache *limiter.LocalCacheGuard
 	stats      localCacheInvalidationStats
 
-	redisType      string
-	socketType     string
-	url            string
-	dialer         radix.Dialer
-	sentinelDialer radix.Dialer
-
-	// clusterAddrs is refreshed from the live topology on every (re)connect.
-	clusterAddrs        []string
-	sentinelMasterName  string
-	sentinelAddrs       []string
-	addrIndex           int
+	dial                func(context.Context) (radix.Conn, error)
 	resubscribeInterval time.Duration
 	// An endpoint that accepts and then stalls must not wedge the reconnect
 	// loop away from the remaining candidates.
@@ -69,17 +56,16 @@ type LocalCacheInvalidator struct {
 }
 
 // StartLocalCacheInvalidator starts the eviction loop against the main Redis.
-func StartLocalCacheInvalidator(ctx context.Context, s settings.Settings, localCache *limiter.LocalCacheGuard, scope gostats.Scope) *LocalCacheInvalidator {
+func StartLocalCacheInvalidator(ctx context.Context, s settings.Settings, localCache *limiter.LocalCacheGuard, scope gostats.Scope,
+	dial func(context.Context) (radix.Conn, error),
+) *LocalCacheInvalidator {
 	assert.Assert(localCache != nil)
+	assert.Assert(dial != nil)
 	maskedUrl := utils.MaskCredentialsInUrl(s.RedisUrl)
 	this := &LocalCacheInvalidator{
 		localCache:          localCache,
 		stats:               newLocalCacheInvalidationStats(scope),
-		redisType:           strings.ToLower(s.RedisType),
-		socketType:          s.RedisSocketType,
-		url:                 s.RedisUrl,
-		dialer:              createDialer(s.RedisTimeout, s.RedisTls, s.RedisTlsConfig, s.RedisAuth, maskedUrl),
-		sentinelDialer:      createDialer(s.RedisTimeout, s.RedisTls, s.RedisTlsConfig, s.RedisSentinelAuth, fmt.Sprintf("sentinel(%s)", maskedUrl)),
+		dial:                dial,
 		resubscribeInterval: s.LocalCacheInvalidationResubscribeInterval,
 		backoff: &backoff.Backoff{
 			Min:    time.Second,
@@ -95,20 +81,6 @@ func StartLocalCacheInvalidator(ctx context.Context, s settings.Settings, localC
 	this.connectTimeout = s.RedisTimeout
 	if this.connectTimeout <= 0 {
 		this.connectTimeout = 10 * time.Second
-	}
-
-	switch this.redisType {
-	case "single":
-	case "cluster":
-		this.clusterAddrs = strings.Split(this.url, ",")
-	case "sentinel":
-		var err error
-		this.sentinelMasterName, this.sentinelAddrs, err = parseSentinelUrl(this.url)
-		if err != nil {
-			panic(RedisError(err.Error()))
-		}
-	default:
-		panic(RedisError("Unrecognized redis type " + this.redisType))
 	}
 
 	ctx, this.cancel = context.WithCancel(ctx)
@@ -196,79 +168,4 @@ func (this *LocalCacheInvalidator) connect(ctx context.Context) (radix.Conn, err
 		return nil, err
 	}
 	return conn, nil
-}
-
-func (this *LocalCacheInvalidator) dial(ctx context.Context) (radix.Conn, error) {
-	switch this.redisType {
-	case "single":
-		return this.dialer.Dial(ctx, this.socketType, this.url)
-	case "cluster":
-		// Any node works (cluster pub/sub is broadcast), always over TCP:
-		// radix's cluster client ignores REDIS_SOCKET_TYPE (default "unix")
-		// for its host:port seeds, and the subscriber must match.
-		addr := this.clusterAddrs[this.addrIndex%len(this.clusterAddrs)]
-		this.addrIndex++
-		conn, err := this.dialer.Dial(ctx, "tcp", addr)
-		if err != nil {
-			return nil, err
-		}
-		this.refreshClusterAddrs(ctx, conn)
-		return conn, nil
-	case "sentinel":
-		return this.dialSentinelMaster(ctx)
-	default:
-		return nil, fmt.Errorf("unrecognized redis type %s", this.redisType)
-	}
-}
-
-// refreshClusterAddrs re-reads the topology so reconnects survive replacement
-// of every bootstrap node; on failure the current list is kept.
-func (this *LocalCacheInvalidator) refreshClusterAddrs(ctx context.Context, conn radix.Conn) {
-	var topo radix.ClusterTopo
-	if err := conn.Do(ctx, radix.Cmd(&topo, "CLUSTER", "SLOTS")); err != nil {
-		logger.Warnf("could not refresh cluster topology for the invalidation subscriber: %v", err)
-		return
-	}
-	if len(topo) == 0 {
-		return
-	}
-	addrs := make([]string, 0, len(topo))
-	for addr := range topo.Map() {
-		addrs = append(addrs, addr)
-	}
-	this.clusterAddrs = addrs
-}
-
-func (this *LocalCacheInvalidator) dialSentinelMaster(ctx context.Context) (radix.Conn, error) {
-	masterName := this.sentinelMasterName
-
-	// A stalled sentinel consumes the whole connect budget; rotating the
-	// start keeps it from starving the healthy ones behind it.
-	start := this.addrIndex
-	this.addrIndex++
-
-	var lastErr error
-	for i := range this.sentinelAddrs {
-		sentinelUrl := this.sentinelAddrs[(start+i)%len(this.sentinelAddrs)]
-		sentinelConn, err := this.sentinelDialer.Dial(ctx, "tcp", sentinelUrl)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		var masterAddr []string
-		err = sentinelConn.Do(ctx, radix.Cmd(&masterAddr, "SENTINEL", "GET-MASTER-ADDR-BY-NAME", masterName))
-		sentinelConn.Close()
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if len(masterAddr) != 2 {
-			lastErr = fmt.Errorf("sentinel did not resolve a master address for %s", masterName)
-			continue
-		}
-
-		return this.dialer.Dial(ctx, "tcp", net.JoinHostPort(masterAddr[0], masterAddr[1]))
-	}
-	return nil, fmt.Errorf("could not resolve master %s through any sentinel: %w", masterName, lastErr)
 }

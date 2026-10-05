@@ -3,10 +3,12 @@ package redis
 import (
 	"context"
 	"errors"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -126,6 +128,71 @@ func TestEffectiveClusterPipelineParallelism(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, effectiveClusterPipelineParallelism(tt.configuredParallelism, tt.poolSize))
 		})
+	}
+}
+
+type topologyRedisClient struct {
+	radix.MultiClient
+	primaries map[string]radix.ReplicaSet
+	err       error
+}
+
+func (c *topologyRedisClient) Clients() (map[string]radix.ReplicaSet, error) {
+	return c.primaries, c.err
+}
+
+func TestPubSubDialerUsesCurrentTopology(t *testing.T) {
+	client := &topologyRedisClient{primaries: map[string]radix.ReplicaSet{
+		"node-a:6379": {}, "node-b:6379": {},
+	}}
+	var addresses []string
+	dialErr := errors.New("endpoint unavailable")
+	dial := newPubSubDialer(client, radix.Dialer{
+		CustomConn: func(_ context.Context, network, addr string) (radix.Conn, error) {
+			assert.Equal(t, "tcp", network)
+			addresses = append(addresses, addr)
+			return nil, dialErr
+		},
+	}, "unix", "obsolete-bootstrap:6379")
+
+	// Failed attempts still rotate candidates, using TCP even with the default
+	// unix socket setting. A failover/replacement must be observed on the next dial.
+	for range 2 {
+		_, err := dial(context.Background())
+		require.ErrorIs(t, err, dialErr)
+	}
+	client.primaries = map[string]radix.ReplicaSet{"new-primary:6379": {}}
+	_, err := dial(context.Background())
+	require.ErrorIs(t, err, dialErr)
+	assert.Equal(t, []string{"node-a:6379", "node-b:6379", "new-primary:6379"}, addresses)
+
+	client.primaries = nil
+	_, err = dial(context.Background())
+	require.ErrorContains(t, err, "no Redis primary")
+	client.err = errors.New("client closed")
+	_, err = dial(context.Background())
+	require.ErrorIs(t, err, client.err)
+	assert.Len(t, addresses, 3, "discovery failures must not dial an obsolete address")
+}
+
+func TestPubSubDialerRefreshesCredentialsOnReconnect(t *testing.T) {
+	srv := miniredis.RunT(t)
+	srv.RequireUserAuth("cache-user", "first-password")
+	path := writeAuthFile(t, "cache-user:first-password")
+	client := newTestClient(t, srv.Addr(), true, newFileCredentialProvider(path)).(*clientImpl)
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+
+	for _, password := range []string{"first-password", "second-password"} {
+		srv.RequireUserAuth("cache-user", password)
+		require.NoError(t, os.WriteFile(path, []byte("cache-user:"+password), 0o600))
+
+		conn, err := client.dialPubSub(context.Background())
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = conn.Close() })
+		var result string
+		require.NoError(t, conn.Do(context.Background(), radix.Cmd(&result, "SET", "key", "value")))
+		require.Equal(t, "OK", result)
+		require.NoError(t, conn.Close())
 	}
 }
 

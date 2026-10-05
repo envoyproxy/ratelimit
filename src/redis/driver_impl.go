@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -78,6 +79,7 @@ type redisClient interface {
 
 type clientImpl struct {
 	client                     redisClient
+	dialPubSub                 func(context.Context) (radix.Conn, error)
 	stats                      poolStats
 	isCluster                  bool
 	clusterPipelineParallelism int
@@ -180,7 +182,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	clusterPipelineParallelism int,
 	closeConnectionOnReadOnlyError bool,
 	credentialProvider CredentialProvider,
-) Client {
+) *clientImpl {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
 
@@ -215,6 +217,8 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	if credentialProvider != nil {
 		logger.Warnf("Redis pool %s: resolving credentials on every connection attempt", maskedUrl)
 		poolConfig.Dialer = wrapDialerCredentialProvider(poolConfig.Dialer, credentialProvider)
+		// Dedicated Pub/Sub connections must also refresh credentials on reconnect.
+		dialer = wrapDialerCredentialProvider(dialer, credentialProvider)
 	}
 
 	// Discard pooled connections whose commands fail with READONLY (the server
@@ -367,9 +371,37 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 
 	return &clientImpl{
 		client:                     client,
+		dialPubSub:                 newPubSubDialer(client, dialer, redisSocketType, url),
 		stats:                      stats,
 		isCluster:                  isCluster,
 		clusterPipelineParallelism: effectivePipelineParallelism,
+	}
+}
+
+// newPubSubDialer opens dedicated connections using the command client's current
+// topology. The returned callback is used serially by one subscription loop.
+func newPubSubDialer(client redisClient, dialer radix.Dialer, network, addr string) func(context.Context) (radix.Conn, error) {
+	var next uint64
+	return func(ctx context.Context) (radix.Conn, error) {
+		if multi, ok := client.(radix.MultiClient); ok {
+			clients, err := multi.Clients()
+			if err != nil {
+				return nil, err
+			}
+			if len(clients) == 0 {
+				return nil, fmt.Errorf("no Redis primary available for local cache invalidation")
+			}
+			addrs := make([]string, 0, len(clients))
+			for addr := range clients {
+				addrs = append(addrs, addr)
+			}
+			// Stable rotation ensures a stalled cluster node cannot starve others.
+			sort.Strings(addrs)
+			addr = addrs[next%uint64(len(addrs))]
+			next++
+			network = "tcp"
+		}
+		return dialer.Dial(ctx, network, addr)
 	}
 }
 

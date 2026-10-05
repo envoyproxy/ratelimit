@@ -28,7 +28,7 @@ type fixedRateLimitCacheImpl struct {
 	// is used for limits that have a SECOND unit.
 	perSecondClient                    Client
 	stopCacheKeyIncrementWhenOverlimit bool
-	// Refunds crossing back under the limit publish the key on the local
+	// Refunds that decrease the counter publish the key on the local
 	// cache invalidation channel (main client only).
 	publishInvalidations bool
 	baseRateLimiter      *limiter.BaseRateLimiter
@@ -41,10 +41,10 @@ func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend ui
 
 // DecrementScript atomically decrements a rate limit counter, floored at 0;
 // a missing key returns 0 without being created. ARGV: hits, expiration
-// seconds, '1'/'0' publish flag, requests per unit, invalidation channel.
+// seconds, '1'/'0' publish flag, invalidation channel.
 //
-// The key is published only when the refund crosses back under the limit —
-// one message per poisoning cycle. Command order is load-bearing: Lua does
+// Publish on every actual decrement: request overrides can use a different
+// threshold from the one that produced a cached verdict. Command order matters: Lua does
 // not roll back on runtime errors, so PUBLISH must fail before the counter
 // is mutated and the mutation must be a single SET..EX, or an ACL denial
 // leaves a half-applied refund behind an errored RPC.
@@ -53,18 +53,15 @@ local current = redis.call('GET', KEYS[1])
 if current == false then return 0 end
 local old = tonumber(current)
 local new_val = math.floor(math.max(0, old - tonumber(ARGV[1])))
-if ARGV[3] == '1' then
-  local limit = tonumber(ARGV[4])
-  if old > limit and new_val <= limit then
-    redis.call('PUBLISH', ARGV[5], KEYS[1])
-  end
+if ARGV[3] == '1' and new_val < old then
+  redis.call('PUBLISH', ARGV[4], KEYS[1])
 end
 redis.call('SET', KEYS[1], tostring(new_val), 'EX', tonumber(ARGV[2]))
 return new_val
 `
 
 func pipelineAppendDecrement(client Client, pipeline *Pipeline, key string, hitsAddend uint64, result *uint64,
-	expirationSeconds int64, publishInvalidation bool, requestsPerUnit uint32,
+	expirationSeconds int64, publishInvalidation bool,
 ) {
 	publishFlag := "0"
 	if publishInvalidation {
@@ -75,7 +72,7 @@ func pipelineAppendDecrement(client Client, pipeline *Pipeline, key string, hits
 	// Redis Cluster mode the command would be routed using the script text,
 	// causing MOVED/CROSSSLOT errors or misrouting.
 	*pipeline = client.PipeAppendWithRoutingKey(*pipeline, key, result, "EVAL", DecrementScript, 1, key,
-		hitsAddend, expirationSeconds, publishFlag, requestsPerUnit, LocalCacheInvalidationChannel)
+		hitsAddend, expirationSeconds, publishFlag, LocalCacheInvalidationChannel)
 }
 
 func (this *fixedRateLimitCacheImpl) selectPipeline(cacheKey limiter.CacheKey, pipeline *Pipeline, perSecondPipeline *Pipeline) (client Client, p *Pipeline, onPerSecondRedis bool) {
@@ -233,7 +230,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			// The subscriber listens only on the main Redis.
 			publishInvalidation := this.publishInvalidations && !onPerSecondRedis
 			pipelineAppendDecrement(client, p, cacheKey.Key, hitsAddends[i].Value, &results[i], expirationSeconds,
-				publishInvalidation, limits[i].Limit.RequestsPerUnit)
+				publishInvalidation)
 		} else {
 			pipelineAppend(client, p, cacheKey.Key, this.getHitsAddendValue(hitsAddends[i].Value,
 				isCacheKeyOverlimit, isCacheKeyNearlimit, nearlimitIndexes[i]), &results[i], expirationSeconds)
