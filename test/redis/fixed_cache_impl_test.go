@@ -43,7 +43,7 @@ func TestNegativeHits(t *testing.T) {
 
 	// Decrement from a counter at 5, requesting -3. Lua returns 2 (5-3=2).
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -72,7 +72,7 @@ func TestNegativeHitsFloorAtZero(t *testing.T) {
 
 	// Counter at 2, requesting -5. Lua floors at 0 and returns 0.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(5), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(0)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(5), int64(1), "0", redis.LocalCacheInvalidationChannel).SetArg(2, uint64(0)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -102,7 +102,7 @@ func TestNegativeHitsSkipsOverLimitCheck(t *testing.T) {
 
 	// Even though the key is in the over-limit local cache, negative hits should still proceed.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(2), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(8)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(2), int64(1), "0", redis.LocalCacheInvalidationChannel).SetArg(2, uint64(8)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -132,7 +132,7 @@ func TestNegativeHitsStillOverLimitReturnsOK(t *testing.T) {
 
 	// Counter at 15, requesting -3. Lua returns 12, which is still above the limit of 10.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(12)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", redis.LocalCacheInvalidationChannel).SetArg(2, uint64(12)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -164,7 +164,7 @@ func TestNegativeHitsWithStopCacheKeyIncrementWhenOverlimit(t *testing.T) {
 	// Counter at 5, requesting -3. Lua returns 2. No GET pre-check should be issued for
 	// the negative hit, only the EVAL decrement.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -178,7 +178,7 @@ func TestNegativeHitsWithStopCacheKeyIncrementWhenOverlimit(t *testing.T) {
 }
 
 // TestNegativeHitsPublishInvalidation verifies that when the cache is built with
-// publishInvalidations=true, decrements pass the publish flag, the limit and the
+// publishInvalidations=true, decrements pass the publish flag and the
 // invalidation channel to the Lua script.
 func TestNegativeHitsPublishInvalidation(t *testing.T) {
 	assert := assert.New(t)
@@ -193,7 +193,7 @@ func TestNegativeHitsPublishInvalidation(t *testing.T) {
 	cache := redis.NewFixedRateLimitCacheImpl(client, nil, timeSource, rand.New(rand.NewSource(1)), 0, limiter.NewLocalCacheGuard(localCache), 0.8, "", sm, false, false, time.Thursday, true)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "1", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
+	client.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "1", redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
 	client.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(
@@ -222,7 +222,7 @@ func TestNegativeHitsPerSecondClientNeverPublishes(t *testing.T) {
 	cache := redis.NewFixedRateLimitCacheImpl(client, perSecondClient, timeSource, rand.New(rand.NewSource(1)), 0, limiter.NewLocalCacheGuard(localCache), 0.8, "", sm, false, false, time.Thursday, true)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
-	perSecondClient.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", uint32(10), redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
+	perSecondClient.EXPECT().PipeAppendWithRoutingKey(gomock.Any(), "domain_key_value_1234", gomock.Any(), "EVAL", redis.DecrementScript, 1, "domain_key_value_1234", uint64(3), int64(1), "0", redis.LocalCacheInvalidationChannel).SetArg(2, uint64(2)).DoAndReturn(pipeAppendWithRoutingKey)
 	perSecondClient.EXPECT().PipeDo(gomock.Any(), gomock.Any()).Return(nil)
 
 	request := common.NewRateLimitRequestWithNegativeHits(

@@ -2,7 +2,6 @@ package redis_test
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/coocood/freecache"
 	gostats "github.com/lyft/gostats"
+	"github.com/mediocregopher/radix/v4"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/envoyproxy/ratelimit/src/limiter"
@@ -36,6 +36,12 @@ type invalidatorFixture struct {
 }
 
 func startInvalidator(t *testing.T, s settings.Settings) *invalidatorFixture {
+	return startInvalidatorWithDial(t, s, func(ctx context.Context) (radix.Conn, error) {
+		return radix.Dial(ctx, s.RedisSocketType, s.RedisUrl)
+	})
+}
+
+func startInvalidatorWithDial(t *testing.T, s settings.Settings, dial func(context.Context) (radix.Conn, error)) *invalidatorFixture {
 	cache := freecache.NewCache(1024)
 	store := gostats.NewStore(gostats.NewNullSink(), false)
 	f := &invalidatorFixture{
@@ -45,7 +51,7 @@ func startInvalidator(t *testing.T, s settings.Settings) *invalidatorFixture {
 		received:   store.NewCounter("localcache.invalidation.received"),
 		deleted:    store.NewCounter("localcache.invalidation.deleted"),
 	}
-	invalidator := redis.StartLocalCacheInvalidator(context.Background(), s, f.guard, store)
+	invalidator := redis.StartLocalCacheInvalidator(context.Background(), s, f.guard, store, dial)
 	t.Cleanup(func() { invalidator.Close() })
 	return f
 }
@@ -76,20 +82,12 @@ func TestLocalCacheInvalidatorConfigValidation(t *testing.T) {
 	statsStore := gostats.NewStore(gostats.NewNullSink(), false)
 
 	assert.Panics(func() {
-		redis.StartLocalCacheInvalidator(context.Background(), makeInvalidatorSettings("localhost:6379"), nil, statsStore)
+		redis.StartLocalCacheInvalidator(context.Background(), makeInvalidatorSettings("localhost:6379"), nil, statsStore, nil)
 	}, "nil local cache")
 
-	badType := makeInvalidatorSettings("localhost:6379")
-	badType.RedisType = "clustered"
 	assert.Panics(func() {
-		redis.StartLocalCacheInvalidator(context.Background(), badType, localCache, statsStore)
-	}, "unrecognized redis type")
-
-	badSentinel := makeInvalidatorSettings("mymaster")
-	badSentinel.RedisType = "sentinel"
-	assert.Panics(func() {
-		redis.StartLocalCacheInvalidator(context.Background(), badSentinel, localCache, statsStore)
-	}, "sentinel url without sentinel addresses")
+		redis.StartLocalCacheInvalidator(context.Background(), makeInvalidatorSettings("localhost:6379"), localCache, statsStore, nil)
+	}, "nil dial callback")
 }
 
 func TestLocalCacheInvalidator(t *testing.T) {
@@ -131,26 +129,6 @@ func TestLocalCacheInvalidatorReconnects(t *testing.T) {
 	assert.NoError(f.cache.Set([]byte("poisoned_key"), []byte{}, 60))
 	client := mkSingleRedisClient(addr)
 	defer client.Close()
-	publish(t, client, "poisoned_key")
-	f.awaitInvalidated(t, "poisoned_key")
-}
-
-func TestLocalCacheInvalidatorClusterDialsTcp(t *testing.T) {
-	redisSrv := mustNewRedisServer()
-	defer redisSrv.Close()
-	client := mkSingleRedisClient(redisSrv.Addr())
-	defer client.Close()
-
-	// REDIS_SOCKET_TYPE defaults to unix; cluster subscriptions must dial TCP
-	// like radix's cluster client does.
-	s := makeInvalidatorSettings(redisSrv.Addr())
-	s.RedisType = "cluster"
-	s.RedisSocketType = "unix"
-
-	f := startInvalidator(t, s)
-	f.awaitSubscribed(t, 5*time.Second)
-
-	assert.NoError(t, f.cache.Set([]byte("poisoned_key"), []byte{}, 60))
 	publish(t, client, "poisoned_key")
 	f.awaitInvalidated(t, "poisoned_key")
 }
@@ -214,33 +192,21 @@ func TestLocalCacheInvalidatorSkipsStalledEndpoint(t *testing.T) {
 	redisSrv := mustNewRedisServer()
 	defer redisSrv.Close()
 
-	s := makeInvalidatorSettings(stalled.Addr().String() + "," + redisSrv.Addr())
-	s.RedisType = "cluster"
+	s := makeInvalidatorSettings(redisSrv.Addr())
 	s.RedisTimeout = 500 * time.Millisecond
 
-	f := startInvalidator(t, s)
+	// Discovery is supplied by the driver; the invalidator must bound a stalled
+	// PING and call the dialer again rather than staying on the first endpoint.
+	first := true
+	f := startInvalidatorWithDial(t, s, func(ctx context.Context) (radix.Conn, error) {
+		addr := redisSrv.Addr()
+		if first {
+			first = false
+			addr = stalled.Addr().String()
+		}
+		return radix.Dial(ctx, "tcp", addr)
+	})
 	f.awaitSubscribed(t, 10*time.Second)
-}
-
-func TestLocalCacheInvalidatorRotatesPastStalledSentinel(t *testing.T) {
-	stalled, conns := newStalledListener(t)
-	defer stalled.Close()
-	defer conns.closeAll()
-
-	redisSrv := mustNewRedisServer()
-	defer redisSrv.Close()
-	masterHost, masterPort, err := net.SplitHostPort(redisSrv.Addr())
-	assert.NoError(t, err)
-
-	sentinel := newFakeSentinel(t, masterHost, masterPort)
-	defer sentinel.Close()
-
-	s := makeInvalidatorSettings("mymaster," + stalled.Addr().String() + "," + sentinel.Addr().String())
-	s.RedisType = "sentinel"
-	s.RedisTimeout = 500 * time.Millisecond
-
-	f := startInvalidator(t, s)
-	f.awaitSubscribed(t, 15*time.Second)
 }
 
 // stalledConns retains accepted connections: an unreferenced net.Conn can be
@@ -281,27 +247,4 @@ func newStalledListener(t *testing.T) (net.Listener, *stalledConns) {
 		}
 	}()
 	return listener, conns
-}
-
-// newFakeSentinel answers every connection with the given master address; the
-// reply is written without reading the request and waits in the buffer.
-func newFakeSentinel(t *testing.T, masterHost, masterPort string) net.Listener {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	reply := fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n",
-		len(masterHost), masterHost, len(masterPort), masterPort)
-	go func() {
-		for {
-			c, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			go func(c net.Conn) {
-				_, _ = c.Write([]byte(reply))
-			}(c)
-		}
-	}()
-	return listener
 }
