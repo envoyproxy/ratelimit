@@ -2,6 +2,7 @@ package settings
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -142,4 +143,31 @@ func TestRedisPoolOnEmptyBehavior_IndependentConfiguration(t *testing.T) {
 
 	// Per-second pool configured differently
 	assert.Equal(t, "CREATE", settings.RedisPerSecondPoolOnEmptyBehavior)
+}
+
+func TestRedisAuthFilePathsAreLoadedWithoutReadingFiles(t *testing.T) {
+	clearRedisAuthEnv(t)
+	authFile := filepath.Join(t.TempDir(), "missing-redis-auth")
+	perSecondAuthFile := filepath.Join(t.TempDir(), "missing-redis-persecond-auth")
+	t.Setenv("REDIS_AUTH_FILE", authFile)
+	t.Setenv("REDIS_PERSECOND_AUTH_FILE", perSecondAuthFile)
+
+	settings := NewSettings()
+
+	assert.Equal(t, authFile, settings.RedisAuthFile)
+	assert.Empty(t, settings.RedisAuth)
+	assert.Equal(t, perSecondAuthFile, settings.RedisPerSecondAuthFile)
+	assert.Empty(t, settings.RedisPerSecondAuth)
+}
+
+func clearRedisAuthEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{
+		"REDIS_AUTH",
+		"REDIS_AUTH_FILE",
+		"REDIS_PERSECOND_AUTH",
+		"REDIS_PERSECOND_AUTH_FILE",
+	} {
+		t.Setenv(name, "")
+	}
 }
