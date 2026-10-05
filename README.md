@@ -1420,10 +1420,10 @@ keeps failing with `READONLY You can't write against a read only replica.` until
 restarts.
 
 Setting `REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR` to `"true"` closes a pooled connection
-whenever a command on it fails with a READONLY error reply, so the pool reconnects through the
-configured address and reaches the current master. The failing command still returns its error
-to the caller; only the connection handling changes. Applies to both the main and the
-per-second Redis clients.
+whenever a command or pipelined command on it fails with a READONLY error reply, so the pool
+reconnects through the configured address and reaches the current master. The failing command
+still returns its error to the caller; only the connection handling changes. Applies to both
+the main and the per-second Redis clients.
 
 ## Credentials that expire or rotate
 
