@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	pb_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -163,7 +165,12 @@ func TestNegativeHitsCrossReplicaInvalidationIntegration(t *testing.T) {
 		sB.GrpcPort = 8086
 		sB.DebugPort = 8087
 
-		t.Run("Redis", testNegativeHitsCrossReplicaInvalidation(sA, sB))
+		for _, localCacheSize := range []int{1000, 0} {
+			sA.LocalCacheSizeInBytes = localCacheSize
+			sA.CacheKeyPrefix = fmt.Sprintf("refund_%d:", localCacheSize)
+			sB.CacheKeyPrefix = sA.CacheKeyPrefix
+			t.Run(fmt.Sprintf("PublisherLocalCache_%d", localCacheSize), testNegativeHitsCrossReplicaInvalidation(sA, sB))
+		}
 	})
 }
 
@@ -186,10 +193,14 @@ func testNegativeHitsCrossReplicaInvalidation(sA, sB settings.Settings) func(*te
 		defer connB.Close()
 		clientB := pb.NewRateLimitServiceClient(connB)
 
-		// Both invalidation subscribers must be live before the refund publishes.
+		// Cache-bearing replicas must be subscribed before the refund publishes.
 		subscribedA := runnerA.GetStatsStore().NewGauge("ratelimit.localcache.invalidation.subscribed")
 		subscribedB := runnerB.GetStatsStore().NewGauge("ratelimit.localcache.invalidation.subscribed")
-		assert.Eventually(func() bool { return subscribedA.Value() == 1 }, 5*time.Second, 10*time.Millisecond)
+		if sA.LocalCacheSizeInBytes > 0 {
+			assert.Eventually(func() bool { return subscribedA.Value() == 1 }, 5*time.Second, 10*time.Millisecond)
+		} else {
+			assert.EqualValues(0, subscribedA.Value())
+		}
 		assert.Eventually(func() bool { return subscribedB.Value() == 1 }, 5*time.Second, 10*time.Millisecond)
 
 		// key3_local has a limit of 10 per hour.
@@ -210,16 +221,18 @@ func testNegativeHitsCrossReplicaInvalidation(sA, sB settings.Settings) func(*te
 		assert.NoError(err)
 		assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
 
-		// Both replicas now answer from their poisoned local caches.
+		// Cache-bearing replicas now answer from their poisoned local caches.
 		localCacheOverLimitA := runnerA.GetStatsStore().NewCounter("ratelimit.service.rate_limit.another.key3_local.over_limit_with_local_cache")
 		localCacheOverLimitB := runnerB.GetStatsStore().NewCounter("ratelimit.service.rate_limit.another.key3_local.over_limit_with_local_cache")
 
-		response, err = clientA.ShouldRateLimit(
-			context.Background(),
-			common.NewRateLimitRequest("another", desc, 1))
-		assert.NoError(err)
-		assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
-		assert.EqualValues(1, localCacheOverLimitA.Value())
+		if sA.LocalCacheSizeInBytes > 0 {
+			response, err = clientA.ShouldRateLimit(
+				context.Background(),
+				common.NewRateLimitRequest("another", desc, 1))
+			assert.NoError(err)
+			assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
+			assert.EqualValues(1, localCacheOverLimitA.Value())
+		}
 
 		response, err = clientB.ShouldRateLimit(
 			context.Background(),
@@ -228,11 +241,15 @@ func testNegativeHitsCrossReplicaInvalidation(sA, sB settings.Settings) func(*te
 		assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
 		assert.EqualValues(1, localCacheOverLimitB.Value())
 
-		// Refund through replica A only: 12 - 3 = 9 crosses back under the
-		// limit of 10, publishing an invalidation for every replica.
+		// Refund through A with a different threshold: 12 -> 9 does not cross
+		// the refund's override of 20, but must invalidate B's cached verdict at 10.
+		refund := common.NewRateLimitRequestWithNegativeHits("another", desc, []uint64{3}, []bool{true})
+		refund.Descriptors[0].Limit = &pb_struct.RateLimitDescriptor_RateLimitOverride{
+			RequestsPerUnit: 20, Unit: pb_type.RateLimitUnit_HOUR,
+		}
 		response, err = clientA.ShouldRateLimit(
 			context.Background(),
-			common.NewRateLimitRequestWithNegativeHits("another", desc, []uint64{3}, []bool{true}))
+			refund)
 		assert.NoError(err)
 		assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
 

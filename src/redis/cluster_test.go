@@ -15,7 +15,7 @@ func newFakeRedisClusterClient(t *testing.T, addr string, parallelism int, opts 
 	store := stats.NewStore(stats.NewNullSink(), false)
 	c := newClientImpl(context.Background(), store, false, "", "tcp", "cluster", addr, 4,
 		0, 0, nil, false, nil, time.Second, "", "", 10*time.Millisecond, 100*time.Millisecond,
-		time.Second, parallelism, false, nil, opts).(*clientImpl)
+		time.Second, parallelism, false, nil, opts)
 	t.Cleanup(func() { c.Close() })
 	return c
 }
