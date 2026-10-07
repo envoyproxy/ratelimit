@@ -9,7 +9,6 @@ import (
 
 	"github.com/envoyproxy/ratelimit/src/stats"
 
-	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -29,7 +28,10 @@ type fixedRateLimitCacheImpl struct {
 	// is used for limits that have a SECOND unit.
 	perSecondClient                    Client
 	stopCacheKeyIncrementWhenOverlimit bool
-	baseRateLimiter                    *limiter.BaseRateLimiter
+	// Refunds that decrease the counter publish the key on the local
+	// cache invalidation channel (main client only).
+	publishInvalidations bool
+	baseRateLimiter      *limiter.BaseRateLimiter
 }
 
 func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint64, result *uint64, expirationSeconds int64) {
@@ -37,25 +39,53 @@ func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend ui
 	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
 }
 
-func pipelineAppendDecrement(client Client, pipeline *Pipeline, key string, hitsAddend uint64, result *uint64, expirationSeconds int64) {
+// DecrementScript atomically decrements a rate limit counter, floored at 0;
+// a missing key returns 0 without being created. ARGV: hits, expiration
+// seconds, '1'/'0' publish flag, invalidation channel.
+//
+// Publish on every actual decrement: request overrides can use a different
+// threshold from the one that produced a cached verdict. Command order matters: Lua does
+// not roll back on runtime errors, so PUBLISH must fail before the counter
+// is mutated and the mutation must be a single SET..EX, or an ACL denial
+// leaves a half-applied refund behind an errored RPC.
+const DecrementScript = `
+local current = redis.call('GET', KEYS[1])
+if current == false then return 0 end
+local old = tonumber(current)
+local new_val = math.floor(math.max(0, old - tonumber(ARGV[1])))
+if ARGV[3] == '1' and new_val < old then
+  redis.call('PUBLISH', ARGV[4], KEYS[1])
+end
+redis.call('SET', KEYS[1], tostring(new_val), 'EX', tonumber(ARGV[2]))
+return new_val
+`
+
+func pipelineAppendDecrement(client Client, pipeline *Pipeline, key string, hitsAddend uint64, result *uint64,
+	expirationSeconds int64, publishInvalidation bool,
+) {
+	publishFlag := "0"
+	if publishInvalidation {
+		publishFlag = "1"
+	}
 	// EVAL's first positional argument is the script body, not the key, so the
 	// real cache key must be passed explicitly as the routing key. Otherwise, in
 	// Redis Cluster mode the command would be routed using the script text,
 	// causing MOVED/CROSSSLOT errors or misrouting.
-	*pipeline = client.PipeAppendWithRoutingKey(*pipeline, key, result, "EVAL", limiter.DecrementScript, 1, key, hitsAddend, expirationSeconds)
+	*pipeline = client.PipeAppendWithRoutingKey(*pipeline, key, result, "EVAL", DecrementScript, 1, key,
+		hitsAddend, expirationSeconds, publishFlag, LocalCacheInvalidationChannel)
 }
 
-func (this *fixedRateLimitCacheImpl) selectPipeline(cacheKey limiter.CacheKey, pipeline *Pipeline, perSecondPipeline *Pipeline) (Client, *Pipeline) {
+func (this *fixedRateLimitCacheImpl) selectPipeline(cacheKey limiter.CacheKey, pipeline *Pipeline, perSecondPipeline *Pipeline) (client Client, p *Pipeline, onPerSecondRedis bool) {
 	if this.perSecondClient != nil && cacheKey.PerSecond {
 		if *perSecondPipeline == nil {
 			*perSecondPipeline = Pipeline{}
 		}
-		return this.perSecondClient, perSecondPipeline
+		return this.perSecondClient, perSecondPipeline, true
 	}
 	if *pipeline == nil {
 		*pipeline = Pipeline{}
 	}
-	return this.client, pipeline
+	return this.client, pipeline, false
 }
 
 func pipelineAppendtoGet(client Client, pipeline *Pipeline, key string, result *uint64) {
@@ -98,6 +128,9 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 	limits []*config.RateLimit,
 ) []*pb.RateLimitResponse_DescriptorStatus {
 	logger.Debugf("starting cache lookup")
+
+	// pinning before any Redis read so a racing invalidation suppresses stale inserts to the local cache
+	localCacheGen := this.baseRateLimiter.GetLocalCacheGenSnapshot()
 
 	hitsAddends := utils.GetHitsAddends(request)
 
@@ -192,9 +225,12 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			expirationSeconds += this.baseRateLimiter.JitterRand.Int63n(this.baseRateLimiter.ExpirationJitterMaxSeconds)
 		}
 
-		client, p := this.selectPipeline(cacheKey, &pipeline, &perSecondPipeline)
+		client, p, onPerSecondRedis := this.selectPipeline(cacheKey, &pipeline, &perSecondPipeline)
 		if hitsAddends[i].IsNegative {
-			pipelineAppendDecrement(client, p, cacheKey.Key, hitsAddends[i].Value, &results[i], expirationSeconds)
+			// The subscriber listens only on the main Redis.
+			publishInvalidation := this.publishInvalidations && !onPerSecondRedis
+			pipelineAppendDecrement(client, p, cacheKey.Key, hitsAddends[i].Value, &results[i], expirationSeconds,
+				publishInvalidation)
 		} else {
 			pipelineAppend(client, p, cacheKey.Key, this.getHitsAddendValue(hitsAddends[i].Value,
 				isCacheKeyOverlimit, isCacheKeyNearlimit, nearlimitIndexes[i]), &results[i], expirationSeconds)
@@ -234,7 +270,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 			responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-				limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i].Value)
+				limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i].Value, localCacheGen)
 		}
 	}
 
@@ -245,13 +281,14 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 func (this *fixedRateLimitCacheImpl) Flush() {}
 
 func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSource utils.TimeSource,
-	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
-	stopCacheKeyIncrementWhenOverlimit bool, useCalendarMonth bool,
+	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *limiter.LocalCacheGuard, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
+	stopCacheKeyIncrementWhenOverlimit bool, useCalendarMonth bool, publishInvalidations bool,
 ) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                             client,
 		perSecondClient:                    perSecondClient,
 		stopCacheKeyIncrementWhenOverlimit: stopCacheKeyIncrementWhenOverlimit,
+		publishInvalidations:               publishInvalidations,
 		baseRateLimiter:                    limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth),
 	}
 }

@@ -164,6 +164,10 @@ func (runner *Runner) Run() {
 	}()
 
 	s := runner.settings
+	if err := s.Validate(); err != nil {
+		logger.Fatalf("%s", err)
+	}
+
 	if s.TracingEnabled {
 		tp := trace.InitProductionTraceProvider(s.TracingExporterProtocol, s.TracingServiceName, s.TracingServiceNamespace, s.TracingServiceInstanceId, s.TracingSamplingRate)
 		defer func() {
@@ -206,6 +210,7 @@ func (runner *Runner) Run() {
 		s.GlobalShadowMode,
 		s.ForceStartWithoutInitialConfig,
 		s.HealthyWithAtLeastOneConfigLoaded,
+		s.EnableNegativeHits,
 	)
 
 	srv.AddDebugHttpEndpoint(
