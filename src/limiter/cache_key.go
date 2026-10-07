@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strconv"
 	"sync"
+	"time"
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -17,14 +18,19 @@ type CacheKeyGenerator struct {
 	// useCalendarMonth gates bucketing MONTH-unit limits by real calendar
 	// month (UTC) instead of the legacy fixed 30-day divider.
 	useCalendarMonth bool
+	// weekStart is the day-of-week on which WEEK-unit windows begin (UTC).
+	// Defaults to Thursday, which matches the legacy epoch-division behaviour
+	// (Unix epoch 0 was Thursday).
+	weekStart time.Weekday
 	// bytes.Buffer pool used to efficiently generate cache keys.
 	bufferPool sync.Pool
 }
 
-func NewCacheKeyGenerator(prefix string, useCalendarMonth bool) CacheKeyGenerator {
+func NewCacheKeyGenerator(prefix string, useCalendarMonth bool, weekStart time.Weekday) CacheKeyGenerator {
 	return CacheKeyGenerator{
 		prefix:           prefix,
 		useCalendarMonth: useCalendarMonth,
+		weekStart:        weekStart,
 		bufferPool: sync.Pool{
 			New: func() interface{} {
 				return new(bytes.Buffer)
@@ -87,6 +93,10 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 		// Calendar months vary in length, so bucket by the start of the
 		// current UTC calendar month rather than a fixed-size divider.
 		bucketStart = utils.MonthStartUnix(now)
+	} else if limit.Limit.Unit == pb.RateLimitResponse_RateLimit_WEEK {
+		// Anchor the weekly window to the configured start-of-week in UTC.
+		// Defaults to Thursday, matching the legacy epoch-division behaviour.
+		bucketStart = utils.WeekStartUnix(now, this.weekStart)
 	} else {
 		divider := utils.UnitToDivider(limit.Limit.Unit)
 		bucketStart = (now / divider) * divider
