@@ -30,7 +30,7 @@ func TestGenerateCacheKeys(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false, time.Thursday)
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
@@ -49,7 +49,7 @@ func TestGenerateCacheKeysNegativeHits(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false, time.Thursday)
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
@@ -73,7 +73,7 @@ func TestGenerateCacheKeysPrefix(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "prefix:", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "prefix:", sm, false, time.Thursday)
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 	assert.Equal(uint64(0), limits[0].Stats.TotalHits.Value())
@@ -91,7 +91,7 @@ func TestGenerateCacheKeysMonth(t *testing.T) {
 	jitterSource := mock_utils.NewMockJitterRandSource(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, true)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, true, time.Thursday)
 	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
 	limits := []*config.RateLimit{config.NewRateLimit(200, pb.RateLimitResponse_RateLimit_MONTH, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 
@@ -117,6 +117,28 @@ func TestGenerateCacheKeysMonth(t *testing.T) {
 	assert.Equal("domain_key_value_"+strconv.FormatInt(startOfFebruary, 10), cacheKeysNextMonth[0].Key)
 }
 
+func TestGenerateCacheKeysWeek(t *testing.T) {
+	assert := assert.New(t)
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	jitterSource := mock_utils.NewMockJitterRandSource(controller)
+	statsStore := stats.NewStore(stats.NewNullSink(), false)
+	sm := mockstats.NewMockStatManager(statsStore)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false, time.Monday)
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
+	limits := []*config.RateLimit{config.NewRateLimit(200, pb.RateLimitResponse_RateLimit_WEEK, sm.NewStats("key_value"), false, false, false, "", nil, false)}
+
+	// 2026-01-14T12:00:00Z (Wednesday) must map to the start of its window, the
+	// previous Monday 2026-01-12T00:00:00Z. Boundary behaviour is covered by
+	// TestWeekStartUnix.
+	timeSource.EXPECT().UnixNow().Return(time.Date(2026, time.January, 14, 12, 0, 0, 0, time.UTC).Unix())
+	cacheKeys := baseRateLimit.GenerateCacheKeys(request, limits, []utils.HitsAddend{{Value: 1}})
+
+	weekStart := time.Date(2026, time.January, 12, 0, 0, 0, 0, time.UTC).Unix()
+	assert.Equal("domain_key_value_"+strconv.FormatInt(weekStart, 10), cacheKeys[0].Key)
+}
+
 func TestGenerateCacheKeysWithShareThreshold(t *testing.T) {
 	assert := assert.New(t)
 	controller := gomock.NewController(t)
@@ -126,8 +148,7 @@ func TestGenerateCacheKeysWithShareThreshold(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).AnyTimes()
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false)
-
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, rand.New(jitterSource), 3600, nil, 0.8, "", sm, false, time.Thursday)
 	// Test 1: Simple case - different values with same wildcard prefix generate same cache key
 	limit := config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("files_files/*"), false, false, false, "", nil, false)
 	limit.ShareThresholdKeyPattern = []string{"files/*"} // Entry at index 0
@@ -205,7 +226,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	localCache := freecache.NewCache(100)
 	localCache.Set([]byte("key"), []byte("value"), 100)
 	sm := mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false))
-	baseRateLimit := limiter.NewBaseRateLimit(nil, nil, 3600, localCache, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(nil, nil, 3600, localCache, 0.8, "", sm, false, time.Thursday)
 	// Returns true, as local cache contains over limit value for the key.
 	assert.Equal(true, baseRateLimit.IsOverLimitWithLocalCache("key"))
 }
@@ -215,11 +236,11 @@ func TestNoOverLimitWithLocalCache(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	sm := mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false))
-	baseRateLimit := limiter.NewBaseRateLimit(nil, nil, 3600, nil, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(nil, nil, 3600, nil, 0.8, "", sm, false, time.Thursday)
 	// Returns false, as local cache is nil.
 	assert.Equal(false, baseRateLimit.IsOverLimitWithLocalCache("domain_key_value_1234"))
 	localCache := freecache.NewCache(100)
-	baseRateLimitWithLocalCache := limiter.NewBaseRateLimit(nil, nil, 3600, localCache, 0.8, "", sm, false)
+	baseRateLimitWithLocalCache := limiter.NewBaseRateLimit(nil, nil, 3600, localCache, 0.8, "", sm, false, time.Thursday)
 	// Returns false, as local cache does not contain value for cache key.
 	assert.Equal(false, baseRateLimitWithLocalCache.IsOverLimitWithLocalCache("domain_key_value_1234"))
 }
@@ -229,7 +250,7 @@ func TestGetResponseStatusEmptyKey(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	sm := mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false))
-	baseRateLimit := limiter.NewBaseRateLimit(nil, nil, 3600, nil, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(nil, nil, 3600, nil, 0.8, "", sm, false, time.Thursday)
 	responseStatus := baseRateLimit.GetResponseDescriptorStatus("", nil, false, 1)
 	assert.Equal(pb.RateLimitResponse_OK, responseStatus.GetCode())
 	assert.Equal(uint32(0), responseStatus.GetLimitRemaining())
@@ -243,7 +264,7 @@ func TestGetResponseStatusOverLimitWithLocalCache(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false, time.Thursday)
 	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 4, 5)
 	// As `isOverLimitWithLocalCache` is passed as `true`, immediate response is returned with no checks of the limits.
@@ -265,7 +286,7 @@ func TestGetResponseStatusOverLimitWithLocalCacheShadowMode(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false, time.Thursday)
 	// This limit is in ShadowMode
 	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, true, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 4, 5)
@@ -290,7 +311,7 @@ func TestGetResponseStatusOverLimit(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	localCache := freecache.NewCache(100)
 	sm := mockstats.NewMockStatManager(statsStore)
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, localCache, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, localCache, 0.8, "", sm, false, time.Thursday)
 	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 7, 4, 5)
 	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1)
@@ -315,7 +336,7 @@ func TestGetResponseStatusOverLimitShadowMode(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	localCache := freecache.NewCache(100)
 	sm := mockstats.NewMockStatManager(statsStore)
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, localCache, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, localCache, 0.8, "", sm, false, time.Thursday)
 	// Key is in shadow_mode: true
 	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, true, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 7, 4, 5)
@@ -338,7 +359,7 @@ func TestGetResponseStatusBelowLimit(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false, time.Thursday)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 9, 10)
 	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1)
@@ -359,7 +380,7 @@ func TestGetResponseStatusBelowLimitShadowMode(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(int64(1234))
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false)
+	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false, time.Thursday)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, true, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 9, 10)
 	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1)

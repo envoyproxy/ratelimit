@@ -2,6 +2,7 @@ package settings
 
 import (
 	"crypto/tls"
+	"fmt"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -118,6 +119,13 @@ type Settings struct {
 	// from the Unix epoch, so enabling this for existing MONTH limits changes when
 	// they reset and is opt-in.
 	UseCalendarMonthRateLimit bool `envconfig:"USE_CALENDAR_MONTH_RATE_LIMIT" default:"false"`
+	// WeekRateLimitResetDay sets the day of the week on which WEEK-unit rate-limit windows
+	// reset (00:00 UTC); each window begins on that day and lasts 7 days. Valid values
+	// (case-insensitive): Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday.
+	// Defaults to Thursday, which preserves the historical behaviour (Unix epoch 0 was a
+	// Thursday, so epoch-division always snapped on Thursdays). An unrecognised value fails
+	// at startup.
+	WeekRateLimitResetDay string `envconfig:"WEEK_RATE_LIMIT_RESET_DAY" default:"Thursday"`
 
 	// Settings for optional returning of custom headers
 	RateLimitResponseHeadersEnabled bool `envconfig:"LIMIT_RESPONSE_HEADERS_ENABLED" default:"false"`
@@ -282,6 +290,9 @@ func NewSettings() Settings {
 	var s Settings
 	if err := envconfig.Process("", &s); err != nil {
 		panic(err)
+	}
+	if _, err := utils.ParseWeekday(s.WeekRateLimitResetDay); err != nil {
+		panic(fmt.Errorf("assigning WEEK_RATE_LIMIT_RESET_DAY: %w", err))
 	}
 	// When we require TLS to connect to Redis, we check if we need to connect using the provided key-pair.
 	RedisTlsConfig(s.RedisTls || s.RedisPerSecondTls)(&s)

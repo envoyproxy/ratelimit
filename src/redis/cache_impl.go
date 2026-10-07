@@ -35,6 +35,9 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		s.RedisCloseConnectionOnReadOnlyError)
 	closer.Closers = append(closer.Closers, otherPool)
 
+	// Validated in settings.NewSettings.
+	weekStart, _ := utils.ParseWeekday(s.WeekRateLimitResetDay)
+
 	return NewFixedRateLimitCacheImpl(
 		otherPool,
 		perSecondPool,
@@ -47,5 +50,6 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		statsManager,
 		s.StopCacheKeyIncrementWhenOverlimit,
 		s.UseCalendarMonthRateLimit,
+		weekStart,
 	), closer
 }

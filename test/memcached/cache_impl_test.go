@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
+	"time"
 
 	mockstats "github.com/envoyproxy/ratelimit/test/mocks/stats"
 
@@ -44,7 +45,7 @@ func TestMemcached(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false, time.Thursday)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	client.EXPECT().GetMulti([]string{"domain_key_value_1234"}).Return(
@@ -56,7 +57,7 @@ func TestMemcached(t *testing.T) {
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 5, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
@@ -84,7 +85,7 @@ func TestMemcached(t *testing.T) {
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
 			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[1].Limit.Unit, timeSource, false)},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[1].Limit.Unit, timeSource, false, time.Thursday)},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -120,8 +121,8 @@ func TestMemcached(t *testing.T) {
 	}
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)},
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[1].Limit.Unit, timeSource, false)},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[1].Limit.Unit, timeSource, false, time.Thursday)},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -146,7 +147,7 @@ func TestMemcachedGetError(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false, time.Thursday)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	client.EXPECT().GetMulti([]string{"domain_key_value_1234"}).Return(
@@ -158,7 +159,7 @@ func TestMemcachedGetError(t *testing.T) {
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
@@ -177,7 +178,7 @@ func TestMemcachedGetError(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value1"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
@@ -236,7 +237,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	sink := &common.TestStatSink{}
 	statsStore := stats.NewStore(sink, true)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, localCache, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, localCache, sm, 0.8, "", false, time.Thursday)
 	localCacheStats := limiter.NewLocalCacheStats(localCache, statsStore.Scope("localcache"))
 
 	// Test Near Limit Stats. Under Near Limit Ratio
@@ -254,7 +255,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -276,7 +277,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -298,7 +299,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -317,7 +318,7 @@ func TestOverLimitWithLocalCache(t *testing.T) {
 	client.EXPECT().Increment("domain_key4_value4_997200", uint64(1)).Times(0)
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -342,7 +343,7 @@ func TestNearLimit(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false, time.Thursday)
 
 	// Test Near Limit Stats. Under Near Limit Ratio
 	timeSource.EXPECT().UnixNow().Return(int64(1000000)).MaxTimes(3)
@@ -359,7 +360,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 4, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -377,7 +378,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 2, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -396,7 +397,7 @@ func TestNearLimit(t *testing.T) {
 
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -417,7 +418,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key5_value5"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 15, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
@@ -436,7 +437,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(8, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key6_value6"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(2), limits[0].Stats.TotalHits.Value())
@@ -455,7 +456,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key7_value7"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 1, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
@@ -474,7 +475,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key8_value8"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
@@ -493,7 +494,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(20, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key9_value9"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(7), limits[0].Stats.TotalHits.Value())
@@ -512,7 +513,7 @@ func TestNearLimit(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key10_value10"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(3), limits[0].Stats.TotalHits.Value())
@@ -533,7 +534,7 @@ func TestMemcacheWithJitter(t *testing.T) {
 	jitterSource := mock_utils.NewMockJitterRandSource(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, rand.New(jitterSource), 3600, nil, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, rand.New(jitterSource), 3600, nil, sm, 0.8, "", false, time.Thursday)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	jitterSource.EXPECT().Int63().Return(int64(100))
@@ -558,7 +559,7 @@ func TestMemcacheWithJitter(t *testing.T) {
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
@@ -578,7 +579,7 @@ func TestMemcacheAdd(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false, time.Thursday)
 
 	// Test a race condition with the initial add
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -604,7 +605,7 @@ func TestMemcacheAdd(t *testing.T) {
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
@@ -630,7 +631,7 @@ func TestMemcacheAdd(t *testing.T) {
 	limits = []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, sm.NewStats("key2_value2"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 	assert.Equal(uint64(1), limits[0].Stats.TotalHits.Value())
@@ -654,7 +655,7 @@ func TestMemcacheCalendarMonthExpirationAboveThirtyDaysIsAbsoluteTimestamp(t *te
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", true)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", true, time.Thursday)
 
 	// 2024-01-01T00:00:00Z: January has 31 days, so the relative expiration until the end of
 	// the month is 31 * 86400 = 2,678,400 seconds, which is above memcached's 30-day threshold.
@@ -677,7 +678,7 @@ func TestMemcacheCalendarMonthExpirationAboveThirtyDaysIsAbsoluteTimestamp(t *te
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MONTH, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 
 	assert.Equal(
-		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, true)}},
+		[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 9, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, true, time.Thursday)}},
 		cache.DoLimit(context.Background(), request, limits),
 	)
 
@@ -735,7 +736,7 @@ func TestMemcachedTracer(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
 
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false, time.Thursday)
 
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
 	client.EXPECT().GetMulti([]string{"domain_key_value_1234"}).Return(
@@ -775,7 +776,7 @@ func TestMemcachedNegativeHits(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false, time.Thursday)
 
 	// Counter at 7, requesting -3. Memcached Decrement floors at 0 natively.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -808,7 +809,7 @@ func TestMemcachedNegativeHitsFloorAtZero(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false, time.Thursday)
 
 	// Counter at 2, requesting -5. Floor at 0.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -842,7 +843,7 @@ func TestMemcachedNegativeHitsStillOverLimitReturnsOK(t *testing.T) {
 	client := mock_memcached.NewMockClient(controller)
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false, time.Thursday)
 
 	// Counter at 15, requesting -3. Predicted post-decrement value is 12, still above the limit of 10.
 	timeSource.EXPECT().UnixNow().Return(int64(1234)).MaxTimes(3)
@@ -874,7 +875,7 @@ func TestMemcachedNegativeHitsSkipsOverLimitCheck(t *testing.T) {
 	statsStore := stats.NewStore(stats.NewNullSink(), false)
 	sm := mockstats.NewMockStatManager(statsStore)
 	localCache := freecache.NewCache(100)
-	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, localCache, sm, 0.8, "", false)
+	cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, localCache, sm, 0.8, "", false, time.Thursday)
 
 	// Set the key as over-limit in local cache.
 	localCache.Set([]byte("domain_key_value_1234"), []byte{}, 60)
