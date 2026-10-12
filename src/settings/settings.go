@@ -246,6 +246,13 @@ type Settings struct {
 	RedisIoTimeout *time.Duration `envconfig:"REDIS_IO_TIMEOUT"`
 	// RedisPerSecondIoTimeout is RedisIoTimeout for the per-second Redis.
 	RedisPerSecondIoTimeout *time.Duration `envconfig:"REDIS_PERSECOND_IO_TIMEOUT"`
+	// RedisMaxInflight bounds the number of Redis commands (pipelines) in
+	// flight per Redis client; further commands fail right away. Commands a
+	// caller stopped waiting for count until Redis answers or the I/O timeout
+	// fires. 0 means unbounded.
+	RedisMaxInflight int `envconfig:"REDIS_MAX_INFLIGHT" default:"0"`
+	// RedisPerSecondMaxInflight is RedisMaxInflight for the per-second Redis.
+	RedisPerSecondMaxInflight int `envconfig:"REDIS_PERSECOND_MAX_INFLIGHT" default:"0"`
 
 	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
 	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).
