@@ -82,6 +82,8 @@ type clientImpl struct {
 	clusterPipelineParallelism int
 	// inflight bounds the number of commands in flight, nil if unbounded.
 	inflight chan struct{}
+	// ioTimeout is the I/O timeout of the connections, see clientOptions.
+	ioTimeout time.Duration
 }
 
 func checkError(err error) {
@@ -233,15 +235,17 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		poolConfig.Dialer = wrapDialerCredentialProvider(poolConfig.Dialer, credentialProvider)
 	}
 
-	// Discard pooled connections whose commands fail with READONLY (the server
-	// behind them was demoted to replica by a failover) so the pool re-dials
-	// and reaches the current master. Installed last because CustomConn
-	// replaces every other Dialer field (TLS, auth, write buffering), which
-	// must all be final before being captured.
+	// Wrap connections to correct which errors make the pool discard them
+	// (see wrappedConn). Installed last because CustomConn replaces every
+	// other Dialer field (TLS, auth, write buffering), which must all be final
+	// before being captured.
 	if closeConnectionOnReadOnlyError {
+		// Discard pooled connections whose commands fail with READONLY (the
+		// server behind them was demoted to replica by a failover) so the
+		// pool re-dials and reaches the current master.
 		logger.Warnf("Redis pool %s: closing connections on READONLY error replies", maskedUrl)
-		poolConfig.Dialer = wrapDialerCloseOnReadOnly(poolConfig.Dialer)
 	}
+	poolConfig.Dialer = wrapDialerConn(poolConfig.Dialer, closeConnectionOnReadOnlyError)
 
 	effectivePipelineParallelism := clusterPipelineParallelism
 	if isCluster {
@@ -384,6 +388,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		stats:                      stats,
 		isCluster:                  isCluster,
 		clusterPipelineParallelism: effectivePipelineParallelism,
+		ioTimeout:                  opts.ioTimeout,
 	}
 	if opts.maxInflight > 0 {
 		logger.Warnf("Redis pool %s: at most %d commands in flight", maskedUrl, opts.maxInflight)
