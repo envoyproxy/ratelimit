@@ -27,7 +27,11 @@ type HealthChecker struct {
 const (
 	ConfigHealthComponentName = "config"
 	RedisHealthComponentName  = "redis"
-	SigtermComponentName      = "sigterm"
+	// RedisPingHealthComponentName and RedisPerSecondPingHealthComponentName
+	// are registered when the Redis health probe is enabled.
+	RedisPingHealthComponentName          = "redis_ping"
+	RedisPerSecondPingHealthComponentName = "redis_per_second_ping"
+	SigtermComponentName                  = "sigterm"
 )
 
 func areAllComponentsHealthy(healthMap map[string]bool) bool {
@@ -124,6 +128,19 @@ func (hc *HealthChecker) Ok(componentName string) error {
 	}
 
 	return nil
+}
+
+// AddComponent registers an additional component whose health contributes to
+// the overall health. Registering an existing component only sets its health.
+func (hc *HealthChecker) AddComponent(componentName string, healthy bool) {
+	hc.Lock()
+	defer hc.Unlock()
+
+	hc.healthMap[componentName] = healthy
+	if !healthy {
+		atomic.StoreUint32(&hc.ok, 0)
+		hc.grpc.SetServingStatus(hc.name, healthpb.HealthCheckResponse_NOT_SERVING)
+	}
 }
 
 func (hc *HealthChecker) Server() *health.Server {
