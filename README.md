@@ -1350,6 +1350,9 @@ Controls the maximum duration for Redis connection establishment, read operation
 
 1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
 1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
+1. `REDIS_IO_TIMEOUT` & `REDIS_PERSECOND_IO_TIMEOUT`: override the I/O part of the timeout above. When set, this is how long a connection may wait for Redis to reply to a command, or to accept a write, before ratelimit closes the connection, fails the commands in flight on it and dials a new one. Idle connections are not affected. Set to `0` to disable (not recommended). Default: the value of `REDIS_TIMEOUT` / `REDIS_PERSECOND_TIMEOUT`.
+
+The I/O timeout is what makes ratelimit fail fast when Redis stops answering without closing its connections, for example after a failover that keeps the server address. Without it, commands block until the operating system gives up on the connection, which takes about 15 minutes with default Linux settings. Keep it well above the slowest normal Redis reply, since every command in flight on a timed-out connection fails. Sentinel connections are not subject to the I/O timeout.
 
 ### Pool On-Empty Behavior
 

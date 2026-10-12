@@ -224,9 +224,17 @@ type Settings struct {
 	// both the main and the per-second Redis clients.
 	RedisCloseConnectionOnReadOnlyError bool `envconfig:"REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR" default:"false"`
 	// RedisTimeout sets the timeout for Redis connection and I/O operations.
+	// Reads and writes use it too unless RedisIoTimeout is set.
 	RedisTimeout time.Duration `envconfig:"REDIS_TIMEOUT" default:"10s"`
 	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.
+	// Reads and writes use it too unless RedisPerSecondIoTimeout is set.
 	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
+	// RedisIoTimeout bounds how long a Redis connection waits for a reply, or
+	// for a write to be accepted, before it is closed and replaced. Unset means
+	// RedisTimeout; 0 disables it.
+	RedisIoTimeout *time.Duration `envconfig:"REDIS_IO_TIMEOUT"`
+	// RedisPerSecondIoTimeout is RedisIoTimeout for the per-second Redis.
+	RedisPerSecondIoTimeout *time.Duration `envconfig:"REDIS_PERSECOND_IO_TIMEOUT"`
 
 	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
 	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).
