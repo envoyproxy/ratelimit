@@ -76,6 +76,7 @@
   - [Two Redis Instances](#two-redis-instances)
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
   - [Recovering from a failover (READONLY errors)](#recovering-from-a-failover-readonly-errors)
+  - [Redis failover and unresponsive Redis](#redis-failover-and-unresponsive-redis)
   - [Credentials that expire or rotate](#credentials-that-expire-or-rotate)
     - [AWS ElastiCache IAM authentication](#aws-elasticache-iam-authentication)
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
@@ -1494,6 +1495,31 @@ whenever a command on it fails with a READONLY error reply, so the pool reconnec
 configured address and reaches the current master. The failing command still returns its error
 to the caller; only the connection handling changes. Applies to both the main and the
 per-second Redis clients.
+
+## Redis failover and unresponsive Redis
+
+A Redis failover, or any event that makes Redis stop answering without closing its connections (a managed Redis that moves the primary behind the same IP, a network partition, a node that hangs), leaves ratelimit's connections open with no reply coming. Ratelimit handles it in layers, from the fastest to the slowest:
+
+1. **Request deadline.** A call returns an error as soon as the deadline set by its client expires (see [Request Deadlines](#request-deadlines)). Envoy then applies its failure mode right away (allow by default, or deny with `failure_mode_deny`).
+1. **I/O timeout.** A connection that does not reply within `REDIS_TIMEOUT` (or `REDIS_IO_TIMEOUT`) is closed and the pool dials a new one, which reaches the current primary. This is what ends the outage on the ratelimit side; without it the connections stay blocked until the OS closes them, about 15 minutes with default Linux settings.
+1. **`TCP_USER_TIMEOUT`.** With `REDIS_TCP_USER_TIMEOUT`, the kernel itself closes connections whose data stays unacknowledged, as a second line of defense.
+1. **Readiness.** With `REDIS_HEALTH_CHECK_PING_INTERVAL`, replicas that cannot reach Redis report not ready on `/ready`, so a readiness probe can take them out of rotation while the rest keep serving. `/healthcheck`, used for liveness, is not affected: restarting replicas cannot fix Redis.
+
+Recommended settings for a Redis with failover (e.g. Sentinel, a managed Redis such as GCP Memorystore or AWS ElastiCache, or a Kubernetes Service in front of a primary):
+
+```
+REDIS_TIMEOUT=1s                              # dial and I/O timeout: well above the slowest normal reply
+REDIS_TCP_USER_TIMEOUT=5s                     # Linux only
+REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR=true # if the failover demotes the old primary behind the same address
+REDIS_HEALTH_CHECK_PING_INTERVAL=1s           # point readiness probes at /ready, keep liveness on /healthcheck
+REDIS_MAX_INFLIGHT=<a few times the normal number of concurrent calls>
+```
+
+Use the same values for the `REDIS_PERSECOND_*` settings when a per-second Redis is configured.
+
+The I/O timeout fails every command in flight on a connection that timed out, so keep it well above the slowest reply Redis normally gives, including under load and across zones; a few hundred milliseconds to a couple of seconds suits most deployments. The client's own timeout (e.g. Envoy's rate limit filter `timeout`) should in turn be above the normal Redis round-trip: calls that miss it are not rate limited (or are denied, with `failure_mode_deny`) even though Redis is healthy.
+
+To watch for these situations, alert on `ratelimit.service.call.should_rate_limit.redis_error`, `cmd_io_timeout` and `cx_local_close_error`, and on `ratelimit.service.call.should_rate_limit.inflight` or `cmd_inflight` growing (see [Service statistics](#service-statistics) and [Redis statistics](#redis-statistics)).
 
 ## Credentials that expire or rotate
 
