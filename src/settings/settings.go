@@ -246,6 +246,17 @@ type Settings struct {
 	RedisIoTimeout *time.Duration `envconfig:"REDIS_IO_TIMEOUT"`
 	// RedisPerSecondIoTimeout is RedisIoTimeout for the per-second Redis.
 	RedisPerSecondIoTimeout *time.Duration `envconfig:"REDIS_PERSECOND_IO_TIMEOUT"`
+	// RedisTcpKeepAlive sets the TCP keepalive idle time and probe interval of
+	// Redis connections. A negative value disables keepalive.
+	RedisTcpKeepAlive time.Duration `envconfig:"REDIS_TCP_KEEPALIVE" default:"10s"`
+	// RedisPerSecondTcpKeepAlive is RedisTcpKeepAlive for the per-second Redis.
+	RedisPerSecondTcpKeepAlive time.Duration `envconfig:"REDIS_PERSECOND_TCP_KEEPALIVE" default:"10s"`
+	// RedisTcpUserTimeout sets TCP_USER_TIMEOUT on Redis connections (Linux
+	// only): how long sent data may stay unacknowledged before the kernel closes
+	// the connection. 0 leaves the OS default.
+	RedisTcpUserTimeout time.Duration `envconfig:"REDIS_TCP_USER_TIMEOUT" default:"0"`
+	// RedisPerSecondTcpUserTimeout is RedisTcpUserTimeout for the per-second Redis.
+	RedisPerSecondTcpUserTimeout time.Duration `envconfig:"REDIS_PERSECOND_TCP_USER_TIMEOUT" default:"0"`
 
 	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
 	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).

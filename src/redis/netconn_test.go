@@ -158,14 +158,14 @@ func TestTLSVerifiesServerName(t *testing.T) {
 	srv := newFakeRedis(t, serverCfg)
 	clientCfg.ServerName = "not-the-server"
 
-	d := newNetDialer(time.Second, time.Second, true, clientCfg)
+	d := newNetDialer(time.Second, clientOptions{ioTimeout: time.Second}, true, clientCfg)
 	_, err := d.DialContext(context.Background(), "tcp", srv.addr())
 	assert.Error(t, err)
 }
 
 func TestNetDialerWorksWithRadixDialer(t *testing.T) {
 	srv := newFakeRedis(t, nil)
-	conn, err := radix.Dialer{NetDialer: newNetDialer(time.Second, time.Second, false, nil)}.
+	conn, err := radix.Dialer{NetDialer: newNetDialer(time.Second, clientOptions{ioTimeout: time.Second}, false, nil)}.
 		Dial(context.Background(), "tcp", srv.addr())
 	require.NoError(t, err)
 	defer conn.Close()
@@ -198,4 +198,45 @@ func selfSignedTLS(t *testing.T) (server, client *tls.Config) {
 	server = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
 	client = &tls.Config{RootCAs: pool}
 	return server, client
+}
+
+func TestNetDialerTCPKeepAliveConfig(t *testing.T) {
+	assert.Equal(t, net.KeepAliveConfig{Enable: true, Idle: defaultTCPKeepAlive, Interval: defaultTCPKeepAlive},
+		newNetDialer(time.Second, clientOptions{}, false, nil).dialer.KeepAliveConfig)
+	assert.Equal(t, net.KeepAliveConfig{Enable: true, Idle: 30 * time.Second, Interval: 30 * time.Second},
+		newNetDialer(time.Second, clientOptions{tcpKeepAlive: 30 * time.Second}, false, nil).dialer.KeepAliveConfig)
+
+	disabled := newNetDialer(time.Second, clientOptions{tcpKeepAlive: -1}, false, nil).dialer
+	assert.False(t, disabled.KeepAliveConfig.Enable)
+	assert.Negative(t, disabled.KeepAlive)
+}
+
+func TestNetDialerTCPUserTimeoutOnlyWhenSupported(t *testing.T) {
+	assert.Nil(t, newNetDialer(time.Second, clientOptions{}, false, nil).dialer.Control)
+	d := newNetDialer(time.Second, clientOptions{tcpUserTimeout: time.Second}, false, nil)
+	assert.Equal(t, tcpUserTimeoutSupported, d.dialer.Control != nil)
+}
+
+func TestSentinelConnectionsHaveNoIOTimeout(t *testing.T) {
+	opts := clientOptions{ioTimeout: time.Second, tcpKeepAlive: 30 * time.Second, tcpUserTimeout: 5 * time.Second}
+	assert.Equal(t, clientOptions{tcpKeepAlive: 30 * time.Second, tcpUserTimeout: 5 * time.Second}, sentinelClientOptions(opts))
+
+	// radix's pubsub connection to the sentinels reads while waiting for
+	// messages that may not come for a long time (EncodeDecode with nothing
+	// to write). An I/O timeout would kill it.
+	waitForMessage := func(opts clientOptions) error {
+		srv := newFakeRedis(t, nil)
+		conn, err := createDialer(time.Second, opts, false, nil, "", "").Dial(context.Background(), "tcp", srv.addr())
+		require.NoError(t, err)
+		defer conn.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		var msg string
+		return conn.EncodeDecode(ctx, nil, &msg)
+	}
+	ioOpts := clientOptions{ioTimeout: 20 * time.Millisecond}
+	assert.ErrorIs(t, waitForMessage(ioOpts), ErrIOTimeout, "Redis connections time out")
+	err := waitForMessage(sentinelClientOptions(ioOpts))
+	assert.ErrorIs(t, err, context.DeadlineExceeded, "sentinel connections wait")
+	assert.NotErrorIs(t, err, ErrIOTimeout)
 }
