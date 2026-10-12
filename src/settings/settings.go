@@ -265,13 +265,12 @@ type Settings struct {
 	// RedisPerSecondTcpUserTimeout is RedisTcpUserTimeout for the per-second Redis.
 	RedisPerSecondTcpUserTimeout time.Duration `envconfig:"REDIS_PERSECOND_TCP_USER_TIMEOUT" default:"0"`
 
-	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
-	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).
-	// Possible values:
-	//   - "WAIT": Block until a connection is available (default, radix v4 behavior)
+	// RedisPoolOnEmptyBehavior controls what happens when a command needs a
+	// connection and the pool has none (Redis is unreachable and the pool is
+	// re-dialing). Possible values:
+	//   - "WAIT": wait for a connection, up to the request deadline (default)
+	//   - "ERROR": fail right away
 	//   - "CREATE": NOT SUPPORTED in radix v4 - will cause panic at startup
-	//   - "ERROR": NOT SUPPORTED in radix v4 - will cause panic at startup
-	// For fail-fast behavior, use context timeouts when calling Redis operations.
 	RedisPoolOnEmptyBehavior string `envconfig:"REDIS_POOL_ON_EMPTY_BEHAVIOR" default:"WAIT"`
 
 	// RedisPerSecondPoolOnEmptyBehavior controls pool-empty behavior for per-second Redis.

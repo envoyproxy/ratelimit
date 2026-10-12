@@ -1388,15 +1388,13 @@ Rate limit calls carry the deadline set by the client (e.g. Envoy's rate limit f
 
 ### Pool On-Empty Behavior
 
-Controls what happens when all connections in the pool are in use and a new request arrives.
+The pool keeps a fixed number of connections, and rate limit calls share them, so a call only has to wait for a connection when the pool has none: Redis is unreachable and the pool is re-dialing.
 
-1. `REDIS_POOL_ON_EMPTY_BEHAVIOR`: controls what happens when the pool is empty. Default: `CREATE`
-   - `CREATE`: create a new overflow connection after waiting for `REDIS_POOL_ON_EMPTY_WAIT_DURATION`. This is the [default radix behavior](https://github.com/mediocregopher/radix/blob/v3.8.1/pool.go#L291-L312).
-   - `ERROR`: return an error after waiting for `REDIS_POOL_ON_EMPTY_WAIT_DURATION`. This enforces a strict pool size limit.
-   - `WAIT`: block until a connection becomes available. This enforces a strict pool size limit but may cause goroutine buildup.
-1. `REDIS_POOL_ON_EMPTY_WAIT_DURATION`: the duration to wait before taking the configured action (`CREATE` or `ERROR`). Default: `1s`
-1. `REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR`: same as above for per-second Redis pool. Default: `CREATE`
-1. `REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION`: same as above for per-second Redis pool. Default: `1s`
+1. `REDIS_POOL_ON_EMPTY_BEHAVIOR`: controls what happens when a call needs a connection and the pool has none. Default: `WAIT`
+   - `WAIT`: wait for a connection, up to the call's deadline.
+   - `ERROR`: fail the call right away.
+   - `CREATE`: not supported; ratelimit refuses to start. The pool cannot create overflow connections, consider increasing `REDIS_POOL_SIZE` instead.
+1. `REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR`: same as above for per-second Redis pool. Default: `WAIT`
 
 ### Pipelining
 

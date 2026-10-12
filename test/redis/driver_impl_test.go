@@ -274,15 +274,21 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 		assert.Equal(t, "bar", res)
 	})
 
-	t.Run("ERROR behavior should panic", func(t *testing.T) {
+	t.Run("ERROR behavior", func(t *testing.T) {
 		redisSrv := mustNewRedisServer()
 		defer redisSrv.Close()
 
-		// radix v4 does not support ERROR behavior - should panic at startup
-		panicErr := expectPanicError(t, func() {
-			mkRedisClientWithBehavior(redisSrv.Addr(), "ERROR")
+		var client redis.Client
+		assert.NotPanics(t, func() {
+			client = mkRedisClientWithBehavior(redisSrv.Addr(), "ERROR")
 		})
-		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4")
+		assert.NotNil(t, client)
+
+		// Verify client works while connected
+		var res string
+		assert.Nil(t, client.DoCmd(nil, "SET", "test4", "value4"))
+		assert.Nil(t, client.DoCmd(&res, "GET", "test4"))
+		assert.Equal(t, "value4", res)
 	})
 
 	t.Run("CREATE behavior should panic", func(t *testing.T) {
@@ -313,15 +319,13 @@ func TestPoolOnEmptyBehavior(t *testing.T) {
 		assert.Equal(t, "value5", res)
 	})
 
-	t.Run("case insensitive behavior - lowercase 'error' panics", func(t *testing.T) {
+	t.Run("case insensitive behavior - lowercase 'error' works", func(t *testing.T) {
 		redisSrv := mustNewRedisServer()
 		defer redisSrv.Close()
 
-		// Test that lowercase 'error' is treated same as 'ERROR' (case insensitive)
-		panicErr := expectPanicError(t, func() {
+		assert.NotPanics(t, func() {
 			mkRedisClientWithBehavior(redisSrv.Addr(), "error")
 		})
-		assert.Contains(t, panicErr.Error(), "REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4")
 	})
 
 	t.Run("case insensitive behavior - lowercase 'create' panics", func(t *testing.T) {
