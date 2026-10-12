@@ -226,6 +226,13 @@ type Settings struct {
 	RedisPerSecondClusterPipelineParallelism int `envconfig:"REDIS_PERSECOND_CLUSTER_PIPELINE_PARALLELISM" default:"1"`
 	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
 	RedisHealthCheckActiveConnection bool `envconfig:"REDIS_HEALTH_CHECK_ACTIVE_CONNECTION" default:"false"`
+	// RedisHealthCheckPingInterval enables a probe that PINGs each Redis at this
+	// interval and fails the health check after RedisHealthCheckFailureThreshold
+	// consecutive failures (and recovers after one success). 0 disables it.
+	RedisHealthCheckPingInterval time.Duration `envconfig:"REDIS_HEALTH_CHECK_PING_INTERVAL" default:"0"`
+	// RedisHealthCheckFailureThreshold is the number of consecutive failed PINGs
+	// before the health check fails.
+	RedisHealthCheckFailureThreshold int `envconfig:"REDIS_HEALTH_CHECK_FAILURE_THRESHOLD" default:"3"`
 	// RedisCloseConnectionOnReadOnlyError closes a pooled Redis connection when a command
 	// on it fails with a READONLY error reply, so the pool re-dials through the configured
 	// address. After a master->replica failover in deployments that fail over by repointing

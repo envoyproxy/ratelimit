@@ -1468,6 +1468,13 @@ To configure whether to return health check failure if there is no active redis 
 
 1. `REDIS_HEALTH_CHECK_ACTIVE_CONNECTION` : (default is "false")
 
+`REDIS_HEALTH_CHECK_ACTIVE_CONNECTION` only fails once every connection to Redis has been closed. A Redis that stops answering without closing its connections keeps it healthy. To make the health check reflect whether Redis actually answers, enable the health probe:
+
+1. `REDIS_HEALTH_CHECK_PING_INTERVAL`: PING each Redis (main and per-second) at this interval through the same path as rate limit calls, with the I/O timeout capped to the interval. The health check fails after `REDIS_HEALTH_CHECK_FAILURE_THRESHOLD` consecutive failed PINGs and recovers after one success. `0` disables it. Default: `0`
+1. `REDIS_HEALTH_CHECK_FAILURE_THRESHOLD`: consecutive failed PINGs before the health check fails. Default: `3`
+
+The health check is served on a single `/healthcheck` endpoint (and the gRPC health service). Use it with the probe enabled for **readiness** only: a Redis outage affects every replica at once, and failing liveness would make them all restart without helping.
+
 ## Recovering from a failover (READONLY errors)
 
 1. `REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR` : (default is "false")

@@ -177,3 +177,42 @@ func TestGrpcHealthyWithAtLeastOneConfigLoaded(t *testing.T) {
 		t.Errorf("expected status NOT_SERVING actual %v", res.Status)
 	}
 }
+
+func TestHealthCheckAddComponent(t *testing.T) {
+	defer signal.Reset(syscall.SIGTERM)
+
+	hc := server.NewHealthChecker(health.NewServer(), "ratelimit", false)
+	checkHTTP := func(wantCode int) {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
+		hc.ServeHTTP(recorder, r)
+		if recorder.Code != wantCode {
+			t.Errorf("expected code %d actual %d", wantCode, recorder.Code)
+		}
+	}
+
+	if err := hc.Ok(server.RedisHealthComponentName); err != nil {
+		t.Fatal(err)
+	}
+	checkHTTP(200)
+
+	// Unknown components are rejected until registered.
+	if err := hc.Fail(server.RedisPingHealthComponentName); err == nil {
+		t.Error("expected an error for an unregistered component")
+	}
+
+	hc.AddComponent(server.RedisPingHealthComponentName, true)
+	checkHTTP(200)
+	if err := hc.Fail(server.RedisPingHealthComponentName); err != nil {
+		t.Fatal(err)
+	}
+	checkHTTP(500)
+	if err := hc.Ok(server.RedisPingHealthComponentName); err != nil {
+		t.Fatal(err)
+	}
+	checkHTTP(200)
+
+	hc.AddComponent(server.RedisPerSecondPingHealthComponentName, false)
+	checkHTTP(500)
+}
