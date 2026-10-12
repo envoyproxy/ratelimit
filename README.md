@@ -40,6 +40,7 @@
     - [xDS Management Server Based Configuration Loading](#xds-management-server-based-configuration-loading)
   - [Log Format](#log-format)
   - [GRPC Keepalive](#grpc-keepalive)
+  - [GRPC Concurrency](#grpc-concurrency)
   - [Health-check](#health-check)
     - [Health-check configurations](#health-check-configurations)
   - [GRPC server](#grpc-server)
@@ -929,6 +930,10 @@ The behavior can be fixed by configuring the following env variables for the rat
 
 - `GRPC_MAX_CONNECTION_AGE`: a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway. A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
 - `GRPC_MAX_CONNECTION_AGE_GRACE`: an additive period after MaxConnectionAge after which the connection will be forcibly closed.
+
+## GRPC Concurrency
+
+- `GRPC_MAX_CONCURRENT_STREAMS`: maximum number of concurrent calls on each gRPC connection. Calls beyond it wait on the client side (HTTP/2 flow control) instead of piling up in the rate limit service while it is slow, e.g. because Redis is. Size it above the normal number of concurrent calls per connection (calls per second per connection × latency). `0` keeps the gRPC default (unbounded). Default: `0`
 
 ## Health-check
 

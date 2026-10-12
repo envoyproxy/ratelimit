@@ -143,3 +143,10 @@ func TestRedisPoolOnEmptyBehavior_IndependentConfiguration(t *testing.T) {
 	// Per-second pool configured differently
 	assert.Equal(t, "CREATE", settings.RedisPerSecondPoolOnEmptyBehavior)
 }
+
+func TestGrpcMaxConcurrentStreams(t *testing.T) {
+	assert.Equal(t, uint32(0), NewSettings().GrpcMaxConcurrentStreams)
+
+	t.Setenv("GRPC_MAX_CONCURRENT_STREAMS", "128")
+	assert.Equal(t, uint32(128), NewSettings().GrpcMaxConcurrentStreams)
+}
