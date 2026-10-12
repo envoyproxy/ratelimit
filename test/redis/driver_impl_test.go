@@ -2,8 +2,11 @@ package redis_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -171,7 +174,10 @@ func TestDoCmd(t *testing.T) {
 		assert.Nil(t, client.DoCmd(nil, "SET", "foo", "bar"))
 
 		redisSrv.Close()
-		assert.EqualError(t, client.DoCmd(nil, "GET", "foo"), "response returned from Conn: EOF")
+		// Depending on timing, the closed connection reads as EOF or as reset.
+		err := client.DoCmd(nil, "GET", "foo")
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET), "unexpected error: %v", err)
 	})
 }
 
