@@ -53,6 +53,7 @@
   - [Statistics](#statistics)
 - [Statistics](#statistics-1)
   - [Service statistics](#service-statistics)
+  - [Redis statistics](#redis-statistics)
   - [Statistics options](#statistics-options)
   - [DogStatsD](#dogstatsd)
     - [Example](#example)
@@ -1091,6 +1092,28 @@ ratelimit.service.call.should_rate_limit.inflight        # calls received and no
 ```
 
 A rising `inflight` with a flat `redis_error` means calls are waiting on Redis. Redis errors are also logged at warning level, at most once every 10 seconds per process, with the number of suppressed similar messages.
+
+## Redis statistics
+
+Each Redis client reports under `ratelimit.redis_pool` (and `ratelimit.redis_per_second_pool` for the per-second Redis):
+
+```
+cx_active               # open connections (gauge)
+cx_total                # connections opened
+cx_connect_error        # failed connection attempts
+cx_local_close          # connections closed
+cx_local_close_error    # connections closed after an error (I/O timeout, reset, ...)
+cmd_inflight            # Redis commands (pipelines) in flight, including those whose caller gave up (gauge)
+cmd_total               # Redis commands issued
+cmd_success             # commands that succeeded
+cmd_error               # commands that failed with a Redis or connection error
+cmd_io_timeout          # commands that failed because Redis did not answer within the I/O timeout
+cmd_deadline_exceeded   # commands whose caller's deadline expired first
+cmd_rejected            # commands rejected without reaching Redis (REDIS_MAX_INFLIGHT)
+cmd_time                # command latency, as seen by the caller or until the command completed in the background (timer)
+```
+
+`cmd_inflight` stuck at a high value means commands are waiting on Redis. Connections closed after an error are also logged at warning level, at most once every 10 seconds per process.
 
 ## Statistics options
 

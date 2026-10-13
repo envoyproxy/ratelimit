@@ -73,7 +73,7 @@ func TestPipeDoCommitsRepliesOnSuccess(t *testing.T) {
 
 func TestPipeDoWithExpiredContextDoesNotTouchRedis(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
-	c := &clientImpl{client: fakeClient}
+	c := &clientImpl{client: fakeClient, stats: newPoolStats(stats.NewStore(stats.NewNullSink(), false))}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -109,7 +109,7 @@ func TestExpiringContextsDoNotCloseHealthyConnections(t *testing.T) {
 
 func TestMaxInflightFailsFast(t *testing.T) {
 	srv := newFakeRedis(t, nil)
-	c, _ := newFakeRedisClient(t, srv.addr(), 2, false, nil, clientOptions{ioTimeout: 300 * time.Millisecond, maxInflight: 2})
+	c, store := newFakeRedisClient(t, srv.addr(), 2, false, nil, clientOptions{ioTimeout: 300 * time.Millisecond, maxInflight: 2})
 
 	srv.setBlackhole(true)
 	var wg sync.WaitGroup
@@ -122,12 +122,14 @@ func TestMaxInflightFailsFast(t *testing.T) {
 		}()
 	}
 	require.Eventually(t, func() bool { return len(c.inflight) == 2 }, time.Second, 5*time.Millisecond)
+	assert.Equal(t, uint64(2), store.NewGauge("cmd_inflight").Value())
 
 	var rcv uint64
 	start := time.Now()
 	err := c.PipeDo(context.Background(), incrPipeline(c, &rcv))
 	assert.True(t, errors.Is(err, ErrTooManyInflight))
 	assert.Less(t, time.Since(start), 50*time.Millisecond)
+	assert.Equal(t, uint64(1), store.NewCounter("cmd_rejected").Value())
 
 	// Slots are released once the I/O timeout ends the blocked calls.
 	wg.Wait()
@@ -175,4 +177,44 @@ func TestPoolOnEmptyErrorFailsFastWithoutConnections(t *testing.T) {
 	err := c.PipeDo(context.Background(), incrPipeline(c, &rcv))
 	assert.ErrorIs(t, err, ErrNoConnection)
 	assert.Less(t, time.Since(start), 10*time.Millisecond)
+}
+
+func TestCommandStats(t *testing.T) {
+	srv := newFakeRedis(t, nil)
+	c, store := newFakeRedisClient(t, srv.addr(), 2, false, nil, clientOptions{ioTimeout: 100 * time.Millisecond})
+	counter := func(name string) uint64 { return store.NewCounter(name).Value() }
+
+	var rcv uint64
+	require.NoError(t, c.PipeDo(context.Background(), incrPipeline(c, &rcv)))
+	assert.Equal(t, uint64(1), counter("cmd_total"))
+	assert.Equal(t, uint64(1), counter("cmd_success"))
+
+	srv.setBlackhole(true)
+
+	// The caller gives up before the I/O timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	require.Error(t, c.PipeDo(ctx, incrPipeline(c, &rcv)))
+	assert.Equal(t, uint64(1), counter("cmd_deadline_exceeded"))
+	require.Eventually(t, func() bool { return store.NewGauge("cmd_inflight").Value() == 0 }, time.Second, 10*time.Millisecond)
+
+	// The I/O timeout then closes the connection that never answered. radix
+	// closes that connection itself and the pool only notices on its
+	// next use, which fails right away and makes the pool discard it.
+	require.Eventually(t, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		_ = c.PipeDo(ctx, incrPipeline(c, &rcv))
+		return counter("cx_local_close_error") > 0
+	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestCommandStatsIOTimeout(t *testing.T) {
+	srv := newFakeRedis(t, nil)
+	c, store := newFakeRedisClient(t, srv.addr(), 1, false, nil, clientOptions{ioTimeout: 100 * time.Millisecond})
+
+	srv.setBlackhole(true)
+	var rcv uint64
+	require.ErrorIs(t, c.PipeDo(context.Background(), incrPipeline(c, &rcv)), ErrIOTimeout)
+	assert.Equal(t, uint64(1), store.NewCounter("cmd_io_timeout").Value())
 }

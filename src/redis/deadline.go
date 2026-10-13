@@ -27,7 +27,26 @@ var ErrTooManyInflight = errors.New("too many Redis commands in flight")
 // deadline; fn finishes in the background, bounded by the I/O timeout. Since
 // fn may outlive the call, it must not write into memory the caller owns:
 // replies are decoded into private receivers and copied out by onSuccess.
-func (c *clientImpl) do(ctx context.Context, fn func(context.Context) error, onSuccess func()) error {
+func (c *clientImpl) do(ctx context.Context, fn func(context.Context) error, onSuccess func()) (err error) {
+	c.stats.cmdTotal.Inc()
+	// The outcome of the call as the caller sees it; commands that keep
+	// running in the background after the caller gave up are only reflected
+	// in cmd_inflight.
+	defer func() {
+		switch {
+		case err == nil:
+			c.stats.cmdSuccess.Inc()
+		case errors.Is(err, ErrTooManyInflight):
+			c.stats.cmdRejected.Inc()
+		case errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled):
+			c.stats.cmdDeadlineExceeded.Inc()
+		case errors.Is(err, ErrIOTimeout):
+			c.stats.cmdIoTimeout.Inc()
+		default:
+			c.stats.cmdError.Inc()
+		}
+	}()
+
 	// radix discards a healthy pooled connection when given an expired
 	// context, so do not hand it one.
 	if err := ctx.Err(); err != nil {
@@ -45,7 +64,11 @@ func (c *clientImpl) do(ctx context.Context, fn func(context.Context) error, onS
 			return ErrTooManyInflight
 		}
 	}
+	c.stats.cmdInflight.Inc()
+	span := c.stats.cmdTime.AllocateSpan()
 	release := func() {
+		span.Complete()
+		c.stats.cmdInflight.Dec()
 		if c.inflight != nil {
 			<-c.inflight
 		}
