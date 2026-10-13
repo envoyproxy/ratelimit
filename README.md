@@ -51,6 +51,7 @@
   - [Configuration](#configuration-1)
   - [Statistics](#statistics)
 - [Statistics](#statistics-1)
+  - [Service statistics](#service-statistics)
   - [Statistics options](#statistics-options)
   - [DogStatsD](#dogstatsd)
     - [Example](#example)
@@ -1070,6 +1071,18 @@ ratelimit.service.rate_limit.messaging.auth-service.over_limit.total_hits: 1
 ratelimit.service.rate_limit.messaging.auth-service.over_limit.over_limit: 1
 ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 ```
+
+## Service statistics
+
+Besides the per-rule statistics, the service reports:
+
+```
+ratelimit.service.call.should_rate_limit.redis_error     # calls that failed with a Redis error
+ratelimit.service.call.should_rate_limit.service_error   # calls that failed with any other error
+ratelimit.service.call.should_rate_limit.inflight        # calls received and not answered yet (gauge)
+```
+
+A rising `inflight` with a flat `redis_error` means calls are waiting on Redis. Redis errors are also logged at warning level, at most once every 10 seconds per process, with the number of suppressed similar messages.
 
 ## Statistics options
 
