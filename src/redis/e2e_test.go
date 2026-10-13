@@ -273,8 +273,10 @@ func TestServiceReportsRedisOutage(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	// Every failed call is counted, and the pool reports why.
+	// Every failed call is counted, none is left in flight, and the pool
+	// reports why.
 	assert.EqualValues(t, calls, svc.counter("ratelimit.service.call.should_rate_limit.redis_error"))
+	assert.EqualValues(t, 0, svc.store.NewGauge("ratelimit.service.call.should_rate_limit.inflight").Value())
 	assert.Positive(t, svc.counter("ratelimit.redis_pool.cmd_io_timeout"))
 	assert.Eventually(t, func() bool { return svc.counter("ratelimit.redis_pool.cx_local_close_error") > 0 },
 		2*time.Second, 20*time.Millisecond)

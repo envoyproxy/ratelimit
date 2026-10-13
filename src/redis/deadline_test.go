@@ -177,6 +177,7 @@ func TestPoolOnEmptyErrorFailsFastWithoutConnections(t *testing.T) {
 	err := c.PipeDo(context.Background(), incrPipeline(c, &rcv))
 	assert.ErrorIs(t, err, ErrNoConnection)
 	assert.Less(t, time.Since(start), 10*time.Millisecond)
+	assert.Positive(t, c.stats.cmdRejected.Value())
 }
 
 func TestCommandStats(t *testing.T) {

@@ -1111,7 +1111,7 @@ cmd_success             # commands that succeeded
 cmd_error               # commands that failed with a Redis or connection error
 cmd_io_timeout          # commands that failed because Redis did not answer within the I/O timeout
 cmd_deadline_exceeded   # commands whose caller's deadline expired first
-cmd_rejected            # commands rejected without reaching Redis (REDIS_MAX_INFLIGHT)
+cmd_rejected            # commands rejected without reaching Redis (REDIS_MAX_INFLIGHT, REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR)
 cmd_time                # command latency in milliseconds, until the command completed, also in the background (timer)
 ```
 

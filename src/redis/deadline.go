@@ -37,7 +37,7 @@ func (c *clientImpl) do(ctx context.Context, fn func(context.Context) error, onS
 		switch {
 		case err == nil:
 			c.stats.cmdSuccess.Inc()
-		case errors.Is(err, ErrTooManyInflight):
+		case errors.Is(err, ErrNoConnection) || errors.Is(err, ErrTooManyInflight):
 			c.stats.cmdRejected.Inc()
 		case errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled):
 			c.stats.cmdDeadlineExceeded.Inc()
