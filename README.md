@@ -1351,10 +1351,10 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 
 ### Connection Timeout
 
-Controls the maximum duration for Redis connection establishment, read operations, and write operations.
+Controls the maximum duration for Redis connection establishment.
 
-1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
-1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
+1. `REDIS_TIMEOUT`: sets the timeout for Redis connection establishment. Default: `10s`
+1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection establishment. Default: `10s`
 
 ### Pool On-Empty Behavior
 
