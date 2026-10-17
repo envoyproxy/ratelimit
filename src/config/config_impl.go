@@ -460,6 +460,8 @@ func (this *rateLimitConfigImpl) GetLimit(
 ) *RateLimit {
 	logger.Debugf("starting get limit lookup")
 	var rateLimit *RateLimit = nil
+	limitOverride := descriptor.GetLimit()
+	var overrideKey string
 	value := this.domains[domain]
 	if value == nil {
 		logger.Debugf("unknown domain '%s'", domain)
@@ -468,22 +470,11 @@ func (this *rateLimitConfigImpl) GetLimit(
 		return rateLimit
 	}
 
-	if descriptor.GetLimit() != nil {
-		rateLimitKey := this.descriptorKey(domain, descriptor)
-		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
-		// When limit override is provided by envoy config, we don't want to enable shadow_mode
-		rateLimit = NewRateLimit(
-			descriptor.GetLimit().GetRequestsPerUnit(),
-			rateLimitOverrideUnit,
-			this.statsManager.NewStats(rateLimitKey),
-			false,
-			false,
-			false,
-			"",
-			[]string{},
-			false,
-		)
-		return rateLimit
+	if limitOverride != nil {
+		overrideKey = this.descriptorKey(domain, descriptor)
+		// Drop the per-request override for lookup so matched descriptor
+		// properties (e.g. shadow_mode) are preserved; reapply after matching.
+		descriptor = &pb_struct.RateLimitDescriptor{Entries: descriptor.Entries}
 	}
 
 	descriptorsMap := value.descriptors
@@ -685,6 +676,46 @@ func (this *rateLimitConfigImpl) GetLimit(
 		}
 	}
 
+	if limitOverride != nil {
+		rateLimit = this.applyLimitOverride(overrideKey, rateLimit, limitOverride)
+	}
+
+	return rateLimit
+}
+
+// applyLimitOverride applies an Envoy per-request limit override.
+// If no configured descriptor matched, the override alone defines the limit
+// (previous behavior). If a descriptor matched, only requests_per_unit/unit
+// are replaced; shadow_mode and other matched properties are kept.
+func (this *rateLimitConfigImpl) applyLimitOverride(
+	overrideKey string,
+	rateLimit *RateLimit,
+	override *pb_struct.RateLimitDescriptor_RateLimitOverride,
+) *RateLimit {
+	unit := pb.RateLimitResponse_RateLimit_Unit(override.GetUnit())
+	if rateLimit == nil {
+		return NewRateLimit(
+			override.GetRequestsPerUnit(),
+			unit,
+			this.statsManager.NewStats(overrideKey),
+			false,
+			false,
+			false,
+			"",
+			[]string{},
+			false,
+		)
+	}
+
+	rateLimit.Limit = &pb.RateLimitResponse_RateLimit{
+		RequestsPerUnit: override.GetRequestsPerUnit(),
+		Unit:            unit,
+	}
+	// Keep the original override descriptor identity for metrics and counters.
+	// The matched configuration supplies enforcement properties, but a fallback
+	// descriptor must not collapse distinct request values onto its default key.
+	rateLimit.FullKey = overrideKey
+	rateLimit.Stats = this.statsManager.NewStats(overrideKey)
 	return rateLimit
 }
 

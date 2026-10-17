@@ -571,6 +571,22 @@ func TestShadowModeConfig(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key2_value2.near_limit").Value())
 	assert.EqualValues(0, stats.NewCounter("test-domain.key2_value2.shadow_mode").Value())
+
+	// A per-request limit override must preserve shadow mode from the
+	// matched configured descriptor.
+	rl = rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey1", Value: "subvalue1"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 3, Unit: pb_type.RateLimitUnit_MINUTE,
+			},
+		})
+	assert.NotNil(rl)
+	assert.True(rl.ShadowMode)
+	assert.EqualValues(3, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+
 }
 
 func TestWildcardConfig(t *testing.T) {
