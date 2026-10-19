@@ -331,6 +331,22 @@ func TestConfigLimitOverride(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.over_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.near_limit").Value())
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.within_limit").Value())
+
+	// key6 is unlimited: true. An explicit override must still be a real limit
+	// so constructLimitsToCheck does not discard it.
+	rl = rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key6", Value: "foo"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 7, Unit: pb_type.RateLimitUnit_MINUTE,
+			},
+		})
+	assert.NotNil(rl)
+	assert.False(rl.Unlimited)
+	assert.Equal("test-domain.key6_foo", rl.FullKey)
+	assert.EqualValues(7, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
 }
 
 func expectConfigPanic(t *testing.T, call func(), expectedError string) {
@@ -586,7 +602,29 @@ func TestShadowModeConfig(t *testing.T) {
 	assert.True(rl.ShadowMode)
 	assert.EqualValues(3, rl.Limit.RequestsPerUnit)
 	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+	assert.Equal("test-domain.key1_value1.subkey1_subvalue1", rl.FullKey)
 
+	// Shadow default key: config FullKey is "test-domain.key2". The override
+	// must keep shadow mode and the request value in the metric key.
+	rl = rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key2", Value: "someone"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 3, Unit: pb_type.RateLimitUnit_MINUTE,
+			},
+		})
+	assert.NotNil(rl)
+	assert.True(rl.ShadowMode)
+	assert.False(rl.Unlimited)
+	assert.False(rl.QuotaMode)
+	assert.Empty(rl.Name)
+	assert.Empty(rl.Replaces)
+	assert.Equal("test-domain.key2_someone", rl.FullKey)
+	assert.EqualValues(3, rl.Limit.RequestsPerUnit)
+	assert.Equal(pb.RateLimitResponse_RateLimit_MINUTE, rl.Limit.Unit)
+	rl.Stats.TotalHits.Inc()
+	assert.EqualValues(1, stats.NewCounter("test-domain.key2_someone.total_hits").Value())
 }
 
 func TestWildcardConfig(t *testing.T) {

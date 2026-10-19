@@ -471,10 +471,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	if limitOverride != nil {
+		// Capture the request descriptor identity before matching. Matching
+		// reads only Entries, so the override field can remain on the
+		// descriptor; applyLimitOverride reuses this key for metrics.
 		overrideKey = this.descriptorKey(domain, descriptor)
-		// Drop the per-request override for lookup so matched descriptor
-		// properties (e.g. shadow_mode) are preserved; reapply after matching.
-		descriptor = &pb_struct.RateLimitDescriptor{Entries: descriptor.Entries}
 	}
 
 	descriptorsMap := value.descriptors
@@ -618,7 +618,8 @@ func (this *rateLimitConfigImpl) GetLimit(
 			logger.Debugf("iterating to next level")
 			descriptorsMap = nextDescriptor.descriptors
 		} else {
-			if rateLimit != nil && rateLimit.DetailedMetric {
+			// Skip metric rebuild when an override will replace FullKey/Stats.
+			if limitOverride == nil && rateLimit != nil && rateLimit.DetailedMetric {
 				// Preserve ShareThresholdKeyPattern when recreating rate limit
 				originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
 				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
@@ -631,8 +632,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	// Replace metric with detailed metric, if leaf descriptor is detailed.
-	// If share_threshold is enabled, always use wildcard pattern with *
-	if rateLimit != nil && rateLimit.DetailedMetric {
+	// If share_threshold is enabled, always use wildcard pattern with *.
+	// Skip when an override will replace FullKey/Stats with overrideKey.
+	if limitOverride == nil && rateLimit != nil && rateLimit.DetailedMetric {
 		// Check if any entry has share_threshold enabled
 		hasShareThreshold := rateLimit.ShareThresholdKeyPattern != nil && len(rateLimit.ShareThresholdKeyPattern) > 0
 		if hasShareThreshold {
@@ -665,8 +667,9 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	// If not using detailed metric, but any value_to_metric path produced a different key,
-	// override stats to use the value_to_metric-enhanced key
-	if rateLimit != nil && !rateLimit.DetailedMetric {
+	// override stats to use the value_to_metric-enhanced key.
+	// Skip when an override will replace FullKey/Stats with overrideKey.
+	if limitOverride == nil && rateLimit != nil && !rateLimit.DetailedMetric {
 		enhancedKey := valueToMetricFullKey.String()
 		if enhancedKey != rateLimit.FullKey {
 			// Recreate to ensure a clean stats struct, then set to enhanced stats
@@ -684,9 +687,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 }
 
 // applyLimitOverride applies an Envoy per-request limit override.
-// If no configured descriptor matched, the override alone defines the limit
-// (previous behavior). If a descriptor matched, only requests_per_unit/unit
-// are replaced; shadow_mode and other matched properties are kept.
+// The override replaces requests_per_unit and unit. ShadowMode is kept from a
+// matched descriptor. Other policy fields keep the historical override
+// behavior: the limit is enforced, it does not join replaces, and it does not
+// share a Redis key via ShareThresholdKeyPattern.
 func (this *rateLimitConfigImpl) applyLimitOverride(
 	overrideKey string,
 	rateLimit *RateLimit,
@@ -711,9 +715,15 @@ func (this *rateLimitConfigImpl) applyLimitOverride(
 		RequestsPerUnit: override.GetRequestsPerUnit(),
 		Unit:            unit,
 	}
+	rateLimit.Unlimited = false
+	rateLimit.QuotaMode = false
+	rateLimit.Name = ""
+	rateLimit.Replaces = nil
+	rateLimit.Metadata = nil
+	rateLimit.ShareThresholdKeyPattern = nil
 	// Keep the original override descriptor identity for metrics and counters.
-	// The matched configuration supplies enforcement properties, but a fallback
-	// descriptor must not collapse distinct request values onto its default key.
+	// A matched fallback descriptor must not collapse distinct request values
+	// onto its default key.
 	rateLimit.FullKey = overrideKey
 	rateLimit.Stats = this.statsManager.NewStats(overrideKey)
 	return rateLimit
