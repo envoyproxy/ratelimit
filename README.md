@@ -74,6 +74,7 @@
   - [Credentials that expire or rotate](#credentials-that-expire-or-rotate)
     - [AWS ElastiCache IAM authentication](#aws-elasticache-iam-authentication)
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
+  - [Configurable WEEK rate limit reset day](#configurable-week-rate-limit-reset-day)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
   - [RequestHeadersToAdd](#requestheaderstoadd)
@@ -1491,6 +1492,23 @@ Setting `USE_CALENDAR_MONTH_RATE_LIMIT` to `"true"` switches `MONTH` limits to a
 month window instead: the cache key bucket, TTL/expiration, and reported reset time all cover
 the 1st through the last day of the month (UTC). This is opt-in because it changes when
 existing `MONTH` limits reset and is therefore not enabled by default.
+
+## Configurable WEEK rate limit reset day
+
+1. `WEEK_RATE_LIMIT_RESET_DAY` : (default is "Thursday")
+
+By default, a `unit: week` rate limit counts 7-day windows from the Unix epoch. Since the epoch
+(1970-01-01) was a Thursday, every weekly window begins and resets on Thursday 00:00 UTC.
+
+Setting `WEEK_RATE_LIMIT_RESET_DAY` to a weekday name (`Sunday`, `Monday`, `Tuesday`, `Wednesday`,
+`Thursday`, `Friday` or `Saturday`; case-insensitive) makes `WEEK` limits reset on that day at
+00:00 UTC, with each weekly window running from that point for 7 days. The cache key bucket and
+reported reset time follow the configured day. Unrecognised values cause the service to fail at
+startup.
+
+The default preserves the existing behaviour exactly, so nothing changes on upgrade. Changing the
+value on a running deployment moves the window boundary, so the current week's counters effectively
+reset when the new value takes effect.
 
 # Memcache
 

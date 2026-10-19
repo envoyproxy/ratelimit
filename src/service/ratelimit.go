@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -59,6 +60,7 @@ type service struct {
 	globalQuotaMode                bool
 	responseDynamicMetadataEnabled bool
 	useCalendarMonthRateLimit      bool
+	weekStart                      time.Weekday
 	perUnitHeadersEnabled          bool
 }
 
@@ -97,6 +99,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 	this.globalQuotaMode = rlSettings.GlobalQuotaMode
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
 	this.useCalendarMonthRateLimit = rlSettings.UseCalendarMonthRateLimit
+	this.weekStart, _ = utils.ParseWeekday(rlSettings.WeekRateLimitResetDay) // validated in settings.NewSettings
 	this.perUnitHeadersEnabled = rlSettings.RateLimitPerUnitHeadersEnabled
 
 	this.customHeadersEnabled = rlSettings.RateLimitResponseHeadersEnabled
@@ -591,7 +594,7 @@ func (this *service) rateLimitResetHeader(
 ) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
 	}
 }
 
@@ -612,7 +615,7 @@ func (this *service) rateLimitRequestRemainingHeader(descriptor *pb.RateLimitRes
 func (this *service) rateLimitRequestResetHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.requestHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
 	}
 }
 

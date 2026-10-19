@@ -346,7 +346,7 @@ func runAsync(task func()) {
 
 func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRand *rand.Rand,
 	expirationJitterMaxSeconds int64, localCache *freecache.Cache, statsManager stats.Manager, nearLimitRatio float32, cacheKeyPrefix string,
-	useCalendarMonth bool,
+	useCalendarMonth bool, weekStart time.Weekday,
 ) limiter.RateLimitCache {
 	return &rateLimitMemcacheImpl{
 		client:                     client,
@@ -355,13 +355,16 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth),
+		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth, weekStart),
 	}
 }
 
 func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.TimeSource, jitterRand *rand.Rand,
 	localCache *freecache.Cache, scope gostats.Scope, statsManager stats.Manager,
 ) limiter.RateLimitCache {
+	// Validated in settings.NewSettings.
+	weekStart, _ := utils.ParseWeekday(s.WeekRateLimitResetDay)
+
 	return NewRateLimitCacheImpl(
 		CollectStats(newMemcacheFromSettings(s), scope.Scope("memcache")),
 		timeSource,
@@ -372,5 +375,6 @@ func NewRateLimitCacheImplFromSettings(s settings.Settings, timeSource utils.Tim
 		s.NearLimitRatio,
 		s.CacheKeyPrefix,
 		s.UseCalendarMonthRateLimit,
+		weekStart,
 	)
 }
