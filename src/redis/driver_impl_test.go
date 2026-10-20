@@ -202,6 +202,53 @@ func TestExecuteGroupedPipelineParallelismAllowsConcurrentGroups(t *testing.T) {
 	assert.Equal(t, 3, fakeClient.maxConcurrentCalls())
 }
 
+func TestNewDeadlineEnforcingClientOptOut(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	assert.Same(t, fakeClient, newDeadlineEnforcingClient(fakeClient, 0))
+	assert.Same(t, fakeClient, newDeadlineEnforcingClient(fakeClient, -1*time.Second))
+}
+
+func TestDeadlineEnforcingClientBoundsStuckConnection(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	client := newDeadlineEnforcingClient(fakeClient, 20*time.Millisecond)
+
+	start := time.Now()
+	// delay is far longer than ioTimeout: this simulates a connection that never comes
+	// back, e.g. its underlying TCP connection is silently dead.
+	err := client.Do(context.Background(), &testAction{key: "a", delay: 10 * time.Second})
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 1*time.Second, "Do should have been bounded by ioTimeout, not the action's delay")
+}
+
+func TestDeadlineEnforcingClientDoesNotWidenCallerDeadline(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	client := newDeadlineEnforcingClient(fakeClient, 1*time.Minute)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	err := client.Do(ctx, &testAction{key: "a", delay: 10 * time.Second})
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 1*time.Second, "Do should have respected the caller's tighter deadline, not the longer ioTimeout")
+}
+
+func TestDeadlineEnforcingClientAllowsFastCalls(t *testing.T) {
+	fakeClient := &recordingRedisClient{}
+	client := newDeadlineEnforcingClient(fakeClient, 1*time.Second)
+
+	err := client.Do(context.Background(), &testAction{key: "a"})
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, fakeClient.callCount())
+}
+
 func TestExecuteGroupedPipelineBoundedParallelism(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{

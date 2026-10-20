@@ -76,6 +76,47 @@ type redisClient interface {
 	Close() error
 }
 
+// deadlineEnforcingClient wraps a redisClient so that every Do call is bounded by at most
+// ioTimeout.
+//
+// REDIS_TIMEOUT/REDIS_PERSECOND_TIMEOUT are documented as covering Redis connection
+// establishment *and* I/O, but createDialer only ever threads the configured timeout into
+// net.Dialer.Timeout, which bounds Dial() alone. Once a connection is established, nothing
+// bounds a Do() call: if that connection goes silently dead (e.g. a NAT/conntrack entry for
+// it is dropped with no FIN/RST exchanged), the goroutine that owns it blocks forever in
+// EncodeDecode, and because the radix v4 pool is fixed-size and blocks when empty, every
+// other caller queued behind it for a pool slot leaks too.
+//
+// radix v4's conn.EncodeDecode and Pool.Do both already select on ctx.Done() - EncodeDecode
+// force-unblocks a pending read via SetReadDeadline and reports the connection unusable so
+// the pool discards and redials it, and Pool.Do itself aborts if the context is done before
+// a connection is even acquired. So attaching a deadline here is enough for the pool to
+// detect and replace a dead connection on its own, without any change to radix itself.
+type deadlineEnforcingClient struct {
+	redisClient
+	ioTimeout time.Duration
+}
+
+func (d *deadlineEnforcingClient) Do(ctx context.Context, action radix.Action) error {
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= d.ioTimeout {
+		// caller already has an equal-or-tighter deadline; don't widen it
+		return d.redisClient.Do(ctx, action)
+	}
+	ctx, cancel := context.WithTimeout(ctx, d.ioTimeout)
+	defer cancel()
+	return d.redisClient.Do(ctx, action)
+}
+
+// newDeadlineEnforcingClient wraps client to bound every Do call by ioTimeout, unless
+// ioTimeout is non-positive, which preserves the pre-existing unbounded behavior as an
+// explicit opt-out.
+func newDeadlineEnforcingClient(client redisClient, ioTimeout time.Duration) redisClient {
+	if ioTimeout <= 0 {
+		return client
+	}
+	return &deadlineEnforcingClient{redisClient: client, ioTimeout: ioTimeout}
+}
+
 type clientImpl struct {
 	client                     redisClient
 	stats                      poolStats
@@ -354,7 +395,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	}
 
 	return &clientImpl{
-		client:                     client,
+		client:                     newDeadlineEnforcingClient(client, timeout),
 		stats:                      stats,
 		isCluster:                  isCluster,
 		clusterPipelineParallelism: effectivePipelineParallelism,
