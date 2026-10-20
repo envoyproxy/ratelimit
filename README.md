@@ -293,6 +293,7 @@ descriptors:
       replaces: (optional)
        - name: (optional)
       unit: <see below: required>
+      unit_multiplier: <positive uint32: optional, defaults to 1>
       requests_per_unit: <see below: required>
     shadow_mode: (optional)
     detailed_metric: (optional)
@@ -309,15 +310,32 @@ effectively whitelisted. Otherwise, nested descriptors allow more complex matchi
 
 ### Rate limit definition
 
+The `rate_limit` block sets the requests allowed per window. Supported units are `second`, `minute`,
+`hour`, `day`, `week`, `month`, and `year`. The optional `unit_multiplier` is a positive uint32,
+defaulting to `1`. For example, this allows 100 requests per 30 seconds:
+
 ```yaml
 rate_limit:
-  unit: <second, minute, hour, day>
-  requests_per_unit: <uint>
+  unit: second
+  unit_multiplier: 30
+  requests_per_unit: 100
 ```
 
-The rate limit block specifies the actual rate limit that will be used when there is a match.
-Currently the service supports per second, minute, hour, and day limits. More types of limits may be added in the
-future based on user demand.
+`unit_multiplier` is supported in YAML policies and Envoy descriptor overrides, and returned in
+`current_limit`. The xDS `RateLimitPolicy` schema does not expose it. Envoy v1.40.0+ uses it for
+`X-RateLimit-Limit` header windows.
+
+Fixed windows align to the Unix epoch. Calendar-aligned MONTH windows group months from January 1970;
+WEEK windows group weeks from the epoch's week, starting on the configured weekday. Multipliers greater
+than `1` use separate counters per unit/multiplier pair; omitting the field or setting `1` preserves
+existing behavior and cache keys.
+
+Expiration timestamps are limited to about 68 years after the Unix epoch in the Memcached client
+and 292 million years in Redis (reachable with MONTH or YEAR multipliers). Windows exceeding these
+limits are stored without expiration and require counter cleanup after the window ends. Each fallback
+increments `ratelimit.service.memcached.ttl_overflow` or `ratelimit.service.redis.ttl_overflow`. The local cache
+shortens unrepresentable TTLs and rechecks the backend on expiry. Reported reset durations are capped
+at Protobuf Duration's 10,000-year maximum.
 
 ### Replaces
 
@@ -1546,12 +1564,12 @@ The following environment variables control the custom response feature:
 1. `LIMIT_REMAINING_HEADER` - The default value is "RateLimit-Remaining", setting the environment variable will specify an alternative header name
 1. `LIMIT_RESET_HEADER` - The default value is "RateLimit-Reset", setting the environment variable will specify an alternative header name
 1. `LIMIT_PER_UNIT_HEADERS_ENABLED` - When set to `true`, returns
-   `RateLimit-Limit-<Unit>` and `RateLimit-Remaining-<Unit>` headers for the
-   descriptor with the lowest remaining count for each rate-limit unit (for
-   example, `RateLimit-Limit-Seconds` and
-   `RateLimit-Remaining-Minutes`). This can be enabled together with
-   `LIMIT_RESPONSE_HEADERS_ENABLED`, which continues to add its three standard
-   headers for the descriptor closest to its limit.
+   `RateLimit-Limit-<Multiplier>-<Unit>` and `RateLimit-Remaining-<Multiplier>-<Unit>` headers for the
+   descriptor with the lowest remaining count for each unit/multiplier pair (for
+   example, `RateLimit-Limit-30-Seconds` and `RateLimit-Remaining-30-Seconds`).
+   The `<Multiplier>-` prefix is omitted when the multiplier is `1`.
+   This can be enabled together with `LIMIT_RESPONSE_HEADERS_ENABLED`, which continues to add its
+   three standard headers for the descriptor closest to its limit.
 
 ## RequestHeadersToAdd
 

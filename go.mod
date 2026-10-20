@@ -10,7 +10,7 @@ require (
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/coocood/freecache v1.2.4
 	github.com/envoyproxy/go-control-plane v0.14.0
-	github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260409083702-98966259b99a
+	github.com/envoyproxy/go-control-plane/envoy v1.40.0
 	github.com/envoyproxy/go-control-plane/ratelimit v0.1.1-0.20260629194254-5581fade6089
 	github.com/go-kit/log v0.2.1
 	github.com/golang/mock v1.6.0
@@ -25,7 +25,7 @@ require (
 	github.com/lyft/gostats v0.4.14
 	github.com/mediocregopher/radix/v4 v4.1.4
 	github.com/prometheus/client_golang v1.19.1
-	github.com/prometheus/client_model v0.6.2
+	github.com/prometheus/client_model v0.6.3
 	github.com/prometheus/statsd_exporter v0.26.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
@@ -39,8 +39,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.45.0
 	golang.org/x/net v0.59.0
 	golang.org/x/sync v0.23.0
-	google.golang.org/grpc v1.83.2
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/grpc v1.84.0
+	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v2 v2.4.0
 )
 

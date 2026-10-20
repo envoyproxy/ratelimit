@@ -65,6 +65,8 @@ func (this *ManagerImpl) NewServiceStats() ServiceStats {
 	ret.ConfigLoadError = this.serviceStatsScope.NewCounter("config_load_error")
 	ret.ShouldRateLimit = this.NewShouldRateLimitStats()
 	ret.GlobalShadowMode = this.serviceStatsScope.NewCounter("global_shadow_mode")
+	ret.RedisTTLOverflow = this.serviceStatsScope.NewCounter("redis.ttl_overflow")
+	ret.MemcachedTTLOverflow = this.serviceStatsScope.NewCounter("memcached.ttl_overflow")
 	return ret
 }
 

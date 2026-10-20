@@ -23,7 +23,9 @@ local current = redis.call('GET', KEYS[1])                   -- get current coun
 if current == false then return 0 end                        -- key absent: nothing to refund
 local new_val = math.floor(math.max(0, tonumber(current) - tonumber(ARGV[1]))) -- subtract hits, floor at 0
 redis.call('SET', KEYS[1], tostring(new_val))                -- persist new value
-redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))             -- reset TTL
+if tonumber(ARGV[2]) > 0 then                             -- zero means no expiration
+  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))           -- reset TTL
+end
 return new_val                                               -- return count after decrement
 `
 
@@ -85,9 +87,9 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 }
 
 // ExpirationSeconds returns the number of seconds, evaluated from the current
-// time, until the given rate limit unit's window ends.
-func (this *BaseRateLimiter) ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
-	return utils.ExpirationSeconds(unit, this.timeSource, this.useCalendarMonth)
+// time, for the given rate limit's cache entry.
+func (this *BaseRateLimiter) ExpirationSeconds(limit *pb.RateLimitResponse_RateLimit) int64 {
+	return utils.RateLimitExpirationSeconds(limit, this.timeSource, this.useCalendarMonth)
 }
 
 // Returns `true` in case local cache is enabled and contains value for provided cache key, `false` otherwise.
@@ -145,7 +147,13 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 				// similar to mongo_1h, mongo_2h, etc. In the hour 1 (0h0m - 0h59m), the cache key is mongo_1h, we start
 				// to get ratelimited in the 50th minute, the ttl of local_cache will be set as 1 hour(0h50m-1h49m).
 				// In the time of 1h1m, since the cache key becomes different (mongo_2h), it won't get ratelimited.
-				err := this.localCache.Set([]byte(key), []byte{}, int(this.ExpirationSeconds(limitInfo.limit.Limit.Unit)))
+				expiration := this.ExpirationSeconds(limitInfo.limit.Limit)
+				if expiration >= math.MaxUint32-time.Now().Unix() {
+					// freecache stores absolute expiration timestamps as uint32.
+					// A shorter local TTL is safe: a miss rechecks the backend.
+					expiration = 24 * 60 * 60
+				}
+				err := this.localCache.Set([]byte(key), []byte{}, int(expiration))
 				if err != nil {
 					logger.Errorf("Failing to set local cache key: %s", key)
 				}
@@ -259,7 +267,7 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource, this.useCalendarMonth, this.weekStart),
+			DurationUntilReset: utils.CalculateRateLimitReset(limit, this.timeSource, this.useCalendarMonth, this.weekStart),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{
