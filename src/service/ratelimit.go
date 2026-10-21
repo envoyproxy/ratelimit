@@ -62,6 +62,8 @@ type service struct {
 	useCalendarMonthRateLimit      bool
 	weekStart                      time.Weekday
 	perUnitHeadersEnabled          bool
+	// redisErrorLogLimiter keeps a Redis outage from logging once per call.
+	redisErrorLogLimiter *utils.LogLimiter
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -634,6 +636,9 @@ func (this *service) ShouldRateLimit(
 	)
 	defer span.End()
 
+	this.stats.ShouldRateLimit.Inflight.Inc()
+	defer this.stats.ShouldRateLimit.Inflight.Dec()
+
 	defer func() {
 		err := recover()
 		if err == nil {
@@ -647,6 +652,9 @@ func (this *service) ShouldRateLimit(
 		case redis.RedisError:
 			{
 				this.stats.ShouldRateLimit.RedisError.Inc()
+				if ok, suppressed := this.redisErrorLogLimiter.Allow(); ok {
+					logger.Warnf("rate limit call failed with a Redis error: %v (%d similar errors suppressed)", t, suppressed)
+				}
 				finalError = t
 			}
 		case serviceError:
@@ -684,6 +692,8 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 		globalShadowMode:  shadowMode,
 		globalQuotaMode:   false,
 		customHeaderClock: clock,
+
+		redisErrorLogLimiter: utils.NewLogLimiter(10 * time.Second),
 	}
 
 	if !forceStart {

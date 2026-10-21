@@ -898,6 +898,8 @@ func TestCacheError(test *testing.T) {
 	t.config.EXPECT().GetLimit(context.Background(), "different-domain", request.Descriptors[0]).Return(limits[0])
 	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Do(
 		func(context.Context, *pb.RateLimitRequest, []*config.RateLimit) {
+			// The call is counted as in flight while it is being served.
+			t.assert.EqualValues(1, t.statStore.NewGauge("call.should_rate_limit.inflight").Value())
 			panic(redis.RedisError("cache error"))
 		})
 
@@ -905,6 +907,7 @@ func TestCacheError(test *testing.T) {
 	t.assert.Nil(response)
 	t.assert.Equal("cache error", err.Error())
 	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.redis_error").Value())
+	t.assert.EqualValues(0, t.statStore.NewGauge("call.should_rate_limit.inflight").Value())
 }
 
 func TestInitialLoadError(test *testing.T) {
