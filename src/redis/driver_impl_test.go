@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	stats "github.com/lyft/gostats"
 	"github.com/mediocregopher/radix/v4"
+	"github.com/mediocregopher/radix/v4/trace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -135,10 +137,36 @@ func TestEffectiveClusterPipelineParallelismRejectsNegativeConfig(t *testing.T) 
 	})
 }
 
+func TestPoolTraceCountsConnectionCreateFailures(t *testing.T) {
+	poolStats := newPoolStats(stats.NewStore(stats.NewNullSink(), false).Scope("ratelimit.redis_pool"))
+	traceCallbacks := poolTrace(&poolStats, false, nil)
+
+	traceCallbacks.ConnCreated(trace.PoolConnCreated{Err: errors.New("dial failed")})
+
+	assert.Zero(t, poolStats.connectionActive.Value())
+	assert.Zero(t, poolStats.connectionTotal.Value())
+	assert.Zero(t, poolStats.connectionClose.Value())
+	assert.Equal(t, uint64(1), poolStats.connectionFail.Value())
+	assert.True(t, poolStats.hadConnError.Load())
+
+	traceCallbacks.ConnCreated(trace.PoolConnCreated{})
+
+	assert.Equal(t, uint64(1), poolStats.connectionActive.Value())
+	assert.Equal(t, uint64(1), poolStats.connectionTotal.Value())
+	assert.Equal(t, uint64(1), poolStats.connectionFail.Value())
+	assert.False(t, poolStats.hadConnError.Load())
+
+	traceCallbacks.ConnClosed(trace.PoolConnClosed{})
+
+	assert.Zero(t, poolStats.connectionActive.Value())
+	assert.Equal(t, uint64(1), poolStats.connectionClose.Value())
+}
+
 func TestExecuteGroupedPipelineSingleActionFastPath(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 1,
 	}
 
@@ -155,6 +183,7 @@ func TestExecuteGroupedPipelineSerialCompatibilityStopsOnFirstError(t *testing.T
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 1,
 	}
 
@@ -172,6 +201,7 @@ func TestExecuteGroupedPipelineGroupsSameKeyActions(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 2,
 	}
 
@@ -188,6 +218,7 @@ func TestExecuteGroupedPipelineParallelismAllowsConcurrentGroups(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 3,
 	}
 
@@ -206,6 +237,7 @@ func TestExecuteGroupedPipelineBoundedParallelism(t *testing.T) {
 	fakeClient := &recordingRedisClient{}
 	client := &clientImpl{
 		client:                     fakeClient,
+		operations:                 newOperationStats(stats.NewStore(stats.NewNullSink(), false)),
 		clusterPipelineParallelism: 2,
 	}
 
