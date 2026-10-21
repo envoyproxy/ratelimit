@@ -255,6 +255,9 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		grpc.UnaryInterceptor(s.GrpcUnaryInterceptor),
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	}
+	if s.GrpcMaxConcurrentStreams > 0 {
+		grpcOptions = append(grpcOptions, grpc.MaxConcurrentStreams(s.GrpcMaxConcurrentStreams))
+	}
 	if s.GrpcServerUseTLS {
 		grpcServerTlsConfig := s.GrpcServerTlsConfig
 		ret.grpcCertProvider = provider.NewCertProvider(s, ret.store, s.GrpcServerTlsCert, s.GrpcServerTlsKey)

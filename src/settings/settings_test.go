@@ -144,6 +144,13 @@ func TestRedisPoolOnEmptyBehavior_IndependentConfiguration(t *testing.T) {
 	assert.Equal(t, "CREATE", settings.RedisPerSecondPoolOnEmptyBehavior)
 }
 
+func TestGrpcMaxConcurrentStreams(t *testing.T) {
+	assert.Equal(t, uint32(0), NewSettings().GrpcMaxConcurrentStreams)
+
+	t.Setenv("GRPC_MAX_CONCURRENT_STREAMS", "128")
+	assert.Equal(t, uint32(128), NewSettings().GrpcMaxConcurrentStreams)
+}
+
 // Tests for WeekRateLimitResetDay
 func TestWeekRateLimitResetDay_Default(t *testing.T) {
 	os.Unsetenv("WEEK_RATE_LIMIT_RESET_DAY")
