@@ -47,22 +47,70 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 // regardless of the configured week start: it always outlives the remaining
 // window, and keeps existing TTL behaviour unchanged.
 func ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool) int64 {
-	if useCalendarMonth && unit == pb.RateLimitResponse_RateLimit_MONTH {
-		return MonthExpirationSeconds(timeSource.UnixNow())
-	}
-	return UnitToDivider(unit)
+	return RateLimitExpirationSeconds(&pb.RateLimitResponse_RateLimit{Unit: unit}, timeSource, useCalendarMonth)
 }
 
 func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool, weekStart time.Weekday) *durationpb.Duration {
-	nowUnix := timeSource.UnixNow()
-	if useCalendarMonth && *unit == pb.RateLimitResponse_RateLimit_MONTH {
-		return &durationpb.Duration{Seconds: MonthExpirationSeconds(nowUnix)}
+	return CalculateRateLimitReset(&pb.RateLimitResponse_RateLimit{Unit: *unit}, timeSource, useCalendarMonth, weekStart)
+}
+
+// RateLimitMultiplier returns the number of units in a window. An omitted
+// multiplier defaults to one. Treat zero defensively as one; request and
+// configuration validation reject explicitly configured zero values.
+func RateLimitMultiplier(limit *pb.RateLimitResponse_RateLimit) int64 {
+	return int64(max(limit.GetUnitMultiplier().GetValue(), 1))
+}
+
+// RateLimitWindow returns the UTC start and end of the window containing now.
+// Fixed windows are anchored to the Unix epoch. Calendar month windows are
+// anchored to January 1970; week windows use the configured start of that week.
+// All arithmetic is in seconds, avoiding time.Duration's much smaller range.
+func RateLimitWindow(limit *pb.RateLimitResponse_RateLimit, now int64, useCalendarMonth bool, weekStart time.Weekday) (int64, int64) {
+	multiplier := RateLimitMultiplier(limit)
+	if useCalendarMonth && limit.Unit == pb.RateLimitResponse_RateLimit_MONTH {
+		t := time.Unix(now, 0).UTC()
+		month := int64(t.Year()-1970)*12 + int64(t.Month()-1)
+		startMonth := floorDivide(month, multiplier) * multiplier
+		start := time.Date(1970, time.Month(startMonth+1), 1, 0, 0, 0, 0, time.UTC).Unix()
+		end := time.Date(1970, time.Month(startMonth+multiplier+1), 1, 0, 0, 0, 0, time.UTC).Unix()
+		return start, end
 	}
-	if *unit == pb.RateLimitResponse_RateLimit_WEEK {
-		return &durationpb.Duration{Seconds: WeekExpirationSeconds(nowUnix, weekStart)}
+	period := UnitToDivider(limit.Unit) * multiplier
+	var anchor int64
+	if limit.Unit == pb.RateLimitResponse_RateLimit_WEEK {
+		anchor = WeekStartUnix(0, weekStart)
 	}
-	sec := UnitToDivider(*unit)
-	return &durationpb.Duration{Seconds: sec - nowUnix%sec}
+	start := anchor + floorDivide(now-anchor, period)*period
+	return start, start + period
+}
+
+func floorDivide(value, divisor int64) int64 {
+	quotient := value / divisor
+	if value%divisor < 0 {
+		quotient--
+	}
+	return quotient
+}
+
+// RateLimitExpirationSeconds preserves the full-window TTL used by fixed
+// windows. Calendar month TTLs end at the next window boundary.
+func RateLimitExpirationSeconds(limit *pb.RateLimitResponse_RateLimit, timeSource TimeSource, useCalendarMonth bool) int64 {
+	if useCalendarMonth && limit.Unit == pb.RateLimitResponse_RateLimit_MONTH {
+		now := timeSource.UnixNow()
+		// MONTH windows ignore the week-start argument.
+		_, end := RateLimitWindow(limit, now, true, time.Thursday)
+		return end - now
+	}
+	return UnitToDivider(limit.Unit) * RateLimitMultiplier(limit)
+}
+
+func CalculateRateLimitReset(limit *pb.RateLimitResponse_RateLimit, timeSource TimeSource, useCalendarMonth bool, weekStart time.Weekday) *durationpb.Duration {
+	now := timeSource.UnixNow()
+	_, end := RateLimitWindow(limit, now, useCalendarMonth, weekStart)
+	// Protobuf Duration is limited to 10,000 years, even though the unit and
+	// multiplier can describe a longer window. Keep the wire response valid.
+	const maxDurationSeconds = 315576000000
+	return &durationpb.Duration{Seconds: min(end-now, maxDurationSeconds)}
 }
 
 // Mask credentials from a redis connection string like

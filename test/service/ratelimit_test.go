@@ -14,15 +14,18 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	descriptorpb "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/golang/mock/gomock"
 	gostats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/envoyproxy/ratelimit/src/trace"
 
@@ -2034,4 +2037,77 @@ func TestServiceMixedModeWithShadowMode(test *testing.T) {
 
 	// Verify global shadow mode counter is incremented
 	t.assert.EqualValues(1, t.statStore.NewCounter("global_shadow_mode").Value())
+}
+
+func TestZeroUnitMultiplier(t *testing.T) {
+	suite := commonSetup(t)
+	defer suite.controller.Finish()
+	service := suite.setupBasicService()
+	request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"key", "value"}}}, 1)
+	request.Descriptors[0].Limit = &descriptorpb.RateLimitDescriptor_RateLimitOverride{UnitMultiplier: wrapperspb.UInt32(0)}
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	require.ErrorContains(t, err, "unit_multiplier must be greater than zero")
+	require.Nil(t, response)
+}
+
+func TestServiceWithUnitMultiplierHeaders(test *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		multiplier *wrapperspb.UInt32Value
+		disabled   bool
+	}{
+		{name: "default names", multiplier: wrapperspb.UInt32(30)},
+		{name: "explicit one", multiplier: wrapperspb.UInt32(1)},
+		{name: "omitted"},
+		{name: "headers disabled", multiplier: wrapperspb.UInt32(30), disabled: true},
+	} {
+		test.Run(tc.name, func(test *testing.T) {
+			enabled := "true"
+			if tc.disabled {
+				enabled = "false"
+			}
+			test.Setenv("LIMIT_RESPONSE_HEADERS_ENABLED", enabled)
+			test.Setenv("LIMIT_REQUEST_HEADERS_ENABLED", enabled)
+			test.Setenv("LIMIT_PER_UNIT_HEADERS_ENABLED", enabled)
+			t := commonSetup(test)
+			defer t.controller.Finish()
+			service := t.setupBasicService()
+			request := common.NewRateLimitRequest("test-domain", [][][2]string{{{"key", "value"}}}, 1)
+			limit := config.NewRateLimit(100, pb.RateLimitResponse_RateLimit_SECOND, t.statsManager.NewStats("key_value"), false, false, false, "", nil, false)
+			limit.Limit.UnitMultiplier = tc.multiplier
+			t.config.EXPECT().GetLimit(context.Background(), "test-domain", request.Descriptors[0]).Return(limit)
+			t.cache.EXPECT().DoLimit(context.Background(), request, []*config.RateLimit{limit}).Return(
+				[]*pb.RateLimitResponse_DescriptorStatus{{Code: pb.RateLimitResponse_OK, CurrentLimit: limit.Limit, LimitRemaining: 99}})
+			response, err := service.ShouldRateLimit(context.Background(), request)
+			require.NoError(test, err)
+			if tc.disabled {
+				t.assert.Empty(response.ResponseHeadersToAdd)
+				t.assert.Empty(response.RequestHeadersToAdd)
+				return
+			}
+			responseHeaders, requestHeaders := map[string]string{}, map[string]string{}
+			for _, header := range response.ResponseHeadersToAdd {
+				responseHeaders[header.Key] = header.Value
+			}
+			for _, header := range response.RequestHeadersToAdd {
+				requestHeaders[header.Key] = header.Value
+			}
+			reset := "1"
+			if tc.multiplier.GetValue() > 1 {
+				reset = "28"
+			} // Clock 2222 is in [2220, 2250).
+			wantResponse := map[string]string{
+				"RateLimit-Limit": "100", "RateLimit-Remaining": "99", "RateLimit-Reset": reset,
+			}
+			wantRequest := map[string]string{"RateLimit-Limit": "100", "RateLimit-Remaining": "99", "RateLimit-Reset": reset}
+			suffix := "Seconds"
+			if tc.multiplier.GetValue() > 1 {
+				suffix = "30-Seconds"
+			}
+			wantResponse["RateLimit-Limit-"+suffix] = "100"
+			wantResponse["RateLimit-Remaining-"+suffix] = "99"
+			t.assert.Equal(wantResponse, responseHeaders)
+			t.assert.Equal(wantRequest, requestHeaders)
+		})
+	}
 }

@@ -2,12 +2,14 @@ package redis_test
 
 import (
 	"context"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/envoyproxy/ratelimit/test/mocks/stats"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/coocood/freecache"
 	"github.com/mediocregopher/radix/v4"
 
@@ -22,6 +24,8 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_redis "github.com/envoyproxy/ratelimit/test/mocks/redis"
@@ -940,4 +944,116 @@ func TestOverLimitWithStopCacheKeyIncrementWhenOverlimitConfig(t *testing.T) {
 
 	// Check the local cache stats.
 	t.Run("TestLocalCacheStats_2", testLocalCacheStats(localCacheScopeName, localCacheStats, statsStore, sink, 0, 6, 6, 0, 1))
+}
+
+type multiplierClock struct{ now int64 }
+
+func (c *multiplierClock) UnixNow() int64 { return c.now }
+
+func (c *multiplierClock) Now() uint32 { return uint32(c.now) }
+
+func TestUnitMultiplierEnforcement(t *testing.T) {
+	for _, useLocalCache := range []bool{false, true} {
+		name := "without local cache"
+		if useLocalCache {
+			name = "with local cache"
+		}
+		t.Run(name, func(t *testing.T) {
+			server := miniredis.RunT(t)
+			store := gostats.NewStore(gostats.NewNullSink(), false)
+			sm := stats.NewMockStatManager(store)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			client := redis.NewClientImpl(ctx, store, false, "", "tcp", "single", server.Addr(), 1, 0, 0, nil, false, nil, time.Second, "", "", time.Millisecond, time.Second, time.Second, false)
+			defer client.Close()
+			clock := &multiplierClock{now: 1200}
+			var localCache *freecache.Cache
+			if useLocalCache {
+				localCache = freecache.NewCacheCustomTimer(1024*1024, clock)
+			}
+			cache := redis.NewFixedRateLimitCacheImpl(client, nil, clock, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false, false, time.Thursday)
+			request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
+			limit := config.NewRateLimit(2, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)
+			limit.Limit.UnitMultiplier = wrapperspb.UInt32(30)
+			limits := []*config.RateLimit{limit}
+
+			response := cache.DoLimit(ctx, request, limits)[0]
+			assert.Equal(t, pb.RateLimitResponse_OK, response.Code)
+			assert.EqualValues(t, 1, response.LimitRemaining)
+			assert.EqualValues(t, 30, response.CurrentLimit.UnitMultiplier.Value)
+			assert.EqualValues(t, 30, response.DurationUntilReset.Seconds)
+			key := "domain_key_value_unit_1_multiplier_30_1200"
+			assert.Equal(t, 30*time.Second, server.TTL(key))
+
+			clock.now = 1201 // Crossing a base-unit boundary must not reset the window.
+			response = cache.DoLimit(ctx, request, limits)[0]
+			assert.EqualValues(t, 0, response.LimitRemaining)
+			assert.EqualValues(t, 29, response.DurationUntilReset.Seconds)
+			assert.Equal(t, pb.RateLimitResponse_OVER_LIMIT, cache.DoLimit(ctx, request, limits)[0].Code)
+
+			if useLocalCache {
+				ttl, err := localCache.TTL([]byte(key))
+				require.NoError(t, err)
+				assert.EqualValues(t, 30, ttl)
+			}
+
+			// A different multiplier must never share this counter, even though
+			// both windows currently start at 1200.
+			other := *limit
+			other.Limit = &pb.RateLimitResponse_RateLimit{RequestsPerUnit: 2, Unit: limit.Limit.Unit, UnitMultiplier: wrapperspb.UInt32(60)}
+			assert.Equal(t, pb.RateLimitResponse_OK, cache.DoLimit(ctx, request, []*config.RateLimit{&other})[0].Code)
+
+			// Refunds use the multiplied key and TTL, including the local-cache path.
+			refund := common.NewRateLimitRequestWithNegativeHits("domain", [][][2]string{{{"key", "value"}}}, []uint64{3}, []bool{true})
+			response = cache.DoLimit(ctx, refund, limits)[0]
+			assert.Equal(t, pb.RateLimitResponse_OK, response.Code)
+			assert.EqualValues(t, 2, response.LimitRemaining)
+			assert.Equal(t, 30*time.Second, server.TTL(key))
+
+			clock.now = 1230
+			response = cache.DoLimit(ctx, request, limits)[0]
+			assert.Equal(t, pb.RateLimitResponse_OK, response.Code)
+			assert.EqualValues(t, 1, response.LimitRemaining)
+			assert.EqualValues(t, 30, response.DurationUntilReset.Seconds)
+			assert.True(t, server.Exists("domain_key_value_unit_1_multiplier_30_1230"))
+
+			// Explicit one and omission both keep the legacy key format.
+			generator := limiter.NewCacheKeyGenerator("", false, time.Thursday)
+			other.Limit.UnitMultiplier = wrapperspb.UInt32(1)
+			assert.Equal(t, "domain_key_value_1230", generator.GenerateCacheKey("domain", request.Descriptors[0], &other, clock.now).Key)
+			assert.Zero(t, store.NewCounter("redis.ttl_overflow").Value())
+		})
+	}
+}
+
+func TestMaximumUnitMultiplierRedisExpiration(t *testing.T) {
+	server := miniredis.RunT(t)
+	store := gostats.NewStore(gostats.NewNullSink(), false)
+	sm := stats.NewMockStatManager(store)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client := redis.NewClientImpl(ctx, store, false, "", "tcp", "single", server.Addr(), 1, 0, 0, nil, false, nil, time.Second, "", "", time.Millisecond, time.Second, time.Second, false)
+	defer client.Close()
+	clock := &multiplierClock{now: 1200}
+	localCache := freecache.NewCacheCustomTimer(1024*1024, clock)
+	cache := redis.NewFixedRateLimitCacheImpl(client, nil, clock, rand.New(rand.NewSource(1)), 0, localCache, 0.8, "", sm, false, false, time.Thursday)
+	request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 3)
+	limit := config.NewRateLimit(2, pb.RateLimitResponse_RateLimit_YEAR, sm.NewStats("key_value"), false, false, false, "", nil, false)
+	limit.Limit.UnitMultiplier = wrapperspb.UInt32(math.MaxUint32)
+	limits := []*config.RateLimit{limit}
+	response := cache.DoLimit(ctx, request, limits)[0]
+	assert.Equal(t, pb.RateLimitResponse_OVER_LIMIT, response.Code)
+	key := "domain_key_value_unit_6_multiplier_4294967295_0"
+	assert.True(t, server.Exists(key))
+	assert.Zero(t, server.TTL(key)) // PERSIST, not an overflowing EXPIRE.
+	assert.EqualValues(t, 1, store.NewCounter("redis.ttl_overflow").Value())
+	ttl, err := localCache.TTL([]byte(key))
+	require.NoError(t, err)
+	assert.EqualValues(t, 86400, ttl)
+	refund := common.NewRateLimitRequestWithNegativeHits("domain", [][][2]string{{{"key", "value"}}}, []uint64{1}, []bool{true})
+	response = cache.DoLimit(ctx, refund, limits)[0]
+	assert.Equal(t, pb.RateLimitResponse_OK, response.Code)
+	assert.True(t, server.Exists(key))
+	assert.Zero(t, server.TTL(key))
+	assert.EqualValues(t, 2, store.NewCounter("redis.ttl_overflow").Value())
 }
