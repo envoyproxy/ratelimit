@@ -228,7 +228,7 @@ func newTestClient(t *testing.T, addr string, closeOnReadOnly bool, provider Cre
 
 	return newClientImpl(context.Background(), stats.NewStore(stats.NewNullSink(), false), false, "", "tcp",
 		"single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, "", "", time.Second, 30*time.Second,
-		100*time.Millisecond, 1, closeOnReadOnly, provider)
+		100*time.Millisecond, 1, closeOnReadOnly, provider, clientOptions{ioTimeout: 10 * time.Second})
 }
 
 func TestNewClientImplAuthenticatesWithCredentialProvider(t *testing.T) {

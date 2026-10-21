@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"math/rand"
+	"time"
 
 	"github.com/coocood/freecache"
 
@@ -24,7 +25,8 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 			s.RedisStartupInitialInterval, s.RedisStartupMaxInterval, s.RedisStartupMaxElapsedTime,
 			s.RedisPerSecondClusterPipelineParallelism,
 			s.RedisCloseConnectionOnReadOnlyError,
-			newCredentialProviderFromSettings(ctx, s, true))
+			newCredentialProviderFromSettings(ctx, s, true),
+			clientOptions{ioTimeout: ioTimeout(s.RedisPerSecondIoTimeout, s.RedisPerSecondTimeout)})
 		closer.Closers = append(closer.Closers, perSecondPool)
 	}
 
@@ -34,8 +36,12 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		s.RedisStartupInitialInterval, s.RedisStartupMaxInterval, s.RedisStartupMaxElapsedTime,
 		s.RedisClusterPipelineParallelism,
 		s.RedisCloseConnectionOnReadOnlyError,
-		newCredentialProviderFromSettings(ctx, s, false))
+		newCredentialProviderFromSettings(ctx, s, false),
+		clientOptions{ioTimeout: ioTimeout(s.RedisIoTimeout, s.RedisTimeout)})
 	closer.Closers = append(closer.Closers, otherPool)
+
+	// Validated in settings.NewSettings.
+	weekStart, _ := utils.ParseWeekday(s.WeekRateLimitResetDay)
 
 	return NewFixedRateLimitCacheImpl(
 		otherPool,
@@ -49,5 +55,15 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		statsManager,
 		s.StopCacheKeyIncrementWhenOverlimit,
 		s.UseCalendarMonthRateLimit,
+		weekStart,
 	), closer
+}
+
+// ioTimeout returns the I/O timeout for a Redis client: the explicit
+// REDIS_IO_TIMEOUT when set, otherwise REDIS_TIMEOUT.
+func ioTimeout(explicit *time.Duration, timeout time.Duration) time.Duration {
+	if explicit != nil {
+		return *explicit
+	}
+	return timeout
 }

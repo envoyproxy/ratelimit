@@ -38,6 +38,8 @@ type ManagerImpl struct {
 type ShouldRateLimitStats struct {
 	RedisError   gostats.Counter
 	ServiceError gostats.Counter
+	// Inflight is the number of calls received and not yet answered.
+	Inflight gostats.Gauge
 }
 
 // Stats for server errors.

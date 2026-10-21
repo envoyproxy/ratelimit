@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"net"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -112,26 +111,14 @@ func effectiveClusterPipelineParallelism(configuredParallelism, poolSize int) in
 
 // createDialer creates a radix.Dialer with timeout, TLS, and auth configuration
 // targetName is used for logging to identify the connection target (e.g., URL, "sentinel(url)")
-func createDialer(timeout time.Duration, useTls bool, tlsConfig *tls.Config, auth string, targetName string) radix.Dialer {
-	var netDialer net.Dialer
-	if timeout > 0 {
-		netDialer.Timeout = timeout
-	}
-
+// ioTimeout bounds every read and write on the connection; 0 disables it.
+func createDialer(timeout, ioTimeout time.Duration, useTls bool, tlsConfig *tls.Config, auth string, targetName string) radix.Dialer {
 	dialer := radix.Dialer{
-		NetDialer: &netDialer,
+		NetDialer: newNetDialer(timeout, ioTimeout, useTls, tlsConfig),
 	}
 
-	// Setup TLS if needed
-	if useTls {
-		tlsNetDialer := tls.Dialer{
-			NetDialer: &netDialer,
-			Config:    tlsConfig,
-		}
-		dialer.NetDialer = &tlsNetDialer
-		if targetName != "" {
-			logger.Warnf("enabling TLS to redis %s", targetName)
-		}
+	if useTls && targetName != "" {
+		logger.Warnf("enabling TLS to redis %s", targetName)
 	}
 
 	// Setup auth if provided
@@ -160,7 +147,14 @@ func NewClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		pipelineWindow, pipelineLimit, tlsConfig, healthCheckActiveConnection, srv,
 		timeout, poolOnEmptyBehavior, sentinelAuth,
 		startupInitialInterval, startupMaxInterval, startupMaxElapsedTime, 1,
-		closeConnectionOnReadOnlyError, nil)
+		closeConnectionOnReadOnlyError, nil, clientOptions{ioTimeout: timeout})
+}
+
+// clientOptions holds the settings that bound how long a Redis client waits
+// on a connection that stopped answering.
+type clientOptions struct {
+	// ioTimeout bounds every read and write on a Redis connection. 0 disables it.
+	ioTimeout time.Duration
 }
 
 func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
@@ -170,12 +164,18 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	clusterPipelineParallelism int,
 	closeConnectionOnReadOnlyError bool,
 	credentialProvider CredentialProvider,
+	opts clientOptions,
 ) Client {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
 
 	// Create Dialer for connecting to Redis
-	dialer := createDialer(timeout, useTls, tlsConfig, auth, maskedUrl)
+	dialer := createDialer(timeout, opts.ioTimeout, useTls, tlsConfig, auth, maskedUrl)
+	if opts.ioTimeout > 0 {
+		logger.Warnf("Redis pool %s: reads and writes time out after %s", maskedUrl, opts.ioTimeout)
+	} else {
+		logger.Warnf("Redis pool %s: no I/O timeout; a connection to an unresponsive server blocks until the OS closes it", maskedUrl)
+	}
 
 	stats := newPoolStats(scope)
 
@@ -316,7 +316,10 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 			client, err = clusterConfig.New(ctx, urls)
 		case "sentinel":
 			urls := strings.Split(url, ",")
-			sentinelDialer := createDialer(timeout, useTls, tlsConfig, sentinelAuth, fmt.Sprintf("sentinel(%s)", maskedUrl))
+			// Sentinel connections are not bounded by the I/O timeout: radix
+			// keeps a pubsub connection to the sentinels that waits for
+			// messages indefinitely and pings it on its own schedule.
+			sentinelDialer := createDialer(timeout, 0, useTls, tlsConfig, sentinelAuth, fmt.Sprintf("sentinel(%s)", maskedUrl))
 			sentinelConfig := radix.SentinelConfig{
 				PoolConfig:     poolConfig,
 				SentinelDialer: sentinelDialer,

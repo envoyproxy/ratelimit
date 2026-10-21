@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -59,7 +60,10 @@ type service struct {
 	globalQuotaMode                bool
 	responseDynamicMetadataEnabled bool
 	useCalendarMonthRateLimit      bool
+	weekStart                      time.Weekday
 	perUnitHeadersEnabled          bool
+	// redisErrorLogLimiter keeps a Redis outage from logging once per call.
+	redisErrorLogLimiter *utils.LogLimiter
 }
 
 func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWithAtLeastOneConfigLoad bool) {
@@ -97,6 +101,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 	this.globalQuotaMode = rlSettings.GlobalQuotaMode
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
 	this.useCalendarMonthRateLimit = rlSettings.UseCalendarMonthRateLimit
+	this.weekStart, _ = utils.ParseWeekday(rlSettings.WeekRateLimitResetDay) // validated in settings.NewSettings
 	this.perUnitHeadersEnabled = rlSettings.RateLimitPerUnitHeadersEnabled
 
 	this.customHeadersEnabled = rlSettings.RateLimitResponseHeadersEnabled
@@ -591,7 +596,7 @@ func (this *service) rateLimitResetHeader(
 ) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
 	}
 }
 
@@ -612,7 +617,7 @@ func (this *service) rateLimitRequestRemainingHeader(descriptor *pb.RateLimitRes
 func (this *service) rateLimitRequestResetHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.requestHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
 	}
 }
 
@@ -631,6 +636,9 @@ func (this *service) ShouldRateLimit(
 	)
 	defer span.End()
 
+	this.stats.ShouldRateLimit.Inflight.Inc()
+	defer this.stats.ShouldRateLimit.Inflight.Dec()
+
 	defer func() {
 		err := recover()
 		if err == nil {
@@ -644,6 +652,9 @@ func (this *service) ShouldRateLimit(
 		case redis.RedisError:
 			{
 				this.stats.ShouldRateLimit.RedisError.Inc()
+				if ok, suppressed := this.redisErrorLogLimiter.Allow(); ok {
+					logger.Warnf("rate limit call failed with a Redis error: %v (%d similar errors suppressed)", t, suppressed)
+				}
 				finalError = t
 			}
 		case serviceError:
@@ -681,6 +692,8 @@ func NewService(cache limiter.RateLimitCache, configProvider provider.RateLimitC
 		globalShadowMode:  shadowMode,
 		globalQuotaMode:   false,
 		customHeaderClock: clock,
+
+		redisErrorLogLimiter: utils.NewLogLimiter(10 * time.Second),
 	}
 
 	if !forceStart {

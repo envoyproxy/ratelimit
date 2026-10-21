@@ -3,6 +3,7 @@ package utils
 import (
 	"regexp"
 	"strings"
+	"time"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -42,7 +43,9 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 // current time, until the given rate limit unit's window ends. When
 // useCalendarMonth is true, MONTH reflects the actual calendar-aligned
 // window (the 1st through the last day of the month, UTC) instead of the
-// fixed-length UnitToDivider approximation.
+// fixed-length UnitToDivider approximation. WEEK keeps the fixed 7-day TTL
+// regardless of the configured week start: it always outlives the remaining
+// window, and keeps existing TTL behaviour unchanged.
 func ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool) int64 {
 	if useCalendarMonth && unit == pb.RateLimitResponse_RateLimit_MONTH {
 		return MonthExpirationSeconds(timeSource.UnixNow())
@@ -50,10 +53,13 @@ func ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit, timeSource Time
 	return UnitToDivider(unit)
 }
 
-func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool) *durationpb.Duration {
+func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool, weekStart time.Weekday) *durationpb.Duration {
 	nowUnix := timeSource.UnixNow()
 	if useCalendarMonth && *unit == pb.RateLimitResponse_RateLimit_MONTH {
 		return &durationpb.Duration{Seconds: MonthExpirationSeconds(nowUnix)}
+	}
+	if *unit == pb.RateLimitResponse_RateLimit_WEEK {
+		return &durationpb.Duration{Seconds: WeekExpirationSeconds(nowUnix, weekStart)}
 	}
 	sec := UnitToDivider(*unit)
 	return &durationpb.Duration{Seconds: sec - nowUnix%sec}

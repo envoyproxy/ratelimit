@@ -150,3 +150,28 @@ func TestGrpcMaxConcurrentStreams(t *testing.T) {
 	t.Setenv("GRPC_MAX_CONCURRENT_STREAMS", "128")
 	assert.Equal(t, uint32(128), NewSettings().GrpcMaxConcurrentStreams)
 }
+
+// Tests for WeekRateLimitResetDay
+func TestWeekRateLimitResetDay_Default(t *testing.T) {
+	os.Unsetenv("WEEK_RATE_LIMIT_RESET_DAY")
+
+	settings := NewSettings()
+
+	assert.Equal(t, "Thursday", settings.WeekRateLimitResetDay)
+}
+
+func TestWeekRateLimitResetDay_Valid(t *testing.T) {
+	os.Setenv("WEEK_RATE_LIMIT_RESET_DAY", "monday")
+	defer os.Unsetenv("WEEK_RATE_LIMIT_RESET_DAY")
+
+	settings := NewSettings()
+
+	assert.Equal(t, "monday", settings.WeekRateLimitResetDay)
+}
+
+func TestWeekRateLimitResetDay_InvalidPanics(t *testing.T) {
+	os.Setenv("WEEK_RATE_LIMIT_RESET_DAY", "Mondey")
+	defer os.Unsetenv("WEEK_RATE_LIMIT_RESET_DAY")
+
+	assert.Panics(t, func() { NewSettings() })
+}

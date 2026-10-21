@@ -3,6 +3,7 @@ package limiter
 import (
 	"math"
 	"math/rand"
+	"time"
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
@@ -37,6 +38,9 @@ type BaseRateLimiter struct {
 	// useCalendarMonth gates the MONTH-unit fix (calendar-aligned window
 	// instead of a fixed 30-day divider) for expiration/TTL computations.
 	useCalendarMonth bool
+	// weekStart is the day-of-week on which WEEK-unit windows begin (UTC).
+	// Defaults to Thursday, matching the legacy epoch-division behaviour.
+	weekStart time.Weekday
 }
 
 type LimitInfo struct {
@@ -191,17 +195,18 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatusForNegativeHits(key stri
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
 	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
-	useCalendarMonth bool,
+	useCalendarMonth bool, weekStart time.Weekday,
 ) *BaseRateLimiter {
 	return &BaseRateLimiter{
 		timeSource:                 timeSource,
 		JitterRand:                 jitterRand,
 		ExpirationJitterMaxSeconds: expirationJitterMaxSeconds,
-		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix, useCalendarMonth),
+		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix, useCalendarMonth, weekStart),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 		StatsManager:               statsManager,
 		useCalendarMonth:           useCalendarMonth,
+		weekStart:                  weekStart,
 	}
 }
 
@@ -254,7 +259,7 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource, this.useCalendarMonth),
+			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource, this.useCalendarMonth, this.weekStart),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{

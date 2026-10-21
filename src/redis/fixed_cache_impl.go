@@ -2,6 +2,7 @@ package redis
 
 import (
 	"math/rand"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -246,12 +247,12 @@ func (this *fixedRateLimitCacheImpl) Flush() {}
 
 func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSource utils.TimeSource,
 	jitterRand *rand.Rand, expirationJitterMaxSeconds int64, localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
-	stopCacheKeyIncrementWhenOverlimit bool, useCalendarMonth bool,
+	stopCacheKeyIncrementWhenOverlimit bool, useCalendarMonth bool, weekStart time.Weekday,
 ) limiter.RateLimitCache {
 	return &fixedRateLimitCacheImpl{
 		client:                             client,
 		perSecondClient:                    perSecondClient,
 		stopCacheKeyIncrementWhenOverlimit: stopCacheKeyIncrementWhenOverlimit,
-		baseRateLimiter:                    limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth),
+		baseRateLimiter:                    limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth, weekStart),
 	}
 }

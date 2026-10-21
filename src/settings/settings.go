@@ -2,6 +2,7 @@ package settings
 
 import (
 	"crypto/tls"
+	"fmt"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -121,6 +122,13 @@ type Settings struct {
 	// from the Unix epoch, so enabling this for existing MONTH limits changes when
 	// they reset and is opt-in.
 	UseCalendarMonthRateLimit bool `envconfig:"USE_CALENDAR_MONTH_RATE_LIMIT" default:"false"`
+	// WeekRateLimitResetDay sets the day of the week on which WEEK-unit rate-limit windows
+	// reset (00:00 UTC); each window begins on that day and lasts 7 days. Valid values
+	// (case-insensitive): Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday.
+	// Defaults to Thursday, which preserves the historical behaviour (Unix epoch 0 was a
+	// Thursday, so epoch-division always snapped on Thursdays). An unrecognised value fails
+	// at startup.
+	WeekRateLimitResetDay string `envconfig:"WEEK_RATE_LIMIT_RESET_DAY" default:"Thursday"`
 
 	// Settings for optional returning of custom headers
 	RateLimitResponseHeadersEnabled bool `envconfig:"LIMIT_RESPONSE_HEADERS_ENABLED" default:"false"`
@@ -227,9 +235,17 @@ type Settings struct {
 	// both the main and the per-second Redis clients.
 	RedisCloseConnectionOnReadOnlyError bool `envconfig:"REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR" default:"false"`
 	// RedisTimeout sets the timeout for Redis connection and I/O operations.
+	// Reads and writes use it too unless RedisIoTimeout is set.
 	RedisTimeout time.Duration `envconfig:"REDIS_TIMEOUT" default:"10s"`
 	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.
+	// Reads and writes use it too unless RedisPerSecondIoTimeout is set.
 	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
+	// RedisIoTimeout bounds how long a Redis connection waits for a reply, or
+	// for a write to be accepted, before it is closed and replaced. Unset means
+	// RedisTimeout; 0 disables it.
+	RedisIoTimeout *time.Duration `envconfig:"REDIS_IO_TIMEOUT"`
+	// RedisPerSecondIoTimeout is RedisIoTimeout for the per-second Redis.
+	RedisPerSecondIoTimeout *time.Duration `envconfig:"REDIS_PERSECOND_IO_TIMEOUT"`
 
 	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
 	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).
@@ -298,6 +314,9 @@ func NewSettings() Settings {
 	var s Settings
 	if err := envconfig.Process("", &s); err != nil {
 		panic(err)
+	}
+	if _, err := utils.ParseWeekday(s.WeekRateLimitResetDay); err != nil {
+		panic(fmt.Errorf("assigning WEEK_RATE_LIMIT_RESET_DAY: %w", err))
 	}
 	// When we require TLS to connect to Redis, we check if we need to connect using the provided key-pair.
 	RedisTlsConfig(s.RedisTls || s.RedisPerSecondTls)(&s)

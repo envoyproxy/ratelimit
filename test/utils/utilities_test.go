@@ -54,7 +54,7 @@ func TestCalculateResetMonthEndOfMonth(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(now)
 
 	unit := pb.RateLimitResponse_RateLimit_MONTH
-	reset := utils.CalculateReset(&unit, timeSource, true)
+	reset := utils.CalculateReset(&unit, timeSource, true, time.Thursday)
 
 	assert.EqualValues(t, (1 * time.Hour).Seconds(), reset.Seconds)
 }
@@ -70,7 +70,7 @@ func TestCalculateResetMonthDisabledUsesLegacyDivider(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(now)
 
 	unit := pb.RateLimitResponse_RateLimit_MONTH
-	reset := utils.CalculateReset(&unit, timeSource, false)
+	reset := utils.CalculateReset(&unit, timeSource, false, time.Thursday)
 
 	sec := utils.UnitToDivider(unit)
 	assert.EqualValues(t, sec-now%sec, reset.Seconds)
@@ -86,7 +86,7 @@ func TestCalculateResetMonthLeapYear(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(now)
 
 	unit := pb.RateLimitResponse_RateLimit_MONTH
-	reset := utils.CalculateReset(&unit, timeSource, true)
+	reset := utils.CalculateReset(&unit, timeSource, true, time.Thursday)
 
 	assert.EqualValues(t, (48 * time.Hour).Seconds(), reset.Seconds)
 }
@@ -137,6 +137,115 @@ func TestExpirationSecondsNonMonthDoesNotUseTimeSource(t *testing.T) {
 
 	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_DAY, timeSource, true)
 	assert.EqualValues(t, 60*60*24, seconds)
+}
+
+func TestWeekStartUnix(t *testing.T) {
+	// Wednesday 2026-01-14 12:00 UTC - verify each weekday as a start day produces the correct anchor.
+	wednesday := time.Date(2026, time.January, 14, 12, 0, 0, 0, time.UTC).Unix()
+	assert.Equal(t, time.Date(2026, time.January, 12, 0, 0, 0, 0, time.UTC).Unix(), utils.WeekStartUnix(wednesday, time.Monday))
+	assert.Equal(t, time.Date(2026, time.January, 13, 0, 0, 0, 0, time.UTC).Unix(), utils.WeekStartUnix(wednesday, time.Tuesday))
+	assert.Equal(t, time.Date(2026, time.January, 14, 0, 0, 0, 0, time.UTC).Unix(), utils.WeekStartUnix(wednesday, time.Wednesday))
+	assert.Equal(t, time.Date(2026, time.January, 8, 0, 0, 0, 0, time.UTC).Unix(), utils.WeekStartUnix(wednesday, time.Thursday))
+	assert.Equal(t, time.Date(2026, time.January, 9, 0, 0, 0, 0, time.UTC).Unix(), utils.WeekStartUnix(wednesday, time.Friday))
+	assert.Equal(t, time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC).Unix(), utils.WeekStartUnix(wednesday, time.Saturday))
+	assert.Equal(t, time.Date(2026, time.January, 11, 0, 0, 0, 0, time.UTC).Unix(), utils.WeekStartUnix(wednesday, time.Sunday))
+
+	// Exactly at week start - bucket start is now itself.
+	mondayMidnight := time.Date(2026, time.January, 12, 0, 0, 0, 0, time.UTC).Unix()
+	assert.Equal(t, mondayMidnight, utils.WeekStartUnix(mondayMidnight, time.Monday))
+
+	// 1 second before week start - still the previous week.
+	oneSecBefore := mondayMidnight - 1
+	prevMonday := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC).Unix()
+	assert.Equal(t, prevMonday, utils.WeekStartUnix(oneSecBefore, time.Monday))
+
+	// Non-UTC must still bucket by UTC calendar week.
+	inTokyo := time.Date(2026, time.January, 13, 5, 0, 0, 0, time.FixedZone("JST", 9*60*60)).Unix()
+	assert.Equal(t, time.Date(2026, time.January, 12, 0, 0, 0, 0, time.UTC).Unix(), utils.WeekStartUnix(inTokyo, time.Monday))
+}
+
+func TestWeekExpirationSeconds(t *testing.T) {
+	// Exactly at week start: full 7 days remain
+	mondayMidnight := time.Date(2026, time.January, 12, 0, 0, 0, 0, time.UTC).Unix()
+	assert.EqualValues(t, 7*24*60*60, utils.WeekExpirationSeconds(mondayMidnight, time.Monday))
+
+	// 1 second before week end: 1 seconds remains
+	oneSecBeforeEnd := time.Date(2026, time.January, 18, 23, 59, 59, 0, time.UTC).Unix()
+	assert.EqualValues(t, 1, utils.WeekExpirationSeconds(oneSecBeforeEnd, time.Monday))
+}
+
+func TestCalculateResetWeek(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	// Wednesday 2026-01-14 12:00 UTC. Monday week start: 4.5 days to reset.
+	now := time.Date(2026, time.January, 14, 12, 0, 0, 0, time.UTC).Unix()
+	timeSource.EXPECT().UnixNow().Return(now)
+
+	unit := pb.RateLimitResponse_RateLimit_WEEK
+	reset := utils.CalculateReset(&unit, timeSource, false, time.Monday)
+
+	nextMonday := time.Date(2026, time.January, 19, 0, 0, 0, 0, time.UTC).Unix()
+	assert.EqualValues(t, nextMonday-now, reset.Seconds)
+}
+
+func TestExpirationSecondsWeekUsesLegacyDivider(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	// No UnixNow() expectation is set: WEEK keeps the fixed 7-day TTL
+	// regardless of the configured week start.
+	timeSource := mock_utils.NewMockTimeSource(controller)
+
+	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_WEEK, timeSource, false)
+	assert.EqualValues(t, 60*60*24*7, seconds)
+}
+
+func TestWeekThursdayMatchesLegacyDivider(t *testing.T) {
+	// The default Thursday reset day must produce the same bucket and reset time
+	// as the legacy epoch-division, so existing behaviour is unchanged.
+	const week = int64(60 * 60 * 24 * 7)
+	for _, now := range []int64{
+		0,
+		1234,
+		time.Date(2026, time.January, 8, 0, 0, 0, 0, time.UTC).Unix(),    // Thursday midnight
+		time.Date(2026, time.January, 7, 23, 59, 59, 0, time.UTC).Unix(), // 1s before
+		time.Date(2026, time.March, 3, 6, 30, 0, 0, time.UTC).Unix(),
+	} {
+		assert.Equal(t, (now/week)*week, utils.WeekStartUnix(now, time.Thursday), "now=%d", now)
+		assert.Equal(t, week-now%week, utils.WeekExpirationSeconds(now, time.Thursday), "now=%d", now)
+	}
+}
+
+func TestParseWeekday(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected time.Weekday
+	}{
+		{"Monday", time.Monday},
+		{"monday", time.Monday},
+		{"MONDAY", time.Monday},
+		{"Tuesday", time.Tuesday},
+		{"Wednesday", time.Wednesday},
+		{"Thursday", time.Thursday},
+		{"Friday", time.Friday},
+		{"Saturday", time.Saturday},
+		{"Sunday", time.Sunday},
+	}
+	for _, c := range cases {
+		weekday, err := utils.ParseWeekday(c.input)
+		assert.NoError(t, err, c.input)
+		assert.Equal(t, c.expected, weekday, c.input)
+	}
+}
+
+func TestParseWeekdayInvalid(t *testing.T) {
+	for _, input := range []string{"", " Monday", "Mon", "Mondey", "1"} {
+		weekday, err := utils.ParseWeekday(input)
+		assert.Error(t, err, input)
+		assert.Equal(t, time.Thursday, weekday, input)
+	}
 }
 
 func TestSanitizeStatKeyValue(t *testing.T) {

@@ -52,6 +52,7 @@
   - [Configuration](#configuration-1)
   - [Statistics](#statistics)
 - [Statistics](#statistics-1)
+  - [Service statistics](#service-statistics)
   - [Statistics options](#statistics-options)
   - [DogStatsD](#dogstatsd)
     - [Example](#example)
@@ -75,6 +76,7 @@
   - [Credentials that expire or rotate](#credentials-that-expire-or-rotate)
     - [AWS ElastiCache IAM authentication](#aws-elasticache-iam-authentication)
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
+  - [Configurable WEEK rate limit reset day](#configurable-week-rate-limit-reset-day)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
   - [RequestHeadersToAdd](#requestheaderstoadd)
@@ -1076,6 +1078,18 @@ ratelimit.service.rate_limit.messaging.auth-service.over_limit.over_limit: 1
 ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 ```
 
+## Service statistics
+
+Besides the per-rule statistics, the service reports:
+
+```
+ratelimit.service.call.should_rate_limit.redis_error     # calls that failed with a Redis error
+ratelimit.service.call.should_rate_limit.service_error   # calls that failed with any other error
+ratelimit.service.call.should_rate_limit.inflight        # calls received and not answered yet (gauge)
+```
+
+A rising `inflight` with a flat `redis_error` means calls are waiting on Redis. Redis errors are also logged at warning level, at most once every 10 seconds per process, with the number of suppressed similar messages.
+
 ## Statistics options
 
 1. `EXTRA_TAGS`: set to `"<k1:v1>,<k2:v2>"` to tag all emitted stats with the provided tags. You might want to tag build commit or release version, for example.
@@ -1353,8 +1367,11 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 
 Controls the maximum duration for Redis connection establishment.
 
-1. `REDIS_TIMEOUT`: sets the timeout for Redis connection establishment. Default: `10s`
-1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection establishment. Default: `10s`
+1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
+1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
+1. `REDIS_IO_TIMEOUT` & `REDIS_PERSECOND_IO_TIMEOUT`: override the I/O part of the timeout above. When set, this is how long a connection may wait for Redis to reply to a command, or to accept a write, before ratelimit closes the connection, fails the commands in flight on it and dials a new one. Idle connections are not affected. Set to `0` to disable (not recommended). Default: the value of `REDIS_TIMEOUT` / `REDIS_PERSECOND_TIMEOUT`.
+
+The I/O timeout is what makes ratelimit fail fast when Redis stops answering without closing its connections, for example after a failover that keeps the server address. Without it, commands block until the operating system gives up on the connection, which takes about 15 minutes with default Linux settings. Keep it well above the slowest normal Redis reply, since every command in flight on a timed-out connection fails. Sentinel connections are not subject to the I/O timeout.
 
 ### Pool On-Empty Behavior
 
@@ -1496,6 +1513,23 @@ Setting `USE_CALENDAR_MONTH_RATE_LIMIT` to `"true"` switches `MONTH` limits to a
 month window instead: the cache key bucket, TTL/expiration, and reported reset time all cover
 the 1st through the last day of the month (UTC). This is opt-in because it changes when
 existing `MONTH` limits reset and is therefore not enabled by default.
+
+## Configurable WEEK rate limit reset day
+
+1. `WEEK_RATE_LIMIT_RESET_DAY` : (default is "Thursday")
+
+By default, a `unit: week` rate limit counts 7-day windows from the Unix epoch. Since the epoch
+(1970-01-01) was a Thursday, every weekly window begins and resets on Thursday 00:00 UTC.
+
+Setting `WEEK_RATE_LIMIT_RESET_DAY` to a weekday name (`Sunday`, `Monday`, `Tuesday`, `Wednesday`,
+`Thursday`, `Friday` or `Saturday`; case-insensitive) makes `WEEK` limits reset on that day at
+00:00 UTC, with each weekly window running from that point for 7 days. The cache key bucket and
+reported reset time follow the configured day. Unrecognised values cause the service to fail at
+startup.
+
+The default preserves the existing behaviour exactly, so nothing changes on upgrade. Changing the
+value on a running deployment moves the window boundary, so the current week's counters effectively
+reset when the new value takes effect.
 
 # Memcache
 
