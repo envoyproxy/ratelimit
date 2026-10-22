@@ -12,6 +12,7 @@ import (
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	gostats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -41,6 +42,7 @@ descriptors:
 
 type e2eService struct {
 	client pb.RateLimitServiceClient
+	store  gostats.Store
 }
 
 func freePort(t *testing.T) int {
@@ -108,7 +110,7 @@ func startService(t *testing.T, redisSrv, perSecondSrv *redis.FakeRedisForTest, 
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
 
-	svc := &e2eService{client: pb.NewRateLimitServiceClient(conn)}
+	svc := &e2eService{client: pb.NewRateLimitServiceClient(conn), store: r.GetStatsStore()}
 	require.Eventually(t, func() bool { return svc.call("minute", time.Second) == nil },
 		10*time.Second, 50*time.Millisecond, "service did not start")
 	return svc
@@ -146,6 +148,10 @@ func (s *e2eService) callConcurrently(key string, n int, timeout time.Duration) 
 	}
 	wg.Wait()
 	return durations, errs
+}
+
+func (s *e2eService) counter(name string) uint64 {
+	return s.store.NewCounter(name).Value()
 }
 
 func TestServiceFailsFastWhenRedisStopsAnswering(t *testing.T) {
@@ -220,4 +226,23 @@ func TestServiceFailsFastWhenRedisStopsAnswering(t *testing.T) {
 				10*time.Second, 50*time.Millisecond)
 		})
 	}
+}
+
+func TestServiceReturnsAtRequestDeadline(t *testing.T) {
+	srv := redis.NewFakeRedisForTest(t)
+	// The I/O timeout is far away: only the request deadline can end calls.
+	svc := startService(t, &srv, nil, func(s *settings.Settings) { s.RedisTimeout = time.Minute })
+
+	srv.SetBlackhole(true)
+	const calls = 50
+	_, errs := svc.callConcurrently("minute", calls, 50*time.Millisecond)
+	for _, err := range errs {
+		assert.Error(t, err)
+	}
+	// The client gives up at its deadline whatever the server does. The
+	// server must give up too, instead of keeping the calls blocked on Redis:
+	// each call it gives up on is answered with a Redis error.
+	assert.Eventually(t, func() bool {
+		return svc.counter("ratelimit.service.call.should_rate_limit.redis_error") == calls
+	}, time.Second, 10*time.Millisecond)
 }

@@ -67,6 +67,7 @@
   - [Connection Pool Settings](#connection-pool-settings)
     - [Pool Size](#pool-size)
     - [Connection Timeout](#connection-timeout)
+    - [Request Deadlines](#request-deadlines)
     - [Pool On-Empty Behavior](#pool-on-empty-behavior)
     - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
@@ -1372,6 +1373,12 @@ Controls the maximum duration for Redis connection establishment.
 1. `REDIS_IO_TIMEOUT` & `REDIS_PERSECOND_IO_TIMEOUT`: override the I/O part of the timeout above. When set, this is how long a connection may wait for Redis to reply to a command, or to accept a write, before ratelimit closes the connection, fails the commands in flight on it and dials a new one. Idle connections are not affected. Set to `0` to disable (not recommended). Default: the value of `REDIS_TIMEOUT` / `REDIS_PERSECOND_TIMEOUT`.
 
 The I/O timeout is what makes ratelimit fail fast when Redis stops answering without closing its connections, for example after a failover that keeps the server address. Without it, commands block until the operating system gives up on the connection, which takes about 15 minutes with default Linux settings. Keep it well above the slowest normal Redis reply, since every command in flight on a timed-out connection fails. Sentinel connections are not subject to the I/O timeout.
+
+### Request Deadlines
+
+Rate limit calls carry the deadline set by the client (e.g. Envoy's rate limit filter `timeout`). Ratelimit stops waiting for Redis when that deadline expires and returns an error, so the client can apply its failure mode (`failure_mode_deny`) instead of timing out on its own. A Redis command whose caller gave up keeps running in the background until Redis answers or the I/O timeout fires; calls that arrive with an already expired deadline are not sent to Redis at all.
+
+1. `REDIS_MAX_INFLIGHT` & `REDIS_PERSECOND_MAX_INFLIGHT`: maximum number of Redis commands (pipelines) in flight per Redis client, counting those whose caller gave up. Further calls fail right away. This bounds the work queued up while Redis is slow or unreachable. `0` means unbounded. Default: `0`
 
 ### Pool On-Empty Behavior
 

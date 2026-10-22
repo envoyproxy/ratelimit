@@ -26,7 +26,10 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 			s.RedisPerSecondClusterPipelineParallelism,
 			s.RedisCloseConnectionOnReadOnlyError,
 			newCredentialProviderFromSettings(ctx, s, true),
-			clientOptions{ioTimeout: ioTimeout(s.RedisPerSecondIoTimeout, s.RedisPerSecondTimeout)})
+			clientOptions{
+				ioTimeout:   ioTimeout(s.RedisPerSecondIoTimeout, s.RedisPerSecondTimeout),
+				maxInflight: s.RedisPerSecondMaxInflight,
+			})
 		closer.Closers = append(closer.Closers, perSecondPool)
 	}
 
@@ -37,7 +40,10 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		s.RedisClusterPipelineParallelism,
 		s.RedisCloseConnectionOnReadOnlyError,
 		newCredentialProviderFromSettings(ctx, s, false),
-		clientOptions{ioTimeout: ioTimeout(s.RedisIoTimeout, s.RedisTimeout)})
+		clientOptions{
+			ioTimeout:   ioTimeout(s.RedisIoTimeout, s.RedisTimeout),
+			maxInflight: s.RedisMaxInflight,
+		})
 	closer.Closers = append(closer.Closers, otherPool)
 
 	// Validated in settings.NewSettings.
