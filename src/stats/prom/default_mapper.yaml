@@ -96,3 +96,31 @@ mappings:
   - match: "ratelimit.service.config_load_error"
     name: "ratelimit_service_config_load_error"
     match_metric_type: counter
+  - match: "ratelimit.service.negative_hits_rejected"
+    name: "ratelimit_service_negative_hits_rejected"
+    match_metric_type: counter
+
+  - match: "ratelimit.localcache.invalidation.subscribed"
+    name: "ratelimit_localcache_invalidation_subscribed"
+    match_metric_type: gauge
+  - match: "ratelimit.localcache.invalidation.received"
+    name: "ratelimit_localcache_invalidation_received"
+    match_metric_type: counter
+  - match: "ratelimit.localcache.invalidation.deleted"
+    name: "ratelimit_localcache_invalidation_deleted"
+    match_metric_type: counter
+
+  - match: "ratelimit.service.rate_limit.*.*.total_negative_hits"
+    name: "ratelimit_service_rate_limit_total_negative_hits"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+  - match: "ratelimit\\.service\\.rate_limit\\.([^\\.]*)\\.([^\\.]*)\\.([^\\.]*)(\\..*)?\\.total_negative_hits"
+    match_type: regex
+    name: "ratelimit_service_rate_limit_total_negative_hits"
+    timer_type: "histogram"
+    labels:
+      domain: "$1"
+      key1: "$2"
+      key2: "$3"
