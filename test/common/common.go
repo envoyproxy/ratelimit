@@ -131,6 +131,17 @@ func WaitForTcpPort(ctx context.Context, port int, timeout time.Duration) error 
 	}
 }
 
+// storeServer returns the server binary WithMultiRedis should launch. The
+// Makefile exports STORE_SERVER so that tests_with_valkey stands up the whole
+// suite, including the servers started here, against valkey-server. Defaults to
+// redis-server so a bare `go test` behaves as it always has.
+func storeServer() string {
+	if server := os.Getenv("STORE_SERVER"); server != "" {
+		return server
+	}
+	return "redis-server"
+}
+
 // startCacheProcess starts memcache or redis as a subprocess and waits until the TCP port is open.
 func startCacheProcess(ctx context.Context, command string, args []string, port int) (context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(ctx)
@@ -178,6 +189,8 @@ func WithMultiRedis(t *testing.T, configs []RedisConfig, f func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	server := storeServer()
+
 	for _, config := range configs {
 		args := []string{"--port", strconv.Itoa(config.Port)}
 		if config.Password != "" {
@@ -187,9 +200,9 @@ func WithMultiRedis(t *testing.T, configs []RedisConfig, f func()) {
 			args = append(args, "--cluster-enabled", "yes")
 		}
 
-		cancel, err := startCacheProcess(ctx, "redis-server", args, config.Port)
+		cancel, err := startCacheProcess(ctx, server, args, config.Port)
 		if err != nil {
-			t.Errorf("Error starting redis: %v", err)
+			t.Errorf("Error starting %s: %v", server, err)
 			return
 		}
 		defer cancel()
