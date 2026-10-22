@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -29,14 +30,33 @@ type netDialer struct {
 	ioTimeout time.Duration
 }
 
-func newNetDialer(dialTimeout, ioTimeout time.Duration, useTls bool, tlsConfig *tls.Config) *netDialer {
-	d := &netDialer{ioTimeout: ioTimeout}
+// defaultTCPKeepAlive is the keepalive radix v4 sets on the TCP connections
+// it dials. radix cannot see through our connection wrapper, so we set it.
+const defaultTCPKeepAlive = 10 * time.Second
+
+func newNetDialer(dialTimeout time.Duration, opts clientOptions, useTls bool, tlsConfig *tls.Config) *netDialer {
+	d := &netDialer{ioTimeout: opts.ioTimeout}
 	if dialTimeout > 0 {
 		d.dialer.Timeout = dialTimeout
 	}
-	// radix v4 enables a 10s keepalive on plain TCP connections it dials, but
-	// cannot see through the wrapper below, so keep that behavior here.
-	d.dialer.KeepAlive = 10 * time.Second
+	switch {
+	case opts.tcpKeepAlive < 0:
+		d.dialer.KeepAliveConfig = net.KeepAliveConfig{Enable: false}
+		d.dialer.KeepAlive = -1
+	case opts.tcpKeepAlive > 0:
+		d.dialer.KeepAliveConfig = net.KeepAliveConfig{Enable: true, Idle: opts.tcpKeepAlive, Interval: opts.tcpKeepAlive}
+	default:
+		d.dialer.KeepAliveConfig = net.KeepAliveConfig{Enable: true, Idle: defaultTCPKeepAlive, Interval: defaultTCPKeepAlive}
+	}
+	if opts.tcpUserTimeout > 0 && tcpUserTimeoutSupported {
+		userTimeout := opts.tcpUserTimeout
+		d.dialer.Control = func(network, _ string, c syscall.RawConn) error {
+			if network != "tcp" && network != "tcp4" && network != "tcp6" {
+				return nil
+			}
+			return setTCPUserTimeout(c, userTimeout)
+		}
+	}
 	if useTls {
 		if tlsConfig == nil {
 			tlsConfig = &tls.Config{}

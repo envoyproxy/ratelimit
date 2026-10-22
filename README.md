@@ -67,6 +67,7 @@
   - [Connection Pool Settings](#connection-pool-settings)
     - [Pool Size](#pool-size)
     - [Connection Timeout](#connection-timeout)
+    - [TCP Settings](#tcp-settings)
     - [Pool On-Empty Behavior](#pool-on-empty-behavior)
     - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
@@ -1365,13 +1366,18 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 
 ### Connection Timeout
 
-Controls the maximum duration for Redis connection establishment.
+Controls the maximum duration for Redis connection establishment, read operations, and write operations.
 
 1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
 1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
 1. `REDIS_IO_TIMEOUT` & `REDIS_PERSECOND_IO_TIMEOUT`: override the I/O part of the timeout above. When set, this is how long a connection may wait for Redis to reply to a command, or to accept a write, before ratelimit closes the connection, fails the commands in flight on it and dials a new one. Idle connections are not affected. Set to `0` to disable (not recommended). Default: the value of `REDIS_TIMEOUT` / `REDIS_PERSECOND_TIMEOUT`.
 
 The I/O timeout is what makes ratelimit fail fast when Redis stops answering without closing its connections, for example after a failover that keeps the server address. Without it, commands block until the operating system gives up on the connection, which takes about 15 minutes with default Linux settings. Keep it well above the slowest normal Redis reply, since every command in flight on a timed-out connection fails. Sentinel connections are not subject to the I/O timeout.
+
+### TCP Settings
+
+1. `REDIS_TCP_KEEPALIVE` & `REDIS_PERSECOND_TCP_KEEPALIVE`: TCP keepalive idle time and probe interval for Redis connections. Set to a negative value to disable keepalive. Default: `10s`
+1. `REDIS_TCP_USER_TIMEOUT` & `REDIS_PERSECOND_TCP_USER_TIMEOUT`: sets `TCP_USER_TIMEOUT` on Redis connections (Linux only, ignored elsewhere): how long data sent to Redis may stay unacknowledged before the kernel closes the connection. Keepalive cannot detect a dead peer while there is unacknowledged data, so without this a connection to a server that vanished is only closed after `net.ipv4.tcp_retries2` retransmissions (about 15 minutes by default). `0` leaves the OS default. Default: `0`
 
 ### Pool On-Empty Behavior
 
