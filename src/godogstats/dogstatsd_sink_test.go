@@ -99,3 +99,22 @@ func TestSinkMogrify(t *testing.T) {
 		assert.Equal(t, tt.expectedTags, actualTags)
 	}
 }
+
+func TestStatsdAddress(t *testing.T) {
+	cases := []struct {
+		host string
+		port int
+		want string
+	}{
+		{"localhost", 8125, "localhost:8125"},
+		{"10.0.0.1", 9125, "10.0.0.1:9125"},
+		{"unix:///var/run/datadog/dsd.socket", 8125, "unix:///var/run/datadog/dsd.socket"},
+		{"unixgram:///var/run/datadog/dsd.socket", 8125, "unixgram:///var/run/datadog/dsd.socket"},
+		{"unixstream:///var/run/datadog/dsd.socket", 8125, "unixstream:///var/run/datadog/dsd.socket"},
+	}
+	for _, tc := range cases {
+		if got := statsdAddress(tc.host, tc.port); got != tc.want {
+			t.Errorf("statsdAddress(%q, %d) = %q, want %q", tc.host, tc.port, got, tc.want)
+		}
+	}
+}
