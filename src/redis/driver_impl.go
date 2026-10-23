@@ -76,10 +76,11 @@ type redisClient interface {
 }
 
 type clientImpl struct {
-	client                     redisClient
-	stats                      poolStats
-	isCluster                  bool
-	clusterPipelineParallelism int
+	client                         redisClient
+	stats                          poolStats
+	isCluster                      bool
+	clusterPipelineParallelism     int
+	closeConnectionOnReadOnlyError bool
 }
 
 func checkError(err error) {
@@ -375,10 +376,11 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	}
 
 	return &clientImpl{
-		client:                     client,
-		stats:                      stats,
-		isCluster:                  isCluster,
-		clusterPipelineParallelism: effectivePipelineParallelism,
+		client:                         client,
+		stats:                          stats,
+		isCluster:                      isCluster,
+		clusterPipelineParallelism:     effectivePipelineParallelism,
+		closeConnectionOnReadOnlyError: closeConnectionOnReadOnlyError,
 	}
 }
 
@@ -423,11 +425,18 @@ func (c *clientImpl) PipeDo(ctx context.Context, pipeline Pipeline) error {
 	}
 
 	// Single/Sentinel mode: batch all commands in a single pipeline.
-	p := radix.NewPipeline()
+	p := c.newPipeline()
 	for _, pipelineAction := range pipeline {
 		p.Append(pipelineAction.Action)
 	}
 	return c.client.Do(ctx, p)
+}
+
+func (c *clientImpl) newPipeline() pipelineAction {
+	if c.closeConnectionOnReadOnlyError {
+		return newReadOnlyAwarePipeline()
+	}
+	return radix.NewPipeline()
 }
 
 // executeGroupedPipeline routes a pipeline of Redis actions in cluster mode
@@ -490,7 +499,7 @@ func (c *clientImpl) doPipelineGroup(ctx context.Context, actions []radix.Action
 	if len(actions) == 1 {
 		return c.client.Do(ctx, actions[0])
 	}
-	p := radix.NewPipeline()
+	p := c.newPipeline()
 	for _, action := range actions {
 		p.Append(action)
 	}

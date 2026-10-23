@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/mediocregopher/radix/v4"
+	"github.com/mediocregopher/radix/v4/resp/resp3"
+	"github.com/mediocregopher/radix/v4/trace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -218,4 +221,71 @@ func TestExecuteGroupedPipelineBoundedParallelism(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, fakeClient.callCount())
 	assert.Equal(t, 2, fakeClient.maxConcurrentCalls())
+}
+
+func TestExecuteGroupedPipelineDiscardsConnOnReadOnly(t *testing.T) {
+	var dials, closes int64
+
+	dialer := wrapDialerCloseOnReadOnly(radix.Dialer{
+		CustomConn: func(ctx context.Context, network, addr string) (radix.Conn, error) {
+			demoted := atomic.AddInt64(&dials, 1) == 1
+			return radix.NewStubConn(network, addr, func(ctx context.Context, args []string) interface{} {
+				switch args[0] {
+				case "PING":
+					return "PONG"
+				case "INCRBY":
+					if demoted {
+						return resp3.SimpleError{S: readOnlyErrMsg}
+					}
+					return uint64(1)
+				case "EXPIRE":
+					if demoted {
+						return resp3.SimpleError{S: readOnlyErrMsg}
+					}
+					return int64(1)
+				default:
+					t.Fatalf("unexpected command: %v", args)
+					return nil
+				}
+			}), nil
+		},
+	})
+
+	pool, err := (radix.PoolConfig{
+		Dialer:       dialer,
+		Size:         1,
+		PingInterval: -1,
+		Trace: trace.PoolTrace{
+			ConnClosed: func(trace.PoolConnClosed) { atomic.AddInt64(&closes, 1) },
+		},
+	}).New(context.Background(), "tcp", "127.0.0.1:6379")
+	require.NoError(t, err)
+	defer pool.Close()
+
+	client := &clientImpl{
+		client:                         pool,
+		isCluster:                      true,
+		clusterPipelineParallelism:     1,
+		closeConnectionOnReadOnlyError: true,
+	}
+
+	var hits uint64
+	pipeline := client.PipeAppend(Pipeline{}, &hits, "INCRBY", "foo", 1)
+	pipeline = client.PipeAppend(pipeline, nil, "EXPIRE", "foo", 1)
+
+	err = client.PipeDo(context.Background(), pipeline)
+	require.Error(t, err)
+	var respErr resp3.SimpleError
+	assert.True(t, errors.As(err, &respErr))
+	assert.Equal(t, readOnlyErrMsg, respErr.S)
+
+	assert.Eventually(t, func() bool {
+		hits = 0
+		pipeline := client.PipeAppend(Pipeline{}, &hits, "INCRBY", "foo", 1)
+		pipeline = client.PipeAppend(pipeline, nil, "EXPIRE", "foo", 1)
+		return client.PipeDo(context.Background(), pipeline) == nil && hits == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	assert.GreaterOrEqual(t, atomic.LoadInt64(&dials), int64(2))
+	assert.GreaterOrEqual(t, atomic.LoadInt64(&closes), int64(1))
 }
