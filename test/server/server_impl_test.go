@@ -6,9 +6,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/signal"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
+	gostats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/proto"
 
@@ -18,8 +23,36 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/envoyproxy/ratelimit/src/server"
+	"github.com/envoyproxy/ratelimit/src/settings"
+	"github.com/envoyproxy/ratelimit/src/stats"
 	mock_v3 "github.com/envoyproxy/ratelimit/test/mocks/rls"
 )
+
+func TestMemcacheServerStartsHealthy(t *testing.T) {
+	defer signal.Reset(syscall.SIGTERM)
+
+	runtimeRoot := t.TempDir()
+	if err := os.Mkdir(filepath.Join(runtimeRoot, "config"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	s := settings.NewSettings()
+	s.BackendType = "memcache"
+	s.RuntimePath = runtimeRoot
+	s.RuntimeSubdirectory = ""
+	s.RuntimeAppDirectory = "config"
+	s.RuntimeWatchRoot = false
+
+	store := gostats.NewStore(gostats.NewNullSink(), false)
+	statsManager := stats.NewStatManager(store, s)
+	srv := server.NewServer(s, "ratelimit", statsManager, nil)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/healthcheck", nil)
+	srv.HealthChecker().ServeHTTP(recorder, request)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+}
 
 func assertHttpResponse(t *testing.T,
 	handler http.HandlerFunc,
