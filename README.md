@@ -1636,6 +1636,13 @@ The following variables can be set to enable mTLS on the Ratelimit service.
 1. `GRPC_CLIENT_TLS_CACERT` - Path to the file containing the client CA certificate.
 1. `GRPC_CLIENT_TLS_SAN` - (Optional) DNS Name to validate from the client cert during mTLS auth
 
+Ratelimit uses [goruntime](https://github.com/lyft/goruntime) to watch the client CA certificate and will hot reload it on changes. New connections are verified against the reloaded CA, while established connections are kept.
+
+Notes on the client CA reload:
+
+1. The reloaded CA replaces the previous one immediately, so new connections with client certs signed only by the previous CA are rejected from then on. To rotate the client CA without disruption, first update `GRPC_CLIENT_TLS_CACERT` to a bundle containing both the old and the new CA, then rotate the client certs, and finally remove the old CA from the bundle.
+1. The whole directory containing `GRPC_CLIENT_TLS_CACERT` is watched and read on every change, so place the CA file in a dedicated directory (e.g. a mounted Kubernetes Secret) rather than a shared one such as `/etc/ssl/certs`.
+
 In the envoy config use, add the `transport_socket` section to the ratelimit service cluster config
 
 ```yaml

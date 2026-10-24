@@ -53,13 +53,9 @@ func TlsConfigFromFiles(certFile, keyFile, caCertFile string, caType CAType, ski
 		config.Certificates = append(config.Certificates, tlsKeyPair)
 	}
 	if caCertFile != "" {
-		// try to get the SystemCertPool first
-		certPool, _ := x509.SystemCertPool()
-		if certPool == nil {
-			certPool = x509.NewCertPool()
-		}
-		if !certPool.AppendCertsFromPEM(mustReadFile(caCertFile)) {
-			panic(fmt.Errorf("failed to load the provided TLS CA certificate: %s", caCertFile))
+		certPool, err := LoadCertPool(caCertFile)
+		if err != nil {
+			panic(err)
 		}
 		switch caType {
 		case ClientCA:
@@ -72,10 +68,19 @@ func TlsConfigFromFiles(certFile, keyFile, caCertFile string, caType CAType, ski
 	return config
 }
 
-func mustReadFile(name string) []byte {
-	b, err := os.ReadFile(name)
+// LoadCertPool returns the system cert pool with the certificates in caCertFile appended.
+func LoadCertPool(caCertFile string) (*x509.CertPool, error) {
+	caCert, err := os.ReadFile(caCertFile)
 	if err != nil {
-		panic(fmt.Errorf("failed to read file: %s: %w", name, err))
+		return nil, fmt.Errorf("failed to read file: %s: %w", caCertFile, err)
 	}
-	return b
+	// try to get the SystemCertPool first
+	certPool, _ := x509.SystemCertPool()
+	if certPool == nil {
+		certPool = x509.NewCertPool()
+	}
+	if !certPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to load the provided TLS CA certificate: %s", caCertFile)
+	}
+	return certPool, nil
 }
