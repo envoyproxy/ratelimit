@@ -744,7 +744,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	// The result should be OK since limit is in ShadowMode
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday), ShadowOverLimit: true},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)
@@ -767,7 +767,7 @@ func TestOverLimitWithLocalCacheShadowRule(t *testing.T) {
 	// The result should be OK since limit is in ShadowMode
 	assert.Equal(
 		[]*pb.RateLimitResponse_DescriptorStatus{
-			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday)},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[0].Limit, LimitRemaining: 0, DurationUntilReset: utils.CalculateReset(&limits[0].Limit.Unit, timeSource, false, time.Thursday), ShadowOverLimit: true},
 		},
 		cache.DoLimit(context.Background(), request, limits),
 	)

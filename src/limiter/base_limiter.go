@@ -164,6 +164,7 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 	if isOverLimit && limitInfo.limit.ShadowMode {
 		logger.Debugf("Limit with key %s, is in shadow_mode", limitInfo.limit.FullKey)
 		responseDescriptorStatus.Code = pb.RateLimitResponse_OK
+		responseDescriptorStatus.ShadowOverLimit = true
 		// Increase shadow mode stats if the limit was actually over the limit
 		this.increaseShadowModeStats(isOverLimitWithLocalCache, limitInfo, hitsAddend)
 	}
