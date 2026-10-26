@@ -68,6 +68,7 @@
     - [Pool Size](#pool-size)
     - [Connection Timeout](#connection-timeout)
     - [Request Deadlines](#request-deadlines)
+    - [TCP Settings](#tcp-settings)
     - [Pool On-Empty Behavior](#pool-on-empty-behavior)
     - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
@@ -1366,7 +1367,7 @@ The deployment type can be specified with the `REDIS_TYPE` / `REDIS_PERSECOND_TY
 
 ### Connection Timeout
 
-Controls the maximum duration for Redis connection establishment.
+Controls the maximum duration for Redis connection establishment, read operations, and write operations.
 
 1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
 1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
@@ -1379,6 +1380,11 @@ The I/O timeout is what makes ratelimit fail fast when Redis stops answering wit
 Rate limit calls carry the deadline set by the client (e.g. Envoy's rate limit filter `timeout`). Ratelimit stops waiting for Redis when that deadline expires and returns an error, so the client can apply its failure mode (`failure_mode_deny`) instead of timing out on its own. A Redis command whose caller gave up keeps running in the background until Redis answers or the I/O timeout fires; calls that arrive with an already expired deadline are not sent to Redis at all.
 
 1. `REDIS_MAX_INFLIGHT` & `REDIS_PERSECOND_MAX_INFLIGHT`: maximum number of Redis commands (pipelines) in flight per Redis client, counting those whose caller gave up. Further calls fail right away. This bounds the work queued up while Redis is slow or unreachable. `0` means unbounded. Default: `0`
+
+### TCP Settings
+
+1. `REDIS_TCP_KEEPALIVE` & `REDIS_PERSECOND_TCP_KEEPALIVE`: TCP keepalive idle time and probe interval for Redis connections. Set to a negative value to disable keepalive. Default: `10s`
+1. `REDIS_TCP_USER_TIMEOUT` & `REDIS_PERSECOND_TCP_USER_TIMEOUT`: sets `TCP_USER_TIMEOUT` on Redis connections (Linux only, ignored elsewhere): how long data sent to Redis may stay unacknowledged before the kernel closes the connection. Keepalive cannot detect a dead peer while there is unacknowledged data, so without this a connection to a server that vanished is only closed after `net.ipv4.tcp_retries2` retransmissions (about 15 minutes by default). `0` leaves the OS default. Default: `0`
 
 ### Pool On-Empty Behavior
 
