@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,5 +53,32 @@ func TestClusterClientFailsFastWhenServerStopsAnswering(t *testing.T) {
 		require.Eventually(t, func() bool {
 			return c.PipeDo(context.Background(), multiKeyPipeline(c, rcvs)) == nil
 		}, 10*time.Second, 50*time.Millisecond, "parallelism %d", parallelism)
+	}
+}
+
+func TestClusterClientReturnsWhenRequestDeadlineExpires(t *testing.T) {
+	for _, parallelism := range []int{1, 0} {
+		srv := newFakeRedis(t, nil)
+		c := newFakeRedisClusterClient(t, srv.addr(), parallelism, clientOptions{ioTimeout: 2 * time.Second})
+
+		srv.setBlackhole(true)
+		// Concurrent calls share the pool's connections, so most of them wait
+		// behind another call's reply, which radix does not interrupt.
+		var wg sync.WaitGroup
+		for i := 0; i < 20; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				rcvs := []uint64{42, 42, 42}
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+				defer cancel()
+				start := time.Now()
+				err := c.PipeDo(ctx, multiKeyPipeline(c, rcvs))
+				assert.ErrorIs(t, err, context.DeadlineExceeded, "parallelism %d", parallelism)
+				assert.Less(t, time.Since(start), 500*time.Millisecond, "parallelism %d", parallelism)
+				assert.Equal(t, []uint64{42, 42, 42}, rcvs, "receivers must not be written on error")
+			}()
+		}
+		wg.Wait()
 	}
 }

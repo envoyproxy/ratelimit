@@ -80,6 +80,8 @@ type clientImpl struct {
 	stats                      poolStats
 	isCluster                  bool
 	clusterPipelineParallelism int
+	// inflight bounds the number of commands in flight, nil if unbounded.
+	inflight chan struct{}
 }
 
 func checkError(err error) {
@@ -164,6 +166,9 @@ func sentinelClientOptions(opts clientOptions) clientOptions {
 type clientOptions struct {
 	// ioTimeout bounds every read and write on a Redis connection. 0 disables it.
 	ioTimeout time.Duration
+	// maxInflight bounds the number of commands in flight; further commands
+	// fail right away. 0 means unbounded.
+	maxInflight int
 	// tcpKeepAlive is the TCP keepalive idle time and probe interval. 0 uses
 	// the default (10s), a negative value disables keepalive.
 	tcpKeepAlive time.Duration
@@ -374,21 +379,29 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		}
 	}
 
-	return &clientImpl{
+	ret := &clientImpl{
 		client:                     client,
 		stats:                      stats,
 		isCluster:                  isCluster,
 		clusterPipelineParallelism: effectivePipelineParallelism,
 	}
+	if opts.maxInflight > 0 {
+		logger.Warnf("Redis pool %s: at most %d commands in flight", maskedUrl, opts.maxInflight)
+		ret.inflight = make(chan struct{}, opts.maxInflight)
+	}
+	return ret
 }
 
 func (c *clientImpl) DoCmd(rcv interface{}, cmd, key string, args ...interface{}) error {
-	ctx := context.Background()
 	// Combine key and args into a single slice
 	allArgs := make([]interface{}, 0, 1+len(args))
 	allArgs = append(allArgs, key)
 	allArgs = append(allArgs, args...)
-	return c.client.Do(ctx, radix.FlatCmd(rcv, cmd, allArgs...))
+	reply := newReply(rcv)
+	action := radix.FlatCmd(reply, cmd, allArgs...)
+	return c.do(context.Background(), func(ctx context.Context) error {
+		return c.client.Do(ctx, action)
+	}, func() { copyReply(rcv, reply) })
 }
 
 func (c *clientImpl) Close() error {
@@ -408,13 +421,24 @@ func (c *clientImpl) PipeAppendWithRoutingKey(pipeline Pipeline, routingKey stri
 	allArgs := make([]interface{}, 0, 1+len(args))
 	allArgs = append(allArgs, key)
 	allArgs = append(allArgs, args...)
+	reply := newReply(rcv)
 	return append(pipeline, PipelineAction{
-		Action: radix.FlatCmd(rcv, cmd, allArgs...),
+		Action: radix.FlatCmd(reply, cmd, allArgs...),
 		Key:    routingKey,
+		rcv:    rcv,
+		reply:  reply,
 	})
 }
 
+// PipeDo returns when the pipeline completed or ctx is done, whichever comes
+// first. Receivers are only written when it returns no error.
 func (c *clientImpl) PipeDo(ctx context.Context, pipeline Pipeline) error {
+	return c.do(ctx, func(ctx context.Context) error {
+		return c.pipeDo(ctx, pipeline)
+	}, func() { commitReplies(pipeline) })
+}
+
+func (c *clientImpl) pipeDo(ctx context.Context, pipeline Pipeline) error {
 	if c.isCluster {
 		// Cluster mode: group commands by key and execute each group as a pipeline.
 		// This ensures INCRBY + EXPIRE for the same key are pipelined together (same slot),

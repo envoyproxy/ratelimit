@@ -28,6 +28,7 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 			newCredentialProviderFromSettings(ctx, s, true),
 			clientOptions{
 				ioTimeout:      ioTimeout(s.RedisPerSecondIoTimeout, s.RedisPerSecondTimeout),
+				maxInflight:    s.RedisPerSecondMaxInflight,
 				tcpKeepAlive:   s.RedisPerSecondTcpKeepAlive,
 				tcpUserTimeout: s.RedisPerSecondTcpUserTimeout,
 			})
@@ -43,6 +44,7 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		newCredentialProviderFromSettings(ctx, s, false),
 		clientOptions{
 			ioTimeout:      ioTimeout(s.RedisIoTimeout, s.RedisTimeout),
+			maxInflight:    s.RedisMaxInflight,
 			tcpKeepAlive:   s.RedisTcpKeepAlive,
 			tcpUserTimeout: s.RedisTcpUserTimeout,
 		})
