@@ -29,7 +29,7 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 			clientOptions{
 				ioTimeout:      ioTimeout(s.RedisPerSecondIoTimeout, s.RedisPerSecondTimeout),
 				maxInflight:    s.RedisPerSecondMaxInflight,
-        tcpKeepAlive:   s.RedisPerSecondTcpKeepAlive,
+				tcpKeepAlive:   s.RedisPerSecondTcpKeepAlive,
 				tcpUserTimeout: s.RedisPerSecondTcpUserTimeout,
 			})
 		closer.Closers = append(closer.Closers, perSecondPool)
