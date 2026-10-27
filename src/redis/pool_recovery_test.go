@@ -161,6 +161,8 @@ func (s *recoveryRedis) serve(peer *recoveryPeer) {
 			reply = "-NOAUTH authentication required\r\n"
 		} else {
 			switch command {
+			case "READONLY":
+				reply = "+OK\r\n"
 			case "PING":
 				reply = "+PONG\r\n"
 			case "CLUSTER":

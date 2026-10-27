@@ -244,6 +244,9 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		poolConfig.Dialer = wrapDialerCloseOnReadOnly(poolConfig.Dialer)
 	}
 
+	if isCluster {
+		poolConfig = clusterReadOnlyPoolConfig(poolConfig)
+	}
 	poolConfig = exclusivePoolConfig(poolConfig, opts.ioTimeout)
 
 	effectivePipelineParallelism := clusterPipelineParallelism

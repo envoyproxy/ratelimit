@@ -172,6 +172,29 @@ func (p *exclusivePool) checkHealth(interval time.Duration, poolSize int) {
 	}
 }
 
+// clusterReadOnlyPoolConfig preserves the bootstrap that ClusterConfig normally
+// adds to default connections. Installing our custom pool disables that Radix
+// hook, so install its equivalent before the pool captures the dialer. Existing
+// custom dialers retain responsibility for their own connection initialization.
+func clusterReadOnlyPoolConfig(config radix.PoolConfig) radix.PoolConfig {
+	if config.CustomPool != nil || config.Dialer.CustomConn != nil {
+		return config
+	}
+	dialer := config.Dialer
+	config.Dialer.CustomConn = func(ctx context.Context, network, addr string) (radix.Conn, error) {
+		conn, err := dialer.Dial(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		if err := conn.Do(ctx, radix.Cmd(nil, "READONLY")); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		return conn, nil
+	}
+	return config
+}
+
 func exclusivePoolConfig(config radix.PoolConfig, waitTimeout time.Duration) radix.PoolConfig {
 	// The built-in pinger uses the raw shared pool and holds its read-lock
 	// during network I/O, bypassing this adapter. Preserve its cadence but
