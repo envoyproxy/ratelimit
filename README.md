@@ -1375,11 +1375,17 @@ Controls the maximum duration for Redis connection establishment, read operation
 
 The I/O timeout is what makes ratelimit fail fast when Redis stops answering without closing its connections, for example after a failover that keeps the server address. Without it, commands block until the operating system gives up on the connection, which takes about 15 minutes with default Linux settings. Keep it well above the slowest normal Redis reply, since every command in flight on a timed-out connection fails. Sentinel connections are not subject to the I/O timeout.
 
+The I/O timeout also bounds waiting for a pooled connection. That acquisition timer stops once the action gets a connection; it does not shorten the timeout for active reads or writes. Set it above the expected pool wait as well as normal Redis latency.
+
+Each connection runs one action at a time, so a pool can perform at most its configured number of actions concurrently. Requests wait for an available connection instead of sharing a connection with an active request. Size the pool for the expected concurrency and account for that wait when choosing timeouts.
+
+Idle connections receive periodic read-only health checks. If a check fails, ratelimit checks up to the pool size in sequential probes within one shared two-second deadline, then resumes the normal check interval. This helps retire stale connections after a server disconnect without replaying application commands. A connection failure can still fail a request whose reply was lost.
+
 ### Request Deadlines
 
-Rate limit calls carry the deadline set by the client (e.g. Envoy's rate limit filter `timeout`). Ratelimit stops waiting for Redis when that deadline expires and returns an error, so the client can apply its failure mode (`failure_mode_deny`) instead of timing out on its own. A Redis command whose caller gave up keeps running in the background until Redis answers or the I/O timeout fires; calls that arrive with an already expired deadline are not sent to Redis at all.
+Rate limit calls carry the deadline set by the client (e.g. Envoy's rate limit filter `timeout`). Ratelimit stops waiting for Redis when that deadline expires and returns an error, so the client can apply its failure mode (`failure_mode_deny`) instead of timing out on its own. Each Redis action exclusively owns its pooled connection until its I/O stops. Cancellation closes that connection to interrupt reads and writes without closing an unrelated request's connection. Calls that arrive with an already expired deadline are not sent to Redis at all. Cancellation cannot undo commands already sent to Redis, and a failed increment is not automatically retried.
 
-1. `REDIS_MAX_INFLIGHT` & `REDIS_PERSECOND_MAX_INFLIGHT`: maximum number of Redis commands (pipelines) in flight per Redis client, counting those whose caller gave up. Further calls fail right away. This bounds the work queued up while Redis is slow or unreachable. `0` means unbounded. Default: `0`
+1. `REDIS_MAX_INFLIGHT` & `REDIS_PERSECOND_MAX_INFLIGHT`: maximum number of Redis commands (pipelines) in flight per Redis client, counting those whose caller gave up until their Redis I/O finishes. Further calls fail right away. This bounds the work queued up while Redis is slow or unreachable. `0` means unbounded. Default: `0`
 
 ### TCP Settings
 

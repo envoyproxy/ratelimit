@@ -164,7 +164,8 @@ func sentinelClientOptions(opts clientOptions) clientOptions {
 // clientOptions holds the settings that bound how long a Redis client waits
 // on a connection that stopped answering.
 type clientOptions struct {
-	// ioTimeout bounds every read and write on a Redis connection. 0 disables it.
+	// ioTimeout bounds every read and write and waiting for a pooled connection.
+	// 0 disables these timeouts.
 	ioTimeout time.Duration
 	// maxInflight bounds the number of commands in flight; further commands
 	// fail right away. 0 means unbounded.
@@ -242,6 +243,8 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		logger.Warnf("Redis pool %s: closing connections on READONLY error replies", maskedUrl)
 		poolConfig.Dialer = wrapDialerCloseOnReadOnly(poolConfig.Dialer)
 	}
+
+	poolConfig = exclusivePoolConfig(poolConfig, opts.ioTimeout)
 
 	effectivePipelineParallelism := clusterPipelineParallelism
 	if isCluster {
@@ -400,7 +403,7 @@ func (c *clientImpl) DoCmd(rcv interface{}, cmd, key string, args ...interface{}
 	reply := newReply(rcv)
 	action := radix.FlatCmd(reply, cmd, allArgs...)
 	return c.do(context.Background(), func(ctx context.Context) error {
-		return c.client.Do(ctx, action)
+		return c.doRequestAction(ctx, action)
 	}, func() { copyReply(rcv, reply) })
 }
 
@@ -430,6 +433,13 @@ func (c *clientImpl) PipeAppendWithRoutingKey(pipeline Pipeline, routingKey stri
 	})
 }
 
+func (c *clientImpl) doRequestAction(ctx context.Context, action radix.Action) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return c.client.Do(ctx, exclusiveRedisAction{action})
+}
+
 // PipeDo returns when the pipeline completed or ctx is done, whichever comes
 // first. Receivers are only written when it returns no error.
 func (c *clientImpl) PipeDo(ctx context.Context, pipeline Pipeline) error {
@@ -451,7 +461,7 @@ func (c *clientImpl) pipeDo(ctx context.Context, pipeline Pipeline) error {
 	for _, pipelineAction := range pipeline {
 		p.Append(pipelineAction.Action)
 	}
-	return c.client.Do(ctx, p)
+	return c.doRequestAction(ctx, p)
 }
 
 // executeGroupedPipeline routes a pipeline of Redis actions in cluster mode
@@ -467,7 +477,7 @@ func (c *clientImpl) pipeDo(ctx context.Context, pipeline Pipeline) error {
 func (c *clientImpl) executeGroupedPipeline(ctx context.Context, pipeline Pipeline) error {
 	// Tier 1: single action — skip grouping, skip map alloc.
 	if len(pipeline) == 1 {
-		return c.client.Do(ctx, pipeline[0].Action)
+		return c.doRequestAction(ctx, pipeline[0].Action)
 	}
 
 	// Tier 2: group by key, preserving first-occurrence order.
@@ -512,11 +522,11 @@ func (c *clientImpl) doPipelineGroupsSerial(ctx context.Context, groups [][]radi
 
 func (c *clientImpl) doPipelineGroup(ctx context.Context, actions []radix.Action) error {
 	if len(actions) == 1 {
-		return c.client.Do(ctx, actions[0])
+		return c.doRequestAction(ctx, actions[0])
 	}
 	p := radix.NewPipeline()
 	for _, action := range actions {
 		p.Append(action)
 	}
-	return c.client.Do(ctx, p)
+	return c.doRequestAction(ctx, p)
 }
