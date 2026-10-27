@@ -240,7 +240,8 @@ type Settings struct {
 	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.
 	// Reads and writes use it too unless RedisPerSecondIoTimeout is set.
 	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
-	// RedisIoTimeout bounds how long a Redis connection waits for a reply, or
+	// RedisIoTimeout bounds waiting for a pooled connection and how long a
+	// Redis connection waits for a reply, or
 	// for a write to be accepted, before it is closed and replaced. Unset means
 	// RedisTimeout; 0 disables it.
 	RedisIoTimeout *time.Duration `envconfig:"REDIS_IO_TIMEOUT"`

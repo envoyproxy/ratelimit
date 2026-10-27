@@ -61,6 +61,9 @@ func (c *recordingRedisClient) Do(ctx context.Context, action radix.Action) erro
 		c.mu.Unlock()
 	}()
 
+	if exclusive, ok := action.(exclusiveRedisAction); ok {
+		action = exclusive.Action
+	}
 	if action, ok := action.(*testAction); ok {
 		return action.Perform(ctx, nil)
 	}
