@@ -348,6 +348,8 @@ When a block is in ShadowMode all functions of the rate limiting service are exe
 
 An additional statistic is added to keep track of how many times a key with "shadow_mode" has overridden result.
 
+When a shadow_mode key is over its limit, its descriptor status in the response also has `shadow_over_limit` set to true. Envoy 1.41 and later use this field to increment its `ratelimit.shadow_over_limit` counter. Global Shadow Mode does not set this field.
+
 There is also a Global Shadow Mode
 
 ### Including detailed metrics for unspecified values
