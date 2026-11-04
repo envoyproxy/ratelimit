@@ -1457,8 +1457,10 @@ restarts.
 Setting `REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR` to `"true"` closes a pooled connection
 whenever a command on it fails with a READONLY error reply, so the pool reconnects through the
 configured address and reaches the current master. The failing command still returns its error
-to the caller; only the connection handling changes. Applies to both the main and the
-per-second Redis clients.
+to the caller; only the connection handling changes. This includes the pipelined commands
+(`INCRBY` and `EXPIRE`) the service uses to update its counters. Applies to both the main and the
+per-second Redis clients. In Redis Cluster mode, pipelined commands are not covered: only
+commands sent on their own close the connection.
 
 ## Credentials that expire or rotate
 
