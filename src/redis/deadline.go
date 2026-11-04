@@ -53,10 +53,27 @@ func (c *clientImpl) do(ctx context.Context, fn func(context.Context) error, onS
 		return err
 	}
 
+	// Do not hand the caller's deadline to radix. When a context is done
+	// while radix is reading a reply, radix interrupts the read and, if part
+	// of the reply had arrived, closes the connection. The connection was
+	// healthy, just slower than the caller's deadline, and the pool discards
+	// it and stalls while it does. On a Redis that is slow but healthy, the
+	// calls stalled behind each discard miss their deadline in turn, so the
+	// connection churn and latency keep feeding each other. The caller does not
+	// need radix to honor its deadline (it stops waiting below), so the
+	// command runs to completion, bounded by the I/O timeout, and the reply is
+	// simply dropped. The backstop bounds a command waiting for a connection
+	// and then for its reply when the I/O timeout fires late.
+	rctx, cancel := context.WithoutCancel(ctx), context.CancelFunc(func() {})
+	if c.ioTimeout > 0 {
+		rctx, cancel = context.WithTimeout(rctx, 2*c.ioTimeout)
+	}
+
 	done := make(chan error, 1)
 	go func() {
 		defer release()
-		done <- fn(ctx)
+		defer cancel()
+		done <- fn(rctx)
 	}()
 
 	select {
