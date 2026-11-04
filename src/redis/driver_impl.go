@@ -80,6 +80,9 @@ type clientImpl struct {
 	stats                      poolStats
 	isCluster                  bool
 	clusterPipelineParallelism int
+	// closeConnectionOnReadOnlyError makes pipelines discard a connection that
+	// answers READONLY (see readOnlyPipeline).
+	closeConnectionOnReadOnlyError bool
 	// inflight bounds the number of commands in flight, nil if unbounded.
 	inflight chan struct{}
 }
@@ -380,10 +383,11 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	}
 
 	ret := &clientImpl{
-		client:                     client,
-		stats:                      stats,
-		isCluster:                  isCluster,
-		clusterPipelineParallelism: effectivePipelineParallelism,
+		client:                         client,
+		stats:                          stats,
+		isCluster:                      isCluster,
+		clusterPipelineParallelism:     effectivePipelineParallelism,
+		closeConnectionOnReadOnlyError: closeConnectionOnReadOnlyError,
 	}
 	if opts.maxInflight > 0 {
 		logger.Warnf("Redis pool %s: at most %d commands in flight", maskedUrl, opts.maxInflight)
@@ -447,6 +451,15 @@ func (c *clientImpl) pipeDo(ctx context.Context, pipeline Pipeline) error {
 	}
 
 	// Single/Sentinel mode: batch all commands in a single pipeline.
+	if c.closeConnectionOnReadOnlyError {
+		// radix's own pipeline hides READONLY replies from the connection, so
+		// the pool would keep a demoted master's connection.
+		p := newReadOnlyPipeline()
+		for _, pipelineAction := range pipeline {
+			p.Append(pipelineAction.Action)
+		}
+		return c.client.Do(ctx, p)
+	}
 	p := radix.NewPipeline()
 	for _, pipelineAction := range pipeline {
 		p.Append(pipelineAction.Action)

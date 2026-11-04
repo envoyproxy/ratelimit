@@ -13,10 +13,13 @@ import (
 )
 
 // fakeRedis is a minimal RESP server for exercising connection failure modes
-// that miniredis cannot simulate: it answers PING with PONG and every other
-// command with :1, answers CLUSTER SLOTS as a single-node cluster owning every
+// that miniredis cannot simulate: it answers PING with PONG, LPUSH with a
+// WRONGTYPE error and every other command with :1, answers CLUSTER SLOTS as a single-node cluster owning every
 // slot, and can be switched to swallow requests without replying,
-// like a server that vanished without resetting its connections. A connection
+// like a server that vanished without resetting its connections. It can also
+// demote every connection opened so far to a read-only replica, which answers
+// writes with a READONLY error while connections opened afterwards reach a
+// healthy master, as after a failover that keeps the demoted server running. A connection
 // that swallowed a request stays dead even after the blackhole is lifted, as
 // TCP never loses a request on a live connection: only connections opened
 // afterwards reach the "recovered" server.
@@ -25,6 +28,10 @@ type fakeRedis struct {
 	blackhole atomic.Bool
 	// delay, if set, is applied before every reply.
 	delay atomic.Int64
+	// accepted counts the connections accepted so far; connections numbered up
+	// to demoted answer every command but PING with a READONLY error.
+	accepted atomic.Int64
+	demoted  atomic.Int64
 
 	mu    sync.Mutex
 	conns []net.Conn
@@ -54,6 +61,13 @@ func (f *fakeRedis) setBlackhole(on bool) { f.blackhole.Store(on) }
 
 func (f *fakeRedis) setDelay(d time.Duration) { f.delay.Store(int64(d)) }
 
+// demoteExistingConns makes every connection accepted so far a read-only
+// replica. Connections accepted afterwards are healthy.
+func (f *fakeRedis) demoteExistingConns() { f.demoted.Store(f.accepted.Load()) }
+
+// connsAccepted returns the number of connections accepted so far.
+func (f *fakeRedis) connsAccepted() int { return int(f.accepted.Load()) }
+
 func (f *fakeRedis) close() {
 	f.ln.Close()
 	f.mu.Lock()
@@ -72,11 +86,11 @@ func (f *fakeRedis) accept() {
 		f.mu.Lock()
 		f.conns = append(f.conns, c)
 		f.mu.Unlock()
-		go f.serve(c)
+		go f.serve(c, f.accepted.Add(1))
 	}
 }
 
-func (f *fakeRedis) serve(c net.Conn) {
+func (f *fakeRedis) serve(c net.Conn, seq int64) {
 	r := bufio.NewReader(c)
 	dead := false
 	for {
@@ -116,7 +130,13 @@ func (f *fakeRedis) serve(c net.Conn) {
 			c.Write([]byte("+OK\r\n"))
 		case "CLUSTER":
 			c.Write([]byte(f.clusterSlots()))
+		case "LPUSH":
+			c.Write([]byte("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"))
 		default:
+			if seq <= f.demoted.Load() {
+				c.Write([]byte("-" + readOnlyErrMsg + "\r\n"))
+				continue
+			}
 			c.Write([]byte(":1\r\n"))
 		}
 	}
