@@ -7,6 +7,10 @@ import (
 	"reflect"
 )
 
+// ErrNoConnection is returned, with REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR, when
+// the pool has no connection to Redis.
+var ErrNoConnection = errors.New("no Redis connection available")
+
 // ErrTooManyInflight is returned when a Redis client already has the maximum
 // number of commands in flight (REDIS_MAX_INFLIGHT).
 var ErrTooManyInflight = errors.New("too many Redis commands in flight")
@@ -28,6 +32,10 @@ func (c *clientImpl) do(ctx context.Context, fn func(context.Context) error, onS
 	// context, so do not hand it one.
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("not sending Redis command: %w", err)
+	}
+
+	if c.failWhenNoConnection && c.stats.connectionActive.Value() == 0 {
+		return ErrNoConnection
 	}
 
 	if c.inflight != nil {

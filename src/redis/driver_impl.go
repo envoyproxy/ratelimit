@@ -82,6 +82,9 @@ type clientImpl struct {
 	clusterPipelineParallelism int
 	// inflight bounds the number of commands in flight, nil if unbounded.
 	inflight chan struct{}
+	// failWhenNoConnection makes commands fail right away while the pool has
+	// no connection (REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR).
+	failWhenNoConnection bool
 }
 
 func checkError(err error) {
@@ -258,37 +261,25 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		}
 	}
 
-	// IMPORTANT: radix v4 pool behavior changes from v3
+	// radix v4 pools have a fixed size, and pipelines share connections, so a
+	// command only waits for a connection when the pool has none, i.e. when
+	// Redis is unreachable and the pool is re-dialing. That wait is bounded by
+	// the request's context (see clientImpl.do).
 	//
-	// v4 uses a FIXED pool size and BLOCKS when all connections are in use.
-	// This is the same as v3's WAIT behavior.
-	//
-	// v3 CREATE and ERROR behaviors are NOT supported in v4:
-	// - v3 WAIT   → v4 supported (blocks until connection available)
-	// - v3 CREATE → v4 NOT SUPPORTED (would block instead of creating overflow connections)
-	// - v3 ERROR  → v4 NOT SUPPORTED (would block instead of failing fast)
-	//
-	// Migration requirements:
-	// - Remove REDIS_POOL_ON_EMPTY_BEHAVIOR setting if set to CREATE or ERROR
-	// - Use WAIT or leave unset (WAIT is default)
-	// - Consider increasing REDIS_POOL_SIZE if you previously relied on CREATE
-	// - Use context timeouts to prevent indefinite blocking:
-	//     ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	//     defer cancel()
-	//     client.Do(ctx, cmd)
+	// - WAIT (default): wait for a connection, up to the request deadline.
+	// - ERROR: fail right away when the pool has no connection.
+	// - CREATE: not supported; radix v4 cannot create overflow connections.
+	failWhenNoConnection := false
 	switch strings.ToUpper(poolOnEmptyBehavior) {
 	case "WAIT":
-		logger.Warnf("Redis pool %s: WAIT is default in radix v4 (blocks until connection available)", maskedUrl)
+		logger.Warnf("Redis pool %s: on-empty=WAIT (commands wait for a connection up to their deadline)", maskedUrl)
 	case "CREATE":
-		// v3 CREATE created overflow connections when pool was full
-		// v4 does NOT support this - fail fast to prevent unexpected blocking behavior
-		panic(RedisError("REDIS_POOL_ON_EMPTY_BEHAVIOR=CREATE is not supported in radix v4. Pool will block instead of creating overflow connections. Remove this setting or set to WAIT, and consider increasing REDIS_POOL_SIZE."))
+		panic(RedisError("REDIS_POOL_ON_EMPTY_BEHAVIOR=CREATE is not supported in radix v4: the pool has a fixed size and cannot create overflow connections. Remove this setting or set it to WAIT or ERROR, and consider increasing REDIS_POOL_SIZE."))
 	case "ERROR":
-		// v3 ERROR failed fast when pool was full
-		// v4 does NOT support this - fail fast to prevent unexpected blocking behavior
-		panic(RedisError("REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR is not supported in radix v4. Pool will block instead of failing fast. Remove this setting or set to WAIT, and use context timeouts for fail-fast behavior."))
+		logger.Warnf("Redis pool %s: on-empty=ERROR (commands fail right away while the pool has no connection)", maskedUrl)
+		failWhenNoConnection = true
 	default:
-		logger.Warnf("Redis pool %s: using v4 default (fixed size=%d, blocks when full)", maskedUrl, poolSize)
+		logger.Warnf("Redis pool %s: using v4 default (fixed size=%d, commands wait for a connection up to their deadline)", maskedUrl, poolSize)
 	}
 
 	poolFunc := func(ctx context.Context, network, addr string) (radix.Client, error) {
@@ -384,6 +375,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		stats:                      stats,
 		isCluster:                  isCluster,
 		clusterPipelineParallelism: effectivePipelineParallelism,
+		failWhenNoConnection:       failWhenNoConnection,
 	}
 	if opts.maxInflight > 0 {
 		logger.Warnf("Redis pool %s: at most %d commands in flight", maskedUrl, opts.maxInflight)
