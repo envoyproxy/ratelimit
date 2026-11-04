@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -41,8 +42,9 @@ descriptors:
 `
 
 type e2eService struct {
-	client pb.RateLimitServiceClient
-	store  gostats.Store
+	settings settings.Settings
+	client   pb.RateLimitServiceClient
+	store    gostats.Store
 }
 
 func freePort(t *testing.T) int {
@@ -110,7 +112,7 @@ func startService(t *testing.T, redisSrv, perSecondSrv *redis.FakeRedisForTest, 
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
 
-	svc := &e2eService{client: pb.NewRateLimitServiceClient(conn), store: r.GetStatsStore()}
+	svc := &e2eService{settings: s, client: pb.NewRateLimitServiceClient(conn), store: r.GetStatsStore()}
 	require.Eventually(t, func() bool { return svc.call("minute", time.Second) == nil },
 		10*time.Second, 50*time.Millisecond, "service did not start")
 	return svc
@@ -152,6 +154,15 @@ func (s *e2eService) callConcurrently(key string, n int, timeout time.Duration) 
 
 func (s *e2eService) counter(name string) uint64 {
 	return s.store.NewCounter(name).Value()
+}
+
+func (s *e2eService) health() int {
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthcheck", s.settings.Port))
+	if err != nil {
+		return 0
+	}
+	resp.Body.Close()
+	return resp.StatusCode
 }
 
 func TestServiceFailsFastWhenRedisStopsAnswering(t *testing.T) {
@@ -245,4 +256,44 @@ func TestServiceReturnsAtRequestDeadline(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return svc.counter("ratelimit.service.call.should_rate_limit.redis_error") == calls
 	}, time.Second, 10*time.Millisecond)
+}
+
+func TestServiceHealthReflectsUnresponsiveRedis(t *testing.T) {
+	for _, perSecond := range []bool{false, true} {
+		t.Run(fmt.Sprintf("perSecond=%t", perSecond), func(t *testing.T) {
+			main := redis.NewFakeRedisForTest(t)
+			failing := main
+			var perSecondSrv *redis.FakeRedisForTest
+			if perSecond {
+				failing = redis.NewFakeRedisForTest(t)
+				perSecondSrv = &failing
+			}
+			svc := startService(t, &main, perSecondSrv, func(s *settings.Settings) {
+				s.RedisTimeout = 200 * time.Millisecond
+				s.RedisPerSecondTimeout = 200 * time.Millisecond
+				s.RedisHealthCheckPingInterval = 50 * time.Millisecond
+				s.RedisHealthCheckFailureThreshold = 2
+			})
+			require.Eventually(t, func() bool { return svc.health() == http.StatusOK }, 5*time.Second, 20*time.Millisecond)
+
+			// Redis keeps its connections open but stops answering.
+			failing.SetBlackhole(true)
+			assert.Eventually(t, func() bool { return svc.health() == http.StatusInternalServerError },
+				5*time.Second, 20*time.Millisecond)
+
+			failing.SetBlackhole(false)
+			assert.Eventually(t, func() bool { return svc.health() == http.StatusOK },
+				10*time.Second, 20*time.Millisecond)
+		})
+	}
+}
+
+func TestServiceHealthProbeDisabledByDefault(t *testing.T) {
+	srv := redis.NewFakeRedisForTest(t)
+	svc := startService(t, &srv, nil, func(s *settings.Settings) { s.RedisTimeout = 200 * time.Millisecond })
+	require.Eventually(t, func() bool { return svc.health() == http.StatusOK }, 5*time.Second, 20*time.Millisecond)
+
+	srv.SetBlackhole(true)
+	time.Sleep(time.Second)
+	assert.Equal(t, http.StatusOK, svc.health())
 }

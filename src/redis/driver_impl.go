@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -82,6 +83,9 @@ type clientImpl struct {
 	clusterPipelineParallelism int
 	// inflight bounds the number of commands in flight, nil if unbounded.
 	inflight chan struct{}
+	// stopProbe and probeDone stop the health probe, if any.
+	stopProbe, probeDone chan struct{}
+	stopOnce             sync.Once
 }
 
 func checkError(err error) {
@@ -174,6 +178,12 @@ type clientOptions struct {
 	tcpKeepAlive time.Duration
 	// tcpUserTimeout sets TCP_USER_TIMEOUT (Linux only). 0 leaves the OS default.
 	tcpUserTimeout time.Duration
+	// healthCheckInterval enables a health probe that PINGs Redis at this
+	// interval and fails healthComponent after healthCheckFailureThreshold
+	// consecutive failures. 0 disables it.
+	healthCheckInterval         time.Duration
+	healthCheckFailureThreshold int
+	healthComponent             string
 }
 
 func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, redisSocketType, redisType, url string, poolSize int,
@@ -389,6 +399,20 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		logger.Warnf("Redis pool %s: at most %d commands in flight", maskedUrl, opts.maxInflight)
 		ret.inflight = make(chan struct{}, opts.maxInflight)
 	}
+	if opts.healthCheckInterval > 0 && srv != nil {
+		component := opts.healthComponent
+		if component == "" {
+			component = server.RedisPingHealthComponentName
+		}
+		// PINGs time out like any other command; startHealthProbe caps it to
+		// the interval.
+		probeTimeout := opts.ioTimeout
+		if probeTimeout <= 0 {
+			probeTimeout = timeout
+		}
+		logger.Warnf("Redis pool %s: health probe every %s, unhealthy after %d consecutive failures", maskedUrl, opts.healthCheckInterval, opts.healthCheckFailureThreshold)
+		ret.startHealthProbe(srv.HealthChecker(), component, opts.healthCheckInterval, probeTimeout, opts.healthCheckFailureThreshold)
+	}
 	return ret
 }
 
@@ -405,6 +429,10 @@ func (c *clientImpl) DoCmd(rcv interface{}, cmd, key string, args ...interface{}
 }
 
 func (c *clientImpl) Close() error {
+	if c.stopProbe != nil {
+		c.stopOnce.Do(func() { close(c.stopProbe) })
+		<-c.probeDone
+	}
 	return c.client.Close()
 }
 
