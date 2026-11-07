@@ -291,6 +291,10 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 
 	// setup healthcheck path
 	ret.health = NewHealthChecker(health.NewServer(), "ratelimit", s.HealthyWithAtLeastOneConfigLoaded)
+	// Memcache has no Redis connection to report, so Redis readiness must not block it.
+	if s.BackendType == "memcache" {
+		_ = ret.health.Ok(RedisHealthComponentName)
+	}
 	ret.router.Path("/healthcheck").Handler(ret.health)
 	healthpb.RegisterHealthServer(ret.grpcServer, ret.health.Server())
 
