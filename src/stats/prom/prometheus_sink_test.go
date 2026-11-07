@@ -185,3 +185,36 @@ func TestFlushResponseTimeCanUseLegacyMilliseconds(t *testing.T) {
 			*m.Metric[0].Histogram.SampleSum == 1000.0
 	}, time.Second, time.Millisecond)
 }
+
+func TestFlushNegativeHitsAndInvalidationMetrics(t *testing.T) {
+	s.FlushCounter("ratelimit.service.negative_hits_rejected", 3)
+	s.FlushGauge("ratelimit.localcache.invalidation.subscribed", 1)
+	s.FlushCounter("ratelimit.localcache.invalidation.received", 5)
+	s.FlushCounter("ratelimit.localcache.invalidation.deleted", 4)
+	assert.Eventually(t, func() bool {
+		metricFamilies, err := prometheus.DefaultGatherer.Gather()
+		if err != nil {
+			return false
+		}
+
+		metrics := make(map[string]*dto.MetricFamily)
+		for _, metricFamily := range metricFamilies {
+			metrics[*metricFamily.Name] = metricFamily
+		}
+
+		rejected, ok := metrics["ratelimit_service_negative_hits_rejected"]
+		if !ok || len(rejected.Metric) != 1 || *rejected.Metric[0].Counter.Value != 3.0 {
+			return false
+		}
+		subscribed, ok := metrics["ratelimit_localcache_invalidation_subscribed"]
+		if !ok || len(subscribed.Metric) != 1 || *subscribed.Metric[0].Gauge.Value != 1.0 {
+			return false
+		}
+		received, ok := metrics["ratelimit_localcache_invalidation_received"]
+		if !ok || len(received.Metric) != 1 || *received.Metric[0].Counter.Value != 5.0 {
+			return false
+		}
+		deleted, ok := metrics["ratelimit_localcache_invalidation_deleted"]
+		return ok && len(deleted.Metric) == 1 && *deleted.Metric[0].Counter.Value == 4.0
+	}, time.Second, time.Millisecond)
+}

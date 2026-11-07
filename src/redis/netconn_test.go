@@ -27,7 +27,7 @@ func newFakeRedisClient(t *testing.T, addr string, poolSize int, useTls bool, tl
 	store := stats.NewStore(stats.NewNullSink(), false)
 	c := newClientImpl(context.Background(), store, useTls, "", "tcp", "single", addr, poolSize,
 		0, 0, tlsConfig, false, nil, time.Second, "", "", 10*time.Millisecond, 100*time.Millisecond,
-		time.Second, 1, false, nil, opts).(*clientImpl)
+		time.Second, 1, false, nil, opts)
 	t.Cleanup(func() { c.Close() })
 	return c, store
 }

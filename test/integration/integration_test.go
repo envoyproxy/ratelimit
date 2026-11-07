@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	pb_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -93,7 +95,9 @@ func TestNegativeHitsIntegration(t *testing.T) {
 	common.WithMultiRedis(t, []common.RedisConfig{
 		{Port: 6383},
 	}, func() {
-		t.Run("Redis", testNegativeHits(makeSimpleRedisSettings(6383, 6380, false, 0)))
+		s := makeSimpleRedisSettings(6383, 6380, false, 0)
+		s.EnableNegativeHits = true
+		t.Run("Redis", testNegativeHits(s))
 	})
 }
 
@@ -132,6 +136,138 @@ func testNegativeHits(s settings.Settings) func(*testing.T) {
 		assert.NoError(err)
 		assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
 		assert.Equal(uint32(47), response.Statuses[0].LimitRemaining)
+	}
+}
+
+// TestNegativeHitsMemcacheIntegration verifies that refunds keep working with
+// the flag on and no local cache on the memcached backend (the boot guard only
+// blocks the combination with a local cache).
+func TestNegativeHitsMemcacheIntegration(t *testing.T) {
+	common.WithMultiMemcache(t, []common.MemcacheConfig{
+		{Port: 6394},
+	}, func() {
+		s := makeSimpleMemcacheSettings([]int{6394}, 0)
+		s.EnableNegativeHits = true
+		t.Run("Memcache", testNegativeHits(s))
+	})
+}
+
+func TestNegativeHitsCrossReplicaInvalidationIntegration(t *testing.T) {
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6383},
+	}, func() {
+		sA := makeSimpleRedisSettings(6383, 6380, false, 1000)
+		sA.EnableNegativeHits = true
+
+		sB := makeSimpleRedisSettings(6383, 6380, false, 1000)
+		sB.EnableNegativeHits = true
+		sB.Port = 8085
+		sB.GrpcPort = 8086
+		sB.DebugPort = 8087
+
+		for _, localCacheSize := range []int{1000, 0} {
+			sA.LocalCacheSizeInBytes = localCacheSize
+			sA.CacheKeyPrefix = fmt.Sprintf("refund_%d:", localCacheSize)
+			sB.CacheKeyPrefix = sA.CacheKeyPrefix
+			t.Run(fmt.Sprintf("PublisherLocalCache_%d", localCacheSize), testNegativeHitsCrossReplicaInvalidation(sA, sB))
+		}
+	})
+}
+
+func testNegativeHitsCrossReplicaInvalidation(sA, sB settings.Settings) func(*testing.T) {
+	return func(t *testing.T) {
+		runnerA := startTestRunner(t, sA)
+		defer runnerA.Stop()
+		runnerB := startTestRunner(t, sB)
+		defer runnerB.Stop()
+
+		assert := assert.New(t)
+
+		connA, err := grpc.Dial(fmt.Sprintf("localhost:%v", sA.GrpcPort), grpc.WithInsecure())
+		assert.NoError(err)
+		defer connA.Close()
+		clientA := pb.NewRateLimitServiceClient(connA)
+
+		connB, err := grpc.Dial(fmt.Sprintf("localhost:%v", sB.GrpcPort), grpc.WithInsecure())
+		assert.NoError(err)
+		defer connB.Close()
+		clientB := pb.NewRateLimitServiceClient(connB)
+
+		// Cache-bearing replicas must be subscribed before the refund publishes.
+		subscribedA := runnerA.GetStatsStore().NewGauge("ratelimit.localcache.invalidation.subscribed")
+		subscribedB := runnerB.GetStatsStore().NewGauge("ratelimit.localcache.invalidation.subscribed")
+		if sA.LocalCacheSizeInBytes > 0 {
+			assert.Eventually(func() bool { return subscribedA.Value() == 1 }, 5*time.Second, 10*time.Millisecond)
+		} else {
+			assert.EqualValues(0, subscribedA.Value())
+		}
+		assert.Eventually(func() bool { return subscribedB.Value() == 1 }, 5*time.Second, 10*time.Millisecond)
+
+		// key3_local has a limit of 10 per hour.
+		desc := [][][2]string{{{"key3_local", "cross"}}}
+
+		// Drive the counter over the limit through replica A (0 -> 11).
+		response, err := clientA.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("another", desc, 11))
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
+
+		// Push replica B over the limit too (11 -> 12) so it poisons its own
+		// local cache.
+		response, err = clientB.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("another", desc, 1))
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
+
+		// Cache-bearing replicas now answer from their poisoned local caches.
+		localCacheOverLimitA := runnerA.GetStatsStore().NewCounter("ratelimit.service.rate_limit.another.key3_local.over_limit_with_local_cache")
+		localCacheOverLimitB := runnerB.GetStatsStore().NewCounter("ratelimit.service.rate_limit.another.key3_local.over_limit_with_local_cache")
+
+		if sA.LocalCacheSizeInBytes > 0 {
+			response, err = clientA.ShouldRateLimit(
+				context.Background(),
+				common.NewRateLimitRequest("another", desc, 1))
+			assert.NoError(err)
+			assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
+			assert.EqualValues(1, localCacheOverLimitA.Value())
+		}
+
+		response, err = clientB.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("another", desc, 1))
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
+		assert.EqualValues(1, localCacheOverLimitB.Value())
+
+		// Refund through A with a different threshold: 12 -> 9 does not cross
+		// the refund's override of 20, but must invalidate B's cached verdict at 10.
+		refund := common.NewRateLimitRequestWithNegativeHits("another", desc, []uint64{3}, []bool{true})
+		refund.Descriptors[0].Limit = &pb_struct.RateLimitDescriptor_RateLimitOverride{
+			RequestsPerUnit: 20, Unit: pb_type.RateLimitUnit_HOUR,
+		}
+		response, err = clientA.ShouldRateLimit(
+			context.Background(),
+			refund)
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+
+		// Replica B receives the invalidation and drops its poisoned entry.
+		receivedB := runnerB.GetStatsStore().NewCounter("ratelimit.localcache.invalidation.received")
+		deletedB := runnerB.GetStatsStore().NewCounter("ratelimit.localcache.invalidation.deleted")
+		assert.Eventually(func() bool { return receivedB.Value() == 1 }, 5*time.Second, 10*time.Millisecond)
+		assert.Eventually(func() bool { return deletedB.Value() == 1 }, 5*time.Second, 10*time.Millisecond)
+
+		// Replica B answers from Redis again: 9 + 1 = 10 <= 10 -> OK.
+		response, err = clientB.ShouldRateLimit(
+			context.Background(),
+			common.NewRateLimitRequest("another", desc, 1))
+		assert.NoError(err)
+		assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+		assert.EqualValues(0, uint64(response.Statuses[0].LimitRemaining))
+		// B's local cache was not consulted for the final answer.
+		assert.EqualValues(1, localCacheOverLimitB.Value())
 	}
 }
 

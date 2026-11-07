@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -77,6 +78,7 @@ type redisClient interface {
 
 type clientImpl struct {
 	client                     redisClient
+	dialPubSub                 func(context.Context) (radix.Conn, error)
 	stats                      poolStats
 	isCluster                  bool
 	clusterPipelineParallelism int
@@ -109,6 +111,16 @@ func effectiveClusterPipelineParallelism(configuredParallelism, poolSize int) in
 	}
 
 	return configuredParallelism
+}
+
+// parseSentinelUrl splits a sentinel REDIS_URL of the form
+// <redis master name>,<sentinel1>,...,<sentineln>.
+func parseSentinelUrl(url string) (masterName string, sentinelAddrs []string, err error) {
+	urls := strings.Split(url, ",")
+	if len(urls) < 2 {
+		return "", nil, fmt.Errorf("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>")
+	}
+	return urls[0], urls[1:], nil
 }
 
 // createDialer creates a radix.Dialer with timeout, TLS, and auth configuration
@@ -184,12 +196,18 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	closeConnectionOnReadOnlyError bool,
 	credentialProvider CredentialProvider,
 	opts clientOptions,
-) Client {
+) *clientImpl {
 	maskedUrl := utils.MaskCredentialsInUrl(url)
 	logger.Warnf("connecting to redis on %s with pool size %d", maskedUrl, poolSize)
 
 	// Create Dialer for connecting to Redis
 	dialer := createDialer(timeout, opts, useTls, tlsConfig, auth, maskedUrl)
+	// Pub/Sub can wait indefinitely between messages. Keep the same TLS/auth
+	// and TCP configuration, but let its subscription loop manage I/O liveness.
+	pubSubOpts := opts
+	pubSubOpts.ioTimeout = 0
+	pubSubDialer := dialer
+	pubSubDialer.NetDialer = newNetDialer(timeout, pubSubOpts, useTls, tlsConfig)
 	if opts.ioTimeout > 0 {
 		logger.Warnf("Redis pool %s: reads and writes time out after %s", maskedUrl, opts.ioTimeout)
 	} else {
@@ -231,6 +249,8 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	if credentialProvider != nil {
 		logger.Warnf("Redis pool %s: resolving credentials on every connection attempt", maskedUrl)
 		poolConfig.Dialer = wrapDialerCredentialProvider(poolConfig.Dialer, credentialProvider)
+		// Dedicated Pub/Sub connections must also refresh credentials on reconnect.
+		pubSubDialer = wrapDialerCredentialProvider(pubSubDialer, credentialProvider)
 	}
 
 	// Discard pooled connections whose commands fail with READONLY (the server
@@ -296,10 +316,13 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 	}
 
 	// Validate sentinel URL format early (before retry loop) since it's a configuration error.
+	var sentinelMasterName string
+	var sentinelAddrs []string
 	if strings.ToLower(redisType) == "sentinel" {
-		urls := strings.Split(url, ",")
-		if len(urls) < 2 {
-			panic(RedisError("Expected master name and a list of urls for the sentinels, in the format: <redis master name>,<sentinel1>,...,<sentineln>"))
+		var parseErr error
+		sentinelMasterName, sentinelAddrs, parseErr = parseSentinelUrl(url)
+		if parseErr != nil {
+			panic(RedisError(parseErr.Error()))
 		}
 	}
 
@@ -341,13 +364,12 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 			}
 			client, err = clusterConfig.New(ctx, urls)
 		case "sentinel":
-			urls := strings.Split(url, ",")
 			sentinelDialer := createDialer(timeout, sentinelClientOptions(opts), useTls, tlsConfig, sentinelAuth, fmt.Sprintf("sentinel(%s)", maskedUrl))
 			sentinelConfig := radix.SentinelConfig{
 				PoolConfig:     poolConfig,
 				SentinelDialer: sentinelDialer,
 			}
-			client, err = sentinelConfig.New(ctx, urls[0], urls[1:])
+			client, err = sentinelConfig.New(ctx, sentinelMasterName, sentinelAddrs)
 		default:
 			panic(RedisError("Unrecognized redis type " + redisType))
 		}
@@ -381,6 +403,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 
 	ret := &clientImpl{
 		client:                     client,
+		dialPubSub:                 newPubSubDialer(client, pubSubDialer, redisSocketType, url),
 		stats:                      stats,
 		isCluster:                  isCluster,
 		clusterPipelineParallelism: effectivePipelineParallelism,
@@ -390,6 +413,33 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		ret.inflight = make(chan struct{}, opts.maxInflight)
 	}
 	return ret
+}
+
+// newPubSubDialer opens dedicated connections using the command client's current
+// topology. The returned callback is used serially by one subscription loop.
+func newPubSubDialer(client redisClient, dialer radix.Dialer, network, addr string) func(context.Context) (radix.Conn, error) {
+	var next uint64
+	return func(ctx context.Context) (radix.Conn, error) {
+		if multi, ok := client.(radix.MultiClient); ok {
+			clients, err := multi.Clients()
+			if err != nil {
+				return nil, err
+			}
+			if len(clients) == 0 {
+				return nil, fmt.Errorf("no Redis primary available for local cache invalidation")
+			}
+			addrs := make([]string, 0, len(clients))
+			for addr := range clients {
+				addrs = append(addrs, addr)
+			}
+			// Stable rotation ensures a stalled cluster node cannot starve others.
+			sort.Strings(addrs)
+			addr = addrs[next%uint64(len(addrs))]
+			next++
+			network = "tcp"
+		}
+		return dialer.Dial(ctx, network, addr)
+	}
 }
 
 func (c *clientImpl) DoCmd(rcv interface{}, cmd, key string, args ...interface{}) error {
@@ -422,8 +472,17 @@ func (c *clientImpl) PipeAppendWithRoutingKey(pipeline Pipeline, routingKey stri
 	allArgs = append(allArgs, key)
 	allArgs = append(allArgs, args...)
 	reply := newReply(rcv)
+	// The cluster client routes by ActionProperties.Keys, and radix's default
+	// resolver classifies EVAL/EVALSHA as keyless.
+	cfg := radix.CmdConfig{
+		ActionProperties: func(cmd string, args ...string) radix.ActionProperties {
+			props := radix.DefaultActionProperties(cmd, args...)
+			props.Keys = []string{routingKey}
+			return props
+		},
+	}
 	return append(pipeline, PipelineAction{
-		Action: radix.FlatCmd(reply, cmd, allArgs...),
+		Action: cfg.FlatCmd(reply, cmd, allArgs...),
 		Key:    routingKey,
 		rcv:    rcv,
 		reply:  reply,
