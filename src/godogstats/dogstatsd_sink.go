@@ -60,12 +60,22 @@ func WithMogrifierFromEnv(keys []string) goDogStatsSinkOption {
 	}
 }
 
+// statsdAddress builds the address passed to the DogStatsD client. Unix domain
+// socket addresses (unix://, unixgram:// or unixstream://) are already complete
+// and must not get the port appended.
+func statsdAddress(host string, port int) string {
+	if strings.HasPrefix(host, "unix://") || strings.HasPrefix(host, "unixgram://") || strings.HasPrefix(host, "unixstream://") {
+		return host
+	}
+	return host + ":" + strconv.Itoa(port)
+}
+
 func NewSink(opts ...goDogStatsSinkOption) (*godogStatsSink, error) {
 	sink := &godogStatsSink{}
 	for _, opt := range opts {
 		opt(sink)
 	}
-	client, err := statsd.New(sink.config.host+":"+strconv.Itoa(sink.config.port), statsd.WithoutClientSideAggregation())
+	client, err := statsd.New(statsdAddress(sink.config.host, sink.config.port), statsd.WithoutClientSideAggregation())
 	if err != nil {
 		return nil, err
 	}
