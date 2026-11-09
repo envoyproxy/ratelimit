@@ -296,6 +296,7 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		_ = ret.health.Ok(RedisHealthComponentName)
 	}
 	ret.router.Path("/healthcheck").Handler(ret.health)
+	ret.router.Path("/ready").Handler(ret.health.ReadinessHandler())
 	healthpb.RegisterHealthServer(ret.grpcServer, ret.health.Server())
 
 	// setup default debug listener

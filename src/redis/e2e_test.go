@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -41,8 +42,9 @@ descriptors:
 `
 
 type e2eService struct {
-	client pb.RateLimitServiceClient
-	store  gostats.Store
+	settings settings.Settings
+	client   pb.RateLimitServiceClient
+	store    gostats.Store
 }
 
 func freePort(t *testing.T) int {
@@ -110,7 +112,7 @@ func startService(t *testing.T, redisSrv, perSecondSrv *redis.FakeRedisForTest, 
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
 
-	svc := &e2eService{client: pb.NewRateLimitServiceClient(conn), store: r.GetStatsStore()}
+	svc := &e2eService{settings: s, client: pb.NewRateLimitServiceClient(conn), store: r.GetStatsStore()}
 	require.Eventually(t, func() bool { return svc.call("minute", time.Second) == nil },
 		10*time.Second, 50*time.Millisecond, "service did not start")
 	return svc
@@ -152,6 +154,19 @@ func (s *e2eService) callConcurrently(key string, n int, timeout time.Duration) 
 
 func (s *e2eService) counter(name string) uint64 {
 	return s.store.NewCounter(name).Value()
+}
+
+func (s *e2eService) health() int { return s.get("/healthcheck") }
+
+func (s *e2eService) ready() int { return s.get("/ready") }
+
+func (s *e2eService) get(path string) int {
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d%s", s.settings.Port, path))
+	if err != nil {
+		return 0
+	}
+	resp.Body.Close()
+	return resp.StatusCode
 }
 
 func TestServiceFailsFastWhenRedisStopsAnswering(t *testing.T) {
@@ -263,4 +278,49 @@ func TestServiceReportsRedisOutage(t *testing.T) {
 	assert.Positive(t, svc.counter("ratelimit.redis_pool.cmd_io_timeout"))
 	assert.Eventually(t, func() bool { return svc.counter("ratelimit.redis_pool.cx_local_close_error") > 0 },
 		2*time.Second, 20*time.Millisecond)
+}
+
+func TestServiceHealthReflectsUnresponsiveRedis(t *testing.T) {
+	for _, perSecond := range []bool{false, true} {
+		t.Run(fmt.Sprintf("perSecond=%t", perSecond), func(t *testing.T) {
+			main := redis.NewFakeRedisForTest(t)
+			failing := main
+			var perSecondSrv *redis.FakeRedisForTest
+			if perSecond {
+				failing = redis.NewFakeRedisForTest(t)
+				perSecondSrv = &failing
+			}
+			svc := startService(t, &main, perSecondSrv, func(s *settings.Settings) {
+				s.RedisTimeout = 200 * time.Millisecond
+				s.RedisPerSecondTimeout = 200 * time.Millisecond
+				s.RedisHealthCheckPingInterval = 50 * time.Millisecond
+				s.RedisHealthCheckFailureThreshold = 2
+			})
+			require.Eventually(t, func() bool { return svc.ready() == http.StatusOK }, 5*time.Second, 20*time.Millisecond)
+
+			// Redis keeps its connections open but stops answering: the
+			// replica is not ready, but its health check, used for liveness,
+			// must not fail and get it restarted.
+			failing.SetBlackhole(true)
+			assert.Eventually(t, func() bool { return svc.ready() == http.StatusInternalServerError },
+				5*time.Second, 20*time.Millisecond)
+			assert.Equal(t, http.StatusOK, svc.health())
+
+			failing.SetBlackhole(false)
+			assert.Eventually(t, func() bool { return svc.ready() == http.StatusOK },
+				10*time.Second, 20*time.Millisecond)
+			assert.Equal(t, http.StatusOK, svc.health())
+		})
+	}
+}
+
+func TestServiceHealthProbeDisabledByDefault(t *testing.T) {
+	srv := redis.NewFakeRedisForTest(t)
+	svc := startService(t, &srv, nil, func(s *settings.Settings) { s.RedisTimeout = 200 * time.Millisecond })
+	require.Eventually(t, func() bool { return svc.ready() == http.StatusOK }, 5*time.Second, 20*time.Millisecond)
+
+	srv.SetBlackhole(true)
+	time.Sleep(time.Second)
+	assert.Equal(t, http.StatusOK, svc.ready())
+	assert.Equal(t, http.StatusOK, svc.health())
 }
