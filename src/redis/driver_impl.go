@@ -126,6 +126,8 @@ type clientImpl struct {
 	// failWhenNoConnection makes commands fail right away while the pool has
 	// no connection (REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR).
 	failWhenNoConnection bool
+	// ioTimeout is the I/O timeout of the connections, see clientOptions.
+	ioTimeout time.Duration
 }
 
 func checkError(err error) {
@@ -277,15 +279,17 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		poolConfig.Dialer = wrapDialerCredentialProvider(poolConfig.Dialer, credentialProvider)
 	}
 
-	// Discard pooled connections whose commands fail with READONLY (the server
-	// behind them was demoted to replica by a failover) so the pool re-dials
-	// and reaches the current master. Installed last because CustomConn
-	// replaces every other Dialer field (TLS, auth, write buffering), which
-	// must all be final before being captured.
+	// Wrap connections to correct which errors make the pool discard them
+	// (see wrappedConn). Installed last because CustomConn replaces every
+	// other Dialer field (TLS, auth, write buffering), which must all be final
+	// before being captured.
 	if closeConnectionOnReadOnlyError {
+		// Discard pooled connections whose commands fail with READONLY (the
+		// server behind them was demoted to replica by a failover) so the
+		// pool re-dials and reaches the current master.
 		logger.Warnf("Redis pool %s: closing connections on READONLY error replies", maskedUrl)
-		poolConfig.Dialer = wrapDialerCloseOnReadOnly(poolConfig.Dialer)
 	}
+	poolConfig.Dialer = wrapDialerConn(poolConfig.Dialer, closeConnectionOnReadOnlyError)
 
 	effectivePipelineParallelism := clusterPipelineParallelism
 	if isCluster {
@@ -417,6 +421,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 		isCluster:                  isCluster,
 		clusterPipelineParallelism: effectivePipelineParallelism,
 		failWhenNoConnection:       failWhenNoConnection,
+		ioTimeout:                  opts.ioTimeout,
 	}
 	if opts.maxInflight > 0 {
 		logger.Warnf("Redis pool %s: at most %d commands in flight", maskedUrl, opts.maxInflight)

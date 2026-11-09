@@ -246,3 +246,30 @@ func TestCommandTimeIsRecordedInMilliseconds(t *testing.T) {
 	// not read as 0.
 	assert.Equal(t, []float64{22.5, 0.25}, sink.timers["cmd_time"])
 }
+
+// TestAbandonedCommandsEndWithoutIOTimeout checks that commands whose caller
+// gave up do not wait forever when the I/O timeout is disabled: with nothing
+// to bound them, they keep the caller's deadline.
+func TestAbandonedCommandsEndWithoutIOTimeout(t *testing.T) {
+	srv := newFakeRedis(t, nil)
+	c, _ := newFakeRedisClient(t, srv.addr(), 2, false, nil, clientOptions{maxInflight: 10})
+
+	var rcv uint64
+	require.NoError(t, c.PipeDo(context.Background(), incrPipeline(c, &rcv)))
+
+	// Redis goes away and the pool is left without connections: commands
+	// wait for one that never comes.
+	srv.close()
+	require.Eventually(t, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		defer cancel()
+		_ = c.PipeDo(ctx, incrPipeline(c, &rcv))
+		return c.NumActiveConns() == 0
+	}, 5*time.Second, 10*time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	assert.Error(t, c.PipeDo(ctx, incrPipeline(c, &rcv)))
+	// The command in the background ends with its caller's deadline.
+	assert.Eventually(t, func() bool { return len(c.inflight) == 0 }, time.Second, 10*time.Millisecond)
+}

@@ -26,8 +26,9 @@ type fakeRedis struct {
 	// delay, if set, is applied before every reply.
 	delay atomic.Int64
 
-	mu    sync.Mutex
-	conns []net.Conn
+	mu     sync.Mutex
+	conns  []net.Conn
+	closed bool
 }
 
 func newFakeRedis(t *testing.T, tlsConfig *tls.Config) *fakeRedis {
@@ -58,6 +59,7 @@ func (f *fakeRedis) close() {
 	f.ln.Close()
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.closed = true
 	for _, c := range f.conns {
 		c.Close()
 	}
@@ -70,6 +72,12 @@ func (f *fakeRedis) accept() {
 			return
 		}
 		f.mu.Lock()
+		if f.closed {
+			// Accepted while close was closing the connections.
+			f.mu.Unlock()
+			c.Close()
+			return
+		}
 		f.conns = append(f.conns, c)
 		f.mu.Unlock()
 		go f.serve(c)
