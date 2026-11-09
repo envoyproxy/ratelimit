@@ -60,6 +60,15 @@ func newPoolStats(scope stats.Scope) poolStats {
 	return ret
 }
 
+// recordCmdTime records a command's duration in cmd_time. Stats sinks read
+// timer values as milliseconds, but gostats timers created with NewTimer
+// record whole microseconds and NewMilliTimer whole milliseconds, which
+// would read most Redis commands, well under a millisecond, as 0. Record
+// fractional milliseconds instead.
+func (ps *poolStats) recordCmdTime(d time.Duration) {
+	ps.cmdTime.AddValue(float64(d) / float64(time.Millisecond))
+}
+
 func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Server) trace.PoolTrace {
 	return trace.PoolTrace{
 		ConnCreated: func(newConn trace.PoolConnCreated) {

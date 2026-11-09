@@ -185,3 +185,52 @@ func TestFlushResponseTimeCanUseLegacyMilliseconds(t *testing.T) {
 			*m.Metric[0].Histogram.SampleSum == 1000.0
 	}, time.Second, time.Millisecond)
 }
+
+func TestRedisCommandTimeConvertsMillisecondsToSeconds(t *testing.T) {
+	s.FlushTimer("ratelimit.redis_per_second_pool.cmd_time", 500)
+	assert.Eventually(t, func() bool {
+		m, ok := gatherMetric(prometheus.DefaultGatherer, "ratelimit_redis_cmd_time_seconds")
+		return ok && len(m.Metric) == 1 &&
+			*m.Metric[0].Histogram.SampleCount == uint64(1) &&
+			reflect.DeepEqual(toMap(m.Metric[0].Label), map[string]string{"pool": "redis_per_second_pool"}) &&
+			*m.Metric[0].Histogram.SampleSum == 0.5
+	}, time.Second, time.Millisecond)
+}
+
+func TestLegacyMillisecondsOnlyAppliesToResponseTime(t *testing.T) {
+	// The legacy option must find the response_time mapping it rewrites.
+	assert.Contains(t, defaultMapper, responseTimeMapping)
+
+	reg := prometheus.NewRegistry()
+	oldRegisterer, oldGatherer := prometheus.DefaultRegisterer, prometheus.DefaultGatherer
+	prometheus.DefaultRegisterer, prometheus.DefaultGatherer = reg, reg
+	defer func() {
+		prometheus.DefaultRegisterer, prometheus.DefaultGatherer = oldRegisterer, oldGatherer
+	}()
+
+	legacySink := NewPrometheusSink(WithAddr(":0"), WithPath("/metrics-legacy-cmd-time"), WithResponseTimeAsMilliseconds(true))
+	legacySink.FlushTimer("ratelimit_server.ShouldRateLimit.response_time", 1000)
+	legacySink.FlushTimer("ratelimit.redis_pool.cmd_time", 500)
+
+	assert.Eventually(t, func() bool {
+		rt, ok := gatherMetric(reg, "ratelimit_service_response_time_seconds")
+		if !ok || len(rt.Metric) != 1 || *rt.Metric[0].Histogram.SampleSum != 1000.0 {
+			return false
+		}
+		cmd, ok := gatherMetric(reg, "ratelimit_redis_cmd_time_seconds")
+		return ok && len(cmd.Metric) == 1 && *cmd.Metric[0].Histogram.SampleSum == 0.5
+	}, time.Second, time.Millisecond)
+}
+
+func gatherMetric(g prometheus.Gatherer, name string) (*dto.MetricFamily, bool) {
+	metricFamilies, err := g.Gather()
+	if err != nil {
+		return nil, false
+	}
+	for _, metricFamily := range metricFamilies {
+		if *metricFamily.Name == name {
+			return metricFamily, true
+		}
+	}
+	return nil, false
+}

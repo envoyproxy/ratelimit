@@ -101,9 +101,21 @@ func WithResponseTimeAsMilliseconds(responseTimeAsMilliseconds bool) prometheusS
 	}
 }
 
+const (
+	responseTimeMapping = `    name: "ratelimit_service_response_time_seconds"
+    timer_type: histogram
+    scale: 0.001
+`
+	responseTimeMappingInMilliseconds = `    name: "ratelimit_service_response_time_seconds"
+    timer_type: histogram
+`
+)
+
 func (s *prometheusSink) mapperConfig() string {
 	if s.config.responseTimeAsMilliseconds {
-		return strings.Replace(defaultMapper, "    scale: 0.001\n", "", 1)
+		// Only response_time keeps its legacy unit; other timers, such as
+		// cmd_time, are always reported in seconds.
+		return strings.Replace(defaultMapper, responseTimeMapping, responseTimeMappingInMilliseconds, 1)
 	}
 
 	return defaultMapper

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 )
 
 // ErrNoConnection is returned, with REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR, when
@@ -65,9 +66,9 @@ func (c *clientImpl) do(ctx context.Context, fn func(context.Context) error, onS
 		}
 	}
 	c.stats.cmdInflight.Inc()
-	span := c.stats.cmdTime.AllocateSpan()
+	start := time.Now()
 	release := func() {
-		span.Complete()
+		c.stats.recordCmdTime(time.Since(start))
 		c.stats.cmdInflight.Dec()
 		if c.inflight != nil {
 			<-c.inflight

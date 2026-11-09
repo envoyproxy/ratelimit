@@ -1110,8 +1110,10 @@ cmd_error               # commands that failed with a Redis or connection error
 cmd_io_timeout          # commands that failed because Redis did not answer within the I/O timeout
 cmd_deadline_exceeded   # commands whose caller's deadline expired first
 cmd_rejected            # commands rejected without reaching Redis (REDIS_MAX_INFLIGHT)
-cmd_time                # command latency, as seen by the caller or until the command completed in the background (timer)
+cmd_time                # command latency in milliseconds, until the command completed, also in the background (timer)
 ```
+
+With the Prometheus sink, `cmd_time` is exported as `ratelimit_redis_cmd_time_seconds`, in seconds, with a `pool` label (`redis_pool` or `redis_per_second_pool`). `PROMETHEUS_RESPONSE_TIME_AS_MILLISECONDS` does not affect it.
 
 `cmd_inflight` stuck at a high value means commands are waiting on Redis. Connections closed after an error are also logged at warning level, at most once every 10 seconds per process.
 

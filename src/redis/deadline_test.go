@@ -218,3 +218,31 @@ func TestCommandStatsIOTimeout(t *testing.T) {
 	require.ErrorIs(t, c.PipeDo(context.Background(), incrPipeline(c, &rcv)), ErrIOTimeout)
 	assert.Equal(t, uint64(1), store.NewCounter("cmd_io_timeout").Value())
 }
+
+// timerSink records the values flushed for each timer.
+type timerSink struct {
+	mu     sync.Mutex
+	timers map[string][]float64
+}
+
+func (s *timerSink) FlushCounter(string, uint64) {}
+func (s *timerSink) FlushGauge(string, uint64)   {}
+func (s *timerSink) FlushTimer(name string, value float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.timers[name] = append(s.timers[name], value)
+}
+
+func TestCommandTimeIsRecordedInMilliseconds(t *testing.T) {
+	sink := &timerSink{timers: map[string][]float64{}}
+	ps := newPoolStats(stats.NewStore(sink, false))
+
+	ps.recordCmdTime(22*time.Millisecond + 500*time.Microsecond)
+	ps.recordCmdTime(250 * time.Microsecond)
+
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	// Sinks read timer values as milliseconds; sub-millisecond commands must
+	// not read as 0.
+	assert.Equal(t, []float64{22.5, 0.25}, sink.timers["cmd_time"])
+}
