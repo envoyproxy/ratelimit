@@ -96,9 +96,15 @@ func (c *clientImpl) do(ctx context.Context, fn func(context.Context) error, onS
 	// command runs to completion, bounded by the I/O timeout, and the reply is
 	// simply dropped. The backstop bounds a command waiting for a connection
 	// and then for its reply when the I/O timeout fires late.
-	rctx, cancel := context.WithoutCancel(ctx), context.CancelFunc(func() {})
+	//
+	// As a consequence, every command handed to radix is written to Redis,
+	// even if its caller gives up before radix gets to write it.
+	//
+	// Without an I/O timeout nothing would bound the detached command, so it
+	// keeps the caller's deadline instead.
+	rctx, cancel := ctx, context.CancelFunc(func() {})
 	if c.ioTimeout > 0 {
-		rctx, cancel = context.WithTimeout(rctx, 2*c.ioTimeout)
+		rctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 2*c.ioTimeout)
 	}
 
 	done := make(chan error, 1)

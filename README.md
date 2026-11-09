@@ -1404,6 +1404,8 @@ The I/O timeout is what makes ratelimit fail fast when Redis stops answering wit
 
 Rate limit calls carry the deadline set by the client (e.g. Envoy's rate limit filter `timeout`). Ratelimit stops waiting for Redis when that deadline expires and returns an error, so the client can apply its failure mode (`failure_mode_deny`) instead of timing out on its own. A Redis command whose caller gave up keeps running in the background until Redis answers or the I/O timeout fires; calls that arrive with an already expired deadline are not sent to Redis at all.
 
+Once a command has been handed to Redis it is always executed, and counted towards the rate limit, even if its caller gives up before it is written. Letting the caller's deadline cancel commands in flight would make healthy connections be closed whenever Redis is slower than that deadline, and the reconnections slow down the calls that follow. The result is that, while Redis is slow, more commands run at once than the callers are waiting for; `REDIS_MAX_INFLIGHT` bounds them. With the I/O timeout disabled (`REDIS_IO_TIMEOUT=0`), nothing would bound those commands, so they keep the caller's deadline instead.
+
 1. `REDIS_MAX_INFLIGHT` & `REDIS_PERSECOND_MAX_INFLIGHT`: maximum number of Redis commands (pipelines) in flight per Redis client, counting those whose caller gave up. Further calls fail right away. This bounds the work queued up while Redis is slow or unreachable. `0` means unbounded. Default: `0`
 
 ### TCP Settings
