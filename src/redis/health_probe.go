@@ -10,9 +10,11 @@ import (
 	"github.com/envoyproxy/ratelimit/src/server"
 )
 
-// healthProbe periodically PINGs Redis and marks a health component unhealthy
-// after failureThreshold consecutive failures, and healthy again after one
-// success.
+// healthProbe periodically PINGs Redis and marks a readiness component
+// unhealthy after failureThreshold consecutive failures, and healthy again
+// after one success. It only affects readiness (/ready), not the health check
+// (/healthcheck): restarting ratelimit cannot fix Redis, so it must not fail
+// liveness probes.
 //
 // Health otherwise only tracks whether the pool has connections at all
 // (REDIS_HEALTH_CHECK_ACTIVE_CONNECTION), which stays true while every
@@ -45,7 +47,7 @@ func (c *clientImpl) startHealthProbe(health *server.HealthChecker, component st
 		failureThreshold: failureThreshold,
 	}
 	// The client connected at startup, so start healthy.
-	health.AddComponent(component, true)
+	health.AddReadinessComponent(component, true)
 
 	c.stopProbe = make(chan struct{})
 	c.probeDone = make(chan struct{})

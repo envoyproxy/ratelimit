@@ -954,6 +954,8 @@ Some components may be turned OFF via configurations so overall health is not ef
   - Turns unhealthy if receives sigterm signal
     All components needs to be healthy for overall health to be healthy.
 
+The overall health is served on `/healthcheck` and the gRPC health service. Readiness is served separately on `/ready`: it is healthy when the overall health is, and, when the [Redis health probe](#health-checking-for-redis-active-connection) is enabled, while Redis answers. Use `/healthcheck` for liveness probes and `/ready` for readiness probes.
+
 ### Health-check configurations
 
 Health check can be configured to check if rate-limit configurations are loaded using the following environment variable.
@@ -1282,6 +1284,7 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
 The ratelimit service listens to HTTP 1.1 (by default on port 8080) with two endpoints:
 
 1. /healthcheck → return a 200 if this service is healthy
+1. /ready → return a 200 if this service is ready to serve: healthy, and, when the [Redis health probe](#health-checking-for-redis-active-connection) is enabled, able to reach Redis
 1. /json → HTTP 1.1 endpoint for interacting with ratelimit service
 
 ## /json endpoint
@@ -1470,10 +1473,10 @@ To configure whether to return health check failure if there is no active redis 
 
 `REDIS_HEALTH_CHECK_ACTIVE_CONNECTION` only fails once every connection to Redis has been closed. A Redis that stops answering without closing its connections keeps it healthy. To make the health check reflect whether Redis actually answers, enable the health probe:
 
-1. `REDIS_HEALTH_CHECK_PING_INTERVAL`: PING each Redis (main and per-second) at this interval through the same path as rate limit calls, with the I/O timeout capped to the interval. The health check fails after `REDIS_HEALTH_CHECK_FAILURE_THRESHOLD` consecutive failed PINGs and recovers after one success. `0` disables it. Default: `0`
-1. `REDIS_HEALTH_CHECK_FAILURE_THRESHOLD`: consecutive failed PINGs before the health check fails. Default: `3`
+1. `REDIS_HEALTH_CHECK_PING_INTERVAL`: PING each Redis (main and per-second) at this interval through the same path as rate limit calls, with the I/O timeout capped to the interval. The `/ready` endpoint fails after `REDIS_HEALTH_CHECK_FAILURE_THRESHOLD` consecutive failed PINGs and recovers after one success. `0` disables it. Default: `0`
+1. `REDIS_HEALTH_CHECK_FAILURE_THRESHOLD`: consecutive failed PINGs before `/ready` fails. Default: `3`
 
-The health check is served on a single `/healthcheck` endpoint (and the gRPC health service). Use it with the probe enabled for **readiness** only: a Redis outage affects every replica at once, and failing liveness would make them all restart without helping.
+The probe only affects `/ready`, never `/healthcheck` or the gRPC health service. Point readiness probes at `/ready` and keep liveness probes on `/healthcheck`: a Redis outage affects every replica at once, and restarting them cannot fix it, only delay recovery.
 
 ## Recovering from a failover (READONLY errors)
 

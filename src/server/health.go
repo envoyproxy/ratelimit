@@ -20,15 +20,20 @@ type HealthChecker struct {
 	sync.Mutex
 	grpc      *health.Server
 	healthMap map[string]bool
-	ok        uint32
-	name      string
+	// readinessMap holds the components that only affect readiness (see
+	// ReadinessHandler), not the health check or the gRPC health service.
+	readinessMap map[string]bool
+	ok           uint32
+	ready        uint32
+	name         string
 }
 
 const (
 	ConfigHealthComponentName = "config"
 	RedisHealthComponentName  = "redis"
 	// RedisPingHealthComponentName and RedisPerSecondPingHealthComponentName
-	// are registered when the Redis health probe is enabled.
+	// are registered as readiness components when the Redis health probe is
+	// enabled.
 	RedisPingHealthComponentName          = "redis_ping"
 	RedisPerSecondPingHealthComponentName = "redis_per_second_ping"
 	SigtermComponentName                  = "sigterm"
@@ -52,6 +57,7 @@ func NewHealthChecker(grpcHealthServer *health.Server, name string, healthyWithA
 	ret.name = name
 
 	ret.healthMap = make(map[string]bool)
+	ret.readinessMap = make(map[string]bool)
 	// Store health states of components into map
 	// Redis starts unhealthy; it is marked healthy once the connection is confirmed at startup.
 	ret.healthMap[RedisHealthComponentName] = false
@@ -67,6 +73,7 @@ func NewHealthChecker(grpcHealthServer *health.Server, name string, healthyWithA
 	if areAllComponentsHealthy(ret.healthMap) {
 		ret.grpc.SetServingStatus(ret.name, healthpb.HealthCheckResponse_SERVING)
 		ret.ok = 1
+		ret.ready = 1
 	} else {
 		ret.grpc.SetServingStatus(ret.name, healthpb.HealthCheckResponse_NOT_SERVING)
 		ret.ok = 0
@@ -92,6 +99,30 @@ func (hc *HealthChecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReadinessHandler serves readiness: healthy when every component the health
+// check covers is healthy and so is every readiness component. Readiness
+// components report conditions a restart cannot fix, such as Redis not
+// answering, so they are kept out of the health check, which is commonly used
+// for liveness.
+func (hc *HealthChecker) ReadinessHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.LoadUint32(&hc.ready) == 1 {
+			w.Write([]byte("OK"))
+		} else {
+			w.WriteHeader(500)
+		}
+	})
+}
+
+// updateReadiness recomputes readiness. Must be called with hc locked.
+func (hc *HealthChecker) updateReadiness() {
+	ready := uint32(0)
+	if areAllComponentsHealthy(hc.healthMap) && areAllComponentsHealthy(hc.readinessMap) {
+		ready = 1
+	}
+	atomic.StoreUint32(&hc.ready, ready)
+}
+
 func (hc *HealthChecker) Fail(componentName string) error {
 	hc.Lock()
 	defer hc.Unlock()
@@ -99,7 +130,11 @@ func (hc *HealthChecker) Fail(componentName string) error {
 		// Set component to be unhealthy
 		hc.healthMap[componentName] = false
 		atomic.StoreUint32(&hc.ok, 0)
+		atomic.StoreUint32(&hc.ready, 0)
 		hc.grpc.SetServingStatus(hc.name, healthpb.HealthCheckResponse_NOT_SERVING)
+	} else if _, ok := hc.readinessMap[componentName]; ok {
+		hc.readinessMap[componentName] = false
+		atomic.StoreUint32(&hc.ready, 0)
 	} else {
 		errorText := fmt.Sprintf("Invalid component: %s", componentName)
 		logger.Error(errorText)
@@ -121,6 +156,10 @@ func (hc *HealthChecker) Ok(componentName string) error {
 			atomic.StoreUint32(&hc.ok, 1)
 			hc.grpc.SetServingStatus(hc.name, healthpb.HealthCheckResponse_SERVING)
 		}
+		hc.updateReadiness()
+	} else if _, ok := hc.readinessMap[componentName]; ok {
+		hc.readinessMap[componentName] = true
+		hc.updateReadiness()
 	} else {
 		errorText := fmt.Sprintf("Invalid component: %s", componentName)
 		logger.Error(errorText)
@@ -130,17 +169,15 @@ func (hc *HealthChecker) Ok(componentName string) error {
 	return nil
 }
 
-// AddComponent registers an additional component whose health contributes to
-// the overall health. Registering an existing component only sets its health.
-func (hc *HealthChecker) AddComponent(componentName string, healthy bool) {
+// AddReadinessComponent registers a component that only affects readiness
+// (see ReadinessHandler). Registering an existing component only sets its
+// health.
+func (hc *HealthChecker) AddReadinessComponent(componentName string, healthy bool) {
 	hc.Lock()
 	defer hc.Unlock()
 
-	hc.healthMap[componentName] = healthy
-	if !healthy {
-		atomic.StoreUint32(&hc.ok, 0)
-		hc.grpc.SetServingStatus(hc.name, healthpb.HealthCheckResponse_NOT_SERVING)
-	}
+	hc.readinessMap[componentName] = healthy
+	hc.updateReadiness()
 }
 
 func (hc *HealthChecker) Server() *health.Server {

@@ -178,41 +178,69 @@ func TestGrpcHealthyWithAtLeastOneConfigLoaded(t *testing.T) {
 	}
 }
 
-func TestHealthCheckAddComponent(t *testing.T) {
+func TestHealthCheckReadinessComponents(t *testing.T) {
 	defer signal.Reset(syscall.SIGTERM)
 
-	hc := server.NewHealthChecker(health.NewServer(), "ratelimit", false)
-	checkHTTP := func(wantCode int) {
+	grpcHealth := health.NewServer()
+	hc := server.NewHealthChecker(grpcHealth, "ratelimit", false)
+	check := func(handler http.Handler, path string, wantCode int) {
 		t.Helper()
 		recorder := httptest.NewRecorder()
-		r, _ := http.NewRequest("GET", "http://1.2.3.4/healthcheck", nil)
-		hc.ServeHTTP(recorder, r)
+		r, _ := http.NewRequest("GET", "http://1.2.3.4"+path, nil)
+		handler.ServeHTTP(recorder, r)
 		if recorder.Code != wantCode {
-			t.Errorf("expected code %d actual %d", wantCode, recorder.Code)
+			t.Errorf("%s: expected code %d actual %d", path, wantCode, recorder.Code)
+		}
+	}
+	checkLive := func(wantCode int) { t.Helper(); check(hc, "/healthcheck", wantCode) }
+	checkReady := func(wantCode int) { t.Helper(); check(hc.ReadinessHandler(), "/ready", wantCode) }
+	checkGrpc := func(want healthpb.HealthCheckResponse_ServingStatus) {
+		t.Helper()
+		res, err := grpcHealth.Check(context.Background(), &healthpb.HealthCheckRequest{Service: "ratelimit"})
+		if err != nil || res.Status != want {
+			t.Errorf("gRPC health: expected %v actual %v (%v)", want, res.GetStatus(), err)
 		}
 	}
 
+	// Readiness follows the health check components...
+	checkReady(500)
 	if err := hc.Ok(server.RedisHealthComponentName); err != nil {
 		t.Fatal(err)
 	}
-	checkHTTP(200)
+	checkLive(200)
+	checkReady(200)
 
 	// Unknown components are rejected until registered.
 	if err := hc.Fail(server.RedisPingHealthComponentName); err == nil {
 		t.Error("expected an error for an unregistered component")
 	}
 
-	hc.AddComponent(server.RedisPingHealthComponentName, true)
-	checkHTTP(200)
+	// ...while readiness components only affect readiness.
+	hc.AddReadinessComponent(server.RedisPingHealthComponentName, true)
+	checkReady(200)
 	if err := hc.Fail(server.RedisPingHealthComponentName); err != nil {
 		t.Fatal(err)
 	}
-	checkHTTP(500)
+	checkReady(500)
+	checkLive(200)
+	checkGrpc(healthpb.HealthCheckResponse_SERVING)
 	if err := hc.Ok(server.RedisPingHealthComponentName); err != nil {
 		t.Fatal(err)
 	}
-	checkHTTP(200)
+	checkReady(200)
 
-	hc.AddComponent(server.RedisPerSecondPingHealthComponentName, false)
-	checkHTTP(500)
+	hc.AddReadinessComponent(server.RedisPerSecondPingHealthComponentName, false)
+	checkReady(500)
+	checkLive(200)
+	if err := hc.Ok(server.RedisPerSecondPingHealthComponentName); err != nil {
+		t.Fatal(err)
+	}
+	checkReady(200)
+
+	// A failing health check component fails readiness too.
+	if err := hc.Fail(server.RedisHealthComponentName); err != nil {
+		t.Fatal(err)
+	}
+	checkLive(500)
+	checkReady(500)
 }

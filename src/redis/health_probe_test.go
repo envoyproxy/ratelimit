@@ -20,6 +20,12 @@ func healthStatus(hc *server.HealthChecker) int {
 	return rec.Code
 }
 
+func readyStatus(hc *server.HealthChecker) int {
+	rec := httptest.NewRecorder()
+	hc.ReadinessHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	return rec.Code
+}
+
 func TestHealthProbeTracksUnresponsiveRedis(t *testing.T) {
 	defer signal.Reset(syscall.SIGTERM)
 	hc := server.NewHealthChecker(health.NewServer(), "ratelimit", false)
@@ -30,15 +36,17 @@ func TestHealthProbeTracksUnresponsiveRedis(t *testing.T) {
 	c.startHealthProbe(hc, server.RedisPingHealthComponentName, 20*time.Millisecond, 15*time.Millisecond, 3)
 
 	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, http.StatusOK, healthStatus(hc))
+	assert.Equal(t, http.StatusOK, readyStatus(hc))
 
 	// Redis stops answering: connections stay open, so only the probe notices.
 	srv.setBlackhole(true)
-	assert.Eventually(t, func() bool { return healthStatus(hc) == http.StatusInternalServerError },
+	assert.Eventually(t, func() bool { return readyStatus(hc) == http.StatusInternalServerError },
 		2*time.Second, 10*time.Millisecond)
 
 	srv.setBlackhole(false)
-	assert.Eventually(t, func() bool { return healthStatus(hc) == http.StatusOK },
+	// The health check, used for liveness, is not affected.
+	assert.Equal(t, http.StatusOK, healthStatus(hc))
+	assert.Eventually(t, func() bool { return readyStatus(hc) == http.StatusOK },
 		5*time.Second, 10*time.Millisecond)
 }
 
@@ -50,12 +58,12 @@ func TestHealthProbeToleratesIsolatedFailures(t *testing.T) {
 	srv := newFakeRedis(t, nil)
 	c, _ := newFakeRedisClient(t, srv.addr(), 1, false, nil, clientOptions{ioTimeout: time.Second})
 	p := &healthProbe{client: c, health: hc, component: server.RedisPingHealthComponentName, timeout: 20 * time.Millisecond, failureThreshold: 3}
-	hc.AddComponent(p.component, true)
+	hc.AddReadinessComponent(p.component, true)
 
 	srv.setDelay(50 * time.Millisecond)
 	p.probe()
 	p.probe()
-	assert.Equal(t, http.StatusOK, healthStatus(hc), "below the threshold")
+	assert.Equal(t, http.StatusOK, readyStatus(hc), "below the threshold")
 
 	srv.setDelay(0)
 	time.Sleep(100 * time.Millisecond) // let the slow replies drain
@@ -66,7 +74,8 @@ func TestHealthProbeToleratesIsolatedFailures(t *testing.T) {
 	p.probe()
 	p.probe()
 	p.probe()
-	assert.Equal(t, http.StatusInternalServerError, healthStatus(hc))
+	assert.Equal(t, http.StatusInternalServerError, readyStatus(hc))
+	assert.Equal(t, http.StatusOK, healthStatus(hc))
 }
 
 func TestCloseStopsHealthProbe(t *testing.T) {

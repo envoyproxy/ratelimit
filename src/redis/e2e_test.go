@@ -156,8 +156,12 @@ func (s *e2eService) counter(name string) uint64 {
 	return s.store.NewCounter(name).Value()
 }
 
-func (s *e2eService) health() int {
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthcheck", s.settings.Port))
+func (s *e2eService) health() int { return s.get("/healthcheck") }
+
+func (s *e2eService) ready() int { return s.get("/ready") }
+
+func (s *e2eService) get(path string) int {
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d%s", s.settings.Port, path))
 	if err != nil {
 		return 0
 	}
@@ -292,16 +296,20 @@ func TestServiceHealthReflectsUnresponsiveRedis(t *testing.T) {
 				s.RedisHealthCheckPingInterval = 50 * time.Millisecond
 				s.RedisHealthCheckFailureThreshold = 2
 			})
-			require.Eventually(t, func() bool { return svc.health() == http.StatusOK }, 5*time.Second, 20*time.Millisecond)
+			require.Eventually(t, func() bool { return svc.ready() == http.StatusOK }, 5*time.Second, 20*time.Millisecond)
 
-			// Redis keeps its connections open but stops answering.
+			// Redis keeps its connections open but stops answering: the
+			// replica is not ready, but its health check, used for liveness,
+			// must not fail and get it restarted.
 			failing.SetBlackhole(true)
-			assert.Eventually(t, func() bool { return svc.health() == http.StatusInternalServerError },
+			assert.Eventually(t, func() bool { return svc.ready() == http.StatusInternalServerError },
 				5*time.Second, 20*time.Millisecond)
+			assert.Equal(t, http.StatusOK, svc.health())
 
 			failing.SetBlackhole(false)
-			assert.Eventually(t, func() bool { return svc.health() == http.StatusOK },
+			assert.Eventually(t, func() bool { return svc.ready() == http.StatusOK },
 				10*time.Second, 20*time.Millisecond)
+			assert.Equal(t, http.StatusOK, svc.health())
 		})
 	}
 }
@@ -309,9 +317,10 @@ func TestServiceHealthReflectsUnresponsiveRedis(t *testing.T) {
 func TestServiceHealthProbeDisabledByDefault(t *testing.T) {
 	srv := redis.NewFakeRedisForTest(t)
 	svc := startService(t, &srv, nil, func(s *settings.Settings) { s.RedisTimeout = 200 * time.Millisecond })
-	require.Eventually(t, func() bool { return svc.health() == http.StatusOK }, 5*time.Second, 20*time.Millisecond)
+	require.Eventually(t, func() bool { return svc.ready() == http.StatusOK }, 5*time.Second, 20*time.Millisecond)
 
 	srv.SetBlackhole(true)
 	time.Sleep(time.Second)
+	assert.Equal(t, http.StatusOK, svc.ready())
 	assert.Equal(t, http.StatusOK, svc.health())
 }
