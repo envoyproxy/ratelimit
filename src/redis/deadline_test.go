@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -149,3 +150,29 @@ func TestCopyReply(t *testing.T) {
 }
 
 func newUint64(v uint64) *uint64 { return &v }
+
+func TestPoolOnEmptyErrorFailsFastWithoutConnections(t *testing.T) {
+	srv := newFakeRedis(t, nil)
+	store := stats.NewStore(stats.NewNullSink(), false)
+	c := newClientImpl(context.Background(), store, false, "", "tcp", "single", srv.addr(), 2,
+		0, 0, nil, false, nil, time.Second, "ERROR", "", 10*time.Millisecond, 100*time.Millisecond,
+		time.Second, 1, false, nil, clientOptions{ioTimeout: 100 * time.Millisecond}).(*clientImpl)
+	defer c.Close()
+
+	var rcv uint64
+	require.NoError(t, c.PipeDo(context.Background(), incrPipeline(c, &rcv)))
+
+	// Redis goes away: once the pool has dropped its connections, commands
+	// fail right away instead of waiting for a connection.
+	srv.close()
+	require.Eventually(t, func() bool {
+		var rcv uint64
+		_ = c.PipeDo(context.Background(), incrPipeline(c, &rcv))
+		return c.NumActiveConns() == 0
+	}, 5*time.Second, 10*time.Millisecond)
+
+	start := time.Now()
+	err := c.PipeDo(context.Background(), incrPipeline(c, &rcv))
+	assert.ErrorIs(t, err, ErrNoConnection)
+	assert.Less(t, time.Since(start), 10*time.Millisecond)
+}
