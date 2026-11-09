@@ -246,3 +246,21 @@ func TestServiceReturnsAtRequestDeadline(t *testing.T) {
 		return svc.counter("ratelimit.service.call.should_rate_limit.redis_error") == calls
 	}, time.Second, 10*time.Millisecond)
 }
+
+func TestServiceReportsRedisOutage(t *testing.T) {
+	srv := redis.NewFakeRedisForTest(t)
+	svc := startService(t, &srv, nil, func(s *settings.Settings) { s.RedisTimeout = 200 * time.Millisecond })
+
+	srv.SetBlackhole(true)
+	const calls = 20
+	_, errs := svc.callConcurrently("minute", calls, 5*time.Second)
+	for _, err := range errs {
+		require.Error(t, err)
+	}
+
+	// Every failed call is counted, and the pool reports why.
+	assert.EqualValues(t, calls, svc.counter("ratelimit.service.call.should_rate_limit.redis_error"))
+	assert.Positive(t, svc.counter("ratelimit.redis_pool.cmd_io_timeout"))
+	assert.Eventually(t, func() bool { return svc.counter("ratelimit.redis_pool.cx_local_close_error") > 0 },
+		2*time.Second, 20*time.Millisecond)
+}

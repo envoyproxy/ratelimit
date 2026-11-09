@@ -20,10 +20,23 @@ import (
 )
 
 type poolStats struct {
-	connectionActive stats.Gauge
-	connectionTotal  stats.Counter
-	connectionClose  stats.Counter
-	hadConnError     *atomic.Bool
+	connectionActive       stats.Gauge
+	connectionTotal        stats.Counter
+	connectionClose        stats.Counter
+	connectionCloseOnError stats.Counter
+	connectionError        stats.Counter
+	hadConnError           *atomic.Bool
+	closeLogLimiter        *utils.LogLimiter
+
+	// Redis commands (pipelines) issued by rate limit calls.
+	cmdInflight         stats.Gauge
+	cmdTotal            stats.Counter
+	cmdSuccess          stats.Counter
+	cmdError            stats.Counter
+	cmdIoTimeout        stats.Counter
+	cmdDeadlineExceeded stats.Counter
+	cmdRejected         stats.Counter
+	cmdTime             stats.Timer
 }
 
 func newPoolStats(scope stats.Scope) poolStats {
@@ -31,8 +44,29 @@ func newPoolStats(scope stats.Scope) poolStats {
 	ret.connectionActive = scope.NewGauge("cx_active")
 	ret.connectionTotal = scope.NewCounter("cx_total")
 	ret.connectionClose = scope.NewCounter("cx_local_close")
+	ret.connectionCloseOnError = scope.NewCounter("cx_local_close_error")
+	ret.connectionError = scope.NewCounter("cx_connect_error")
 	ret.hadConnError = new(atomic.Bool)
+	ret.closeLogLimiter = utils.NewLogLimiter(10 * time.Second)
+
+	ret.cmdInflight = scope.NewGauge("cmd_inflight")
+	ret.cmdTotal = scope.NewCounter("cmd_total")
+	ret.cmdSuccess = scope.NewCounter("cmd_success")
+	ret.cmdError = scope.NewCounter("cmd_error")
+	ret.cmdIoTimeout = scope.NewCounter("cmd_io_timeout")
+	ret.cmdDeadlineExceeded = scope.NewCounter("cmd_deadline_exceeded")
+	ret.cmdRejected = scope.NewCounter("cmd_rejected")
+	ret.cmdTime = scope.NewTimer("cmd_time")
 	return ret
+}
+
+// recordCmdTime records a command's duration in cmd_time. Stats sinks read
+// timer values as milliseconds, but gostats timers created with NewTimer
+// record whole microseconds and NewMilliTimer whole milliseconds, which
+// would read most Redis commands, well under a millisecond, as 0. Record
+// fractional milliseconds instead.
+func (ps *poolStats) recordCmdTime(d time.Duration) {
+	ps.cmdTime.AddValue(float64(d) / float64(time.Millisecond))
 }
 
 func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Server) trace.PoolTrace {
@@ -52,12 +86,19 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 				}
 			} else {
 				ps.hadConnError.Store(true)
+				ps.connectionError.Inc()
 				logger.Errorf("creating redis connection error : %v", newConn.Err)
 			}
 		},
-		ConnClosed: func(_ trace.PoolConnClosed) {
+		ConnClosed: func(closed trace.PoolConnClosed) {
 			ps.connectionActive.Sub(1)
 			ps.connectionClose.Add(1)
+			if closed.Reason == trace.PoolConnClosedReasonError {
+				ps.connectionCloseOnError.Inc()
+				if ok, suppressed := ps.closeLogLimiter.Allow(); ok {
+					logger.Warnf("redis connection to %s closed after an error, reconnecting (%d similar messages suppressed)", closed.Addr, suppressed)
+				}
+			}
 			if healthCheckActiveConnection && srv != nil && ps.connectionActive.Value() == 0 {
 				err := srv.HealthChecker().Fail(server.RedisHealthComponentName)
 				if err != nil {
