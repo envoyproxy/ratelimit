@@ -992,8 +992,8 @@ The feature is gated by the `ENABLE_NEGATIVE_HITS` environment variable, which d
 While it is off, any request containing a negative-hit descriptor is rejected as a whole with the
 gRPC `UNIMPLEMENTED` code; a negative-hit descriptor is never silently processed as a positive hit.
 Because a rejected batch fails every descriptor in it, callers should send refunds in dedicated
-requests rather than mixing them with positive hits. Rejections are counted in the
-`ratelimit.service.negative_hits_rejected` statistic.
+requests rather than mixing them with positive hits. Rejections are counted in both
+`ratelimit.service.negative_hits_rejected` and `ratelimit.service.call.should_rate_limit.service_error`.
 
 The combination `ENABLE_NEGATIVE_HITS=true`, `BACKEND_TYPE=memcache` and
 `LOCAL_CACHE_SIZE_IN_BYTES>0` refuses to boot: an over-limit counter poisons the local cache and

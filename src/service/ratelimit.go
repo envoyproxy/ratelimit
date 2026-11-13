@@ -685,6 +685,7 @@ func (this *service) ShouldRateLimit(
 			}
 		case negativeHitsDisabledError:
 			{
+				this.stats.ShouldRateLimit.ServiceError.Inc()
 				if this.stats.NegativeHitsRejected != nil {
 					this.stats.NegativeHitsRejected.Inc()
 				}

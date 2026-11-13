@@ -2053,7 +2053,7 @@ func TestNegativeHitsRejectedWhenFlagOff(test *testing.T) {
 	t.assert.Nil(response)
 	t.assert.Equal(codes.Unimplemented, status.Code(err))
 	t.assert.EqualValues(1, t.statStore.NewCounter("negative_hits_rejected").Value())
-	t.assert.EqualValues(0, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
 }
 
 func TestNegativeHitsRejectedWhenFlagOffMixedBatch(test *testing.T) {
@@ -2070,6 +2070,7 @@ func TestNegativeHitsRejectedWhenFlagOffMixedBatch(test *testing.T) {
 	t.assert.Nil(response)
 	t.assert.Equal(codes.Unimplemented, status.Code(err))
 	t.assert.EqualValues(1, t.statStore.NewCounter("negative_hits_rejected").Value())
+	t.assert.EqualValues(1, t.statStore.NewCounter("call.should_rate_limit.service_error").Value())
 }
 
 func TestNegativeHitsAllowedWhenFlagOn(test *testing.T) {
