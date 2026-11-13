@@ -131,13 +131,11 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 ) []*pb.RateLimitResponse_DescriptorStatus {
 	logger.Debugf("starting cache lookup")
 
-	// pinning before any Redis read so a racing invalidation suppresses stale inserts to the local cache
-	localCacheGen := this.baseRateLimiter.GetLocalCacheGenSnapshot()
-
 	hitsAddends := utils.GetHitsAddends(request)
 
 	// First build a list of all cache keys that we are actually going to hit.
 	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddends)
+	localCacheGens := make([]uint64, len(cacheKeys))
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 	results := make([]uint64, len(request.Descriptors))
@@ -155,6 +153,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 		if cacheKey.Key == "" || hitsAddends[i].IsNegative {
 			continue
 		}
+		localCacheGens[i] = this.baseRateLimiter.GetLocalCacheGenSnapshot(cacheKey.Key)
 
 		// Check if key is over the limit in local cache.
 		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
@@ -272,7 +271,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 			responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-				limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i].Value, localCacheGen)
+				limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i].Value, localCacheGens[i])
 		}
 	}
 

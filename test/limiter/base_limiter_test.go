@@ -314,7 +314,7 @@ func TestGetResponseStatusOverLimit(t *testing.T) {
 	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, limiter.NewLocalCacheGuard(localCache), 0.8, "", sm, false, time.Thursday)
 	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 7, 4, 5)
-	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1, baseRateLimit.GetLocalCacheGenSnapshot())
+	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1, baseRateLimit.GetLocalCacheGenSnapshot("key"))
 	assert.Equal(pb.RateLimitResponse_OVER_LIMIT, responseStatus.GetCode())
 	assert.Equal(uint32(0), responseStatus.GetLimitRemaining())
 	assert.Equal(limits[0].Limit, responseStatus.GetCurrentLimit())
@@ -340,7 +340,7 @@ func TestGetResponseStatusOverLimitShadowMode(t *testing.T) {
 	// Key is in shadow_mode: true
 	limits := []*config.RateLimit{config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, true, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 7, 4, 5)
-	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1, baseRateLimit.GetLocalCacheGenSnapshot())
+	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1, baseRateLimit.GetLocalCacheGenSnapshot("key"))
 	assert.Equal(pb.RateLimitResponse_OK, responseStatus.GetCode())
 	assert.Equal(uint32(0), responseStatus.GetLimitRemaining())
 	assert.Equal(limits[0].Limit, responseStatus.GetCurrentLimit())
@@ -362,7 +362,7 @@ func TestGetResponseStatusBelowLimit(t *testing.T) {
 	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false, time.Thursday)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, false, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 9, 10)
-	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1, baseRateLimit.GetLocalCacheGenSnapshot())
+	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1, baseRateLimit.GetLocalCacheGenSnapshot("key"))
 	assert.Equal(pb.RateLimitResponse_OK, responseStatus.GetCode())
 	assert.Equal(uint32(4), responseStatus.GetLimitRemaining())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())
@@ -383,7 +383,7 @@ func TestGetResponseStatusBelowLimitShadowMode(t *testing.T) {
 	baseRateLimit := limiter.NewBaseRateLimit(timeSource, nil, 3600, nil, 0.8, "", sm, false, time.Thursday)
 	limits := []*config.RateLimit{config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_SECOND, sm.NewStats("key_value"), false, true, false, "", nil, false)}
 	limitInfo := limiter.NewRateLimitInfo(limits[0], 2, 6, 9, 10)
-	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1, baseRateLimit.GetLocalCacheGenSnapshot())
+	responseStatus := baseRateLimit.GetResponseDescriptorStatus("key", limitInfo, false, 1, baseRateLimit.GetLocalCacheGenSnapshot("key"))
 	assert.Equal(pb.RateLimitResponse_OK, responseStatus.GetCode())
 	assert.Equal(uint32(4), responseStatus.GetLimitRemaining())
 	assert.Equal(uint64(0), limits[0].Stats.NearLimit.Value())

@@ -133,12 +133,12 @@ func TestLocalCacheInvalidatorIsolatesPrefixes(t *testing.T) {
 		fixtures[i].awaitInvalidated(t, "poisoned_key")
 		for j := i + 1; j < len(fixtures); j++ {
 			assert.True(t, fixtures[j].cached("poisoned_key"))
-			assert.EqualValues(t, 0, fixtures[j].guard.GenSnapshot())
+			assert.EqualValues(t, 0, fixtures[j].guard.GenSnapshot([]byte("poisoned_key")))
 		}
 	}
 	for _, f := range fixtures {
 		assert.EqualValues(t, 1, f.received.Value())
-		assert.EqualValues(t, 1, f.guard.GenSnapshot())
+		assert.EqualValues(t, 1, f.guard.GenSnapshot([]byte("poisoned_key")))
 	}
 }
 
@@ -201,7 +201,7 @@ func TestLocalCacheInvalidatorSuppressesRacedInsert(t *testing.T) {
 
 	// A snapshot taken before the invalidation must not insert afterwards; a
 	// fresh one must.
-	snap := f.guard.GenSnapshot()
+	snap := f.guard.GenSnapshot([]byte("poisoned_key"))
 	publish(t, client, "poisoned_key")
 	assert.Eventually(func() bool { return f.received.Value() == 1 }, 5*time.Second, 10*time.Millisecond)
 
@@ -210,7 +210,7 @@ func TestLocalCacheInvalidatorSuppressesRacedInsert(t *testing.T) {
 	assert.False(inserted)
 	assert.False(f.cached("poisoned_key"))
 
-	inserted, err = f.guard.SetIfUnchanged([]byte("poisoned_key"), []byte{}, 60, f.guard.GenSnapshot())
+	inserted, err = f.guard.SetIfUnchanged([]byte("poisoned_key"), []byte{}, 60, f.guard.GenSnapshot([]byte("poisoned_key")))
 	assert.NoError(err)
 	assert.True(inserted)
 	assert.True(f.cached("poisoned_key"))

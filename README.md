@@ -1034,7 +1034,7 @@ including replicas that only handle positive hits.
   failover that left the old master reachable but unlinked from the new one).
 - Invalidation is ordered against poisoning: a request whose over-limit verdict was read from Redis
   before an invalidation arrived does not write the (possibly stale) entry into the local cache.
-  The suppressed insert only costs one extra Redis lookup on a later request.
+  Generations are sharded by key hash; collisions can suppress unrelated inserts in the same shard.
 - Decrements routed to the dedicated per-second Redis (`REDIS_PERSECOND`) never publish: the
   subscriber listens only on the main Redis. Refunds still apply, but a stale local-cache rejection
   can persist for the remainder of the one-second window.

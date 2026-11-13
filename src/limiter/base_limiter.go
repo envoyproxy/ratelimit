@@ -96,11 +96,11 @@ func (this *BaseRateLimiter) IsOverLimitThresholdReached(limitInfo *LimitInfo) b
 
 // GetLocalCacheGenSnapshot returns the invalidation generation to pass into
 // GetResponseDescriptorStatus; take it before the backend read.
-func (this *BaseRateLimiter) GetLocalCacheGenSnapshot() uint64 {
+func (this *BaseRateLimiter) GetLocalCacheGenSnapshot(key string) uint64 {
 	if this.localCache == nil {
 		return 0
 	}
-	return this.localCache.GenSnapshot()
+	return this.localCache.GenSnapshot([]byte(key))
 }
 
 // Generates response descriptor status based on cache key, over the limit with local cache, over the limit and
