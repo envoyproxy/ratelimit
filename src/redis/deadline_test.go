@@ -158,7 +158,7 @@ func TestPoolOnEmptyErrorFailsFastWithoutConnections(t *testing.T) {
 	store := stats.NewStore(stats.NewNullSink(), false)
 	c := newClientImpl(context.Background(), store, false, "", "tcp", "single", srv.addr(), 2,
 		0, 0, nil, false, nil, time.Second, "ERROR", "", 10*time.Millisecond, 100*time.Millisecond,
-		time.Second, 1, false, nil, clientOptions{ioTimeout: 100 * time.Millisecond}).(*clientImpl)
+		time.Second, 1, false, nil, clientOptions{ioTimeout: 100 * time.Millisecond})
 	defer c.Close()
 
 	var rcv uint64

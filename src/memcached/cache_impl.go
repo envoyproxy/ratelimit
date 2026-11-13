@@ -75,6 +75,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 
 	// First build a list of all cache keys that we are actually going to hit.
 	cacheKeys := this.baseRateLimiter.GenerateCacheKeys(request, limits, hitsAddends)
+	localCacheGens := make([]uint64, len(cacheKeys))
 
 	isOverLimitWithLocalCache := make([]bool, len(request.Descriptors))
 
@@ -90,6 +91,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 			keysToGet = append(keysToGet, cacheKey.Key)
 			continue
 		}
+		localCacheGens[i] = this.baseRateLimiter.GetLocalCacheGenSnapshot(cacheKey.Key)
 
 		// Check if key is over the limit in local cache.
 		if this.baseRateLimiter.IsOverLimitWithLocalCache(cacheKey.Key) {
@@ -154,7 +156,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 			limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 			responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
-				limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i].Value)
+				limitInfo, isOverLimitWithLocalCache[i], hitsAddends[i].Value, localCacheGens[i])
 		}
 	}
 
@@ -355,7 +357,7 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 		expirationJitterMaxSeconds: expirationJitterMaxSeconds,
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
-		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth, weekStart),
+		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, limiter.NewLocalCacheGuard(localCache), nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth, weekStart),
 	}
 }
 
