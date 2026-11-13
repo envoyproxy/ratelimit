@@ -481,7 +481,10 @@ func TestBasicConfigMemcache(t *testing.T) {
 		{Port: 6394},
 	}, func() {
 		t.Run("Memcache", testBasicConfig(makeSimpleMemcacheSettings(singleNodePort, 0)))
-		t.Run("MemcacheWithLocalCache", testBasicConfig(makeSimpleMemcacheSettings(singleNodePort, 1000)))
+		localCacheSettings := makeSimpleMemcacheSettings(singleNodePort, 1000)
+		// Memcached has no refund invalidation path for the local cache.
+		localCacheSettings.EnableNegativeHits = false
+		t.Run("MemcacheWithLocalCache", testBasicConfig(localCacheSettings))
 		cacheSettings := makeSimpleMemcacheSettings(singleNodePort, 0)
 		cacheSettings.CacheKeyPrefix = "prefix:"
 		t.Run("MemcacheWithPrefix", testBasicConfig(cacheSettings))
