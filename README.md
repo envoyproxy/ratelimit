@@ -988,7 +988,7 @@ Each descriptor entry may set the `is_negative_hits` field. When it is `true`, t
 `hits_addend` is subtracted from the rate limit counter instead of being added to it, effectively
 refunding previously consumed capacity.
 
-The feature is gated by the `ENABLE_NEGATIVE_HITS` environment variable, which defaults to `false`.
+The feature is gated by the `ENABLE_NEGATIVE_HITS` environment variable, which defaults to `true`.
 While it is off, any request containing a negative-hit descriptor is rejected as a whole with the
 gRPC `UNIMPLEMENTED` code; a negative-hit descriptor is never silently processed as a positive hit.
 Because a rejected batch fails every descriptor in it, callers should send refunds in dedicated

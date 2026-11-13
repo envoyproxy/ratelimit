@@ -119,7 +119,7 @@ type Settings struct {
 	// EnableNegativeHits gates the `is_negative_hits` descriptor feature (refunds).
 	// When false, requests containing negative-hit descriptors are rejected with
 	// UNIMPLEMENTED — never processed as positive hits.
-	EnableNegativeHits bool `envconfig:"ENABLE_NEGATIVE_HITS" default:"false"`
+	EnableNegativeHits bool `envconfig:"ENABLE_NEGATIVE_HITS" default:"true"`
 	// LocalCacheInvalidationResubscribeInterval bounds one invalidation pub/sub
 	// session, capping how long a subscription can stay silently stranded on a
 	// demoted or removed node.
