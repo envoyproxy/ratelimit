@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -111,19 +112,39 @@ func TestLocalCacheInvalidator(t *testing.T) {
 	assert.EqualValues(1, f.deleted.Value())
 }
 
+func TestLocalCacheInvalidatorClearsOnFirstSubscription(t *testing.T) {
+	redisSrv := miniredis.RunT(t)
+	allowConnect := make(chan struct{})
+	f := startInvalidatorWithDial(t, makeInvalidatorSettings(redisSrv.Addr()), func(ctx context.Context) (radix.Conn, error) {
+		select {
+		case <-allowConnect:
+			return radix.Dial(ctx, "tcp", redisSrv.Addr())
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	})
+	key := []byte("startup_key")
+	require.NoError(t, f.cache.Set(key, nil, 60))
+	snap := f.guard.GenSnapshot(key)
+	close(allowConnect)
+	f.awaitSubscribed(t, 5*time.Second)
+	assert.False(t, f.cached(string(key)))
+	inserted, err := f.guard.SetIfUnchanged(key, nil, 60, snap)
+	require.NoError(t, err)
+	assert.False(t, inserted)
+}
+
 func TestLocalCacheInvalidatorIsolatesPrefixes(t *testing.T) {
 	redisSrv := miniredis.RunT(t)
 	prefixes := []string{"", "prod:", "staging:"}
 	fixtures := make([]*invalidatorFixture, len(prefixes))
+	generations := make([]uint64, len(prefixes))
 	for i, prefix := range prefixes {
 		s := makeInvalidatorSettings(redisSrv.Addr())
 		s.CacheKeyPrefix = prefix
 		fixtures[i] = startInvalidator(t, s)
-		// Wait for Redis to process SUBSCRIBE, not just the client's flush.
-		channel := prefix + redis.LocalCacheInvalidationChannel
-		require.Eventually(t, func() bool {
-			return len(redisSrv.PubSubChannels(channel)) == 1
-		}, 5*time.Second, 10*time.Millisecond)
+		fixtures[i].awaitSubscribed(t, 5*time.Second)
+		generations[i] = fixtures[i].guard.GenSnapshot([]byte("poisoned_key"))
 		// Use the same key to make an unintended cross-deployment eviction visible.
 		require.NoError(t, fixtures[i].cache.Set([]byte("poisoned_key"), []byte{}, 60))
 	}
@@ -133,12 +154,12 @@ func TestLocalCacheInvalidatorIsolatesPrefixes(t *testing.T) {
 		fixtures[i].awaitInvalidated(t, "poisoned_key")
 		for j := i + 1; j < len(fixtures); j++ {
 			assert.True(t, fixtures[j].cached("poisoned_key"))
-			assert.EqualValues(t, 0, fixtures[j].guard.GenSnapshot([]byte("poisoned_key")))
+			assert.Equal(t, generations[j], fixtures[j].guard.GenSnapshot([]byte("poisoned_key")))
 		}
 	}
-	for _, f := range fixtures {
+	for i, f := range fixtures {
 		assert.EqualValues(t, 1, f.received.Value())
-		assert.EqualValues(t, 1, f.guard.GenSnapshot([]byte("poisoned_key")))
+		assert.Equal(t, generations[i]+1, f.guard.GenSnapshot([]byte("poisoned_key")))
 	}
 }
 
@@ -147,16 +168,40 @@ func TestLocalCacheInvalidatorReconnects(t *testing.T) {
 	redisSrv := mustNewRedisServer()
 	addr := redisSrv.Addr()
 
-	f := startInvalidator(t, makeInvalidatorSettings(addr))
+	allowReconnect := make(chan struct{})
+	first := true
+	f := startInvalidatorWithDial(t, makeInvalidatorSettings(addr), func(ctx context.Context) (radix.Conn, error) {
+		if !first {
+			select {
+			case <-allowReconnect:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		first = false
+		return radix.Dial(ctx, "tcp", addr)
+	})
 	f.awaitSubscribed(t, 5*time.Second)
+	assert.NoError(f.cache.Set([]byte("before_disconnect"), []byte{}, 60))
 
 	redisSrv.Close()
 	assert.Eventually(func() bool { return f.subscribed.Value() == 0 }, 10*time.Second, 10*time.Millisecond)
+	assert.NoError(f.cache.Set([]byte("during_disconnect"), []byte{}, 60))
+	snap := f.guard.GenSnapshot([]byte("during_disconnect"))
 
 	restartedSrv := miniredis.NewMiniRedis()
 	assert.NoError(restartedSrv.StartAddr(addr))
 	defer restartedSrv.Close()
+	assert.Equal(0, restartedSrv.Publish(redis.LocalCacheInvalidationChannel, "before_disconnect"))
+	assert.True(f.cached("before_disconnect"))
+	assert.True(f.cached("during_disconnect"))
+	close(allowReconnect)
 	f.awaitSubscribed(t, 30*time.Second)
+	assert.False(f.cached("before_disconnect"))
+	assert.False(f.cached("during_disconnect"))
+	inserted, err := f.guard.SetIfUnchanged([]byte("during_disconnect"), nil, 60, snap)
+	assert.NoError(err)
+	assert.False(inserted)
 
 	assert.NoError(f.cache.Set([]byte("poisoned_key"), []byte{}, 60))
 	client := mkSingleRedisClient(addr)
@@ -174,17 +219,32 @@ func TestLocalCacheInvalidatorRotatesSubscription(t *testing.T) {
 	s := makeInvalidatorSettings(redisSrv.Addr())
 	s.LocalCacheInvalidationResubscribeInterval = 200 * time.Millisecond
 
-	f := startInvalidator(t, s)
+	var dials atomic.Uint64
+	f := startInvalidatorWithDial(t, s, func(ctx context.Context) (radix.Conn, error) {
+		conn, err := radix.Dial(ctx, "tcp", s.RedisUrl)
+		if err == nil {
+			dials.Add(1)
+		}
+		return conn, err
+	})
 	f.awaitSubscribed(t, 5*time.Second)
 
-	time.Sleep(600 * time.Millisecond)
+	require.NoError(t, f.cache.Set([]byte("stale_key"), nil, 60))
+	snap := f.guard.GenSnapshot([]byte("stale_key"))
+	require.Eventually(t, func() bool {
+		return dials.Load() >= 3 && f.subscribed.Value() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+	assert.False(t, f.cached("stale_key"))
+	inserted, err := f.guard.SetIfUnchanged([]byte("stale_key"), nil, 60, snap)
+	require.NoError(t, err)
+	assert.False(t, inserted)
 
 	// The publish is retried: a message landing in the short unsubscribed gap
 	// between sessions is legitimately dropped (at-most-once delivery).
 	assert.NoError(t, f.cache.Set([]byte("poisoned_key"), []byte{}, 60))
 	assert.Eventually(t, func() bool {
 		publish(t, client, "poisoned_key")
-		return !f.cached("poisoned_key")
+		return f.received.Value() > 0 && !f.cached("poisoned_key")
 	}, 5*time.Second, 50*time.Millisecond)
 	f.awaitSubscribed(t, 5*time.Second)
 }

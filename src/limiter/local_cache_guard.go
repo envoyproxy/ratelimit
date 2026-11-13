@@ -11,6 +11,7 @@ import (
 // LocalCacheGuard orders cache writes against invalidations using key-hashed generations.
 type LocalCacheGuard struct {
 	cache  *freecache.Cache
+	mu     sync.RWMutex
 	shards [256]localCacheShard
 }
 
@@ -45,6 +46,8 @@ func (this *LocalCacheGuard) GenSnapshot(key []byte) uint64 {
 // SetIfUnchanged inserts the entry unless an invalidation was processed since
 // the snapshot; it reports whether the insert happened.
 func (this *LocalCacheGuard) SetIfUnchanged(key []byte, value []byte, expireSeconds int, genSnapshot uint64) (bool, error) {
+	this.mu.RLock()
+	defer this.mu.RUnlock()
 	shard := this.shard(key)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
@@ -57,9 +60,21 @@ func (this *LocalCacheGuard) SetIfUnchanged(key []byte, value []byte, expireSeco
 // Invalidate bumps the generation and deletes the entry, reporting whether it
 // existed.
 func (this *LocalCacheGuard) Invalidate(key []byte) bool {
+	this.mu.RLock()
+	defer this.mu.RUnlock()
 	shard := this.shard(key)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 	shard.gen.Add(1)
 	return this.cache.Del(key)
+}
+
+// Clear evicts all entries and suppresses inserts using older snapshots.
+func (this *LocalCacheGuard) Clear() {
+	this.mu.Lock()
+	defer this.mu.Unlock()
+	for i := range this.shards {
+		this.shards[i].gen.Add(1)
+	}
+	this.cache.Clear()
 }

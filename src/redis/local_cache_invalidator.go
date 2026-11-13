@@ -36,8 +36,8 @@ func newLocalCacheInvalidationStats(scope gostats.Scope) localCacheInvalidationS
 }
 
 // LocalCacheInvalidator deletes cache keys published on the invalidation
-// channel from this replica's local cache. Best-effort, at-most-once: a
-// missed message leaves the stale entry until the window ends.
+// channel from this replica's local cache. Delivery is best-effort, at-most-once;
+// every confirmed subscription clears the cache to cover missed publications.
 //
 // It uses the driver's dialer and current topology for a dedicated raw Conn:
 // pooled clients cannot subscribe. The loop provides nonfatal retries with
@@ -133,6 +133,7 @@ func (this *LocalCacheInvalidator) subscribeAndConsume(ctx context.Context) erro
 	if err := this.subscribe(ctx, conn, pubSubConn); err != nil {
 		return err
 	}
+	this.localCache.Clear()
 	sessionCtx, cancel := context.WithTimeout(ctx, this.resubscribeInterval)
 	defer cancel()
 
