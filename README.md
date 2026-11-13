@@ -1018,7 +1018,9 @@ With the Redis backend, a counter that goes over the limit poisons the local cac
 that observed it: the over-limit answer is then served locally until the window ends. Since a
 refund can bring the counter back under the limit, negative hits use Redis pub/sub to invalidate
 those entries across replicas: every refund that decreases the counter publishes the cache key on
-the `ratelimit:local_cache_invalidation` channel, even if the refunding replica has no local cache.
+the `CACHE_KEY_PREFIX + "ratelimit:local_cache_invalidation"` channel, even if the refunding replica
+has no local cache. With an empty prefix, the channel is `ratelimit:local_cache_invalidation`.
+Replicas sharing counters must use the same prefix; different prefixes isolate invalidation traffic.
 Request overrides can use different thresholds, so publication does not depend on crossing the
 refund's threshold. Replicas with `ENABLE_NEGATIVE_HITS=true` and a local cache subscribe and delete
 the key from their local caches. Enable negative hits on all replicas caching the shared counters,
@@ -1045,7 +1047,9 @@ including replicas that only handle positive hits.
 With `ENABLE_NEGATIVE_HITS=true`, the identity configured by `REDIS_AUTH` needs the `EVAL`, `GET`,
 `SET` and `PUBLISH` commands for the refund script, including when the refunding replica has no local
 cache. With the local cache additionally enabled, it also needs `SUBSCRIBE`. With Redis 7 channel
-ACLs, grant access to `&ratelimit:local_cache_invalidation` for both publishers and subscribers.
+ACLs, grant access to the prefixed channel for both publishers and subscribers: for example,
+`CACHE_KEY_PREFIX=prod:` requires `&prod:ratelimit:local_cache_invalidation`. With an empty prefix,
+use `&ratelimit:local_cache_invalidation`.
 
 A missing `SUBSCRIBE` permission keeps publishing enabled while the subscriber retries forever —
 watch the `subscribed` gauge, every invalidation published in that state is lost. The refund

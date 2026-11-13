@@ -12,6 +12,7 @@ import (
 	gostats "github.com/lyft/gostats"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/envoyproxy/ratelimit/src/limiter"
 	"github.com/envoyproxy/ratelimit/src/redis"
@@ -108,6 +109,37 @@ func TestLocalCacheInvalidator(t *testing.T) {
 	publish(t, client, "unknown_key")
 	assert.Eventually(func() bool { return f.received.Value() == 2 }, 5*time.Second, 10*time.Millisecond)
 	assert.EqualValues(1, f.deleted.Value())
+}
+
+func TestLocalCacheInvalidatorIsolatesPrefixes(t *testing.T) {
+	redisSrv := miniredis.RunT(t)
+	prefixes := []string{"", "prod:", "staging:"}
+	fixtures := make([]*invalidatorFixture, len(prefixes))
+	for i, prefix := range prefixes {
+		s := makeInvalidatorSettings(redisSrv.Addr())
+		s.CacheKeyPrefix = prefix
+		fixtures[i] = startInvalidator(t, s)
+		// Wait for Redis to process SUBSCRIBE, not just the client's flush.
+		channel := prefix + redis.LocalCacheInvalidationChannel
+		require.Eventually(t, func() bool {
+			return len(redisSrv.PubSubChannels(channel)) == 1
+		}, 5*time.Second, 10*time.Millisecond)
+		// Use the same key to make an unintended cross-deployment eviction visible.
+		require.NoError(t, fixtures[i].cache.Set([]byte("poisoned_key"), []byte{}, 60))
+	}
+
+	for i, prefix := range prefixes {
+		require.Equal(t, 1, redisSrv.Publish(prefix+redis.LocalCacheInvalidationChannel, "poisoned_key"))
+		fixtures[i].awaitInvalidated(t, "poisoned_key")
+		for j := i + 1; j < len(fixtures); j++ {
+			assert.True(t, fixtures[j].cached("poisoned_key"))
+			assert.EqualValues(t, 0, fixtures[j].guard.GenSnapshot())
+		}
+	}
+	for _, f := range fixtures {
+		assert.EqualValues(t, 1, f.received.Value())
+		assert.EqualValues(t, 1, f.guard.GenSnapshot())
+	}
 }
 
 func TestLocalCacheInvalidatorReconnects(t *testing.T) {

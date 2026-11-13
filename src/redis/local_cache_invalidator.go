@@ -15,7 +15,8 @@ import (
 	"github.com/envoyproxy/ratelimit/src/utils"
 )
 
-// Cache keys published here are evicted from every replica's local cache.
+// LocalCacheInvalidationChannel is the channel suffix, prepended with
+// CACHE_KEY_PREFIX to isolate deployments sharing Redis.
 const LocalCacheInvalidationChannel = "ratelimit:local_cache_invalidation"
 
 type localCacheInvalidationStats struct {
@@ -43,6 +44,7 @@ func newLocalCacheInvalidationStats(scope gostats.Scope) localCacheInvalidationS
 type LocalCacheInvalidator struct {
 	localCache *limiter.LocalCacheGuard
 	stats      localCacheInvalidationStats
+	channel    string
 
 	dial                func(context.Context) (radix.Conn, error)
 	resubscribeInterval time.Duration
@@ -65,6 +67,7 @@ func StartLocalCacheInvalidator(ctx context.Context, s settings.Settings, localC
 	this := &LocalCacheInvalidator{
 		localCache:          localCache,
 		stats:               newLocalCacheInvalidationStats(scope),
+		channel:             s.CacheKeyPrefix + LocalCacheInvalidationChannel,
 		dial:                dial,
 		resubscribeInterval: s.LocalCacheInvalidationResubscribeInterval,
 		backoff: &backoff.Backoff{
@@ -129,13 +132,13 @@ func (this *LocalCacheInvalidator) subscribeAndConsume(ctx context.Context) erro
 	pubSubConn := radix.PubSubConfig{}.New(conn)
 	defer pubSubConn.Close()
 
-	if err := pubSubConn.Subscribe(sessionCtx, LocalCacheInvalidationChannel); err != nil {
+	if err := pubSubConn.Subscribe(sessionCtx, this.channel); err != nil {
 		return err
 	}
 	this.backoff.Reset()
 	this.stats.subscribed.Set(1)
 	defer this.stats.subscribed.Set(0)
-	logger.Debugf("subscribed to %s for local cache invalidation", LocalCacheInvalidationChannel)
+	logger.Debugf("subscribed to %s for local cache invalidation", this.channel)
 
 	for {
 		message, err := pubSubConn.Next(sessionCtx)

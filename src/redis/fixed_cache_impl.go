@@ -32,6 +32,7 @@ type fixedRateLimitCacheImpl struct {
 	// Refunds that decrease the counter publish the key on the local
 	// cache invalidation channel (main client only).
 	publishInvalidations bool
+	invalidationChannel  string
 	baseRateLimiter      *limiter.BaseRateLimiter
 }
 
@@ -62,7 +63,7 @@ return new_val
 `
 
 func pipelineAppendDecrement(client Client, pipeline *Pipeline, key string, hitsAddend uint64, result *uint64,
-	expirationSeconds int64, publishInvalidation bool,
+	expirationSeconds int64, publishInvalidation bool, invalidationChannel string,
 ) {
 	publishFlag := "0"
 	if publishInvalidation {
@@ -73,7 +74,7 @@ func pipelineAppendDecrement(client Client, pipeline *Pipeline, key string, hits
 	// Redis Cluster mode the command would be routed using the script text,
 	// causing MOVED/CROSSSLOT errors or misrouting.
 	*pipeline = client.PipeAppendWithRoutingKey(*pipeline, key, result, "EVAL", DecrementScript, 1, key,
-		hitsAddend, expirationSeconds, publishFlag, LocalCacheInvalidationChannel)
+		hitsAddend, expirationSeconds, publishFlag, invalidationChannel)
 }
 
 func (this *fixedRateLimitCacheImpl) selectPipeline(cacheKey limiter.CacheKey, pipeline *Pipeline, perSecondPipeline *Pipeline) (client Client, p *Pipeline, onPerSecondRedis bool) {
@@ -231,7 +232,7 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 			// The subscriber listens only on the main Redis.
 			publishInvalidation := this.publishInvalidations && !onPerSecondRedis
 			pipelineAppendDecrement(client, p, cacheKey.Key, hitsAddends[i].Value, &results[i], expirationSeconds,
-				publishInvalidation)
+				publishInvalidation, this.invalidationChannel)
 		} else {
 			pipelineAppend(client, p, cacheKey.Key, this.getHitsAddendValue(hitsAddends[i].Value,
 				isCacheKeyOverlimit, isCacheKeyNearlimit, nearlimitIndexes[i]), &results[i], expirationSeconds)
@@ -291,5 +292,6 @@ func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSourc
 		stopCacheKeyIncrementWhenOverlimit: stopCacheKeyIncrementWhenOverlimit,
 		baseRateLimiter:                    limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth, weekStart),
 		publishInvalidations:               publishInvalidations,
+		invalidationChannel:                cacheKeyPrefix + LocalCacheInvalidationChannel,
 	}
 }
