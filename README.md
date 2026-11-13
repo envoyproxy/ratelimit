@@ -1027,9 +1027,10 @@ the key from their local caches. Enable negative hits on all replicas caching th
 including replicas that only handle positive hits.
 
 - Invalidation is best-effort / at-most-once: messages are never buffered or replayed, so a replica
-  clears its local cache after every confirmed subscription, including startup, error recovery,
-  and routine rotations. Older in-flight verdicts cannot repopulate the cleared entries. This
-  repairs missed invalidations at the next successful subscription, at the cost of extra Redis lookups.
+  clears its local cache after a confirmed subscription on startup or recovery from an error.
+  Older in-flight verdicts cannot repopulate the cleared entries. Routine rotations retain the
+  cache to avoid extra Redis traffic; messages missed during their brief gap can leave stale
+  entries until the window ends.
 - The subscriber re-dials every `LOCAL_CACHE_INVALIDATION_RESUBSCRIBE_INTERVAL` (default `5m`),
   selecting an endpoint from the main Redis client's current Sentinel/Cluster topology. This bounds how long a
   subscription can stay silently attached to a demoted or removed node (e.g. after a sentinel

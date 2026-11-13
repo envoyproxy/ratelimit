@@ -229,15 +229,13 @@ func TestLocalCacheInvalidatorRotatesSubscription(t *testing.T) {
 	})
 	f.awaitSubscribed(t, 5*time.Second)
 
-	require.NoError(t, f.cache.Set([]byte("stale_key"), nil, 60))
-	snap := f.guard.GenSnapshot([]byte("stale_key"))
+	require.NoError(t, f.cache.Set([]byte("retained_key"), nil, 60))
+	snap := f.guard.GenSnapshot([]byte("retained_key"))
 	require.Eventually(t, func() bool {
 		return dials.Load() >= 3 && f.subscribed.Value() == 1
 	}, 5*time.Second, 10*time.Millisecond)
-	assert.False(t, f.cached("stale_key"))
-	inserted, err := f.guard.SetIfUnchanged([]byte("stale_key"), nil, 60, snap)
-	require.NoError(t, err)
-	assert.False(t, inserted)
+	assert.True(t, f.cached("retained_key"))
+	assert.Equal(t, snap, f.guard.GenSnapshot([]byte("retained_key")))
 
 	// The publish is retried: a message landing in the short unsubscribed gap
 	// between sessions is legitimately dropped (at-most-once delivery).

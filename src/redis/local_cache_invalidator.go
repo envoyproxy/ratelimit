@@ -37,7 +37,7 @@ func newLocalCacheInvalidationStats(scope gostats.Scope) localCacheInvalidationS
 
 // LocalCacheInvalidator deletes cache keys published on the invalidation
 // channel from this replica's local cache. Delivery is best-effort, at-most-once;
-// every confirmed subscription clears the cache to cover missed publications.
+// startup and recovery from subscription errors clear the cache.
 //
 // It uses the driver's dialer and current topology for a dedicated raw Conn:
 // pooled clients cannot subscribe. The loop provides nonfatal retries with
@@ -101,14 +101,16 @@ func (this *LocalCacheInvalidator) Close() error {
 
 func (this *LocalCacheInvalidator) run(ctx context.Context) {
 	defer close(this.done)
+	clearCache := true
 	for {
-		err := this.subscribeAndConsume(ctx)
+		err := this.subscribeAndConsume(ctx, clearCache)
 		if err != nil && ctx.Err() == nil {
 			logger.Warnf("local cache invalidation subscription lost: %v", err)
 		}
 		if ctx.Err() != nil {
 			return
 		}
+		clearCache = err != nil
 		if err == nil {
 			// Routine session rotation: reconnect immediately.
 			continue
@@ -121,7 +123,7 @@ func (this *LocalCacheInvalidator) run(ctx context.Context) {
 	}
 }
 
-func (this *LocalCacheInvalidator) subscribeAndConsume(ctx context.Context) error {
+func (this *LocalCacheInvalidator) subscribeAndConsume(ctx context.Context, clearCache bool) error {
 	conn, err := this.connect(ctx)
 	if err != nil {
 		return err
@@ -133,7 +135,9 @@ func (this *LocalCacheInvalidator) subscribeAndConsume(ctx context.Context) erro
 	if err := this.subscribe(ctx, conn, pubSubConn); err != nil {
 		return err
 	}
-	this.localCache.Clear()
+	if clearCache {
+		this.localCache.Clear()
+	}
 	sessionCtx, cancel := context.WithTimeout(ctx, this.resubscribeInterval)
 	defer cancel()
 
