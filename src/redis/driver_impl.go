@@ -482,6 +482,7 @@ func newClientImpl(ctx context.Context, scope stats.Scope, useTls bool, auth, re
 func newPubSubDialer(client redisClient, dialer radix.Dialer, network, addr string) func(context.Context) (radix.Conn, error) {
 	var next uint64
 	return func(ctx context.Context) (radix.Conn, error) {
+		dialNetwork, dialAddr := network, addr
 		if multi, ok := client.(radix.MultiClient); ok {
 			clients, err := multi.Clients()
 			if err != nil {
@@ -496,11 +497,11 @@ func newPubSubDialer(client redisClient, dialer radix.Dialer, network, addr stri
 			}
 			// Stable rotation ensures a stalled cluster node cannot starve others.
 			sort.Strings(addrs)
-			addr = addrs[next%uint64(len(addrs))]
+			dialAddr = addrs[next%uint64(len(addrs))]
 			next++
-			network = "tcp"
+			dialNetwork = "tcp"
 		}
-		return dialer.Dial(ctx, network, addr)
+		return dialer.Dial(ctx, dialNetwork, dialAddr)
 	}
 }
 
