@@ -333,6 +333,87 @@ func TestConfigLimitOverride(t *testing.T) {
 	assert.EqualValues(1, stats.NewCounter("test-domain.key1_value1.subkey1_something_else.within_limit").Value())
 }
 
+// TestConfigLimitOverridePreservesQuotaMode verifies that a dynamic-metadata limit
+// override (descriptor.Limit set by Envoy, e.g. via fromMetadata) overrides the limit
+// value/unit while preserving the quota_mode configured on the matched config leaf.
+// Regression test: previously the override path hardcoded quota_mode=false, which
+// silently dropped overridden quota descriptors out of quota-group exhaustion.
+func TestConfigLimitOverridePreservesQuotaMode(t *testing.T) {
+	assert := assert.New(t)
+	stats := stats.NewStore(stats.NewNullSink(), false)
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("quotamode_config.yaml"), mockstats.NewMockStatManager(stats), false)
+	rlConfig.Dump()
+
+	// Override on a leaf configured with quota_mode: true -> quota_mode preserved,
+	// while requests_per_unit/unit come from the override.
+	rl := rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey1", Value: "subvalue1"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 1, Unit: pb_type.RateLimitUnit_MONTH,
+			},
+		})
+	require.NotNil(t, rl)
+	assert.Equal("test-domain.key1_value1.subkey1_subvalue1", rl.FullKey)
+	assert.True(rl.QuotaMode, "quota_mode from the config leaf must be preserved on override")
+	assert.False(rl.ShadowMode, "shadow_mode stays disabled for overrides")
+	common.AssertProtoEqual(assert, &pb.RateLimitResponse_RateLimit{
+		RequestsPerUnit: 1,
+		Unit:            pb.RateLimitResponse_RateLimit_MONTH,
+	}, rl.Limit)
+
+	// Override on a leaf without quota_mode -> quota_mode stays false.
+	rl = rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "subkey2", Value: "subvalue2"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 5, Unit: pb_type.RateLimitUnit_MONTH,
+			},
+		})
+	require.NotNil(t, rl)
+	assert.Equal("test-domain.key1_value1.subkey2_subvalue2", rl.FullKey)
+	assert.False(rl.QuotaMode, "quota_mode must stay false when config leaf has no quota_mode")
+
+	// Override on a leaf with quota_mode AND shadow_mode -> quota_mode preserved,
+	// shadow_mode still forced off for overrides.
+	rl = rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key2", Value: "value2"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 7, Unit: pb_type.RateLimitUnit_HOUR,
+			},
+		})
+	require.NotNil(t, rl)
+	assert.Equal("test-domain.key2_value2", rl.FullKey)
+	assert.True(rl.QuotaMode)
+	assert.False(rl.ShadowMode)
+	common.AssertProtoEqual(assert, &pb.RateLimitResponse_RateLimit{
+		RequestsPerUnit: 7,
+		Unit:            pb.RateLimitResponse_RateLimit_HOUR,
+	}, rl.Limit)
+
+	// Override on a descriptor with no matching config leaf -> still returns the
+	// override limit, with quota_mode defaulting to false.
+	rl = rlConfig.GetLimit(
+		context.TODO(), "test-domain",
+		&pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key1", Value: "value1"}, {Key: "nomatch", Value: "x"}},
+			Limit: &pb_struct.RateLimitDescriptor_RateLimitOverride{
+				RequestsPerUnit: 9, Unit: pb_type.RateLimitUnit_DAY,
+			},
+		})
+	require.NotNil(t, rl)
+	assert.Equal("test-domain.key1_value1.nomatch_x", rl.FullKey)
+	assert.False(rl.QuotaMode)
+	common.AssertProtoEqual(assert, &pb.RateLimitResponse_RateLimit{
+		RequestsPerUnit: 9,
+		Unit:            pb.RateLimitResponse_RateLimit_DAY,
+	}, rl.Limit)
+}
+
 func expectConfigPanic(t *testing.T, call func(), expectedError string) {
 	assert := assert.New(t)
 	defer func() {
