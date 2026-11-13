@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jpillora/backoff"
@@ -126,15 +127,15 @@ func (this *LocalCacheInvalidator) subscribeAndConsume(ctx context.Context) erro
 		return err
 	}
 
-	sessionCtx, cancel := context.WithTimeout(ctx, this.resubscribeInterval)
-	defer cancel()
-
 	pubSubConn := radix.PubSubConfig{}.New(conn)
 	defer pubSubConn.Close()
 
-	if err := pubSubConn.Subscribe(sessionCtx, this.channel); err != nil {
+	if err := this.subscribe(ctx, conn, pubSubConn); err != nil {
 		return err
 	}
+	sessionCtx, cancel := context.WithTimeout(ctx, this.resubscribeInterval)
+	defer cancel()
+
 	this.backoff.Reset()
 	this.stats.subscribed.Set(1)
 	defer this.stats.subscribed.Set(0)
@@ -156,9 +157,29 @@ func (this *LocalCacheInvalidator) subscribeAndConsume(ctx context.Context) erro
 	}
 }
 
-// connect establishes a confirmed connection within connectTimeout: radix's
-// pub/sub Subscribe and Ping are flush-only, so the PING round trip is the
-// only bounded proof that the endpoint responds.
+// subscribe waits for Redis to acknowledge the channel before the session is
+// considered live. Radix's Subscribe only flushes the command, and Next discards
+// subscription acknowledgements, so read the first response directly from Conn.
+func (this *LocalCacheInvalidator) subscribe(ctx context.Context, conn radix.Conn, pubSubConn radix.PubSubConn) error {
+	ctx, cancel := context.WithTimeout(ctx, this.connectTimeout)
+	defer cancel()
+	if err := pubSubConn.Subscribe(ctx, this.channel); err != nil {
+		return err
+	}
+	// Both RESP2 arrays and RESP3 push frames decode into a slice. This is a
+	// fresh connection subscribing to exactly one channel, so the count is 1.
+	var ack []string
+	if err := conn.EncodeDecode(ctx, nil, &ack); err != nil {
+		return fmt.Errorf("confirming local cache invalidation subscription: %w", err)
+	}
+	if len(ack) != 3 || ack[0] != "subscribe" || ack[1] != this.channel || ack[2] != "1" {
+		return fmt.Errorf("unexpected local cache invalidation subscription acknowledgement: %q", ack)
+	}
+	return nil
+}
+
+// connect bounds dialing and verifies the connection with a normal PING round
+// trip. The subscription acknowledgement is checked separately.
 func (this *LocalCacheInvalidator) connect(ctx context.Context) (radix.Conn, error) {
 	ctx, cancel := context.WithTimeout(ctx, this.connectTimeout)
 	defer cancel()
