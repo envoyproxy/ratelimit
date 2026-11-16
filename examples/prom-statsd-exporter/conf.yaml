@@ -1,4 +1,4 @@
-mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
+mappings: # Requires statsd exporter >= v0.24.0 since it uses the "scale" option.
   - match: "ratelimit.service.rate_limit.*.*.near_limit"
     name: "ratelimit_service_rate_limit_near_limit"
     timer_type: "histogram"
@@ -68,6 +68,7 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
   - match: "ratelimit_server.*.response_time"
     name: "ratelimit_service_response_time_seconds"
     timer_type: histogram
+    scale: 0.001 # response_time is reported in milliseconds
     labels:
       grpc_method: "$1"
 
