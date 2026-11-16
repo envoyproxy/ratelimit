@@ -74,6 +74,7 @@ func NewRateLimiterCacheImplFromSettings(ctx context.Context, s settings.Setting
 		s.StopCacheKeyIncrementWhenOverlimit,
 		s.UseCalendarMonthRateLimit,
 		weekStart,
+		s.CalendarYearStartMonth(),
 	), closer
 }
 

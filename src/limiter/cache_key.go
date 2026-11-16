@@ -22,15 +22,19 @@ type CacheKeyGenerator struct {
 	// Defaults to Thursday, which matches the legacy epoch-division behaviour
 	// (Unix epoch 0 was Thursday).
 	weekStart time.Weekday
+	// yearStart is the month on which YEAR-unit windows begin (the 1st, UTC).
+	// Zero keeps the legacy fixed 365-day epoch-division behaviour.
+	yearStart time.Month
 	// bytes.Buffer pool used to efficiently generate cache keys.
 	bufferPool sync.Pool
 }
 
-func NewCacheKeyGenerator(prefix string, useCalendarMonth bool, weekStart time.Weekday) CacheKeyGenerator {
+func NewCacheKeyGenerator(prefix string, useCalendarMonth bool, weekStart time.Weekday, yearStart time.Month) CacheKeyGenerator {
 	return CacheKeyGenerator{
 		prefix:           prefix,
 		useCalendarMonth: useCalendarMonth,
 		weekStart:        weekStart,
+		yearStart:        yearStart,
 		bufferPool: sync.Pool{
 			New: func() interface{} {
 				return new(bytes.Buffer)
@@ -97,6 +101,10 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 		// Anchor the weekly window to the configured start-of-week in UTC.
 		// Defaults to Thursday, matching the legacy epoch-division behaviour.
 		bucketStart = utils.WeekStartUnix(now, this.weekStart)
+	} else if this.yearStart != 0 && limit.Limit.Unit == pb.RateLimitResponse_RateLimit_YEAR {
+		// Calendar (or fiscal) years vary in length, so bucket by the start of
+		// the current year beginning on the 1st of yearStart (UTC).
+		bucketStart = utils.YearStartUnix(now, this.yearStart)
 	} else {
 		divider := utils.UnitToDivider(limit.Limit.Unit)
 		bucketStart = (now / divider) * divider

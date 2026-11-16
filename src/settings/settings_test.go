@@ -3,6 +3,7 @@ package settings
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -172,6 +173,45 @@ func TestWeekRateLimitResetDay_Valid(t *testing.T) {
 func TestWeekRateLimitResetDay_InvalidPanics(t *testing.T) {
 	os.Setenv("WEEK_RATE_LIMIT_RESET_DAY", "Mondey")
 	defer os.Unsetenv("WEEK_RATE_LIMIT_RESET_DAY")
+
+	assert.Panics(t, func() { NewSettings() })
+}
+
+// Tests for UseCalendarYearRateLimit and YearRateLimitStartMonth
+func TestCalendarYearStartMonth_DefaultDisabled(t *testing.T) {
+	os.Unsetenv("USE_CALENDAR_YEAR_RATE_LIMIT")
+	os.Unsetenv("YEAR_RATE_LIMIT_START_MONTH")
+
+	settings := NewSettings()
+
+	assert.False(t, settings.UseCalendarYearRateLimit)
+	assert.Equal(t, "January", settings.YearRateLimitStartMonth)
+	assert.Equal(t, time.Month(0), settings.CalendarYearStartMonth())
+}
+
+func TestCalendarYearStartMonth_EnabledDefaultsToJanuary(t *testing.T) {
+	t.Setenv("USE_CALENDAR_YEAR_RATE_LIMIT", "true")
+	os.Unsetenv("YEAR_RATE_LIMIT_START_MONTH")
+
+	assert.Equal(t, time.January, NewSettings().CalendarYearStartMonth())
+}
+
+func TestCalendarYearStartMonth_EnabledWithStartMonth(t *testing.T) {
+	t.Setenv("USE_CALENDAR_YEAR_RATE_LIMIT", "true")
+	t.Setenv("YEAR_RATE_LIMIT_START_MONTH", "april")
+
+	assert.Equal(t, time.April, NewSettings().CalendarYearStartMonth())
+}
+
+func TestCalendarYearStartMonth_StartMonthIgnoredWhenDisabled(t *testing.T) {
+	t.Setenv("USE_CALENDAR_YEAR_RATE_LIMIT", "false")
+	t.Setenv("YEAR_RATE_LIMIT_START_MONTH", "April")
+
+	assert.Equal(t, time.Month(0), NewSettings().CalendarYearStartMonth())
+}
+
+func TestYearRateLimitStartMonth_InvalidPanics(t *testing.T) {
+	t.Setenv("YEAR_RATE_LIMIT_START_MONTH", "Apr")
 
 	assert.Panics(t, func() { NewSettings() })
 }
