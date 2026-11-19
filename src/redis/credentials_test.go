@@ -79,17 +79,17 @@ func TestCredentialProviderComposesWithCloseOnReadOnly(t *testing.T) {
 	srv := miniredis.RunT(t)
 	srv.RequireUserAuth("cache-user", "token")
 
-	dialer := wrapDialerCloseOnReadOnly(wrapDialerCredentialProvider(radix.Dialer{}, &stubCredentialProvider{
+	dialer := wrapDialerConn(wrapDialerCredentialProvider(radix.Dialer{}, &stubCredentialProvider{
 		user: "cache-user",
 		pass: "token",
-	}))
+	}), true)
 
 	conn := requireAuthenticatedConn(t, dialer, srv.Addr())
-	assert.IsType(t, readOnlyClosingConn{}, conn)
+	assert.IsType(t, wrappedConn{}, conn)
 }
 
 func TestCredentialProviderRefusesADialerItCannotAuthenticate(t *testing.T) {
-	base := wrapDialerCloseOnReadOnly(radix.Dialer{})
+	base := wrapDialerConn(radix.Dialer{}, true)
 
 	assert.PanicsWithError(t, "the Redis credential provider must wrap the dialer before any CustomConn dialer, otherwise connections are not authenticated", func() {
 		wrapDialerCredentialProvider(base, &stubCredentialProvider{})
@@ -228,7 +228,7 @@ func newTestClient(t *testing.T, addr string, closeOnReadOnly bool, provider Cre
 
 	return newClientImpl(context.Background(), stats.NewStore(stats.NewNullSink(), false), false, "", "tcp",
 		"single", addr, 1, 0, 0, nil, false, nil, 10*time.Second, "", "", time.Second, 30*time.Second,
-		100*time.Millisecond, 1, closeOnReadOnly, provider)
+		100*time.Millisecond, 1, closeOnReadOnly, provider, clientOptions{ioTimeout: 10 * time.Second})
 }
 
 func TestNewClientImplAuthenticatesWithCredentialProvider(t *testing.T) {

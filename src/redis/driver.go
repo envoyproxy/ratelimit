@@ -51,6 +51,9 @@ type Client interface {
 	// a single write, then reads their responses in a single read. This reduces
 	// network delay into a single round-trip.
 	//
+	// PipeDo returns when ctx is done even if Redis has not answered yet. The
+	// pipeline's receivers are only written when PipeDo returns no error.
+	//
 	// @param ctx supplies the context for Redis I/O.
 	// @param pipeline supplies the queue for pending commands.
 	PipeDo(ctx context.Context, pipeline Pipeline) error
@@ -68,6 +71,10 @@ type Client interface {
 type PipelineAction struct {
 	Action radix.Action
 	Key    string
+	// rcv is the caller's receiver and reply the private one Action decodes
+	// into; reply is copied into rcv only once the pipeline succeeded, so a
+	// pipeline the caller stopped waiting for never writes into rcv.
+	rcv, reply interface{}
 }
 
 type Pipeline []PipelineAction

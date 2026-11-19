@@ -89,6 +89,12 @@ mappings:
     scale: 0.001
     labels:
       grpc_method: "$1"
+  - match: "ratelimit.*.cmd_time"
+    name: "ratelimit_redis_cmd_time_seconds"
+    timer_type: histogram
+    scale: 0.001
+    labels:
+      pool: "$1"
 
   - match: "ratelimit.service.config_load_success"
     name: "ratelimit_service_config_load_success"

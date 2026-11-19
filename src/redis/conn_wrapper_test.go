@@ -3,7 +3,9 @@ package redis
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -36,7 +38,7 @@ func TestIsReadOnlyError(t *testing.T) {
 // stubConn returns a radix.Conn whose replies are driven by fn, wrapped the
 // same way newClientImpl wraps real connections.
 func wrappedStubConn(fn func(ctx context.Context, args []string) interface{}) radix.Conn {
-	return readOnlyClosingConn{Conn: radix.NewStubConn("tcp", "127.0.0.1:6379", fn)}
+	return wrappedConn{Conn: radix.NewStubConn("tcp", "127.0.0.1:6379", fn), closeOnReadOnly: true}
 }
 
 func TestReadOnlyClosingConnUnwrapsReadOnlyErrors(t *testing.T) {
@@ -92,7 +94,7 @@ func TestPoolDiscardsConnOnReadOnly(t *testing.T) {
 
 	// The first dialed "server" answers writes with READONLY (a demoted
 	// master); every later dial reaches a healthy master.
-	dialer := wrapDialerCloseOnReadOnly(radix.Dialer{
+	dialer := wrapDialerConn(radix.Dialer{
 		CustomConn: func(ctx context.Context, network, addr string) (radix.Conn, error) {
 			demoted := atomic.AddInt64(&dials, 1) == 1
 			return radix.NewStubConn(network, addr, func(ctx context.Context, args []string) interface{} {
@@ -105,7 +107,7 @@ func TestPoolDiscardsConnOnReadOnly(t *testing.T) {
 				return "OK"
 			}), nil
 		},
-	})
+	}, true)
 
 	pool, err := (radix.PoolConfig{
 		Dialer: dialer,
@@ -135,4 +137,101 @@ func TestPoolDiscardsConnOnReadOnly(t *testing.T) {
 
 	assert.GreaterOrEqual(t, atomic.LoadInt64(&dials), int64(2))
 	assert.GreaterOrEqual(t, atomic.LoadInt64(&closes), int64(1))
+}
+
+func TestWrappedConnKeepsReadOnlyErrorsUsableWhenDisabled(t *testing.T) {
+	conn := wrappedConn{Conn: radix.NewStubConn("tcp", "127.0.0.1:6379", func(ctx context.Context, args []string) interface{} {
+		return readOnlyReply()
+	})}
+	defer conn.Close()
+
+	err := conn.Do(context.Background(), radix.Cmd(nil, "SET", "foo", "bar"))
+	require.Error(t, err)
+	assert.True(t, errors.As(err, new(resp.ErrConnUsable)))
+}
+
+func TestWrappedConnKeepsConnectionOnDoneContext(t *testing.T) {
+	conn := wrappedStubConn(func(ctx context.Context, args []string) interface{} {
+		return "OK"
+	})
+	defer conn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := conn.Do(ctx, radix.Cmd(nil, "SET", "foo", "bar"))
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.True(t, errors.As(err, new(resp.ErrConnUsable)))
+}
+
+func TestIsUnqueuedContextError(t *testing.T) {
+	assert.True(t, isUnqueuedContextError(fmt.Errorf("writing EncodeDecode to Conn channel: %w", context.DeadlineExceeded)))
+	assert.True(t, isUnqueuedContextError(fmt.Errorf("writing EncodeDecode to Conn channel: %w", context.Canceled)))
+	// A context error after a partial read leaves the connection unusable.
+	assert.False(t, isUnqueuedContextError(fmt.Errorf("waiting for response from Conn: after partial read off Conn: %w", context.DeadlineExceeded)))
+	assert.False(t, isUnqueuedContextError(resp.ErrConnUsable{Err: context.Canceled}))
+	assert.False(t, isUnqueuedContextError(errors.New("writing EncodeDecode to Conn channel: something else")))
+}
+
+// TestPoolKeepsConnectionsOnDoneContexts reproduces radix discarding healthy
+// connections when a command's context is done before it is queued.
+func TestPoolKeepsConnectionsOnDoneContexts(t *testing.T) {
+	srv := newFakeRedis(t, nil)
+	var closes atomic.Int64
+	pool, err := (radix.PoolConfig{
+		Dialer: wrapDialerConn(radix.Dialer{}, false),
+		Size:   2,
+		Trace: trace.PoolTrace{
+			ConnClosed: func(trace.PoolConnClosed) { closes.Add(1) },
+		},
+	}).New(context.Background(), "tcp", srv.addr())
+	require.NoError(t, err)
+	defer pool.Close()
+
+	for i := 0; i < 50; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		require.Error(t, pool.Do(ctx, radix.Cmd(nil, "INCR", "foo")))
+	}
+	require.NoError(t, pool.Do(context.Background(), radix.Cmd(nil, "INCR", "foo")))
+	assert.Equal(t, int64(0), closes.Load())
+}
+
+// TestSlowRedisDoesNotChurnConnections reproduces the degradation seen after a
+// Redis failover: Redis is healthy but some replies are slower than the
+// callers' deadline. Calls whose deadline expires while waiting must not make
+// the pool discard the connection they were queued on: discarding stalls the
+// pool, which makes more calls miss their deadline.
+func TestSlowRedisDoesNotChurnConnections(t *testing.T) {
+	srv := newFakeRedis(t, nil)
+	c, store := newFakeRedisClient(t, srv.addr(), 4, false, nil, clientOptions{ioTimeout: time.Second})
+
+	stop := time.Now().Add(time.Second)
+	var timedOut atomic.Int64
+	var wg sync.WaitGroup
+	for w := 0; w < 20; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; time.Now().Before(stop); i++ {
+				// Every few calls, Redis slows down past the callers' deadline.
+				if w == 0 {
+					if i%10 == 0 {
+						srv.setDelay(15 * time.Millisecond)
+					} else {
+						srv.setDelay(0)
+					}
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+				var rcv uint64
+				if err := c.PipeDo(ctx, incrPipeline(c, &rcv)); err != nil {
+					timedOut.Add(1)
+				}
+				cancel()
+			}
+		}(w)
+	}
+	wg.Wait()
+
+	require.Positive(t, timedOut.Load(), "the test must make calls miss their deadline")
+	assert.Equal(t, uint64(0), store.NewCounter("cx_local_close").Value())
 }

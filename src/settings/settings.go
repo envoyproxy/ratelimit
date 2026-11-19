@@ -34,6 +34,9 @@ type Settings struct {
 	GrpcMaxConnectionAge time.Duration `envconfig:"GRPC_MAX_CONNECTION_AGE" default:"24h" description:"Duration a connection may exist before it will be closed by sending a GoAway."`
 	// GrpcMaxConnectionAgeGrace is an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 	GrpcMaxConnectionAgeGrace time.Duration `envconfig:"GRPC_MAX_CONNECTION_AGE_GRACE" default:"1h" description:"Period after MaxConnectionAge after which the connection will be forcibly closed."`
+	// GrpcMaxConcurrentStreams bounds the number of concurrent calls (streams)
+	// on each gRPC connection. 0 keeps the gRPC default (unbounded).
+	GrpcMaxConcurrentStreams uint32 `envconfig:"GRPC_MAX_CONCURRENT_STREAMS" default:"0"`
 	// GrpcServerUseTLS enables gprc connections to server over TLS
 	GrpcServerUseTLS bool `envconfig:"GRPC_SERVER_USE_TLS" default:"false"`
 	// Allow to set the server certificate and key for TLS connections.
@@ -223,6 +226,13 @@ type Settings struct {
 	RedisPerSecondClusterPipelineParallelism int `envconfig:"REDIS_PERSECOND_CLUSTER_PIPELINE_PARALLELISM" default:"1"`
 	// Enable healthcheck to check Redis Connection. If there is no active connection, healthcheck failed.
 	RedisHealthCheckActiveConnection bool `envconfig:"REDIS_HEALTH_CHECK_ACTIVE_CONNECTION" default:"false"`
+	// RedisHealthCheckPingInterval enables a probe that PINGs each Redis at this
+	// interval and fails the health check after RedisHealthCheckFailureThreshold
+	// consecutive failures (and recovers after one success). 0 disables it.
+	RedisHealthCheckPingInterval time.Duration `envconfig:"REDIS_HEALTH_CHECK_PING_INTERVAL" default:"0"`
+	// RedisHealthCheckFailureThreshold is the number of consecutive failed PINGs
+	// before the health check fails.
+	RedisHealthCheckFailureThreshold int `envconfig:"REDIS_HEALTH_CHECK_FAILURE_THRESHOLD" default:"3"`
 	// RedisCloseConnectionOnReadOnlyError closes a pooled Redis connection when a command
 	// on it fails with a READONLY error reply, so the pool re-dials through the configured
 	// address. After a master->replica failover in deployments that fail over by repointing
@@ -232,17 +242,42 @@ type Settings struct {
 	// both the main and the per-second Redis clients.
 	RedisCloseConnectionOnReadOnlyError bool `envconfig:"REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR" default:"false"`
 	// RedisTimeout sets the timeout for Redis connection and I/O operations.
+	// Reads and writes use it too unless RedisIoTimeout is set.
 	RedisTimeout time.Duration `envconfig:"REDIS_TIMEOUT" default:"10s"`
 	// RedisPerSecondTimeout sets the timeout for per-second Redis connection and I/O operations.
+	// Reads and writes use it too unless RedisPerSecondIoTimeout is set.
 	RedisPerSecondTimeout time.Duration `envconfig:"REDIS_PERSECOND_TIMEOUT" default:"10s"`
+	// RedisIoTimeout bounds how long a Redis connection waits for a reply, or
+	// for a write to be accepted, before it is closed and replaced. Unset means
+	// RedisTimeout; 0 disables it.
+	RedisIoTimeout *time.Duration `envconfig:"REDIS_IO_TIMEOUT"`
+	// RedisPerSecondIoTimeout is RedisIoTimeout for the per-second Redis.
+	RedisPerSecondIoTimeout *time.Duration `envconfig:"REDIS_PERSECOND_IO_TIMEOUT"`
+	// RedisMaxInflight bounds the number of Redis commands (pipelines) in
+	// flight per Redis client; further commands fail right away. Commands a
+	// caller stopped waiting for count until Redis answers or the I/O timeout
+	// fires. 0 means unbounded.
+	RedisMaxInflight int `envconfig:"REDIS_MAX_INFLIGHT" default:"0"`
+	// RedisPerSecondMaxInflight is RedisMaxInflight for the per-second Redis.
+	RedisPerSecondMaxInflight int `envconfig:"REDIS_PERSECOND_MAX_INFLIGHT" default:"0"`
+	// RedisTcpKeepAlive sets the TCP keepalive idle time and probe interval of
+	// Redis connections. A negative value disables keepalive.
+	RedisTcpKeepAlive time.Duration `envconfig:"REDIS_TCP_KEEPALIVE" default:"10s"`
+	// RedisPerSecondTcpKeepAlive is RedisTcpKeepAlive for the per-second Redis.
+	RedisPerSecondTcpKeepAlive time.Duration `envconfig:"REDIS_PERSECOND_TCP_KEEPALIVE" default:"10s"`
+	// RedisTcpUserTimeout sets TCP_USER_TIMEOUT on Redis connections (Linux
+	// only): how long sent data may stay unacknowledged before the kernel closes
+	// the connection. 0 leaves the OS default.
+	RedisTcpUserTimeout time.Duration `envconfig:"REDIS_TCP_USER_TIMEOUT" default:"0"`
+	// RedisPerSecondTcpUserTimeout is RedisTcpUserTimeout for the per-second Redis.
+	RedisPerSecondTcpUserTimeout time.Duration `envconfig:"REDIS_PERSECOND_TCP_USER_TIMEOUT" default:"0"`
 
-	// RedisPoolOnEmptyBehavior controls what happens when Redis connection pool is empty.
-	// NOTE: In radix v4, the pool ALWAYS blocks when empty (WAIT behavior).
-	// Possible values:
-	//   - "WAIT": Block until a connection is available (default, radix v4 behavior)
+	// RedisPoolOnEmptyBehavior controls what happens when a command needs a
+	// connection and the pool has none (Redis is unreachable and the pool is
+	// re-dialing). Possible values:
+	//   - "WAIT": wait for a connection, up to the request deadline (default)
+	//   - "ERROR": fail right away
 	//   - "CREATE": NOT SUPPORTED in radix v4 - will cause panic at startup
-	//   - "ERROR": NOT SUPPORTED in radix v4 - will cause panic at startup
-	// For fail-fast behavior, use context timeouts when calling Redis operations.
 	RedisPoolOnEmptyBehavior string `envconfig:"REDIS_POOL_ON_EMPTY_BEHAVIOR" default:"WAIT"`
 
 	// RedisPerSecondPoolOnEmptyBehavior controls pool-empty behavior for per-second Redis.

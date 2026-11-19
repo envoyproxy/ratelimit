@@ -40,6 +40,7 @@
     - [xDS Management Server Based Configuration Loading](#xds-management-server-based-configuration-loading)
   - [Log Format](#log-format)
   - [GRPC Keepalive](#grpc-keepalive)
+  - [GRPC Concurrency](#grpc-concurrency)
   - [Health-check](#health-check)
     - [Health-check configurations](#health-check-configurations)
   - [GRPC server](#grpc-server)
@@ -51,6 +52,8 @@
   - [Configuration](#configuration-1)
   - [Statistics](#statistics)
 - [Statistics](#statistics-1)
+  - [Service statistics](#service-statistics)
+  - [Redis statistics](#redis-statistics)
   - [Statistics options](#statistics-options)
   - [DogStatsD](#dogstatsd)
     - [Example](#example)
@@ -65,12 +68,15 @@
   - [Connection Pool Settings](#connection-pool-settings)
     - [Pool Size](#pool-size)
     - [Connection Timeout](#connection-timeout)
+    - [Request Deadlines](#request-deadlines)
+    - [TCP Settings](#tcp-settings)
     - [Pool On-Empty Behavior](#pool-on-empty-behavior)
     - [Pipelining](#pipelining)
   - [One Redis Instance](#one-redis-instance)
   - [Two Redis Instances](#two-redis-instances)
   - [Health Checking for Redis Active Connection](#health-checking-for-redis-active-connection)
   - [Recovering from a failover (READONLY errors)](#recovering-from-a-failover-readonly-errors)
+  - [Redis failover and unresponsive Redis](#redis-failover-and-unresponsive-redis)
   - [Credentials that expire or rotate](#credentials-that-expire-or-rotate)
     - [AWS ElastiCache IAM authentication](#aws-elasticache-iam-authentication)
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
@@ -949,6 +955,10 @@ The behavior can be fixed by configuring the following env variables for the rat
 - `GRPC_MAX_CONNECTION_AGE`: a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway. A random jitter of +/-10% will be added to MaxConnectionAge to spread out connection storms.
 - `GRPC_MAX_CONNECTION_AGE_GRACE`: an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 
+## GRPC Concurrency
+
+- `GRPC_MAX_CONCURRENT_STREAMS`: maximum number of concurrent calls on each gRPC connection. Calls beyond it wait on the client side (HTTP/2 flow control) instead of piling up in the rate limit service while it is slow, e.g. because Redis is. Size it above the normal number of concurrent calls per connection (calls per second per connection × latency). `0` keeps the gRPC default (unbounded). Default: `0`
+
 ## Health-check
 
 Health check status is determined internally by individual components.
@@ -962,6 +972,8 @@ Some components may be turned OFF via configurations so overall health is not ef
 - Sigterm (Turned ON. Defaults to healthy)
   - Turns unhealthy if receives sigterm signal
     All components needs to be healthy for overall health to be healthy.
+
+The overall health is served on `/healthcheck` and the gRPC health service. Readiness is served separately on `/ready`: it is healthy when the overall health is, and, when the [Redis health probe](#health-checking-for-redis-active-connection) is enabled, while Redis answers. Use `/healthcheck` for liveness probes and `/ready` for readiness probes.
 
 ### Health-check configurations
 
@@ -1090,6 +1102,42 @@ ratelimit.service.rate_limit.messaging.auth-service.over_limit.over_limit: 1
 ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 ```
 
+## Service statistics
+
+Besides the per-rule statistics, the service reports:
+
+```
+ratelimit.service.call.should_rate_limit.redis_error     # calls that failed with a Redis error
+ratelimit.service.call.should_rate_limit.service_error   # calls that failed with any other error
+ratelimit.service.call.should_rate_limit.inflight        # calls received and not answered yet (gauge)
+```
+
+A rising `inflight` with a flat `redis_error` means calls are waiting on Redis. Redis errors are also logged at warning level, at most once every 10 seconds per process, with the number of suppressed similar messages.
+
+## Redis statistics
+
+Each Redis client reports under `ratelimit.redis_pool` (and `ratelimit.redis_per_second_pool` for the per-second Redis):
+
+```
+cx_active               # open connections (gauge)
+cx_total                # connections opened
+cx_connect_error        # failed connection attempts
+cx_local_close          # connections closed
+cx_local_close_error    # connections closed after an error (I/O timeout, reset, ...)
+cmd_inflight            # Redis commands (pipelines) in flight, including those whose caller gave up (gauge)
+cmd_total               # Redis commands issued
+cmd_success             # commands that succeeded
+cmd_error               # commands that failed with a Redis or connection error
+cmd_io_timeout          # commands that failed because Redis did not answer within the I/O timeout
+cmd_deadline_exceeded   # commands whose caller's deadline expired first
+cmd_rejected            # commands rejected without reaching Redis (REDIS_MAX_INFLIGHT, REDIS_POOL_ON_EMPTY_BEHAVIOR=ERROR)
+cmd_time                # command latency in milliseconds, until the command completed, also in the background (timer)
+```
+
+With the Prometheus sink, `cmd_time` is exported as `ratelimit_redis_cmd_time_seconds`, in seconds, with a `pool` label (`redis_pool` or `redis_per_second_pool`). `PROMETHEUS_RESPONSE_TIME_AS_MILLISECONDS` does not affect it.
+
+`cmd_inflight` stuck at a high value means commands are waiting on Redis. Connections closed after an error are also logged at warning level, at most once every 10 seconds per process.
+
 ## Statistics options
 
 1. `EXTRA_TAGS`: set to `"<k1:v1>,<k2:v2>"` to tag all emitted stats with the provided tags. You might want to tag build commit or release version, for example.
@@ -1099,6 +1147,8 @@ ratelimit.service.rate_limit.messaging.auth-service.over_limit.shadow_mode: 1
 To enable dogstatsd integration set:
 
 1. `USE_DOG_STATSD`: `true` to use [DogStatsD](https://docs.datadoghq.com/developers/dogstatsd/?code-lang=go)
+
+`STATSD_HOST` may also be a Unix domain socket address such as `unix:///var/run/datadog/dsd.socket` (`unixgram://` and `unixstream://` are accepted too). In that case `STATSD_PORT` is ignored.
 
 dogstatsd also enables so called `mogrifiers` which can
 convert from traditional stats tags into a combination of stat name and tags.
@@ -1255,6 +1305,7 @@ mappings: # Requires statsd exporter >= v0.6.0 since it uses the "drop" action.
 The ratelimit service listens to HTTP 1.1 (by default on port 8080) with two endpoints:
 
 1. /healthcheck → return a 200 if this service is healthy
+1. /ready → return a 200 if this service is ready to serve: healthy, and, when the [Redis health probe](#health-checking-for-redis-active-connection) is enabled, able to reach Redis
 1. /json → HTTP 1.1 endpoint for interacting with ratelimit service
 
 ## /json endpoint
@@ -1369,18 +1420,32 @@ Controls the maximum duration for Redis connection establishment, read operation
 
 1. `REDIS_TIMEOUT`: sets the timeout for Redis connection and I/O operations. Default: `10s`
 1. `REDIS_PERSECOND_TIMEOUT`: sets the timeout for per-second Redis connection and I/O operations. Default: `10s`
+1. `REDIS_IO_TIMEOUT` & `REDIS_PERSECOND_IO_TIMEOUT`: override the I/O part of the timeout above. When set, this is how long a connection may wait for Redis to reply to a command, or to accept a write, before ratelimit closes the connection, fails the commands in flight on it and dials a new one. Idle connections are not affected. Set to `0` to disable (not recommended). Default: the value of `REDIS_TIMEOUT` / `REDIS_PERSECOND_TIMEOUT`.
+
+The I/O timeout is what makes ratelimit fail fast when Redis stops answering without closing its connections, for example after a failover that keeps the server address. Without it, commands block until the operating system gives up on the connection, which takes about 15 minutes with default Linux settings. Keep it well above the slowest normal Redis reply, since every command in flight on a timed-out connection fails. Sentinel connections are not subject to the I/O timeout.
+
+### Request Deadlines
+
+Rate limit calls carry the deadline set by the client (e.g. Envoy's rate limit filter `timeout`). Ratelimit stops waiting for Redis when that deadline expires and returns an error, so the client can apply its failure mode (`failure_mode_deny`) instead of timing out on its own. A Redis command whose caller gave up keeps running in the background until Redis answers or the I/O timeout fires; calls that arrive with an already expired deadline are not sent to Redis at all.
+
+Once a command has been handed to Redis it is always executed, and counted towards the rate limit, even if its caller gives up before it is written. Letting the caller's deadline cancel commands in flight would make healthy connections be closed whenever Redis is slower than that deadline, and the reconnections slow down the calls that follow. The result is that, while Redis is slow, more commands run at once than the callers are waiting for; `REDIS_MAX_INFLIGHT` bounds them. With the I/O timeout disabled (`REDIS_IO_TIMEOUT=0`), nothing would bound those commands, so they keep the caller's deadline instead.
+
+1. `REDIS_MAX_INFLIGHT` & `REDIS_PERSECOND_MAX_INFLIGHT`: maximum number of Redis commands (pipelines) in flight per Redis client, counting those whose caller gave up. Further calls fail right away. This bounds the work queued up while Redis is slow or unreachable. `0` means unbounded. Default: `0`
+
+### TCP Settings
+
+1. `REDIS_TCP_KEEPALIVE` & `REDIS_PERSECOND_TCP_KEEPALIVE`: TCP keepalive idle time and probe interval for Redis connections. Set to a negative value to disable keepalive. Default: `10s`
+1. `REDIS_TCP_USER_TIMEOUT` & `REDIS_PERSECOND_TCP_USER_TIMEOUT`: sets `TCP_USER_TIMEOUT` on Redis connections (Linux only, ignored elsewhere): how long data sent to Redis may stay unacknowledged before the kernel closes the connection. Keepalive cannot detect a dead peer while there is unacknowledged data, so without this a connection to a server that vanished is only closed after `net.ipv4.tcp_retries2` retransmissions (about 15 minutes by default). `0` leaves the OS default. Default: `0`
 
 ### Pool On-Empty Behavior
 
-Controls what happens when all connections in the pool are in use and a new request arrives.
+The pool keeps a fixed number of connections, and rate limit calls share them, so a call only has to wait for a connection when the pool has none: Redis is unreachable and the pool is re-dialing.
 
-1. `REDIS_POOL_ON_EMPTY_BEHAVIOR`: controls what happens when the pool is empty. Default: `CREATE`
-   - `CREATE`: create a new overflow connection after waiting for `REDIS_POOL_ON_EMPTY_WAIT_DURATION`. This is the [default radix behavior](https://github.com/mediocregopher/radix/blob/v3.8.1/pool.go#L291-L312).
-   - `ERROR`: return an error after waiting for `REDIS_POOL_ON_EMPTY_WAIT_DURATION`. This enforces a strict pool size limit.
-   - `WAIT`: block until a connection becomes available. This enforces a strict pool size limit but may cause goroutine buildup.
-1. `REDIS_POOL_ON_EMPTY_WAIT_DURATION`: the duration to wait before taking the configured action (`CREATE` or `ERROR`). Default: `1s`
-1. `REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR`: same as above for per-second Redis pool. Default: `CREATE`
-1. `REDIS_PERSECOND_POOL_ON_EMPTY_WAIT_DURATION`: same as above for per-second Redis pool. Default: `1s`
+1. `REDIS_POOL_ON_EMPTY_BEHAVIOR`: controls what happens when a call needs a connection and the pool has none. Default: `WAIT`
+   - `WAIT`: wait for a connection, up to the call's deadline.
+   - `ERROR`: fail the call right away.
+   - `CREATE`: not supported; ratelimit refuses to start. The pool cannot create overflow connections, consider increasing `REDIS_POOL_SIZE` instead.
+1. `REDIS_PERSECOND_POOL_ON_EMPTY_BEHAVIOR`: same as above for per-second Redis pool. Default: `WAIT`
 
 ### Pipelining
 
@@ -1427,6 +1492,13 @@ To configure whether to return health check failure if there is no active redis 
 
 1. `REDIS_HEALTH_CHECK_ACTIVE_CONNECTION` : (default is "false")
 
+`REDIS_HEALTH_CHECK_ACTIVE_CONNECTION` only fails once every connection to Redis has been closed. A Redis that stops answering without closing its connections keeps it healthy. To make the health check reflect whether Redis actually answers, enable the health probe:
+
+1. `REDIS_HEALTH_CHECK_PING_INTERVAL`: PING each Redis (main and per-second) at this interval through the same path as rate limit calls, with the I/O timeout capped to the interval. The `/ready` endpoint fails after `REDIS_HEALTH_CHECK_FAILURE_THRESHOLD` consecutive failed PINGs and recovers after one success. `0` disables it. Default: `0`
+1. `REDIS_HEALTH_CHECK_FAILURE_THRESHOLD`: consecutive failed PINGs before `/ready` fails. Default: `3`
+
+The probe only affects `/ready`, never `/healthcheck` or the gRPC health service. Point readiness probes at `/ready` and keep liveness probes on `/healthcheck`: a Redis outage affects every replica at once, and restarting them cannot fix it, only delay recovery.
+
 ## Recovering from a failover (READONLY errors)
 
 1. `REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR` : (default is "false")
@@ -1443,6 +1515,31 @@ whenever a command on it fails with a READONLY error reply, so the pool reconnec
 configured address and reaches the current master. The failing command still returns its error
 to the caller; only the connection handling changes. Applies to both the main and the
 per-second Redis clients.
+
+## Redis failover and unresponsive Redis
+
+A Redis failover, or any event that makes Redis stop answering without closing its connections (a managed Redis that moves the primary behind the same IP, a network partition, a node that hangs), leaves ratelimit's connections open with no reply coming. Ratelimit handles it in layers, from the fastest to the slowest:
+
+1. **Request deadline.** A call returns an error as soon as the deadline set by its client expires (see [Request Deadlines](#request-deadlines)). Envoy then applies its failure mode right away (allow by default, or deny with `failure_mode_deny`).
+1. **I/O timeout.** A connection that does not reply within `REDIS_TIMEOUT` (or `REDIS_IO_TIMEOUT`) is closed and the pool dials a new one, which reaches the current primary. This is what ends the outage on the ratelimit side; without it the connections stay blocked until the OS closes them, about 15 minutes with default Linux settings.
+1. **`TCP_USER_TIMEOUT`.** With `REDIS_TCP_USER_TIMEOUT`, the kernel itself closes connections whose data stays unacknowledged, as a second line of defense.
+1. **Readiness.** With `REDIS_HEALTH_CHECK_PING_INTERVAL`, replicas that cannot reach Redis report not ready on `/ready`, so a readiness probe can take them out of rotation while the rest keep serving. `/healthcheck`, used for liveness, is not affected: restarting replicas cannot fix Redis.
+
+Recommended settings for a Redis with failover (e.g. Sentinel, a managed Redis such as GCP Memorystore or AWS ElastiCache, or a Kubernetes Service in front of a primary):
+
+```
+REDIS_TIMEOUT=1s                              # dial and I/O timeout: well above the slowest normal reply
+REDIS_TCP_USER_TIMEOUT=5s                     # Linux only
+REDIS_CLOSE_CONNECTION_ON_READONLY_ERROR=true # if the failover demotes the old primary behind the same address
+REDIS_HEALTH_CHECK_PING_INTERVAL=1s           # point readiness probes at /ready, keep liveness on /healthcheck
+REDIS_MAX_INFLIGHT=<a few times the normal number of concurrent calls>
+```
+
+Use the same values for the `REDIS_PERSECOND_*` settings when a per-second Redis is configured.
+
+The I/O timeout fails every command in flight on a connection that timed out, so keep it well above the slowest reply Redis normally gives, including under load and across zones; a few hundred milliseconds to a couple of seconds suits most deployments. The client's own timeout (e.g. Envoy's rate limit filter `timeout`) should in turn be above the normal Redis round-trip: calls that miss it are not rate limited (or are denied, with `failure_mode_deny`) even though Redis is healthy.
+
+To watch for these situations, alert on `ratelimit.service.call.should_rate_limit.redis_error`, `cmd_io_timeout` and `cx_local_close_error`, and on `ratelimit.service.call.should_rate_limit.inflight` or `cmd_inflight` growing (see [Service statistics](#service-statistics) and [Redis statistics](#redis-statistics)).
 
 ## Credentials that expire or rotate
 

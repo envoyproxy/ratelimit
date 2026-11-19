@@ -56,6 +56,7 @@ func (this *ManagerImpl) NewShouldRateLimitStats() ShouldRateLimitStats {
 	ret := ShouldRateLimitStats{}
 	ret.RedisError = this.shouldRateLimitScope.NewCounter("redis_error")
 	ret.ServiceError = this.shouldRateLimitScope.NewCounter("service_error")
+	ret.Inflight = this.shouldRateLimitScope.NewGauge("inflight")
 	return ret
 }
 
