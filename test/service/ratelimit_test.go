@@ -2035,3 +2035,57 @@ func TestServiceMixedModeWithShadowMode(test *testing.T) {
 	// Verify global shadow mode counter is incremented
 	t.assert.EqualValues(1, t.statStore.NewCounter("global_shadow_mode").Value())
 }
+
+func TestServiceGlobalQuotaModeUnconfiguredDescriptor(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload so QUOTA_MODE is picked up.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Two descriptors that map to configured limits, plus a third that matches no
+	// limit at all. A client can produce the third by sending a value the config
+	// has no rule for.
+	request := common.NewRateLimitRequest(
+		"quota-domain",
+		[][][2]string{{{"foo", "bar"}}, {{"hello", "world"}}, {{"unconfigured", "value"}}},
+		1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, false, "", nil, false),
+		config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, false, "", nil, false),
+		nil,
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[2]).Return(limits[2])
+	// This mirrors what the cache really returns: GetResponseDescriptorStatus() emits
+	// OK with a nil CurrentLimit whenever the generated cache key is empty, which is
+	// exactly the case for a descriptor with no configured limit.
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[1].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: nil, LimitRemaining: 0},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(err)
+
+	// Every configured quota limit is over, so the request must be rejected. The
+	// unconfigured descriptor holds no quota and must not vote.
+	t.assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
+}
