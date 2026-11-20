@@ -9,6 +9,7 @@ import (
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	"gopkg.in/yaml.v2"
 
 	"github.com/envoyproxy/ratelimit/src/stats"
@@ -20,7 +21,8 @@ type yamlReplaces struct {
 }
 
 type YamlRateLimit struct {
-	RequestsPerUnit uint32 `yaml:"requests_per_unit"`
+	RequestsPerUnit uint32  `yaml:"requests_per_unit"`
+	UnitMultiplier  *uint32 `yaml:"unit_multiplier"`
 	Unit            string
 	Unlimited       bool `yaml:"unlimited"`
 	Name            string
@@ -80,6 +82,7 @@ var validKeys = map[string]bool{
 	"rate_limit":        true,
 	"unit":              true,
 	"requests_per_unit": true,
+	"unit_multiplier":   true,
 	"unlimited":         true,
 	"shadow_mode":       true,
 	"quota_mode":        true,
@@ -122,9 +125,13 @@ func NewRateLimit(requestsPerUnit uint32, unit pb.RateLimitResponse_RateLimit_Un
 func (this *rateLimitDescriptor) dump() string {
 	ret := ""
 	if this.limit != nil {
+		unit := this.limit.Limit.Unit.String()
+		if multiplier := this.limit.Limit.UnitMultiplier; multiplier != nil {
+			unit += fmt.Sprintf(" unit_multiplier=%d", multiplier.Value)
+		}
 		ret += fmt.Sprintf(
 			"%s: unit=%s requests_per_unit=%d, shadow_mode: %t, quota_mode: %t\n", this.limit.FullKey,
-			this.limit.Limit.Unit.String(), this.limit.Limit.RequestsPerUnit, this.limit.ShadowMode, this.limit.QuotaMode)
+			unit, this.limit.Limit.RequestsPerUnit, this.limit.ShadowMode, this.limit.QuotaMode)
 	}
 	for _, descriptor := range this.descriptors {
 		ret += descriptor.dump()
@@ -265,6 +272,15 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 		var rateLimitDebugString string = ""
 		if descriptorConfig.RateLimit != nil {
 			unlimited := descriptorConfig.RateLimit.Unlimited
+			multiplier := descriptorConfig.RateLimit.UnitMultiplier
+			if multiplier != nil {
+				if *multiplier == 0 {
+					panic(newRateLimitConfigError(config.Name, "unit_multiplier must be greater than zero"))
+				}
+				if unlimited {
+					panic(newRateLimitConfigError(config.Name, "should not specify unit_multiplier when unlimited"))
+				}
+			}
 
 			value, present := pb.RateLimitResponse_RateLimit_Unit_value[strings.ToUpper(descriptorConfig.RateLimit.Unit)]
 			validUnit := present && value != int32(pb.RateLimitResponse_RateLimit_UNKNOWN)
@@ -291,9 +307,12 @@ func (this *rateLimitDescriptor) loadDescriptors(config RateLimitConfigToLoad, p
 				statsManager.NewStats(newParentKey), unlimited, descriptorConfig.ShadowMode, descriptorConfig.QuotaMode,
 				descriptorConfig.RateLimit.Name, replaces, descriptorConfig.DetailedMetric,
 			)
+			if multiplier != nil {
+				rateLimit.Limit.UnitMultiplier = wrapperspb.UInt32(*multiplier)
+			}
 			rateLimitDebugString = fmt.Sprintf(
-				" ratelimit={requests_per_unit=%d, unit=%s, unlimited=%t, shadow_mode=%t, quota_mode=%t}", rateLimit.Limit.RequestsPerUnit,
-				rateLimit.Limit.Unit.String(), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode)
+				" ratelimit={requests_per_unit=%d, unit=%s, unit_multiplier=%d, unlimited=%t, shadow_mode=%t, quota_mode=%t}", rateLimit.Limit.RequestsPerUnit,
+				rateLimit.Limit.Unit.String(), utils.RateLimitMultiplier(rateLimit.Limit), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode)
 
 			for _, replaces := range descriptorConfig.RateLimit.Replaces {
 				if replaces.Name == "" {
@@ -483,6 +502,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 			[]string{},
 			false,
 		)
+		rateLimit.Limit.UnitMultiplier = descriptor.GetLimit().GetUnitMultiplier()
 		return rateLimit
 	}
 
@@ -630,8 +650,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 			if rateLimit != nil && rateLimit.DetailedMetric {
 				// Preserve ShareThresholdKeyPattern when recreating rate limit
 				originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
+				originalMultiplier := rateLimit.Limit.UnitMultiplier
 				rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(rateLimit.FullKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
 				rateLimit.ShareThresholdKeyPattern = originalShareThresholdKeyPattern
+				rateLimit.Limit.UnitMultiplier = originalMultiplier
 			}
 
 			break
@@ -680,8 +702,10 @@ func (this *rateLimitConfigImpl) GetLimit(
 		if enhancedKey != rateLimit.FullKey {
 			// Recreate to ensure a clean stats struct, then set to enhanced stats
 			originalShareThresholdKeyPattern := rateLimit.ShareThresholdKeyPattern
+			originalMultiplier := rateLimit.Limit.UnitMultiplier
 			rateLimit = NewRateLimit(rateLimit.Limit.RequestsPerUnit, rateLimit.Limit.Unit, this.statsManager.NewStats(enhancedKey), rateLimit.Unlimited, rateLimit.ShadowMode, rateLimit.QuotaMode, rateLimit.Name, rateLimit.Replaces, rateLimit.DetailedMetric)
 			rateLimit.ShareThresholdKeyPattern = originalShareThresholdKeyPattern
+			rateLimit.Limit.UnitMultiplier = originalMultiplier
 		}
 	}
 

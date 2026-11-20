@@ -213,6 +213,10 @@ func (this *service) shouldRateLimitWorker(
 ) *pb.RateLimitResponse {
 	checkServiceErr(request.Domain != "", "rate limit domain must not be empty")
 	checkServiceErr(len(request.Descriptors) != 0, "rate limit descriptor list must not be empty")
+	for _, descriptor := range request.Descriptors {
+		multiplier := descriptor.GetLimit().GetUnitMultiplier()
+		checkServiceErr(multiplier == nil || multiplier.GetValue() > 0, "rate limit unit_multiplier must be greater than zero")
+	}
 
 	snappedConfig, globalShadowMode, globalQuotaMode := this.GetCurrentConfig()
 	limitsToCheck, isUnlimited := this.constructLimitsToCheck(request, ctx, snappedConfig)
@@ -365,14 +369,18 @@ func (this *service) shouldRateLimitWorker(
 func (this *service) perUnitHeaders(
 	descriptorStatuses []*pb.RateLimitResponse_DescriptorStatus,
 ) []*core.HeaderValue {
-	closestByUnit := make(map[pb.RateLimitResponse_RateLimit_Unit]*pb.RateLimitResponse_DescriptorStatus)
-	units := make([]pb.RateLimitResponse_RateLimit_Unit, 0, len(descriptorStatuses))
+	type period struct {
+		unit       pb.RateLimitResponse_RateLimit_Unit
+		multiplier int64
+	}
+	closestByUnit := make(map[period]*pb.RateLimitResponse_DescriptorStatus)
+	units := make([]period, 0, len(descriptorStatuses))
 	for _, status := range descriptorStatuses {
 		if status.CurrentLimit == nil {
 			continue
 		}
 
-		unit := status.CurrentLimit.Unit
+		unit := period{status.CurrentLimit.Unit, utils.RateLimitMultiplier(status.CurrentLimit)}
 		closest, found := closestByUnit[unit]
 		if !found {
 			units = append(units, unit)
@@ -385,7 +393,10 @@ func (this *service) perUnitHeaders(
 	headers := make([]*core.HeaderValue, 0, len(units)*2)
 	for _, unit := range units {
 		status := closestByUnit[unit]
-		unitSuffix := unitToHeaderSuffix(unit)
+		unitSuffix := unitToHeaderSuffix(unit.unit)
+		if unit.multiplier > 1 {
+			unitSuffix = strconv.FormatInt(unit.multiplier, 10) + "-" + unitSuffix
+		}
 		headers = append(headers,
 			&core.HeaderValue{
 				Key:   "RateLimit-Limit-" + unitSuffix,
@@ -596,7 +607,7 @@ func (this *service) rateLimitResetHeader(
 ) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateRateLimitReset(descriptor.CurrentLimit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
 	}
 }
 
@@ -617,7 +628,7 @@ func (this *service) rateLimitRequestRemainingHeader(descriptor *pb.RateLimitRes
 func (this *service) rateLimitRequestResetHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.requestHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateRateLimitReset(descriptor.CurrentLimit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
 	}
 }
 

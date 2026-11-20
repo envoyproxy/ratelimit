@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/envoyproxy/ratelimit/src/config"
 	mock_stats "github.com/envoyproxy/ratelimit/test/mocks/stats"
@@ -524,4 +525,57 @@ func TestRequestHeadersEnabledResetToFalseOnHotReload(t *testing.T) {
 	// Bug: without the fix, this assertion fails because the if-only guard never
 	// resets the field to false.
 	assert.False(t, svc.requestHeadersEnabled, "requestHeadersEnabled should be false after reload with env var off")
+}
+
+type multiplierHeaderClock int64
+
+func (c multiplierHeaderClock) UnixNow() int64 { return int64(c) }
+
+func TestUnitMultiplierResetHeaders(t *testing.T) {
+	svc := &service{
+		customHeaderClock:        multiplierHeaderClock(2222),
+		customHeaderResetHeader:  "RateLimit-Reset",
+		requestHeaderResetHeader: "X-Request-RateLimit-Reset",
+	}
+	status := &pb.RateLimitResponse_DescriptorStatus{
+		CurrentLimit: &pb.RateLimitResponse_RateLimit{
+			Unit:           pb.RateLimitResponse_RateLimit_MINUTE,
+			UnitMultiplier: wrapperspb.UInt32(10),
+		},
+	}
+	assert.Equal(t, "178", svc.rateLimitResetHeader(status).Value)
+	assert.Equal(t, "178", svc.rateLimitRequestResetHeader(status).Value)
+}
+
+func TestUnitMultiplierPerUnitHeaders(t *testing.T) {
+	statuses := []*pb.RateLimitResponse_DescriptorStatus{
+		{CurrentLimit: &pb.RateLimitResponse_RateLimit{Unit: pb.RateLimitResponse_RateLimit_SECOND, RequestsPerUnit: 10}, LimitRemaining: 5},
+		{CurrentLimit: &pb.RateLimitResponse_RateLimit{Unit: pb.RateLimitResponse_RateLimit_SECOND, UnitMultiplier: wrapperspb.UInt32(30), RequestsPerUnit: 100}, LimitRemaining: 4},
+		{CurrentLimit: &pb.RateLimitResponse_RateLimit{Unit: pb.RateLimitResponse_RateLimit_SECOND, UnitMultiplier: wrapperspb.UInt32(1), RequestsPerUnit: 20}, LimitRemaining: 6},
+		{CurrentLimit: &pb.RateLimitResponse_RateLimit{Unit: pb.RateLimitResponse_RateLimit_SECOND, UnitMultiplier: wrapperspb.UInt32(30), RequestsPerUnit: 200}, LimitRemaining: 3},
+	}
+	values := func() map[string]string {
+		headers := (&service{}).perUnitHeaders(statuses)
+		result := make(map[string]string, len(headers))
+		for _, header := range headers {
+			result[header.Key] = header.Value
+		}
+		return result
+	}
+	assert.Equal(t, map[string]string{
+		"RateLimit-Limit-Seconds":        "10",
+		"RateLimit-Remaining-Seconds":    "5",
+		"RateLimit-Limit-30-Seconds":     "200",
+		"RateLimit-Remaining-30-Seconds": "3",
+	}, values())
+
+	// Changing the closest one-unit descriptor does not hide the
+	// independent 30-second window.
+	statuses[0].LimitRemaining = 2
+	assert.Equal(t, map[string]string{
+		"RateLimit-Limit-Seconds":        "10",
+		"RateLimit-Remaining-Seconds":    "2",
+		"RateLimit-Limit-30-Seconds":     "200",
+		"RateLimit-Remaining-30-Seconds": "3",
+	}, values())
 }

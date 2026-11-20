@@ -28,6 +28,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/envoyproxy/ratelimit/test/common"
 	mock_memcached "github.com/envoyproxy/ratelimit/test/mocks/memcached"
@@ -897,4 +898,44 @@ func TestMemcachedNegativeHitsSkipsOverLimitCheck(t *testing.T) {
 	assert.Equal(pb.RateLimitResponse_OK, result[0].Code)
 	assert.Equal(uint64(0), limits[0].Stats.OverLimit.Value())
 	assert.Equal(uint64(0), limits[0].Stats.OverLimitWithLocalCache.Value())
+}
+
+func TestMemcacheUnitMultiplierExpiration(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		unit       pb.RateLimitResponse_RateLimit_Unit
+		multiplier uint32
+		expiration int32
+	}{
+		{"30 seconds", pb.RateLimitResponse_RateLimit_SECOND, 30, 30},
+		{"60 days uses absolute timestamp", pb.RateLimitResponse_RateLimit_DAY, 60, 1709251200},
+		{"long window cannot fit int32 timestamp", pb.RateLimitResponse_RateLimit_YEAR, 100, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			timeSource := mock_utils.NewMockTimeSource(controller)
+			timeSource.EXPECT().UnixNow().Return(int64(1704067200)).AnyTimes()
+			client := mock_memcached.NewMockClient(controller)
+			store := stats.NewStore(stats.NewNullSink(), false)
+			sm := mockstats.NewMockStatManager(store)
+			cache := memcached.NewRateLimitCacheImpl(client, timeSource, nil, 0, nil, sm, 0.8, "", false, time.Thursday)
+			limit := config.NewRateLimit(10, tc.unit, sm.NewStats("key_value"), false, false, false, "", nil, false)
+			limit.Limit.UnitMultiplier = wrapperspb.UInt32(tc.multiplier)
+			request := common.NewRateLimitRequest("domain", [][][2]string{{{"key", "value"}}}, 1)
+			generator := limiter.NewCacheKeyGenerator("", false, time.Thursday)
+			key := generator.GenerateCacheKey("domain", request.Descriptors[0], limit, 1704067200).Key
+			client.EXPECT().GetMulti([]string{key}).Return(nil, nil)
+			client.EXPECT().Increment(key, uint64(1)).Return(uint64(0), memcache.ErrCacheMiss)
+			client.EXPECT().Add(&memcache.Item{Key: key, Value: []byte("1"), Expiration: tc.expiration}).Return(nil)
+			response := cache.DoLimit(context.Background(), request, []*config.RateLimit{limit})[0]
+			cache.Flush()
+			assert.Equal(t, pb.RateLimitResponse_OK, response.Code)
+			assert.EqualValues(t, tc.multiplier, response.CurrentLimit.GetUnitMultiplier().GetValue())
+			var wantOverflow uint64
+			if tc.expiration == 0 {
+				wantOverflow = 1
+			}
+			assert.Equal(t, wantOverflow, store.NewCounter("memcached.ttl_overflow").Value())
+		})
+	}
 }

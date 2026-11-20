@@ -1,12 +1,14 @@
 package utils_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/envoyproxy/ratelimit/src/utils"
 	mock_utils "github.com/envoyproxy/ratelimit/test/mocks/utils"
@@ -246,6 +248,80 @@ func TestParseWeekdayInvalid(t *testing.T) {
 		assert.Error(t, err, input)
 		assert.Equal(t, time.Thursday, weekday, input)
 	}
+}
+
+type windowClock int64
+
+func (c windowClock) UnixNow() int64 { return int64(c) }
+
+func TestMultipliedWindows(t *testing.T) {
+	for _, unit := range []pb.RateLimitResponse_RateLimit_Unit{
+		pb.RateLimitResponse_RateLimit_SECOND, pb.RateLimitResponse_RateLimit_MINUTE,
+		pb.RateLimitResponse_RateLimit_HOUR, pb.RateLimitResponse_RateLimit_DAY,
+		pb.RateLimitResponse_RateLimit_WEEK, pb.RateLimitResponse_RateLimit_MONTH,
+		pb.RateLimitResponse_RateLimit_YEAR,
+	} {
+		t.Run(unit.String(), func(t *testing.T) {
+			limit := &pb.RateLimitResponse_RateLimit{Unit: unit, UnitMultiplier: wrapperspb.UInt32(30)}
+			period := utils.UnitToDivider(unit) * 30
+			for _, now := range []int64{-1, 0, period - 1, period, period + 1} {
+				start, end := utils.RateLimitWindow(limit, now, false, time.Thursday)
+				assert.LessOrEqual(t, start, now)
+				assert.Greater(t, end, now)
+				assert.Equal(t, period, end-start)
+				assert.Equal(t, end-now, utils.CalculateRateLimitReset(limit, windowClock(now), false, time.Thursday).Seconds)
+				assert.Equal(t, period, utils.RateLimitExpirationSeconds(limit, windowClock(now), false))
+			}
+		})
+	}
+}
+
+func TestMultipliedCalendarWindows(t *testing.T) {
+	cases := []struct {
+		name            string
+		unit            pb.RateLimitResponse_RateLimit_Unit
+		multiplier      uint32
+		now, start, end string
+	}{
+		{"two months include leap February", pb.RateLimitResponse_RateLimit_MONTH, 2, "2024-02-29", "2024-01-01", "2024-03-01"},
+		{"two months rollover", pb.RateLimitResponse_RateLimit_MONTH, 2, "2024-03-01", "2024-03-01", "2024-05-01"},
+		{"five months cross year", pb.RateLimitResponse_RateLimit_MONTH, 5, "2026-01-15", "2025-11-01", "2026-04-01"},
+		{"two Monday weeks", pb.RateLimitResponse_RateLimit_WEEK, 2, "2026-01-14", "2026-01-12", "2026-01-26"},
+		{"two Monday weeks rollover", pb.RateLimitResponse_RateLimit_WEEK, 2, "2026-01-26", "2026-01-26", "2026-02-09"},
+	}
+	parse := func(date string) int64 {
+		v, err := time.Parse("2006-01-02", date)
+		assert.NoError(t, err)
+		return v.Unix()
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			limit := &pb.RateLimitResponse_RateLimit{Unit: c.unit, UnitMultiplier: wrapperspb.UInt32(c.multiplier)}
+			now := parse(c.now)
+			start, end := utils.RateLimitWindow(limit, now, true, time.Monday)
+			assert.Equal(t, parse(c.start), start)
+			assert.Equal(t, parse(c.end), end)
+			assert.Equal(t, end-now, utils.CalculateRateLimitReset(limit, windowClock(now), true, time.Monday).Seconds)
+			if c.unit == pb.RateLimitResponse_RateLimit_MONTH {
+				assert.Equal(t, end-now, utils.RateLimitExpirationSeconds(limit, windowClock(now), true))
+			}
+		})
+	}
+}
+
+func TestMaximumUnitMultiplierDoesNotOverflow(t *testing.T) {
+	limit := &pb.RateLimitResponse_RateLimit{Unit: pb.RateLimitResponse_RateLimit_YEAR, UnitMultiplier: wrapperspb.UInt32(math.MaxUint32)}
+	start, end := utils.RateLimitWindow(limit, 1234, false, time.Thursday)
+	assert.Zero(t, start)
+	assert.EqualValues(t, 135446088615120000, end)
+	assert.Equal(t, end, utils.RateLimitExpirationSeconds(limit, windowClock(1234), false))
+	reset := utils.CalculateRateLimitReset(limit, windowClock(1234), false, time.Thursday)
+	assert.NoError(t, reset.CheckValid())
+	assert.EqualValues(t, 315576000000, reset.Seconds)
+	limit.Unit = pb.RateLimitResponse_RateLimit_MONTH
+	start, end = utils.RateLimitWindow(limit, 1234, true, time.Thursday)
+	assert.Zero(t, start)
+	assert.Greater(t, end, int64(0))
 }
 
 func TestSanitizeStatKeyValue(t *testing.T) {

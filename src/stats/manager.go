@@ -42,13 +42,14 @@ type ShouldRateLimitStats struct {
 	Inflight gostats.Gauge
 }
 
-// Stats for server errors.
-// Keeps failure and success metrics.
+// Service-wide request, configuration, and cache fallback metrics.
 type ServiceStats struct {
-	ConfigLoadSuccess gostats.Counter
-	ConfigLoadError   gostats.Counter
-	ShouldRateLimit   ShouldRateLimitStats
-	GlobalShadowMode  gostats.Counter
+	ConfigLoadSuccess    gostats.Counter
+	ConfigLoadError      gostats.Counter
+	ShouldRateLimit      ShouldRateLimitStats
+	GlobalShadowMode     gostats.Counter
+	RedisTTLOverflow     gostats.Counter
+	MemcachedTTLOverflow gostats.Counter
 }
 
 // Stats for an individual rate limit config entry.

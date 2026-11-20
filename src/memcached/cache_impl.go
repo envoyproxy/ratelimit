@@ -18,6 +18,7 @@ package memcached
 import (
 	"context"
 	"crypto/tls"
+	"math"
 	"math/rand"
 	"net"
 	"strconv"
@@ -57,6 +58,7 @@ type rateLimitMemcacheImpl struct {
 	waitGroup                  sync.WaitGroup
 	nearLimitRatio             float32
 	baseRateLimiter            *limiter.BaseRateLimiter
+	ttlOverflow                gostats.Counter
 }
 
 var AutoFlushForIntegrationTests bool = false
@@ -178,7 +180,15 @@ const memcachedMaxRelativeExpirationSeconds = 60 * 60 * 24 * 30
 // 30-day threshold (e.g. calendar-aligned MONTH limits in 31-day months).
 func (this *rateLimitMemcacheImpl) memcacheExpiration(expirationSeconds int64) int32 {
 	if expirationSeconds > memcachedMaxRelativeExpirationSeconds {
-		return int32(this.timeSource.UnixNow() + expirationSeconds)
+		expiresAt := this.timeSource.UnixNow() + expirationSeconds
+		if expiresAt > math.MaxInt32 {
+			// The client API uses signed 32-bit timestamps. Keep very long
+			// windows without expiration rather than wrapping into the past.
+			// Window-specific cache keys still enforce the reset boundary.
+			this.ttlOverflow.Inc()
+			return 0
+		}
+		return int32(expiresAt)
 	}
 	return int32(expirationSeconds)
 }
@@ -203,7 +213,7 @@ func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, i
 
 		_, err := this.client.Increment(cacheKey.Key, hitsAddends[i].Value)
 		if err == memcache.ErrCacheMiss {
-			expirationSeconds := this.baseRateLimiter.ExpirationSeconds(limits[i].Limit.Unit)
+			expirationSeconds := this.baseRateLimiter.ExpirationSeconds(limits[i].Limit)
 			if this.expirationJitterMaxSeconds > 0 {
 				expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 			}
@@ -356,6 +366,7 @@ func NewRateLimitCacheImpl(client Client, timeSource utils.TimeSource, jitterRan
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 		baseRateLimiter:            limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth, weekStart),
+		ttlOverflow:                statsManager.NewServiceStats().MemcachedTTLOverflow,
 	}
 }
 

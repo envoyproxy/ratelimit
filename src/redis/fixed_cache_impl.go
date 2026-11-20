@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"math"
 	"math/rand"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
+	gostats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 
@@ -31,11 +33,26 @@ type fixedRateLimitCacheImpl struct {
 	perSecondClient                    Client
 	stopCacheKeyIncrementWhenOverlimit bool
 	baseRateLimiter                    *limiter.BaseRateLimiter
+	ttlOverflow                        gostats.Counter
+}
+
+// redisExpirationSeconds returns zero (PERSIST) when Redis cannot represent the
+// expiry using the existing seconds-based timestamp guard. now approximates the
+// Redis server's wall clock, independently of the limiter's window clock.
+func redisExpirationSeconds(expirationSeconds, now int64) int64 {
+	if expirationSeconds > math.MaxInt64/1000-now {
+		return 0
+	}
+	return expirationSeconds
 }
 
 func pipelineAppend(client Client, pipeline *Pipeline, key string, hitsAddend uint64, result *uint64, expirationSeconds int64) {
 	*pipeline = client.PipeAppend(*pipeline, result, "INCRBY", key, hitsAddend)
-	*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
+	if expirationSeconds == 0 {
+		*pipeline = client.PipeAppend(*pipeline, nil, "PERSIST", key)
+	} else {
+		*pipeline = client.PipeAppend(*pipeline, nil, "EXPIRE", key, expirationSeconds)
+	}
 }
 
 func pipelineAppendDecrement(client Client, pipeline *Pipeline, key string, hitsAddend uint64, result *uint64, expirationSeconds int64) {
@@ -188,9 +205,13 @@ func (this *fixedRateLimitCacheImpl) DoLimit(
 
 		logger.Debugf("looking up cache key: %s", cacheKey.Key)
 
-		expirationSeconds := this.baseRateLimiter.ExpirationSeconds(limits[i].Limit.Unit)
+		expirationSeconds := this.baseRateLimiter.ExpirationSeconds(limits[i].Limit)
 		if this.baseRateLimiter.ExpirationJitterMaxSeconds > 0 {
 			expirationSeconds += this.baseRateLimiter.JitterRand.Int63n(this.baseRateLimiter.ExpirationJitterMaxSeconds)
+		}
+		expirationSeconds = redisExpirationSeconds(expirationSeconds, time.Now().Unix())
+		if expirationSeconds == 0 {
+			this.ttlOverflow.Inc()
 		}
 
 		client, p := this.selectPipeline(cacheKey, &pipeline, &perSecondPipeline)
@@ -254,5 +275,6 @@ func NewFixedRateLimitCacheImpl(client Client, perSecondClient Client, timeSourc
 		perSecondClient:                    perSecondClient,
 		stopCacheKeyIncrementWhenOverlimit: stopCacheKeyIncrementWhenOverlimit,
 		baseRateLimiter:                    limiter.NewBaseRateLimit(timeSource, jitterRand, expirationJitterMaxSeconds, localCache, nearLimitRatio, cacheKeyPrefix, statsManager, useCalendarMonth, weekStart),
+		ttlOverflow:                        statsManager.NewServiceStats().RedisTTLOverflow,
 	}
 }

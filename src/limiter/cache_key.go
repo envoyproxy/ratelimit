@@ -88,19 +88,16 @@ func (this *CacheKeyGenerator) GenerateCacheKey(
 		b.WriteByte('_')
 	}
 
-	var bucketStart int64
-	if this.useCalendarMonth && limit.Limit.Unit == pb.RateLimitResponse_RateLimit_MONTH {
-		// Calendar months vary in length, so bucket by the start of the
-		// current UTC calendar month rather than a fixed-size divider.
-		bucketStart = utils.MonthStartUnix(now)
-	} else if limit.Limit.Unit == pb.RateLimitResponse_RateLimit_WEEK {
-		// Anchor the weekly window to the configured start-of-week in UTC.
-		// Defaults to Thursday, matching the legacy epoch-division behaviour.
-		bucketStart = utils.WeekStartUnix(now, this.weekStart)
-	} else {
-		divider := utils.UnitToDivider(limit.Limit.Unit)
-		bucketStart = (now / divider) * divider
+	// Keep legacy keys for default windows, and isolate multiplied windows
+	// from other periods even when their start timestamps coincide.
+	if multiplier := utils.RateLimitMultiplier(limit.Limit); multiplier > 1 {
+		b.WriteString("unit_")
+		b.WriteString(strconv.FormatInt(int64(limit.Limit.Unit), 10))
+		b.WriteString("_multiplier_")
+		b.WriteString(strconv.FormatInt(multiplier, 10))
+		b.WriteByte('_')
 	}
+	bucketStart, _ := utils.RateLimitWindow(limit.Limit, now, this.useCalendarMonth, this.weekStart)
 	b.WriteString(strconv.FormatInt(bucketStart, 10))
 
 	return CacheKey{

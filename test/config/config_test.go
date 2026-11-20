@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 	stats "github.com/lyft/gostats"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/envoyproxy/ratelimit/src/config"
 	mockstats "github.com/envoyproxy/ratelimit/test/mocks/stats"
@@ -2425,4 +2427,80 @@ func TestSanitizeDescriptorMetricDots(t *testing.T) {
 		asrt.NotNil(rl)
 		asrt.Equal("domain.source_ip_10_0_0_1", rl.Stats.Key)
 	})
+}
+
+func TestConfiguredUnitMultiplier(t *testing.T) {
+	for _, flags := range []string{"", "detailed_metric: true", "value_to_metric: true", "share_threshold: true", "share_threshold: true\n    detailed_metric: true"} {
+		t.Run(flags, func(t *testing.T) {
+			contents := fmt.Sprintf(`domain: test
+descriptors:
+  - key: key
+    value: "*"
+    %s
+    rate_limit:
+      unit: second
+      unit_multiplier: 30
+      requests_per_unit: 10
+`, flags)
+			sm := mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false))
+			root := config.ConfigFileContentToYaml("inline", contents)
+			rlConfig := config.NewRateLimitConfigImpl([]config.RateLimitConfigToLoad{{Name: "inline", ConfigYaml: root}}, sm, false)
+			limit := rlConfig.GetLimit(context.Background(), "test", &pb_struct.RateLimitDescriptor{
+				Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key", Value: "value"}},
+			})
+			require.NotNil(t, limit)
+			assert.EqualValues(t, 30, limit.Limit.GetUnitMultiplier().GetValue())
+			assert.Contains(t, rlConfig.Dump(), "unit_multiplier=30")
+		})
+	}
+}
+
+func TestInvalidConfiguredUnitMultiplier(t *testing.T) {
+	for _, value := range []string{"0", "-1", "1.5", "4294967296", "invalid"} {
+		t.Run(value, func(t *testing.T) {
+			sm := mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false))
+			assert.Panics(t, func() {
+				root := config.ConfigFileContentToYaml("inline", fmt.Sprintf("domain: test\ndescriptors:\n- key: key\n  rate_limit:\n    unit: second\n    unit_multiplier: %s\n    requests_per_unit: 10\n", value))
+				config.NewRateLimitConfigImpl([]config.RateLimitConfigToLoad{{Name: "inline", ConfigYaml: root}}, sm, false)
+			})
+		})
+	}
+}
+
+func TestOverrideUnitMultiplier(t *testing.T) {
+	sm := mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false))
+	rlConfig := config.NewRateLimitConfigImpl(loadFile("basic_config.yaml"), sm, false)
+	for _, multiplier := range []*wrapperspb.UInt32Value{nil, wrapperspb.UInt32(1), wrapperspb.UInt32(30)} {
+		limit := rlConfig.GetLimit(context.Background(), "test-domain", &pb_struct.RateLimitDescriptor{
+			Entries: []*pb_struct.RateLimitDescriptor_Entry{{Key: "key", Value: "value"}},
+			Limit:   &pb_struct.RateLimitDescriptor_RateLimitOverride{RequestsPerUnit: 10, Unit: pb_type.RateLimitUnit_SECOND, UnitMultiplier: multiplier},
+		})
+		require.NotNil(t, limit)
+		assert.Equal(t, multiplier, limit.Limit.UnitMultiplier)
+	}
+}
+
+func TestUnitMultiplierConfigErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		multiplier uint32
+		unlimited  bool
+		unit       string
+		message    string
+	}{
+		{"zero multiplier", 0, false, "second", "unit_multiplier must be greater than zero"},
+		{"unlimited", 30, true, "", "should not specify unit_multiplier when unlimited"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			expectConfigPanic(t, func() {
+				sm := mockstats.NewMockStatManager(stats.NewStore(stats.NewNullSink(), false))
+				config.NewRateLimitConfigImpl([]config.RateLimitConfigToLoad{{
+					Name: "inline",
+					ConfigYaml: &config.YamlRoot{Domain: "test", Descriptors: []config.YamlDescriptor{{
+						Key: "key", RateLimit: &config.YamlRateLimit{Unit: tc.unit, UnitMultiplier: &tc.multiplier, Unlimited: tc.unlimited},
+					}}},
+				}}, sm, false)
+			}, "inline: "+tc.message)
+		})
+	}
 }

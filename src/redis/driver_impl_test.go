@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"math"
 	"sync"
 	"testing"
 	"time"
@@ -218,4 +219,22 @@ func TestExecuteGroupedPipelineBoundedParallelism(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, fakeClient.callCount())
 	assert.Equal(t, 2, fakeClient.maxConcurrentCalls())
+}
+
+func TestRedisExpirationSeconds(t *testing.T) {
+	for _, tc := range []struct {
+		now    int64
+		maxTTL int64
+	}{
+		{0, 9223372036854775},
+		{1700000000, 9223370336854775},
+		{1700000001, 9223370336854774},
+	} {
+		assert.EqualValues(t, 30, redisExpirationSeconds(30, tc.now))
+		assert.Equal(t, tc.maxTTL-1, redisExpirationSeconds(tc.maxTTL-1, tc.now))
+		assert.Equal(t, tc.maxTTL, redisExpirationSeconds(tc.maxTTL, tc.now), "largest EXPIRE TTL at now=%d", tc.now)
+		assert.Zero(t, redisExpirationSeconds(tc.maxTTL+1, tc.now), "smallest PERSIST TTL at now=%d", tc.now)
+		assert.Zero(t, redisExpirationSeconds(math.MaxInt64, tc.now))
+		assert.Zero(t, redisExpirationSeconds(0, tc.now))
+	}
 }
