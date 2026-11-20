@@ -12,7 +12,7 @@ type MultiCloser struct {
 func (m *MultiCloser) Close() error {
 	var e error
 	for _, closer := range m.Closers {
-		e = errors.Join(closer.Close())
+		e = errors.Join(e, closer.Close())
 	}
 	return e
 }
