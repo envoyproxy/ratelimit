@@ -54,7 +54,7 @@ func TestCalculateResetMonthEndOfMonth(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(now)
 
 	unit := pb.RateLimitResponse_RateLimit_MONTH
-	reset := utils.CalculateReset(&unit, timeSource, true, time.Thursday)
+	reset := utils.CalculateReset(&unit, timeSource, true, time.Thursday, 0)
 
 	assert.EqualValues(t, (1 * time.Hour).Seconds(), reset.Seconds)
 }
@@ -70,7 +70,7 @@ func TestCalculateResetMonthDisabledUsesLegacyDivider(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(now)
 
 	unit := pb.RateLimitResponse_RateLimit_MONTH
-	reset := utils.CalculateReset(&unit, timeSource, false, time.Thursday)
+	reset := utils.CalculateReset(&unit, timeSource, false, time.Thursday, 0)
 
 	sec := utils.UnitToDivider(unit)
 	assert.EqualValues(t, sec-now%sec, reset.Seconds)
@@ -86,7 +86,7 @@ func TestCalculateResetMonthLeapYear(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(now)
 
 	unit := pb.RateLimitResponse_RateLimit_MONTH
-	reset := utils.CalculateReset(&unit, timeSource, true, time.Thursday)
+	reset := utils.CalculateReset(&unit, timeSource, true, time.Thursday, 0)
 
 	assert.EqualValues(t, (48 * time.Hour).Seconds(), reset.Seconds)
 }
@@ -110,7 +110,7 @@ func TestExpirationSecondsMonth(t *testing.T) {
 	now := time.Date(2024, time.February, 28, 0, 0, 0, 0, time.UTC).Unix()
 	timeSource.EXPECT().UnixNow().Return(now)
 
-	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_MONTH, timeSource, true)
+	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_MONTH, timeSource, true, 0)
 	assert.EqualValues(t, (48 * time.Hour).Seconds(), seconds)
 }
 
@@ -123,7 +123,7 @@ func TestExpirationSecondsMonthDisabledUsesLegacyDivider(t *testing.T) {
 	// behavior exactly.
 	timeSource := mock_utils.NewMockTimeSource(controller)
 
-	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_MONTH, timeSource, false)
+	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_MONTH, timeSource, false, 0)
 	assert.EqualValues(t, 60*60*24*30, seconds)
 }
 
@@ -135,7 +135,7 @@ func TestExpirationSecondsNonMonthDoesNotUseTimeSource(t *testing.T) {
 	// the time source at all, matching the pre-existing UnitToDivider behavior.
 	timeSource := mock_utils.NewMockTimeSource(controller)
 
-	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_DAY, timeSource, true)
+	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_DAY, timeSource, true, 0)
 	assert.EqualValues(t, 60*60*24, seconds)
 }
 
@@ -184,7 +184,7 @@ func TestCalculateResetWeek(t *testing.T) {
 	timeSource.EXPECT().UnixNow().Return(now)
 
 	unit := pb.RateLimitResponse_RateLimit_WEEK
-	reset := utils.CalculateReset(&unit, timeSource, false, time.Monday)
+	reset := utils.CalculateReset(&unit, timeSource, false, time.Monday, 0)
 
 	nextMonday := time.Date(2026, time.January, 19, 0, 0, 0, 0, time.UTC).Unix()
 	assert.EqualValues(t, nextMonday-now, reset.Seconds)
@@ -198,7 +198,7 @@ func TestExpirationSecondsWeekUsesLegacyDivider(t *testing.T) {
 	// regardless of the configured week start.
 	timeSource := mock_utils.NewMockTimeSource(controller)
 
-	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_WEEK, timeSource, false)
+	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_WEEK, timeSource, false, 0)
 	assert.EqualValues(t, 60*60*24*7, seconds)
 }
 
@@ -245,6 +245,126 @@ func TestParseWeekdayInvalid(t *testing.T) {
 		weekday, err := utils.ParseWeekday(input)
 		assert.Error(t, err, input)
 		assert.Equal(t, time.Thursday, weekday, input)
+	}
+}
+
+func TestYearStartUnix(t *testing.T) {
+	// 2026-11-16 12:00 UTC. A January start gives the calendar year; an April
+	// start gives the fiscal year that began on 2026-04-01.
+	november := time.Date(2026, time.November, 16, 12, 0, 0, 0, time.UTC).Unix()
+	assert.Equal(t, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC).Unix(), utils.YearStartUnix(november, time.January))
+	assert.Equal(t, time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC).Unix(), utils.YearStartUnix(november, time.April))
+	assert.Equal(t, time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC).Unix(), utils.YearStartUnix(november, time.November))
+	assert.Equal(t, time.Date(2025, time.December, 1, 0, 0, 0, 0, time.UTC).Unix(), utils.YearStartUnix(november, time.December))
+
+	// Before the start month, the year began in the previous calendar year.
+	february := time.Date(2027, time.February, 10, 0, 0, 0, 0, time.UTC).Unix()
+	assert.Equal(t, time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC).Unix(), utils.YearStartUnix(february, time.April))
+
+	// Exactly at the year start - bucket start is now itself.
+	aprilFirst := time.Date(2027, time.April, 1, 0, 0, 0, 0, time.UTC).Unix()
+	assert.Equal(t, aprilFirst, utils.YearStartUnix(aprilFirst, time.April))
+
+	// 1 second before the year start - still the previous year.
+	assert.Equal(t, time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC).Unix(), utils.YearStartUnix(aprilFirst-1, time.April))
+
+	// Non-UTC must still bucket by the UTC year: 2027-04-01 05:00 JST is
+	// 2027-03-31 20:00 UTC, which is in the year that began 2026-04-01.
+	inTokyo := time.Date(2027, time.April, 1, 5, 0, 0, 0, time.FixedZone("JST", 9*60*60)).Unix()
+	assert.Equal(t, time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC).Unix(), utils.YearStartUnix(inTokyo, time.April))
+}
+
+func TestYearExpirationSeconds(t *testing.T) {
+	const day = int64(24 * 60 * 60)
+
+	// Exactly at year start: the whole year remains. 2026-04-01 to 2027-04-01
+	// is 365 days; 2027-04-01 to 2028-04-01 contains 2028-02-29, so 366 days.
+	assert.EqualValues(t, 365*day, utils.YearExpirationSeconds(time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC).Unix(), time.April))
+	assert.EqualValues(t, 366*day, utils.YearExpirationSeconds(time.Date(2027, time.April, 1, 0, 0, 0, 0, time.UTC).Unix(), time.April))
+	assert.EqualValues(t, 366*day, utils.YearExpirationSeconds(time.Date(2028, time.January, 1, 0, 0, 0, 0, time.UTC).Unix(), time.January))
+
+	// 1 second before the year ends: 1 second remains.
+	oneSecBeforeEnd := time.Date(2027, time.March, 31, 23, 59, 59, 0, time.UTC).Unix()
+	assert.EqualValues(t, 1, utils.YearExpirationSeconds(oneSecBeforeEnd, time.April))
+}
+
+func TestExpirationSecondsYear(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	now := time.Date(2027, time.March, 30, 0, 0, 0, 0, time.UTC).Unix()
+	timeSource.EXPECT().UnixNow().Return(now)
+
+	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_YEAR, timeSource, false, time.April)
+	assert.EqualValues(t, (48 * time.Hour).Seconds(), seconds)
+}
+
+func TestExpirationSecondsYearDisabledUsesLegacyDivider(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	// No UnixNow() expectation is set: with yearStart 0, YEAR must not consult
+	// the time source at all, matching the legacy UnitToDivider behaviour.
+	timeSource := mock_utils.NewMockTimeSource(controller)
+
+	seconds := utils.ExpirationSeconds(pb.RateLimitResponse_RateLimit_YEAR, timeSource, true, 0)
+	assert.EqualValues(t, 60*60*24*365, seconds)
+}
+
+func TestCalculateResetYear(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	now := time.Date(2026, time.November, 16, 12, 0, 0, 0, time.UTC).Unix()
+	timeSource.EXPECT().UnixNow().Return(now)
+
+	unit := pb.RateLimitResponse_RateLimit_YEAR
+	reset := utils.CalculateReset(&unit, timeSource, false, time.Thursday, time.April)
+
+	nextApril := time.Date(2027, time.April, 1, 0, 0, 0, 0, time.UTC).Unix()
+	assert.EqualValues(t, nextApril-now, reset.Seconds)
+}
+
+func TestCalculateResetYearDisabledUsesLegacyDivider(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	timeSource := mock_utils.NewMockTimeSource(controller)
+	now := time.Date(2026, time.November, 16, 12, 0, 0, 0, time.UTC).Unix()
+	timeSource.EXPECT().UnixNow().Return(now)
+
+	unit := pb.RateLimitResponse_RateLimit_YEAR
+	reset := utils.CalculateReset(&unit, timeSource, false, time.Thursday, 0)
+
+	const year = int64(60 * 60 * 24 * 365)
+	assert.EqualValues(t, year-now%year, reset.Seconds)
+}
+
+func TestParseMonth(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected time.Month
+	}{
+		{"January", time.January},
+		{"april", time.April},
+		{"APRIL", time.April},
+		{"September", time.September},
+		{"December", time.December},
+	}
+	for _, c := range cases {
+		month, err := utils.ParseMonth(c.input)
+		assert.NoError(t, err, c.input)
+		assert.Equal(t, c.expected, month, c.input)
+	}
+}
+
+func TestParseMonthInvalid(t *testing.T) {
+	for _, input := range []string{"", " April", "Apr", "Aprill", "4", "0", "13"} {
+		month, err := utils.ParseMonth(input)
+		assert.Error(t, err, input)
+		assert.Equal(t, time.January, month, input)
 	}
 }
 

@@ -41,6 +41,9 @@ type BaseRateLimiter struct {
 	// weekStart is the day-of-week on which WEEK-unit windows begin (UTC).
 	// Defaults to Thursday, matching the legacy epoch-division behaviour.
 	weekStart time.Weekday
+	// yearStart is the month on which YEAR-unit windows begin (the 1st, UTC).
+	// Zero keeps the legacy fixed 365-day window.
+	yearStart time.Month
 }
 
 type LimitInfo struct {
@@ -87,7 +90,7 @@ func (this *BaseRateLimiter) GenerateCacheKeys(request *pb.RateLimitRequest,
 // ExpirationSeconds returns the number of seconds, evaluated from the current
 // time, until the given rate limit unit's window ends.
 func (this *BaseRateLimiter) ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
-	return utils.ExpirationSeconds(unit, this.timeSource, this.useCalendarMonth)
+	return utils.ExpirationSeconds(unit, this.timeSource, this.useCalendarMonth, this.yearStart)
 }
 
 // Returns `true` in case local cache is enabled and contains value for provided cache key, `false` otherwise.
@@ -195,18 +198,19 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatusForNegativeHits(key stri
 
 func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expirationJitterMaxSeconds int64,
 	localCache *freecache.Cache, nearLimitRatio float32, cacheKeyPrefix string, statsManager stats.Manager,
-	useCalendarMonth bool, weekStart time.Weekday,
+	useCalendarMonth bool, weekStart time.Weekday, yearStart time.Month,
 ) *BaseRateLimiter {
 	return &BaseRateLimiter{
 		timeSource:                 timeSource,
 		JitterRand:                 jitterRand,
 		ExpirationJitterMaxSeconds: expirationJitterMaxSeconds,
-		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix, useCalendarMonth, weekStart),
+		cacheKeyGenerator:          NewCacheKeyGenerator(cacheKeyPrefix, useCalendarMonth, weekStart, yearStart),
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 		StatsManager:               statsManager,
 		useCalendarMonth:           useCalendarMonth,
 		weekStart:                  weekStart,
+		yearStart:                  yearStart,
 	}
 }
 
@@ -259,7 +263,7 @@ func (this *BaseRateLimiter) generateResponseDescriptorStatus(responseCode pb.Ra
 			Code:               responseCode,
 			CurrentLimit:       limit,
 			LimitRemaining:     limitRemaining,
-			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource, this.useCalendarMonth, this.weekStart),
+			DurationUntilReset: utils.CalculateReset(&limit.Unit, this.timeSource, this.useCalendarMonth, this.weekStart, this.yearStart),
 		}
 	} else {
 		return &pb.RateLimitResponse_DescriptorStatus{

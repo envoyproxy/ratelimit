@@ -45,21 +45,29 @@ func UnitToDivider(unit pb.RateLimitResponse_RateLimit_Unit) int64 {
 // window (the 1st through the last day of the month, UTC) instead of the
 // fixed-length UnitToDivider approximation. WEEK keeps the fixed 7-day TTL
 // regardless of the configured week start: it always outlives the remaining
-// window, and keeps existing TTL behaviour unchanged.
-func ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool) int64 {
+// window, and keeps existing TTL behaviour unchanged. When yearStart is
+// non-zero, YEAR reflects a calendar-aligned year beginning on the 1st of
+// yearStart (UTC); zero keeps the fixed 365-day divider.
+func ExpirationSeconds(unit pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool, yearStart time.Month) int64 {
 	if useCalendarMonth && unit == pb.RateLimitResponse_RateLimit_MONTH {
 		return MonthExpirationSeconds(timeSource.UnixNow())
+	}
+	if yearStart != 0 && unit == pb.RateLimitResponse_RateLimit_YEAR {
+		return YearExpirationSeconds(timeSource.UnixNow(), yearStart)
 	}
 	return UnitToDivider(unit)
 }
 
-func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool, weekStart time.Weekday) *durationpb.Duration {
+func CalculateReset(unit *pb.RateLimitResponse_RateLimit_Unit, timeSource TimeSource, useCalendarMonth bool, weekStart time.Weekday, yearStart time.Month) *durationpb.Duration {
 	nowUnix := timeSource.UnixNow()
 	if useCalendarMonth && *unit == pb.RateLimitResponse_RateLimit_MONTH {
 		return &durationpb.Duration{Seconds: MonthExpirationSeconds(nowUnix)}
 	}
 	if *unit == pb.RateLimitResponse_RateLimit_WEEK {
 		return &durationpb.Duration{Seconds: WeekExpirationSeconds(nowUnix, weekStart)}
+	}
+	if yearStart != 0 && *unit == pb.RateLimitResponse_RateLimit_YEAR {
+		return &durationpb.Duration{Seconds: YearExpirationSeconds(nowUnix, yearStart)}
 	}
 	sec := UnitToDivider(*unit)
 	return &durationpb.Duration{Seconds: sec - nowUnix%sec}

@@ -81,6 +81,7 @@
     - [AWS ElastiCache IAM authentication](#aws-elasticache-iam-authentication)
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
   - [Configurable WEEK rate limit reset day](#configurable-week-rate-limit-reset-day)
+  - [Calendar-aligned YEAR rate limits](#calendar-aligned-year-rate-limits)
 - [Memcache](#memcache)
 - [Custom headers](#custom-headers)
   - [RequestHeadersToAdd](#requestheaderstoadd)
@@ -1606,6 +1607,26 @@ startup.
 The default preserves the existing behaviour exactly, so nothing changes on upgrade. Changing the
 value on a running deployment moves the window boundary, so the current week's counters effectively
 reset when the new value takes effect.
+
+## Calendar-aligned YEAR rate limits
+
+1. `USE_CALENDAR_YEAR_RATE_LIMIT` : (default is "false")
+1. `YEAR_RATE_LIMIT_START_MONTH` : (default is "January")
+
+By default, a `unit: year` rate limit counts fixed 365-day windows from the Unix epoch. Because
+leap days are not counted, the window boundary drifts through the calendar (it currently falls in
+mid-December) and does not line up with any calendar or fiscal year.
+
+Setting `USE_CALENDAR_YEAR_RATE_LIMIT` to `"true"` switches `YEAR` limits to a calendar-aligned
+year that begins at 00:00 UTC on the 1st of `YEAR_RATE_LIMIT_START_MONTH`: the cache key bucket,
+TTL/expiration, and reported reset time all follow that boundary, and leap years are 366 days long.
+`YEAR_RATE_LIMIT_START_MONTH` takes an English month name (`January` through `December`;
+case-insensitive), so `January` gives the calendar year and, for example, `April` gives a fiscal
+year that runs from April 1 to March 31. Unrecognised values cause the service to fail at startup.
+
+This is opt-in because it changes when existing `YEAR` limits reset. Enabling it, or changing the
+start month, on a running deployment moves the window boundary, so the current year's counters
+effectively reset when the new value takes effect.
 
 # Memcache
 

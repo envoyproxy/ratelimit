@@ -61,6 +61,7 @@ type service struct {
 	responseDynamicMetadataEnabled bool
 	useCalendarMonthRateLimit      bool
 	weekStart                      time.Weekday
+	yearStart                      time.Month
 	perUnitHeadersEnabled          bool
 	// redisErrorLogLimiter keeps a Redis outage from logging once per call.
 	redisErrorLogLimiter *utils.LogLimiter
@@ -102,6 +103,7 @@ func (this *service) SetConfig(updateEvent provider.ConfigUpdateEvent, healthyWi
 	this.responseDynamicMetadataEnabled = rlSettings.ResponseDynamicMetadata
 	this.useCalendarMonthRateLimit = rlSettings.UseCalendarMonthRateLimit
 	this.weekStart, _ = utils.ParseWeekday(rlSettings.WeekRateLimitResetDay) // validated in settings.NewSettings
+	this.yearStart = rlSettings.CalendarYearStartMonth()
 	this.perUnitHeadersEnabled = rlSettings.RateLimitPerUnitHeadersEnabled
 
 	this.customHeadersEnabled = rlSettings.RateLimitResponseHeadersEnabled
@@ -606,7 +608,7 @@ func (this *service) rateLimitResetHeader(
 ) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.customHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart, this.yearStart).GetSeconds(), 10),
 	}
 }
 
@@ -627,7 +629,7 @@ func (this *service) rateLimitRequestRemainingHeader(descriptor *pb.RateLimitRes
 func (this *service) rateLimitRequestResetHeader(descriptor *pb.RateLimitResponse_DescriptorStatus) *core.HeaderValue {
 	return &core.HeaderValue{
 		Key:   this.requestHeaderResetHeader,
-		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart).GetSeconds(), 10),
+		Value: strconv.FormatInt(utils.CalculateReset(&descriptor.CurrentLimit.Unit, this.customHeaderClock, this.useCalendarMonthRateLimit, this.weekStart, this.yearStart).GetSeconds(), 10),
 	}
 }
 

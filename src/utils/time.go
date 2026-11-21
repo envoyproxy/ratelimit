@@ -79,6 +79,39 @@ func WeekStartUnix(nowUnix int64, weekStart time.Weekday) int64 {
 	return time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC).Unix()
 }
 
+// YearStartUnix returns the Unix timestamp (UTC) of the most recent start-of-year
+// boundary at or before nowUnix, where each year begins at 00:00 UTC on the 1st
+// of startMonth. Used to bucket a YEAR-unit rate limit's cache key by calendar
+// (or fiscal) year.
+func YearStartUnix(nowUnix int64, startMonth time.Month) int64 {
+	t := time.Unix(nowUnix, 0).UTC()
+	year := t.Year()
+	if t.Month() < startMonth {
+		year--
+	}
+	return time.Date(year, startMonth, 1, 0, 0, 0, 0, time.UTC).Unix()
+}
+
+// YearExpirationSeconds returns the number of seconds remaining until the end
+// of the year (UTC) containing nowUnix, where each year begins on the 1st of
+// startMonth. Used as the TTL/expiration and reported reset time for a
+// YEAR-unit rate limit. Leap years are 366 days long.
+func YearExpirationSeconds(nowUnix int64, startMonth time.Month) int64 {
+	start := time.Unix(YearStartUnix(nowUnix, startMonth), 0).UTC()
+	return start.AddDate(1, 0, 0).Unix() - nowUnix
+}
+
+// ParseMonth converts an English month name (case-insensitive) to a time.Month.
+// Any other value, including an empty string, returns time.January and an error.
+func ParseMonth(s string) (time.Month, error) {
+	for m := time.January; m <= time.December; m++ {
+		if strings.EqualFold(s, m.String()) {
+			return m, nil
+		}
+	}
+	return time.January, fmt.Errorf("invalid month %q: expected an English month name such as January or April", s)
+}
+
 // ParseWeekday converts a weekday name (case-insensitive) to a time.Weekday.
 // Any other value, including an empty string, returns time.Thursday (the legacy
 // behaviour) and an error.

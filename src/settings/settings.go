@@ -129,6 +129,17 @@ type Settings struct {
 	// Thursday, so epoch-division always snapped on Thursdays). An unrecognised value fails
 	// at startup.
 	WeekRateLimitResetDay string `envconfig:"WEEK_RATE_LIMIT_RESET_DAY" default:"Thursday"`
+	// UseCalendarYearRateLimit switches YEAR-unit rate limits to a calendar-aligned
+	// year beginning at 00:00 UTC on the 1st of YearRateLimitStartMonth, for cache key
+	// bucketing, TTL/expiration, and the reported reset time. Defaults to false, which
+	// preserves the legacy fixed 365-day window counted from the Unix epoch, so enabling
+	// this for existing YEAR limits changes when they reset and is opt-in.
+	UseCalendarYearRateLimit bool `envconfig:"USE_CALENDAR_YEAR_RATE_LIMIT" default:"false"`
+	// YearRateLimitStartMonth sets the month on which calendar-aligned YEAR windows begin,
+	// for example April for a fiscal year ending March 31. Valid values (case-insensitive):
+	// January through December. Only used when UseCalendarYearRateLimit is true. An
+	// unrecognised value fails at startup.
+	YearRateLimitStartMonth string `envconfig:"YEAR_RATE_LIMIT_START_MONTH" default:"January"`
 
 	// Settings for optional returning of custom headers
 	RateLimitResponseHeadersEnabled bool `envconfig:"LIMIT_RESPONSE_HEADERS_ENABLED" default:"false"`
@@ -342,6 +353,9 @@ func NewSettings() Settings {
 	if _, err := utils.ParseWeekday(s.WeekRateLimitResetDay); err != nil {
 		panic(fmt.Errorf("assigning WEEK_RATE_LIMIT_RESET_DAY: %w", err))
 	}
+	if _, err := utils.ParseMonth(s.YearRateLimitStartMonth); err != nil {
+		panic(fmt.Errorf("assigning YEAR_RATE_LIMIT_START_MONTH: %w", err))
+	}
 	// When we require TLS to connect to Redis, we check if we need to connect using the provided key-pair.
 	RedisTlsConfig(s.RedisTls || s.RedisPerSecondTls)(&s)
 	MemcacheTlsConfig(s.MemcacheTls)(&s)
@@ -403,4 +417,15 @@ func GrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 	return func(s *Settings) {
 		s.GrpcUnaryInterceptor = i
 	}
+}
+
+// CalendarYearStartMonth returns the month on which YEAR-unit rate-limit windows
+// begin when UseCalendarYearRateLimit is enabled, or 0 when YEAR limits keep the
+// legacy fixed 365-day window. YearRateLimitStartMonth is validated in NewSettings.
+func (s Settings) CalendarYearStartMonth() time.Month {
+	if !s.UseCalendarYearRateLimit {
+		return 0
+	}
+	month, _ := utils.ParseMonth(s.YearRateLimitStartMonth)
+	return month
 }
