@@ -2089,3 +2089,53 @@ func TestServiceGlobalQuotaModeUnconfiguredDescriptor(test *testing.T) {
 	// unconfigured descriptor holds no quota and must not vote.
 	t.assert.Equal(pb.RateLimitResponse_OVER_LIMIT, response.OverallCode)
 }
+
+func TestServiceGlobalQuotaModeGroupKeyCollision(test *testing.T) {
+	os.Setenv("QUOTA_MODE", "true")
+	defer func() {
+		os.Unsetenv("QUOTA_MODE")
+	}()
+
+	t := commonSetup(test)
+	defer t.controller.Finish()
+
+	service := t.setupBasicService()
+
+	// Force a config reload so QUOTA_MODE is picked up.
+	barrier := newBarrier()
+	t.configUpdateEvent.EXPECT().GetConfig().DoAndReturn(func() (config.RateLimitConfig, any) {
+		barrier.signal()
+		return t.config, nil
+	})
+	t.configUpdateEventChan <- t.configUpdateEvent
+	barrier.wait()
+
+	// Two unrelated quota descriptors. Neither carries backend_name or
+	// model_name_override, so quotaGroupKey() falls back to joining the entries
+	// as "key=value;". The first descriptor's value happens to contain the two
+	// separator characters, which is ordinary for a header value, and that makes
+	// both descriptors serialise to the identical string "k=v;x=y;".
+	request := common.NewRateLimitRequest(
+		"quota-domain",
+		[][][2]string{{{"k", "v;x=y"}}, {{"k", "v"}, {"x", "y"}}},
+		1)
+
+	limits := []*config.RateLimit{
+		config.NewRateLimit(10, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key"), false, false, true, "", nil, false),
+		config.NewRateLimit(5, pb.RateLimitResponse_RateLimit_MINUTE, t.statsManager.NewStats("key2"), false, false, true, "", nil, false),
+	}
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[0]).Return(limits[0])
+	t.config.EXPECT().GetLimit(context.Background(), "quota-domain", request.Descriptors[1]).Return(limits[1])
+	t.cache.EXPECT().DoLimit(context.Background(), request, limits).Return(
+		[]*pb.RateLimitResponse_DescriptorStatus{
+			{Code: pb.RateLimitResponse_OVER_LIMIT, CurrentLimit: limits[0].Limit, LimitRemaining: 0},
+			{Code: pb.RateLimitResponse_OK, CurrentLimit: limits[1].Limit, LimitRemaining: 4},
+		})
+
+	response, err := service.ShouldRateLimit(context.Background(), request)
+	t.assert.Nil(err)
+
+	// The second descriptor still has quota, so it is its own group and that group
+	// is not over. Quota groups are ANDed, so the request must pass.
+	t.assert.Equal(pb.RateLimitResponse_OK, response.OverallCode)
+}

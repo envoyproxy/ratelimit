@@ -429,15 +429,36 @@ func quotaGroupKey(descriptor *ratelimitv3.RateLimitDescriptor) string {
 		case modelNameOverrideDescriptorKey:
 			model = entry.GetValue()
 		}
-		all.WriteString(entry.GetKey())
+		all.WriteString(escapeGroupKeyField(entry.GetKey()))
 		all.WriteString("=")
-		all.WriteString(entry.GetValue())
+		all.WriteString(escapeGroupKeyField(entry.GetValue()))
 		all.WriteString(";")
 	}
 	if backend != "" || model != "" {
-		return backend + "|" + model
+		return escapeGroupKeyField(backend) + "|" + escapeGroupKeyField(model)
 	}
 	return all.String()
+}
+
+// escapeGroupKeyField escapes the characters quotaGroupKey uses as separators.
+// Descriptor values are request data and routinely contain "=" and ";", so
+// without this two unrelated descriptors can serialise to the same group key
+// and get merged into one quota group. Values that hold none of these
+// characters are returned unchanged, so the key format is unaffected for them.
+func escapeGroupKeyField(s string) string {
+	if !strings.ContainsAny(s, `\|;=`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	for _, r := range s {
+		switch r {
+		case '\\', '|', ';', '=':
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limitsToCheck []*config.RateLimit, quotaMode bool) *structpb.Struct {
