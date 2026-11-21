@@ -468,24 +468,6 @@ func (this *rateLimitConfigImpl) GetLimit(
 		return rateLimit
 	}
 
-	if descriptor.GetLimit() != nil {
-		rateLimitKey := this.descriptorKey(domain, descriptor)
-		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
-		// When limit override is provided by envoy config, we don't want to enable shadow_mode
-		rateLimit = NewRateLimit(
-			descriptor.GetLimit().GetRequestsPerUnit(),
-			rateLimitOverrideUnit,
-			this.statsManager.NewStats(rateLimitKey),
-			false,
-			false,
-			false,
-			"",
-			[]string{},
-			false,
-		)
-		return rateLimit
-	}
-
 	descriptorsMap := value.descriptors
 	prevDescriptor := &value.rateLimitDescriptor
 
@@ -637,6 +619,31 @@ func (this *rateLimitConfigImpl) GetLimit(
 			break
 		}
 		prevDescriptor = nextDescriptor
+	}
+
+	// A dynamic-metadata limit override (e.g. from fromMetadata) only overrides the
+	// limit value/unit. Rebuild the limit using the override's value/unit while
+	// preserving quota_mode from the matched config descriptor, so quota descriptors
+	// that receive an override still participate in quota-group exhaustion /
+	// passedBackends filtering. shadow_mode stays disabled for overrides.
+	if descriptor.GetLimit() != nil {
+		quotaMode := false
+		if rateLimit != nil {
+			quotaMode = rateLimit.QuotaMode
+		}
+		rateLimitKey := this.descriptorKey(domain, descriptor)
+		rateLimitOverrideUnit := pb.RateLimitResponse_RateLimit_Unit(descriptor.GetLimit().GetUnit())
+		return NewRateLimit(
+			descriptor.GetLimit().GetRequestsPerUnit(),
+			rateLimitOverrideUnit,
+			this.statsManager.NewStats(rateLimitKey),
+			false,
+			false,
+			quotaMode,
+			"",
+			[]string{},
+			false,
+		)
 	}
 
 	// Replace metric with detailed metric, if leaf descriptor is detailed.

@@ -1,0 +1,29 @@
+# Configuration for testing quota_mode preservation across dynamic-metadata overrides.
+domain: test-domain
+descriptors:
+  - key: key1
+    value: value1
+    descriptors:
+      # Leaf with quota_mode enabled.
+      - key: subkey1
+        value: subvalue1
+        rate_limit:
+          unit: second
+          requests_per_unit: 10
+        quota_mode: true
+
+      # Leaf without quota_mode (defaults to false).
+      - key: subkey2
+        value: subvalue2
+        rate_limit:
+          unit: second
+          requests_per_unit: 10
+
+  # Top level key/value leaf with both quota_mode and shadow_mode enabled.
+  - key: key2
+    value: value2
+    rate_limit:
+      unit: minute
+      requests_per_unit: 30
+    quota_mode: true
+    shadow_mode: true

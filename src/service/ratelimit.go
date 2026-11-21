@@ -475,10 +475,16 @@ func ratelimitToMetadata(req *pb.RateLimitRequest, passedDescriptors []int, limi
 	// In quota mode, advertise the unique (backend_name, model_name_override) pairs
 	// that still have quota so the data plane can make a routing decision and send the
 	// request to a non-exhausted model/backend pair.
+	//
+	// The list is emitted unconditionally in quota mode, including when it is empty.
+	// An empty-but-present list tells the data plane's host_allowlist load balancer that
+	// every quota backend/model group is exhausted, so it must exclude all quota-governed
+	// hosts (and fall over to any non-quota hosts, or return 429 when none remain). Omitting
+	// the field instead would be read as "no quota metadata", which fails open and would let
+	// an exhausted backend keep receiving traffic.
 	if quotaMode {
-		if backends := passedBackendsList(req, passedDescriptors); len(backends) > 0 {
-			fields["passedBackends"] = structpb.NewListValue(&structpb.ListValue{Values: backends})
-		}
+		backends := passedBackendsList(req, passedDescriptors)
+		fields["passedBackends"] = structpb.NewListValue(&structpb.ListValue{Values: backends})
 	}
 
 	return &structpb.Struct{Fields: fields}

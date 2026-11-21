@@ -95,7 +95,8 @@ func TestRatelimitToMetadata(t *testing.T) {
     "domain": "quota-domain",
     "metadata": {
         "name": "service_1"
-    }
+    },
+    "passedBackends": []
 }`,
 		},
 		{
@@ -178,7 +179,8 @@ func TestRatelimitToMetadata(t *testing.T) {
     "domain": "mixed-domain",
     "metadata": {
         "name": "service_2"
-    }
+    },
+    "passedBackends": []
 }`,
 		},
 		{
@@ -213,7 +215,8 @@ func TestRatelimitToMetadata(t *testing.T) {
         }
     ],
     "domain": "addend-domain",
-    "hitsAddend": 5
+    "hitsAddend": 5,
+    "passedBackends": []
 }`,
 		},
 		{
@@ -371,7 +374,8 @@ func TestRatelimitToMetadata(t *testing.T) {
             ]
         }
     ],
-    "domain": "quota-domain"
+    "domain": "quota-domain",
+    "passedBackends": []
 }`,
 		},
 	}
