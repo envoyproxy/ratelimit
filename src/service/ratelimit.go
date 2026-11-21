@@ -269,7 +269,11 @@ func (this *service) shouldRateLimitWorker(
 		}
 
 		response.Statuses[i] = descriptorStatus
-		isQuotaMode := globalQuotaMode || (limitsToCheck[i] != nil && limitsToCheck[i].QuotaMode)
+		// A descriptor that matched no configured limit carries no quota, so it must
+		// not open a quota group. Its status is always OK, so a group created for it
+		// could never go over, and because the groups below are ANDed together that
+		// one group would stop the whole request from ever being OVER_LIMIT.
+		isQuotaMode := limitsToCheck[i] != nil && (globalQuotaMode || limitsToCheck[i].QuotaMode)
 		over := descriptorStatus.Code == pb.RateLimitResponse_OVER_LIMIT
 		if !over {
 			// Keep track of the descriptors that have passed
