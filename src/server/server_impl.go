@@ -54,20 +54,21 @@ const (
 )
 
 type server struct {
-	httpAddress      string
-	grpcAddress      string
-	grpcListenType   grpcListenType
-	debugAddress     string
-	router           *mux.Router
-	grpcServer       *grpc.Server
-	store            gostats.Store
-	scope            gostats.Scope
-	provider         provider.RateLimitConfigProvider
-	debugListener    serverDebugListener
-	httpServer       *http.Server
-	listenerMu       sync.Mutex
-	health           *HealthChecker
-	grpcCertProvider *provider.CertProvider
+	httpAddress          string
+	grpcAddress          string
+	grpcListenType       grpcListenType
+	debugAddress         string
+	router               *mux.Router
+	grpcServer           *grpc.Server
+	store                gostats.Store
+	scope                gostats.Scope
+	provider             provider.RateLimitConfigProvider
+	debugListener        serverDebugListener
+	httpServer           *http.Server
+	listenerMu           sync.Mutex
+	health               *HealthChecker
+	grpcCertProvider     *provider.CertProvider
+	grpcClientCAProvider *provider.ClientCAProvider
 }
 
 func (server *server) AddDebugHttpEndpoint(path string, help string, handler http.HandlerFunc) {
@@ -264,8 +265,12 @@ func newServer(s settings.Settings, name string, statsManager stats.Manager, loc
 		// Remove the static certificates and use the provider via the GetCertificate function
 		grpcServerTlsConfig.Certificates = nil
 		grpcServerTlsConfig.GetCertificate = ret.grpcCertProvider.GetCertificateFunc()
-		// Verify client SAN if provided
-		if s.GrpcClientTlsSAN != "" {
+		if s.GrpcClientTlsCACert != "" {
+			// Reload the client CA on changes and verify client certs against the current one per handshake
+			ret.grpcClientCAProvider = provider.NewClientCAProvider(s, ret.store, s.GrpcClientTlsCACert)
+			grpcServerTlsConfig.GetConfigForClient = getConfigForClient(grpcServerTlsConfig.Clone(), ret.grpcClientCAProvider.ClientCAs, s.GrpcClientTlsSAN)
+		} else if s.GrpcClientTlsSAN != "" {
+			// Verify client SAN if provided
 			grpcServerTlsConfig.VerifyPeerCertificate = verifyClient(grpcServerTlsConfig.ClientCAs, s.GrpcClientTlsSAN)
 		}
 		grpcOptions = append(grpcOptions, grpc.Creds(credentials.NewTLS(grpcServerTlsConfig)))

@@ -489,6 +489,95 @@ func TestReloadGRPCServerCerts(t *testing.T) {
 	})
 }
 
+// mTLSHandshake connects to the server and reads the first bytes sent by it. With TLS 1.3 the
+// server verifies the client cert after the client completes the handshake, so a rejected client
+// cert only shows up as an error on the first read.
+func mTLSHandshake(connStr string, config *tls.Config) error {
+	conn, err := tls.Dial("tcp", connStr, config)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		return err
+	}
+	_, err = conn.Read(make([]byte, 1))
+	return err
+}
+
+func TestReloadGRPCClientCA(t *testing.T) {
+	common.WithMultiRedis(t, []common.RedisConfig{
+		{Port: 6383},
+	}, func() {
+		s := makeSimpleRedisSettings(6383, 6380, false, 0)
+		assert := assert.New(t)
+		serverCAFile, serverCertFile, serverCertKey, err := mTLSSetup(utils.ServerCA)
+		assert.NoError(err)
+		// Client CA initially used to verify clients
+		initialClientCAFile, initialClientCertFile, initialClientCertKey, err := mTLSSetup(utils.ClientCA)
+		assert.NoError(err)
+		// Second client CA that will replace the above during test
+		newClientCAFile, newClientCertFile, newClientCertKey, err := mTLSSetup(utils.ClientCA)
+		assert.NoError(err)
+		initialTlsConfig := utils.TlsConfigFromFiles(initialClientCertFile, initialClientCertKey, serverCAFile, utils.ServerCA, false)
+		initialTlsConfig.NextProtos = []string{"h2"}
+		newTlsConfig := utils.TlsConfigFromFiles(newClientCertFile, newClientCertKey, serverCAFile, utils.ServerCA, false)
+		newTlsConfig.NextProtos = []string{"h2"}
+		connStr := fmt.Sprintf("localhost:%v", s.GrpcPort)
+
+		// Move the watched files into dedicated directories, as the whole directory containing them
+		// is watched and read on every change
+		moveToDir := func(dir, file string) string {
+			dst := filepath.Join(dir, filepath.Base(file))
+			assert.NoError(os.Rename(file, dst))
+			return dst
+		}
+		serverCertDir := t.TempDir()
+		serverCertFile = moveToDir(serverCertDir, serverCertFile)
+		serverCertKey = moveToDir(serverCertDir, serverCertKey)
+		clientCADir := t.TempDir()
+		initialClientCAFile = moveToDir(clientCADir, initialClientCAFile)
+		newClientCAFile = moveToDir(t.TempDir(), newClientCAFile)
+
+		// Set up ratelimit with the initial client CA
+		s.GrpcServerUseTLS = true
+		s.GrpcServerTlsCert = serverCertFile
+		s.GrpcServerTlsKey = serverCertKey
+		s.GrpcClientTlsCACert = initialClientCAFile
+		s.GrpcClientTlsSAN = "localhost"
+		settings.GrpcServerTlsConfig()(&s)
+		runner := startTestRunner(t, s)
+		defer runner.Stop()
+
+		// Ensure a client cert signed by the initial client CA is accepted
+		t.Run("WithInitialClientCert", func(t *testing.T) {
+			assert.NoError(mTLSHandshake(connStr, initialTlsConfig))
+		})
+
+		// Ensure a client cert signed by the new client CA is rejected
+		t.Run("WithNewClientCertFail", func(t *testing.T) {
+			assert.Error(mTLSHandshake(connStr, newTlsConfig))
+		})
+
+		// Replace the initial client CA with the new one
+		err = os.Rename(newClientCAFile, initialClientCAFile)
+		assert.NoError(err)
+
+		// Ensure a client cert signed by the new client CA is accepted
+		t.Run("WithNewClientCertOK", func(t *testing.T) {
+			// If this takes longer than 10s, something is probably wrong
+			assert.Eventually(func() bool {
+				return mTLSHandshake(connStr, newTlsConfig) == nil
+			}, 10*time.Second, 100*time.Millisecond)
+		})
+
+		// Ensure a client cert signed by the initial client CA is rejected
+		t.Run("WithInitialClientCertFail", func(t *testing.T) {
+			assert.Error(mTLSHandshake(connStr, initialTlsConfig))
+		})
+	})
+}
+
 func testBasicConfigAuthTLS(perSecond bool, local_cache_size int) func(*testing.T) {
 	s := makeSimpleRedisSettings(16381, 16382, perSecond, local_cache_size)
 	s.RedisTlsConfig = &tls.Config{}
