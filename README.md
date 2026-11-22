@@ -1105,6 +1105,7 @@ Each Redis client reports under `ratelimit.redis_pool` (and `ratelimit.redis_per
 cx_active               # open connections (gauge)
 cx_total                # connections opened
 cx_connect_error        # failed connection attempts
+cx_connect_time         # time to open a connection, including TLS and AUTH, in milliseconds (timer)
 cx_local_close          # connections closed
 cx_local_close_error    # connections closed after an error (I/O timeout, reset, ...)
 cmd_inflight            # Redis commands (pipelines) in flight, including those whose caller gave up (gauge)
