@@ -8,6 +8,7 @@ import (
 	"time"
 
 	stats "github.com/lyft/gostats"
+	"github.com/mediocregopher/radix/v4/trace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -273,4 +274,19 @@ func TestAbandonedCommandsEndWithoutIOTimeout(t *testing.T) {
 	assert.Error(t, c.PipeDo(ctx, incrPipeline(c, &rcv)))
 	// The command in the background ends with its caller's deadline.
 	assert.Eventually(t, func() bool { return len(c.inflight) == 0 }, time.Second, 10*time.Millisecond)
+}
+
+func TestConnectTimeIsRecordedInMilliseconds(t *testing.T) {
+	sink := &timerSink{timers: map[string][]float64{}}
+	ps := newPoolStats(stats.NewStore(sink, false))
+	connCreated := poolTrace(&ps, false, nil).ConnCreated
+
+	connCreated(trace.PoolConnCreated{ConnectTime: 1500 * time.Microsecond})
+	connCreated(trace.PoolConnCreated{ConnectTime: 300 * time.Microsecond})
+	// A failed connect is counted in cx_connect_error, not timed.
+	connCreated(trace.PoolConnCreated{ConnectTime: time.Second, Err: errors.New("dial failed")})
+
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	assert.Equal(t, []float64{1.5, 0.3}, sink.timers["cx_connect_time"])
 }

@@ -38,6 +38,7 @@ type poolStats struct {
 	cmdDeadlineExceeded stats.Counter
 	cmdRejected         stats.Counter
 	cmdTime             stats.Timer
+	connectTime         stats.Timer
 }
 
 func newPoolStats(scope stats.Scope) poolStats {
@@ -58,6 +59,7 @@ func newPoolStats(scope stats.Scope) poolStats {
 	ret.cmdDeadlineExceeded = scope.NewCounter("cmd_deadline_exceeded")
 	ret.cmdRejected = scope.NewCounter("cmd_rejected")
 	ret.cmdTime = scope.NewTimer("cmd_time")
+	ret.connectTime = scope.NewTimer("cx_connect_time")
 	return ret
 }
 
@@ -75,6 +77,8 @@ func poolTrace(ps *poolStats, healthCheckActiveConnection bool, srv server.Serve
 		ConnCreated: func(newConn trace.PoolConnCreated) {
 			if newConn.Err == nil {
 				ps.connectionTotal.Add(1)
+				// Fractional milliseconds, for the same reason as recordCmdTime.
+				ps.connectTime.AddValue(float64(newConn.ConnectTime) / float64(time.Millisecond))
 				ps.connectionActive.Add(1)
 				if ps.hadConnError.CompareAndSwap(true, false) {
 					logger.Infof("redis connection re-established after previous error")
