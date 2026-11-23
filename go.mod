@@ -22,7 +22,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/lyft/goruntime v0.3.0
-	github.com/lyft/gostats v0.4.14
+	github.com/lyft/gostats v0.4.15
 	github.com/mediocregopher/radix/v4 v4.1.4
 	github.com/prometheus/client_golang v1.19.1
 	github.com/prometheus/client_model v0.6.2

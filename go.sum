@@ -127,8 +127,8 @@ github.com/libp2p/go-reuseport v0.4.0/go.mod h1:ZtI03j/wO5hZVDFo2jKywN6bYKWLOy8S
 github.com/lyft/goruntime v0.3.0 h1:VLBYR4s3XazkUT8lLtq9CJrt58YmLQQumrK3ktenEkI=
 github.com/lyft/goruntime v0.3.0/go.mod h1:BW1gngSpMJR9P9w23BPUPdhdbUWhpirl98TQhOWWMF4=
 github.com/lyft/gostats v0.4.1/go.mod h1:Tpx2xRzz4t+T2Tx0xdVgIoBdR2UMVz+dKnE3X01XSd8=
-github.com/lyft/gostats v0.4.14 h1:xmP4yMfDvEKtlNZEcS2sYz0cvnps1ri337ZEEbw3ab8=
-github.com/lyft/gostats v0.4.14/go.mod h1:cJWqEVL8JIewIJz/olUIios2F1q06Nc51hXejPQmBH0=
+github.com/lyft/gostats v0.4.15 h1:oOTWg+W5qfeZnDGdapxWQ0AhDUIxx6N3RjRw7UW+g0c=
+github.com/lyft/gostats v0.4.15/go.mod h1:cJWqEVL8JIewIJz/olUIios2F1q06Nc51hXejPQmBH0=
 github.com/mediocregopher/radix/v4 v4.1.4 h1:Uze6DEbEAvL+VHXUEu/EDBTkUk5CLct5h3nVSGpc6Ts=
 github.com/mediocregopher/radix/v4 v4.1.4/go.mod h1:ajchozX/6ELmydxWeWM6xCFHVpZ4+67LXHOTOVR0nCE=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
