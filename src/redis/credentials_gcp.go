@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	logger "github.com/sirupsen/logrus"
@@ -18,6 +19,10 @@ const (
 	// Google's library only honors this for metadata server tokens; tokens
 	// from a credentials file refresh 10 seconds before expiry.
 	gcpIAMTokenEarlyRefresh = 5 * time.Minute
+	// Bounds a token request made with a credentials file, which otherwise
+	// uses an HTTP client with no timeout. The metadata server path has its
+	// own client with timeouts.
+	gcpIAMTokenRequestTimeout = 10 * time.Second
 )
 
 // gcpIAMCredentialProvider authenticates to GCP Memorystore with a Google
@@ -41,7 +46,11 @@ func (p *gcpIAMCredentialProvider) Credentials(_ context.Context) (string, strin
 }
 
 func newGcpIamCredentialProvider(ctx context.Context, prefix string) CredentialProvider {
-	credentials, err := google.FindDefaultCredentialsWithParams(ctx, google.CredentialsParams{
+	// Some credential types keep this context for every later token request,
+	// so it must outlive shutdown (the runner cancels ctx on SIGTERM) and
+	// carry an HTTP client with a timeout.
+	tokenCtx := context.WithValue(context.WithoutCancel(ctx), oauth2.HTTPClient, &http.Client{Timeout: gcpIAMTokenRequestTimeout})
+	credentials, err := google.FindDefaultCredentialsWithParams(tokenCtx, google.CredentialsParams{
 		Scopes:            []string{gcpIAMTokenScope},
 		EarlyTokenRefresh: gcpIAMTokenEarlyRefresh,
 	})

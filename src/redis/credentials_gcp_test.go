@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -83,9 +84,14 @@ func TestCredentialProviderFromSettingsFailsWithoutGoogleCredentials(t *testing.
 }
 
 func TestGcpIAMFetchesTheTokenFromTheMetadataServer(t *testing.T) {
-	var got *http.Request
+	var (
+		mu  sync.Mutex
+		got *http.Request
+	)
 	metadata := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		got = r
+		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"access_token":"metadata-token","expires_in":3600,"token_type":"Bearer"}`))
 	}))
@@ -103,6 +109,8 @@ func TestGcpIAMFetchesTheTokenFromTheMetadataServer(t *testing.T) {
 	assert.Empty(t, user)
 	assert.Equal(t, "metadata-token", pass)
 
+	mu.Lock()
+	defer mu.Unlock()
 	require.NotNil(t, got)
 	assert.Equal(t, "/computeMetadata/v1/instance/service-accounts/default/token", got.URL.Path)
 	assert.Equal(t, "Google", got.Header.Get("Metadata-Flavor"))

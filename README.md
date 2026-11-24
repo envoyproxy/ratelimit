@@ -1591,7 +1591,8 @@ IAM instead of a password. The password becomes a Google access
 token, sent with no username, which Memorystore accepts as the default user. Ratelimit gets the
 token through Google's Application Default Credentials, so nothing is configured here: GKE Workload
 Identity, a VM's attached service account, or `GOOGLE_APPLICATION_CREDENTIALS` all work. Ratelimit
-fails at startup if no credentials can be found.
+fails at startup if it finds no credentials at all. Credentials that are found but cannot get a
+token, or that Memorystore rejects, show up as connection errors instead.
 
 On the GCP side the instance needs IAM authentication enabled, and the principal ratelimit runs as
 needs `memorystore.instances.connect`, which `roles/memorystore.dbConnectionUser` grants. Memorystore
