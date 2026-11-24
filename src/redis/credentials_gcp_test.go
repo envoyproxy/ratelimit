@@ -3,6 +3,9 @@ package redis
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,4 +80,31 @@ func TestCredentialProviderFromSettingsFailsWithoutGoogleCredentials(t *testing.
 	assert.Panics(t, func() {
 		newCredentialProviderFromSettings(context.Background(), settings.Settings{RedisGcpIamAuth: true}, false)
 	})
+}
+
+func TestGcpIAMFetchesTheTokenFromTheMetadataServer(t *testing.T) {
+	var got *http.Request
+	metadata := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"metadata-token","expires_in":3600,"token_type":"Bearer"}`))
+	}))
+	t.Cleanup(metadata.Close)
+
+	// Skip the local credential files so the lookup falls through to the
+	// metadata server, which GCE_METADATA_HOST points at the fake one.
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(metadata.URL, "http://"))
+
+	provider := newCredentialProviderFromSettings(context.Background(), settings.Settings{RedisGcpIamAuth: true}, false)
+	user, pass, err := provider.Credentials(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, user)
+	assert.Equal(t, "metadata-token", pass)
+
+	require.NotNil(t, got)
+	assert.Equal(t, "/computeMetadata/v1/instance/service-accounts/default/token", got.URL.Path)
+	assert.Equal(t, "Google", got.Header.Get("Metadata-Flavor"))
+	assert.Equal(t, gcpIAMTokenScope, got.URL.Query().Get("scopes"))
 }
