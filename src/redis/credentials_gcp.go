@@ -13,11 +13,11 @@ import (
 
 const (
 	gcpIAMTokenScope = "https://www.googleapis.com/auth/cloud-platform"
-	// Fetch a new token this long before the current one expires, so a
-	// connection never authenticates with a token that is about to lapse.
-	// Google's library only honors this for metadata server tokens; tokens
-	// from a credentials file refresh 10 seconds before expiry.
-	gcpIAMTokenEarlyRefresh = 5 * time.Minute
+	// Fetch a new token this long before the current one expires. It stays
+	// under the metadata server's shortest token cache (4 minutes), matching
+	// cloud.google.com/go/auth. Google's library only honors this for metadata
+	// server tokens; tokens from a credentials file refresh 10 seconds early.
+	gcpIAMTokenEarlyRefresh = 225 * time.Second
 	// Bounds a token request made with a credentials file, which otherwise
 	// uses an HTTP client with no timeout. The metadata server path has its
 	// own client with timeouts.
@@ -32,12 +32,30 @@ type gcpIAMCredentialProvider struct {
 	tokens oauth2.TokenSource
 }
 
-func (p *gcpIAMCredentialProvider) Credentials(_ context.Context) (string, string, error) {
-	token, err := p.tokens.Token()
-	if err != nil {
-		return "", "", fmt.Errorf("retrieving a Google access token for Memorystore IAM authentication: %w", err)
+func (p *gcpIAMCredentialProvider) Credentials(ctx context.Context) (string, string, error) {
+	type result struct {
+		token *oauth2.Token
+		err   error
 	}
-	return "", token.AccessToken, nil
+
+	// Token takes no context and a metadata server fetch can retry for tens of
+	// seconds, so give up when the dial does. The fetch keeps going and fills
+	// the cache for later dials.
+	done := make(chan result, 1)
+	go func() {
+		token, err := p.tokens.Token()
+		done <- result{token, err}
+	}()
+
+	select {
+	case r := <-done:
+		if r.err != nil {
+			return "", "", fmt.Errorf("retrieving a Google access token for Memorystore IAM authentication: %w", r.err)
+		}
+		return "", r.token.AccessToken, nil
+	case <-ctx.Done():
+		return "", "", fmt.Errorf("retrieving a Google access token for Memorystore IAM authentication: %w", ctx.Err())
+	}
 }
 
 func newGcpIamCredentialProvider(ctx context.Context, prefix string) CredentialProvider {

@@ -18,10 +18,14 @@ import (
 )
 
 type stubGcpTokenSource struct {
-	err error
+	err   error
+	block chan struct{}
 }
 
 func (s *stubGcpTokenSource) Token() (*oauth2.Token, error) {
+	if s.block != nil {
+		<-s.block
+	}
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -34,6 +38,18 @@ func TestGcpIAMReportsTokenRetrievalFailure(t *testing.T) {
 	_, _, err := provider.Credentials(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "metadata server unreachable")
+}
+
+func TestGcpIAMGivesUpWhenTheDialDeadlinePasses(t *testing.T) {
+	tokens := &stubGcpTokenSource{block: make(chan struct{})}
+	t.Cleanup(func() { close(tokens.block) })
+	provider := &gcpIAMCredentialProvider{tokens: tokens}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, _, err := provider.Credentials(ctx)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func TestCredentialProviderFromSettingsRejectsGcpIamWithAnotherSource(t *testing.T) {
@@ -78,6 +94,7 @@ func TestGcpIAMFetchesTheTokenFromTheMetadataServer(t *testing.T) {
 	// metadata server, which GCE_METADATA_HOST points at the fake one.
 	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
 	t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(metadata.URL, "http://"))
 
 	provider := newCredentialProviderFromSettings(context.Background(), settings.Settings{RedisGcpIamAuth: true}, false)
