@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,9 +21,11 @@ import (
 type stubGcpTokenSource struct {
 	err   error
 	block chan struct{}
+	calls atomic.Int32
 }
 
 func (s *stubGcpTokenSource) Token() (*oauth2.Token, error) {
+	s.calls.Add(1)
 	if s.block != nil {
 		<-s.block
 	}
@@ -40,16 +43,26 @@ func TestGcpIAMReportsTokenRetrievalFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), "metadata server unreachable")
 }
 
-func TestGcpIAMGivesUpWhenTheDialDeadlinePasses(t *testing.T) {
+func TestGcpIAMDialsGiveUpAtTheirDeadlineAndShareOneFetch(t *testing.T) {
 	tokens := &stubGcpTokenSource{block: make(chan struct{})}
 	t.Cleanup(func() { close(tokens.block) })
 	provider := &gcpIAMCredentialProvider{tokens: tokens}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
 
-	_, _, err := provider.Credentials(ctx)
-	require.ErrorIs(t, err, context.DeadlineExceeded)
+			_, _, err := provider.Credentials(ctx)
+			assert.ErrorIs(t, err, context.DeadlineExceeded)
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, int32(1), tokens.calls.Load(), "dials that overlap a fetch must wait on it, not start their own")
 }
 
 func TestCredentialProviderFromSettingsRejectsGcpIamWithAnotherSource(t *testing.T) {

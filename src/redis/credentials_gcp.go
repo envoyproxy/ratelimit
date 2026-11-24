@@ -9,6 +9,7 @@ import (
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -30,29 +31,29 @@ const (
 // concurrent use, so every connection in the pool shares one token.
 type gcpIAMCredentialProvider struct {
 	tokens oauth2.TokenSource
+	fetch  singleflight.Group
 }
 
 func (p *gcpIAMCredentialProvider) Credentials(ctx context.Context) (string, string, error) {
-	type result struct {
-		token *oauth2.Token
-		err   error
-	}
-
 	// Token takes no context and a metadata server fetch can retry for tens of
-	// seconds, so give up when the dial does. The fetch keeps going and fills
-	// the cache for later dials.
-	done := make(chan result, 1)
-	go func() {
+	// seconds, so give up when the dial does. Concurrent dials share one fetch,
+	// which keeps going after they give up and fills the cache for later dials.
+	result := p.fetch.DoChan("token", func() (any, error) {
 		token, err := p.tokens.Token()
-		done <- result{token, err}
-	}()
+		if err != nil {
+			// Logged here because a dial that already gave up never sees it.
+			logger.Warnf("Memorystore IAM authentication: getting a Google access token failed: %v", err)
+			return nil, err
+		}
+		return token.AccessToken, nil
+	})
 
 	select {
-	case r := <-done:
-		if r.err != nil {
-			return "", "", fmt.Errorf("retrieving a Google access token for Memorystore IAM authentication: %w", r.err)
+	case r := <-result:
+		if r.Err != nil {
+			return "", "", fmt.Errorf("retrieving a Google access token for Memorystore IAM authentication: %w", r.Err)
 		}
-		return "", r.token.AccessToken, nil
+		return "", r.Val.(string), nil
 	case <-ctx.Done():
 		return "", "", fmt.Errorf("retrieving a Google access token for Memorystore IAM authentication: %w", ctx.Err())
 	}
