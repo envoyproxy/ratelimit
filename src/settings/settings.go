@@ -177,6 +177,7 @@ type Settings struct {
 	RedisAwsIamUserId     string `envconfig:"REDIS_AWS_IAM_USER_ID" default:""`
 	RedisAwsIamServerless bool   `envconfig:"REDIS_AWS_IAM_SERVERLESS" default:"false"`
 	RedisAwsIamRegion     string `envconfig:"REDIS_AWS_IAM_REGION" default:""`
+	RedisGcpIamAuth       bool   `envconfig:"REDIS_GCP_IAM_AUTH" default:"false"`
 	RedisTls              bool   `envconfig:"REDIS_TLS" default:"false"`
 	// TODO: Make this setting configurable out of the box instead of having to provide it through code.
 	RedisTlsConfig *tls.Config
@@ -216,6 +217,7 @@ type Settings struct {
 	RedisPerSecondAwsIamUserId      string `envconfig:"REDIS_PERSECOND_AWS_IAM_USER_ID" default:""`
 	RedisPerSecondAwsIamServerless  bool   `envconfig:"REDIS_PERSECOND_AWS_IAM_SERVERLESS" default:"false"`
 	RedisPerSecondAwsIamRegion      string `envconfig:"REDIS_PERSECOND_AWS_IAM_REGION" default:""`
+	RedisPerSecondGcpIamAuth        bool   `envconfig:"REDIS_PERSECOND_GCP_IAM_AUTH" default:"false"`
 	RedisPerSecondTls               bool   `envconfig:"REDIS_PERSECOND_TLS" default:"false"`
 	// RedisSentinelAuth is the password for authenticating to Redis Sentinel nodes (not the Redis master/replica).
 	// This is separate from RedisAuth which is used for authenticating to the Redis master/replica nodes.
