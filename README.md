@@ -1598,8 +1598,10 @@ needs `memorystore.instances.connect`, which `roles/memorystore.dbConnectionUser
 does not require in-transit encryption for IAM authentication, but without it the token is sent in
 the clear, so `REDIS_TLS` should be `"true"` as well.
 
-Access tokens are valid for an hour. Ratelimit shares one token across the pool and fetches a new
-one five minutes before it expires. Memorystore only checks the token when a connection
+Access tokens are valid for an hour. Ratelimit shares one token across the pool. When the token
+comes from the metadata server (GKE or a Compute Engine VM), ratelimit fetches a new one five
+minutes before it expires; with a credentials file, Google's library refreshes it ten seconds
+before expiry instead. Memorystore only checks the token when a connection
 authenticates, so connections that are already open keep working after it expires.
 Memorystore also throttles new IAM-authenticated connections, so restarting many replicas at once
 can briefly fail some connection attempts.

@@ -15,6 +15,8 @@ const (
 	gcpIAMTokenScope = "https://www.googleapis.com/auth/cloud-platform"
 	// Fetch a new token this long before the current one expires, so a
 	// connection never authenticates with a token that is about to lapse.
+	// Google's library only honors this for metadata server tokens; tokens
+	// from a credentials file refresh 10 seconds before expiry.
 	gcpIAMTokenEarlyRefresh = 5 * time.Minute
 )
 
