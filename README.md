@@ -79,6 +79,7 @@
   - [Redis failover and unresponsive Redis](#redis-failover-and-unresponsive-redis)
   - [Credentials that expire or rotate](#credentials-that-expire-or-rotate)
     - [AWS ElastiCache IAM authentication](#aws-elasticache-iam-authentication)
+    - [GCP Memorystore IAM authentication](#gcp-memorystore-iam-authentication)
   - [Calendar-aligned MONTH rate limits](#calendar-aligned-month-rate-limits)
   - [Configurable WEEK rate limit reset day](#configurable-week-rate-limit-reset-day)
   - [Calendar-aligned YEAR rate limits](#calendar-aligned-year-rate-limits)
@@ -1367,6 +1368,7 @@ As well Ratelimit supports TLS connections and authentication. These can be conf
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"password"` to enable password-only authentication to the Redis master/replica nodes.
 1. `REDIS_AUTH` & `REDIS_PERSECOND_AUTH`: set to `"username:password"` to enable username-password authentication to the Redis master/replica nodes.
 1. `REDIS_AUTH_FILE` & `REDIS_PERSECOND_AUTH_FILE`: set to the path of a file holding `"password"` or `"username:password"`. The file is re-read on every connection attempt, so a credential that expires or rotates keeps working. Mutually exclusive with `REDIS_AUTH`/`REDIS_PERSECOND_AUTH`. See [Credentials that expire or rotate](#credentials-that-expire-or-rotate).
+1. `REDIS_AWS_IAM_AUTH` & `REDIS_GCP_IAM_AUTH` (and their `REDIS_PERSECOND_` twins): set to `"true"` to authenticate to AWS ElastiCache or GCP Memorystore with short-lived IAM tokens. See [Credentials that expire or rotate](#credentials-that-expire-or-rotate).
 1. `REDIS_SENTINEL_AUTH` & `REDIS_PERSECOND_SENTINEL_AUTH`: set to `"password"` or `"username:password"` to enable authentication to Redis Sentinel nodes. This is separate from `REDIS_AUTH`/`REDIS_PERSECOND_AUTH` which authenticate to the Redis master/replica nodes. Only used when `REDIS_TYPE` or `REDIS_PERSECOND_TYPE` is set to `"sentinel"`. If not set, no authentication will be attempted when connecting to Sentinel nodes.
 1. `CACHE_KEY_PREFIX`: a string to prepend to all cache keys
 
@@ -1577,6 +1579,33 @@ early when the AWS credentials that signed the token are close to expiring, sinc
 ElastiCache force-closes IAM-authenticated connections after 12 hours. Ratelimit handles that the
 same way it handles any dropped connection: the pool discards it and reconnects, authenticating
 with a fresh token. Nothing needs to be configured for it, and no restart is involved.
+
+### GCP Memorystore IAM authentication
+
+1. `REDIS_GCP_IAM_AUTH` : (default is "false")
+1. `REDIS_PERSECOND_GCP_IAM_AUTH` : the same, for the per-second client
+
+Setting `REDIS_GCP_IAM_AUTH` to `"true"` authenticates to
+[Memorystore for Valkey](https://cloud.google.com/memorystore/docs/valkey/about-iam-auth) with
+IAM instead of a password. The password becomes a Google access
+token, sent with no username, which Memorystore accepts as the default user. Ratelimit gets the
+token through Google's Application Default Credentials, so nothing is configured here: GKE Workload
+Identity, a VM's attached service account, or `GOOGLE_APPLICATION_CREDENTIALS` all work. Ratelimit
+fails at startup if it finds no credentials at all. Credentials that are found but cannot get a
+token, or that Memorystore rejects, show up as connection errors instead.
+
+On the GCP side the instance needs IAM authentication enabled, and the principal ratelimit runs as
+needs `memorystore.instances.connect`, which `roles/memorystore.dbConnectionUser` grants. Memorystore
+does not require in-transit encryption for IAM authentication, but without it the token is sent in
+the clear, so `REDIS_TLS` should be `"true"` as well.
+
+Access tokens are valid for an hour. Ratelimit shares one token across the pool. When the token
+comes from the metadata server (GKE or a Compute Engine VM), ratelimit fetches a new one 3 minutes
+45 seconds before it expires; with a credentials file, Google's library refreshes it ten seconds
+before expiry instead. Memorystore only checks the token when a connection
+authenticates, so connections that are already open keep working after it expires.
+Memorystore also throttles new IAM-authenticated connections, so restarting many replicas at once
+can briefly fail some connection attempts.
 
 ## Calendar-aligned MONTH rate limits
 

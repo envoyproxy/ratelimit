@@ -69,9 +69,19 @@ func (p *fileCredentialProvider) Credentials(_ context.Context) (string, string,
 func newCredentialProviderFromSettings(ctx context.Context, s settings.Settings, perSecond bool) CredentialProvider {
 	prefix, auth, authFile := "REDIS", s.RedisAuth, s.RedisAuthFile
 	awsIam, cacheName, userID, serverless, region := s.RedisAwsIamAuth, s.RedisAwsIamCacheName, s.RedisAwsIamUserId, s.RedisAwsIamServerless, s.RedisAwsIamRegion
+	gcpIam := s.RedisGcpIamAuth
 	if perSecond {
 		prefix, auth, authFile = "REDIS_PERSECOND", s.RedisPerSecondAuth, s.RedisPerSecondAuthFile
 		awsIam, cacheName, userID, serverless, region = s.RedisPerSecondAwsIamAuth, s.RedisPerSecondAwsIamCacheName, s.RedisPerSecondAwsIamUserId, s.RedisPerSecondAwsIamServerless, s.RedisPerSecondAwsIamRegion
+		gcpIam = s.RedisPerSecondGcpIamAuth
+	}
+
+	if gcpIam {
+		if awsIam || auth != "" || authFile != "" {
+			panic(RedisError(fmt.Sprintf("%s_GCP_IAM_AUTH cannot be combined with %s_AWS_IAM_AUTH, %s_AUTH or %s_AUTH_FILE", prefix, prefix, prefix, prefix)))
+		}
+
+		return newGcpIamCredentialProvider(ctx, prefix)
 	}
 
 	if awsIam {
