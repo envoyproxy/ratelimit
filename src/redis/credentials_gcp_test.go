@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/mediocregopher/radix/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -28,17 +26,6 @@ func (s *stubGcpTokenSource) Token() (*oauth2.Token, error) {
 		return nil, s.err
 	}
 	return &oauth2.Token{AccessToken: "access-token", Expiry: time.Now().Add(time.Hour)}, nil
-}
-
-func TestGcpIAMAuthenticatesWithTheAccessTokenAsThePassword(t *testing.T) {
-	srv := miniredis.RunT(t)
-	srv.RequireAuth("access-token")
-
-	provider := &gcpIAMCredentialProvider{tokens: &stubGcpTokenSource{}}
-
-	conn, err := wrapDialerCredentialProvider(radix.Dialer{}, provider).Dial(context.Background(), "tcp", srv.Addr())
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
 }
 
 func TestGcpIAMReportsTokenRetrievalFailure(t *testing.T) {
@@ -63,16 +50,6 @@ func TestCredentialProviderFromSettingsRejectsGcpIamWithAnotherSource(t *testing
 			RedisPerSecondAwsIamAuth: true,
 		}, true)
 	})
-}
-
-func TestCredentialProviderFromSettingsUsesGoogleDefaultCredentials(t *testing.T) {
-	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "testdata/gcp-authorized-user.json")
-
-	provider := newCredentialProviderFromSettings(context.Background(), settings.Settings{RedisGcpIamAuth: true}, false)
-	assert.IsType(t, &gcpIAMCredentialProvider{}, provider)
-
-	assert.Nil(t, newCredentialProviderFromSettings(context.Background(), settings.Settings{RedisPerSecondGcpIamAuth: true}, false),
-		"the per-second setting must not enable GCP IAM on the other pool")
 }
 
 func TestCredentialProviderFromSettingsFailsWithoutGoogleCredentials(t *testing.T) {

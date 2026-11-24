@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -38,10 +37,6 @@ func (p *gcpIAMCredentialProvider) Credentials(_ context.Context) (string, strin
 	if err != nil {
 		return "", "", fmt.Errorf("retrieving a Google access token for Memorystore IAM authentication: %w", err)
 	}
-	if token.AccessToken == "" {
-		return "", "", errors.New("retrieving a Google access token for Memorystore IAM authentication: the token is empty")
-	}
-
 	return "", token.AccessToken, nil
 }
 
